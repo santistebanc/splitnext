@@ -106,8 +106,6 @@ export class MemberDirectory {
   createWithAccess(
     prepared: PreparedMemberWithAccess,
   ): CreatedMemberWithAccess {
-    this.provision();
-
     const member = this.insert(prepared.displayName);
 
     const accessToken = this.credentials.issue(
@@ -171,18 +169,6 @@ export class MemberDirectory {
     if (!resolved.ok) return resolved;
 
     return this.commit(resolved.member, { deleted: true });
-  }
-
-  private provision(): void {
-    this.sql.exec(`CREATE TABLE IF NOT EXISTS members (
-      id TEXT PRIMARY KEY,
-      version INTEGER NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      deleted_at TEXT,
-      display_name TEXT NOT NULL
-    )`);
-    this.credentials.provision();
   }
 
   private insert(displayName: string): Member {

@@ -18,7 +18,7 @@ beforeAll(async () => {
 describe('members API', () => {
   it('creates a versioned member inside its group object', async () => {
     const group = await AuthenticatedGroupDriver.create();
-    const createdReply = await group.createMember('Ada Lovelace');
+    const createdReply = await group.createMember({ display_name: 'Ada Lovelace' });
     const created = successBody(createdReply, 201).member;
 
     expect(Object.keys(created).sort()).toEqual(memberFields);
@@ -52,7 +52,7 @@ describe('members API', () => {
 
   it('lists and retrieves members', async () => {
     const group = await AuthenticatedGroupDriver.create();
-    const createdReply = await group.createMember('Ada');
+    const createdReply = await group.createMember({ display_name: 'Ada' });
     const created = successBody(createdReply, 201).member;
     const listedReply = await group.listMembers();
     const listed = successBody(listedReply, 200).members;
@@ -67,7 +67,7 @@ describe('members API', () => {
 
   it('renames a member and advances its version', async () => {
     const group = await AuthenticatedGroupDriver.create();
-    const originalReply = await group.createMember('Ada');
+    const originalReply = await group.createMember({ display_name: 'Ada' });
     const original = successBody(originalReply, 201).member;
 
     const updatedReply = await group.updateMember(original.id, {
@@ -91,7 +91,7 @@ describe('members API', () => {
 
   it('does not advance the version for a no-op rename and rejects a stale one', async () => {
     const group = await AuthenticatedGroupDriver.create();
-    const originalReply = await group.createMember('Ada');
+    const originalReply = await group.createMember({ display_name: 'Ada' });
     const original = successBody(originalReply, 201).member;
 
     const unchanged = await group.updateMember(original.id, {
@@ -116,7 +116,7 @@ describe('members API', () => {
 
   it('soft-deletes a member and hides it from active reads', async () => {
     const group = await AuthenticatedGroupDriver.create();
-    const originalReply = await group.createMember('Ada');
+    const originalReply = await group.createMember({ display_name: 'Ada' });
     const original = successBody(originalReply, 201).member;
 
     const deletedReply = await group.deleteMember(original.id, {
@@ -164,7 +164,7 @@ describe('members API', () => {
 
   it('rejects stale deletion and mutations of an unknown member', async () => {
     const group = await AuthenticatedGroupDriver.create();
-    const originalReply = await group.createMember('Ada');
+    const originalReply = await group.createMember({ display_name: 'Ada' });
     const original = successBody(originalReply, 201).member;
 
     await group.updateMember(original.id, {

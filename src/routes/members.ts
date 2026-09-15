@@ -11,7 +11,7 @@ import {
   groupIdParameterSchema,
   groupParamsSchema,
 } from './groupRequest';
-import { errorResponse } from './responses';
+import { errorResponse, REFUSAL_STATUS } from './responses';
 
 const memberParamsSchema = z.object({
   groupId: groupIdParameterSchema,
@@ -187,7 +187,7 @@ export const memberRoutes = new OpenAPIHono<{ Bindings: Env }>({
     );
 
     if (!result.ok) {
-      return context.json({ error: result.error }, memberCreateStatus(result.error));
+      return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);
     }
 
     return context.json({ member: result.member }, 201);
@@ -200,7 +200,7 @@ export const memberRoutes = new OpenAPIHono<{ Bindings: Env }>({
     const result = await context.env.GROUPS.get(id).listMembers(credential);
 
     if (!result.ok) {
-      return context.json({ error: result.error }, groupRefusalStatus(result.error));
+      return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);
     }
 
     return context.json({ members: result.members }, 200);
@@ -216,7 +216,7 @@ export const memberRoutes = new OpenAPIHono<{ Bindings: Env }>({
     );
 
     if (!result.ok) {
-      return context.json({ error: result.error }, memberRefusalStatus(result.error));
+      return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);
     }
 
     return context.json({ member: result.member }, 200);
@@ -234,7 +234,7 @@ export const memberRoutes = new OpenAPIHono<{ Bindings: Env }>({
     );
 
     if (!result.ok) {
-      return context.json({ error: result.error }, memberMutationStatus(result.error));
+      return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);
     }
 
     return context.json({ member: result.member }, 200);
@@ -252,42 +252,8 @@ export const memberRoutes = new OpenAPIHono<{ Bindings: Env }>({
     );
 
     if (!result.ok) {
-      return context.json({ error: result.error }, memberMutationStatus(result.error));
+      return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);
     }
 
     return context.json({ member: result.member }, 200);
   });
-
-function groupRefusalStatus(error: 'unauthorized' | 'group_deleted'): 401 | 410 {
-  return error === 'group_deleted' ? 410 : 401;
-}
-
-function memberCreateStatus(
-  error: 'invalid_request' | 'unauthorized' | 'group_deleted',
-): 400 | 401 | 410 {
-  return error === 'invalid_request' ? 400 : groupRefusalStatus(error);
-}
-
-function memberRefusalStatus(
-  error: 'unauthorized' | 'group_deleted' | 'member_not_found' | 'member_deleted',
-): 401 | 404 | 410 {
-  if (error === 'group_deleted' || error === 'member_deleted') return 410;
-
-  return error === 'member_not_found' ? 404 : 401;
-}
-
-function memberMutationStatus(
-  error:
-    | 'invalid_request'
-    | 'unauthorized'
-    | 'group_deleted'
-    | 'member_not_found'
-    | 'member_deleted'
-    | 'version_conflict',
-): 400 | 401 | 404 | 409 | 410 {
-  if (error === 'invalid_request') return 400;
-
-  if (error === 'version_conflict') return 409;
-
-  return memberRefusalStatus(error);
-}
