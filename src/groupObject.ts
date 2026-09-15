@@ -1,45 +1,55 @@
 import { DurableObject } from 'cloudflare:workers';
+import { z } from 'zod';
 import {
   createGroupInputSchema,
   type CreateGroupInput,
+  deleteGroupInputSchema,
   type DeleteGroupInput,
   type Group,
   type GroupMutationResult,
   GroupState,
+  updateGroupInputSchema,
   type UpdateGroupInput,
 } from './groupState';
+import { type AccessCredential } from './accessCredential';
 import {
-  type AccessCredential,
+  createMemberInputSchema,
   type CreateMemberInput,
+  deleteMemberInputSchema,
   type DeleteMemberInput,
   type Member,
-  type MemberCreateResult,
   MemberDirectory,
   type MemberMutationResult,
   type MemberReadResult,
+  updateMemberInputSchema,
   type UpdateMemberInput,
 } from './memberDirectory';
 
 type ProbeRow = { ok: number };
 
-type CreateGroupResult =
-  | { ok: true; group: Group; member: Member; access_token: string }
-  | { ok: false; error: 'group_exists' | 'invalid_request' };
-
 /** Why a caller may not act on this group at all. */
 type GroupRefusal = { ok: false; error: 'unauthorized' | 'group_deleted' };
 
-type ResolvedGroup = { ok: true; group: Group } | GroupRefusal;
+/** A command that did not survive the seam it was sent across. */
+type InvalidCommand = { ok: false; error: 'invalid_request' };
 
-type MutateGroupResult = GroupMutationResult | GroupRefusal;
+/**
+ * An outcome an authorized operation can produce. Naming the guard once means
+ * a new operation adds a method, not a result type.
+ */
+type Guarded<T> = T | GroupRefusal;
 
-type CreateMemberResult = MemberCreateResult | GroupRefusal;
+/** The same, for operations that carry a command this seam must validate. */
+type Commanded<T> = Guarded<T> | InvalidCommand;
 
-type ListMembersResult = { ok: true; members: Member[] } | GroupRefusal;
+type GroupFound = { ok: true; group: Group };
 
-type GetMemberResult = MemberReadResult | GroupRefusal;
+type MemberFound = { ok: true; member: Member };
 
-type MutateMemberResult = MemberMutationResult | GroupRefusal;
+type CreateGroupResult =
+  | { ok: true; group: Group; member: Member; access_token: string }
+  | { ok: false; error: 'group_exists' }
+  | InvalidCommand;
 
 /**
  * Cloudflare's adapter for one group. It owns the named object identity,
@@ -96,8 +106,8 @@ export class GroupObject extends DurableObject<Env> {
    * Whether the group exists is itself privileged, so an unknown group and a
    * wrong token are deliberately indistinguishable.
    */
-  async getGroup(credential: AccessCredential): Promise<ResolvedGroup> {
-    return this.actOnGroup(credential, (group): ResolvedGroup => ({
+  async getGroup(credential: AccessCredential): Promise<Guarded<GroupFound>> {
+    return this.actOnGroup(credential, (group): GroupFound => ({
       ok: true,
       group,
     }));
@@ -106,33 +116,42 @@ export class GroupObject extends DurableObject<Env> {
   async updateGroup(
     credential: AccessCredential,
     input: UpdateGroupInput,
-  ): Promise<MutateGroupResult> {
-    return this.actOnGroup(credential, (group): MutateGroupResult =>
-      this.groupState.update(group, input),
+  ): Promise<Commanded<GroupMutationResult>> {
+    return this.onCommand(updateGroupInputSchema, input, (command) =>
+      this.actOnGroup(credential, (group) =>
+        this.groupState.update(group, command),
+      ),
     );
   }
 
   async deleteGroup(
     credential: AccessCredential,
     input: DeleteGroupInput,
-  ): Promise<MutateGroupResult> {
-    return this.actOnGroup(credential, (group): MutateGroupResult =>
-      this.groupState.remove(group, input),
+  ): Promise<Commanded<GroupMutationResult>> {
+    return this.onCommand(deleteGroupInputSchema, input, (command) =>
+      this.actOnGroup(credential, (group) =>
+        this.groupState.remove(group, command),
+      ),
     );
   }
 
   async createMember(
     credential: AccessCredential,
     input: CreateMemberInput,
-  ): Promise<CreateMemberResult> {
-    return this.actOnGroup(credential, (): CreateMemberResult =>
-      this.members.create(input),
+  ): Promise<Commanded<MemberFound>> {
+    return this.onCommand(createMemberInputSchema, input, (command) =>
+      this.actOnGroup(credential, (): MemberFound => ({
+        ok: true,
+        member: this.members.create(command),
+      })),
     );
   }
 
-  async listMembers(credential: AccessCredential): Promise<ListMembersResult> {
-    return this.actOnGroup(credential, (): ListMembersResult => ({
-      ok: true,
+  async listMembers(
+    credential: AccessCredential,
+  ): Promise<Guarded<{ ok: true; members: Member[] }>> {
+    return this.actOnGroup(credential, () => ({
+      ok: true as const,
       members: this.members.listActive(),
     }));
   }
@@ -140,19 +159,17 @@ export class GroupObject extends DurableObject<Env> {
   async getMember(
     credential: AccessCredential,
     memberId: string,
-  ): Promise<GetMemberResult> {
-    return this.actOnGroup(credential, (): GetMemberResult =>
-      this.members.retrieve(memberId),
-    );
+  ): Promise<Guarded<MemberReadResult>> {
+    return this.actOnGroup(credential, () => this.members.retrieve(memberId));
   }
 
   async updateMember(
     credential: AccessCredential,
     memberId: string,
     input: UpdateMemberInput,
-  ): Promise<MutateMemberResult> {
-    return this.actOnGroup(credential, (): MutateMemberResult =>
-      this.members.rename(memberId, input),
+  ): Promise<Commanded<MemberMutationResult>> {
+    return this.onCommand(updateMemberInputSchema, input, (command) =>
+      this.actOnGroup(credential, () => this.members.rename(memberId, command)),
     );
   }
 
@@ -160,10 +177,26 @@ export class GroupObject extends DurableObject<Env> {
     credential: AccessCredential,
     memberId: string,
     input: DeleteMemberInput,
-  ): Promise<MutateMemberResult> {
-    return this.actOnGroup(credential, (): MutateMemberResult =>
-      this.members.remove(memberId, input),
+  ): Promise<Commanded<MemberMutationResult>> {
+    return this.onCommand(deleteMemberInputSchema, input, (command) =>
+      this.actOnGroup(credential, () => this.members.remove(memberId, command)),
     );
+  }
+
+  /**
+   * Commands are validated here and nowhere else. This is the seam a command
+   * crosses, so the state modules behind it receive shapes they can trust.
+   */
+  private async onCommand<Command, T>(
+    schema: z.ZodType<Command, Command>,
+    input: Command,
+    act: (command: Command) => Promise<T>,
+  ): Promise<T | InvalidCommand> {
+    const parsed = schema.safeParse(input);
+
+    if (!parsed.success) return { ok: false, error: 'invalid_request' };
+
+    return act(parsed.data);
   }
 
   /**

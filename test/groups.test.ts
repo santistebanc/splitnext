@@ -2,7 +2,8 @@ import { env, exports } from 'cloudflare:workers';
 import { runInDurableObject } from 'cloudflare:test';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { groupSchema, type Group } from '../src/groupState';
-import { accessTokenSchema, memberSchema } from '../src/memberDirectory';
+import { accessTokenSchema } from '../src/accessCredential';
+import { memberSchema } from '../src/memberDirectory';
 import {
   AuthenticatedGroupDriver,
   failureBody,
