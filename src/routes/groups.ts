@@ -5,7 +5,8 @@ import {
   groupVersionSchema,
   updateGroupInputSchema,
 } from '../groupState';
-import { accessTokenSchema, memberSchema } from '../memberDirectory';
+import { accessTokenSchema } from '../accessCredential';
+import { memberSchema } from '../memberDirectory';
 import {
   accessHeadersSchema,
   capabilityFrom,

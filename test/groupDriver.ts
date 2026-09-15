@@ -10,7 +10,8 @@ import type {
   DeleteMemberInput,
   UpdateMemberInput,
 } from '../src/memberDirectory';
-import { accessTokenSchema, memberSchema } from '../src/memberDirectory';
+import { accessTokenSchema } from '../src/accessCredential';
+import { memberSchema } from '../src/memberDirectory';
 
 const createGroupResponseSchema = z.object({
   access_token: accessTokenSchema,

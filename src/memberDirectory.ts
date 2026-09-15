@@ -2,22 +2,12 @@ import { z } from 'zod';
 import {
   type AccessCredential,
   deviceUserIdSchema,
-  MemberCredentials,
   type MemberPrincipal,
+} from './accessCredential';
+import {
+  MemberCredentials,
   type PreparedAuthorization,
   type PreparedCredentialIssue,
-} from './memberCredentials.internal';
-
-export {
-  ACCESS_TOKEN_PATTERN,
-  accessTokenSchema,
-  accessCredentialSchema,
-  deviceUserIdSchema,
-} from './memberCredentials.internal';
-
-export type {
-  AccessCredential,
-  MemberPrincipal,
 } from './memberCredentials.internal';
 
 export const memberDisplayNameSchema = z.string().trim().min(1).max(100);
@@ -60,19 +50,11 @@ export type MemberReadResult =
   | { ok: true; member: Member }
   | { ok: false; error: 'member_not_found' | 'member_deleted' };
 
-export type MemberCreateResult =
-  | { ok: true; member: Member }
-  | { ok: false; error: 'invalid_request' };
-
 export type MemberMutationResult =
   | { ok: true; member: Member }
   | {
       ok: false;
-      error:
-        | 'invalid_request'
-        | 'member_not_found'
-        | 'member_deleted'
-        | 'version_conflict';
+      error: 'member_not_found' | 'member_deleted' | 'version_conflict';
     };
 
 type PreparedMemberWithAccess = {
@@ -148,12 +130,8 @@ export class MemberDirectory {
     return this.credentials.authenticate(prepared);
   }
 
-  create(rawInput: CreateMemberInput): MemberCreateResult {
-    const parsed = createMemberInputSchema.safeParse(rawInput);
-
-    return parsed.success
-      ? { ok: true, member: this.insert(parsed.data.display_name) }
-      : { ok: false, error: 'invalid_request' };
+  create(input: CreateMemberInput): Member {
+    return this.insert(input.display_name);
   }
 
   listActive(): Member[] {
@@ -177,15 +155,7 @@ export class MemberDirectory {
       : { ok: false, error: 'member_deleted' };
   }
 
-  rename(
-    memberId: string,
-    rawInput: UpdateMemberInput,
-  ): MemberMutationResult {
-    const parsed = updateMemberInputSchema.safeParse(rawInput);
-
-    if (!parsed.success) return { ok: false, error: 'invalid_request' };
-
-    const input = parsed.data;
+  rename(memberId: string, input: UpdateMemberInput): MemberMutationResult {
     const resolved = this.resolveMutation(memberId, input.expected_version);
 
     if (!resolved.ok) return resolved;
@@ -195,15 +165,7 @@ export class MemberDirectory {
     return this.commit(resolved.member, { displayName: input.display_name });
   }
 
-  remove(
-    memberId: string,
-    rawInput: DeleteMemberInput,
-  ): MemberMutationResult {
-    const parsed = deleteMemberInputSchema.safeParse(rawInput);
-
-    if (!parsed.success) return { ok: false, error: 'invalid_request' };
-
-    const input = parsed.data;
+  remove(memberId: string, input: DeleteMemberInput): MemberMutationResult {
     const resolved = this.resolveMutation(memberId, input.expected_version);
 
     if (!resolved.ok) return resolved;

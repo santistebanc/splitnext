@@ -1,8 +1,6 @@
 import { z } from 'zod';
-import {
-  deviceUserIdSchema,
-  memberDisplayNameSchema,
-} from './memberDirectory';
+import { deviceUserIdSchema } from './accessCredential';
+import { memberDisplayNameSchema } from './memberDirectory';
 
 export const groupNameSchema = z.string().trim().min(1).max(100);
 
@@ -66,7 +64,7 @@ export type CreateStoredGroupResult =
 
 export type GroupMutationResult =
   | { ok: true; group: Group }
-  | { ok: false; error: 'invalid_request' | 'version_conflict' };
+  | { ok: false; error: 'version_conflict' };
 
 type GroupChanges = {
   name?: string | undefined;
@@ -117,13 +115,7 @@ export class GroupState {
     return row ?? null;
   }
 
-  update(group: Group, rawInput: UpdateGroupInput): GroupMutationResult {
-    const parsed = updateGroupInputSchema.safeParse(rawInput);
-
-    if (!parsed.success) return { ok: false, error: 'invalid_request' };
-
-    const input = parsed.data;
-
+  update(group: Group, input: UpdateGroupInput): GroupMutationResult {
     if (group.version !== input.expected_version) {
       return { ok: false, error: 'version_conflict' };
     }
@@ -138,13 +130,7 @@ export class GroupState {
     return this.commit(group, { name, currency_label: currencyLabel });
   }
 
-  remove(group: Group, rawInput: DeleteGroupInput): GroupMutationResult {
-    const parsed = deleteGroupInputSchema.safeParse(rawInput);
-
-    if (!parsed.success) return { ok: false, error: 'invalid_request' };
-
-    const input = parsed.data;
-
+  remove(group: Group, input: DeleteGroupInput): GroupMutationResult {
     if (group.version !== input.expected_version) {
       return { ok: false, error: 'version_conflict' };
     }

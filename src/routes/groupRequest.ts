@@ -3,7 +3,7 @@ import {
   ACCESS_TOKEN_PATTERN,
   type AccessCredential,
   deviceUserIdSchema,
-} from '../memberDirectory';
+} from '../accessCredential';
 
 const BEARER_PREFIX = 'Bearer ';
 

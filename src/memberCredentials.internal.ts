@@ -1,23 +1,8 @@
-import { z } from 'zod';
-
-export const ACCESS_TOKEN_PATTERN = '[a-f0-9]{64}';
-
-export const accessTokenSchema = z
-  .string()
-  .regex(new RegExp(`^${ACCESS_TOKEN_PATTERN}$`));
-
-export const deviceUserIdSchema = z.string().trim().min(1).max(128);
-
-export const accessCredentialSchema = z
-  .object({
-    accessToken: accessTokenSchema,
-    deviceUserId: deviceUserIdSchema,
-  })
-  .strict();
-
-export type AccessCredential = z.infer<typeof accessCredentialSchema>;
-
-export type MemberPrincipal = { memberId: string };
+import {
+  type AccessCredential,
+  accessCredentialSchema,
+  type MemberPrincipal,
+} from './accessCredential';
 
 export type PreparedCredentialIssue = {
   accessToken: string;
