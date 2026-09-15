@@ -14,3 +14,12 @@ export type Member = z.infer<typeof memberSchema>;
 export type CreateMemberInput = {
   display_name: string;
 };
+
+export type UpdateMemberInput = {
+  expected_version: number;
+  display_name: string;
+};
+
+export type DeleteMemberInput = {
+  expected_version: number;
+};

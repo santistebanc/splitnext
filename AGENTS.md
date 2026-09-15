@@ -1,0 +1,35 @@
+# Splitnext instructions
+
+This file contains decisions that are not evident from the code. Follow them
+unless the user changes them, and update this file when a decision changes.
+
+## Working agreement
+
+- Build small, reviewable vertical slices.
+- Run `npm run check` after each slice, then leave it uncommitted for the user to
+  inspect. Commit only when asked.
+- Do not add compatibility logic for discarded pre-production designs or erase
+  remote data without explicit permission.
+
+## Product constraints
+
+- Do not invent owner/admin roles.
+
+## Invites (decided, not implemented)
+
+- Invites are temporary credentials; redemption issues separate member/device
+  access. Expiring an invite does not revoke access already issued from it.
+- Present reusable **group links** and single-use **individual member links** as
+  one Invite feature.
+- Initially, a group link creates a new member. Claiming a pre-created member is
+  a later slice. An individual link targets one pre-created member.
+- Join URLs include group id and secret: `/join/{groupId}/{inviteToken}`. Persist
+  only the token hash in the relevant group's Durable Object.
+- Default expiry is seven days. Never reactivate an expired or revoked link;
+  inviting again creates a fresh token.
+- "Disable link" sets `revoked_at` instead of deleting the record.
+- Group links remain usable until expiry, or revocation.
+- Redemption atomically validates the invite, creates or claims the member,
+  issues access, and records use.
+- Implement as separate slices: invite lifecycle, new-member redemption,
+  claiming existing members, then individual invites.

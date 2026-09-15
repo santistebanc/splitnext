@@ -1,6 +1,11 @@
 import { DurableObject } from 'cloudflare:workers';
 import { z } from 'zod';
-import { type CreateMemberInput, type Member } from './member';
+import {
+  type CreateMemberInput,
+  type DeleteMemberInput,
+  type Member,
+  type UpdateMemberInput,
+} from './member';
 
 /**
  * The shape of a group, declared once because the group owns it. The storage
@@ -34,6 +39,7 @@ export type CreateGroupInput = {
   name: string;
   currency_label: string;
   device_user_id: string;
+  creator_display_name: string;
 };
 
 export type UpdateGroupInput = {
@@ -56,16 +62,14 @@ type TableRow = { name: string };
 
 type ProbeRow = { ok: number };
 
-type AccessRow = {
-  revoked_at: string | null;
-};
+type MemberAccessRow = { member_id: string };
 
 type CreateGroupStorageResult =
-  | { ok: true; group: Group }
+  | { ok: true; group: Group; member: Member }
   | { ok: false; error: 'group_exists' };
 
 type CreateGroupResult =
-  | { ok: true; group: Group; access_token: string }
+  | { ok: true; group: Group; member: Member; access_token: string }
   | { ok: false; error: 'group_exists' };
 
 /** Why a caller may not act on this group at all. */
@@ -82,12 +86,25 @@ type ListMembersResult = { ok: true; members: Member[] } | GroupRefusal;
 type GetMemberResult =
   | { ok: true; member: Member }
   | GroupRefusal
-  | { ok: false; error: 'member_not_found' };
+  | { ok: false; error: 'member_not_found' | 'member_deleted' };
+
+type MutateMemberResult =
+  | { ok: true; member: Member }
+  | GroupRefusal
+  | {
+      ok: false;
+      error: 'member_not_found' | 'member_deleted' | 'version_conflict';
+    };
 
 /** The columns a mutation may change; anything absent keeps its current value. */
 type GroupChanges = {
   name?: string | undefined;
   currency_label?: string | undefined;
+  deleted?: boolean | undefined;
+};
+
+type MemberChanges = {
+  display_name?: string | undefined;
   deleted?: boolean | undefined;
 };
 
@@ -110,6 +127,7 @@ export class GroupObject extends DurableObject<Env> {
 
     const accessToken = generateAccessToken();
     const tokenHash = await hashAccessToken(accessToken);
+    const creatorMemberId = crypto.randomUUID();
     // The group stamps its own clock, as it already does its own version.
     const createdAt = new Date().toISOString();
 
@@ -132,19 +150,32 @@ export class GroupObject extends DurableObject<Env> {
           input.currency_label,
         );
         this.ctx.storage.sql.exec(
-          `INSERT INTO access_tokens
-            (token_hash, device_user_id, created_at, revoked_at)
-           VALUES (?, ?, ?, NULL)`,
+          `INSERT INTO members
+            (id, version, created_at, updated_at, deleted_at, display_name)
+           VALUES (?, 1, ?, ?, NULL, ?)`,
+          creatorMemberId,
+          createdAt,
+          createdAt,
+          input.creator_display_name,
+        );
+        this.ctx.storage.sql.exec(
+          `INSERT INTO member_access
+            (token_hash, member_id, device_user_id, created_at, revoked_at)
+           VALUES (?, ?, ?, ?, NULL)`,
           tokenHash,
+          creatorMemberId,
           input.device_user_id,
           createdAt,
         );
 
         const group = this.readGroup();
+        const member = this.readMember(creatorMemberId);
 
         if (!group) throw new Error('group_insert_failed');
 
-        return { ok: true, group };
+        if (!member) throw new Error('creator_member_insert_failed');
+
+        return { ok: true, group, member };
       },
     );
 
@@ -261,11 +292,71 @@ export class GroupObject extends DurableObject<Env> {
 
       const member = this.readMember(memberId);
 
-      if (!member || member.deleted_at !== null) {
+      if (!member) {
         return { ok: false, error: 'member_not_found' };
       }
 
+      if (member.deleted_at !== null) {
+        return { ok: false, error: 'member_deleted' };
+      }
+
       return { ok: true, member };
+    });
+  }
+
+  async updateMember(
+    accessToken: string,
+    deviceUserId: string,
+    memberId: string,
+    input: UpdateMemberInput,
+  ): Promise<MutateMemberResult> {
+    return this.actOnGroup(accessToken, deviceUserId, (): MutateMemberResult => {
+      this.ensureMemberStorage();
+
+      const member = this.readMember(memberId);
+
+      if (!member) return { ok: false, error: 'member_not_found' };
+
+      if (member.deleted_at !== null) {
+        return { ok: false, error: 'member_deleted' };
+      }
+
+      if (member.version !== input.expected_version) {
+        return { ok: false, error: 'version_conflict' };
+      }
+
+      if (member.display_name === input.display_name) {
+        return { ok: true, member };
+      }
+
+      return this.commitMemberMutation(member, {
+        display_name: input.display_name,
+      });
+    });
+  }
+
+  async deleteMember(
+    accessToken: string,
+    deviceUserId: string,
+    memberId: string,
+    input: DeleteMemberInput,
+  ): Promise<MutateMemberResult> {
+    return this.actOnGroup(accessToken, deviceUserId, (): MutateMemberResult => {
+      this.ensureMemberStorage();
+
+      const member = this.readMember(memberId);
+
+      if (!member) return { ok: false, error: 'member_not_found' };
+
+      if (member.deleted_at !== null) {
+        return { ok: false, error: 'member_deleted' };
+      }
+
+      if (member.version !== input.expected_version) {
+        return { ok: false, error: 'version_conflict' };
+      }
+
+      return this.commitMemberMutation(member, { deleted: true });
     });
   }
 
@@ -358,13 +449,15 @@ export class GroupObject extends DurableObject<Env> {
       name TEXT NOT NULL,
       currency_label TEXT NOT NULL
     )`);
-    this.ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS access_tokens (
+    this.ensureMemberStorage();
+    this.ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS member_access (
       token_hash TEXT PRIMARY KEY,
+      member_id TEXT NOT NULL,
       device_user_id TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      revoked_at TEXT
+      revoked_at TEXT,
+      FOREIGN KEY (member_id) REFERENCES members(id)
     )`);
-    this.ensureMemberStorage();
     this.ctx.storage.sql.exec(
       `INSERT INTO object_metadata (key, value)
        VALUES (?, ?)
@@ -431,18 +524,58 @@ export class GroupObject extends DurableObject<Env> {
     return member ?? null;
   }
 
+  private commitMemberMutation(
+    member: Member,
+    changes: MemberChanges,
+  ): MutateMemberResult {
+    const at = new Date().toISOString();
+
+    this.ctx.storage.sql.exec(
+      `UPDATE members
+       SET version = version + 1,
+           updated_at = ?,
+           display_name = ?,
+           deleted_at = ?
+       WHERE id = ?`,
+      at,
+      changes.display_name ?? member.display_name,
+      changes.deleted === true ? at : member.deleted_at,
+      member.id,
+    );
+
+    if (changes.deleted === true) {
+      this.ctx.storage.sql.exec(
+        `UPDATE member_access
+         SET revoked_at = ?
+         WHERE member_id = ? AND revoked_at IS NULL`,
+        at,
+        member.id,
+      );
+    }
+
+    const mutated = this.readMember(member.id);
+
+    if (!mutated) throw new Error('member_mutation_failed');
+
+    return { ok: true, member: mutated };
+  }
+
   private hasAccess(tokenHash: string, deviceUserId: string): boolean {
     const access = this.ctx.storage.sql
-      .exec<AccessRow>(
-        `SELECT revoked_at
-         FROM access_tokens
-         WHERE token_hash = ? AND device_user_id = ?`,
+      .exec<MemberAccessRow>(
+        `SELECT access.member_id
+         FROM member_access AS access
+         INNER JOIN members AS member ON member.id = access.member_id
+         WHERE access.token_hash = ?
+           AND access.device_user_id = ?
+           AND access.revoked_at IS NULL
+           AND member.deleted_at IS NULL`,
         tokenHash,
         deviceUserId,
       )
       .toArray()[0];
 
-    return access?.revoked_at === null;
+    return access !== undefined;
   }
 }
 

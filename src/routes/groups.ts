@@ -1,5 +1,6 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { accessTokenSchema, groupSchema } from '../groupObject';
+import { memberSchema } from '../member';
 import {
   accessHeadersSchema,
   capabilityFrom,
@@ -22,6 +23,7 @@ const createGroupRoute = createRoute({
               name: z.string().trim().min(1).max(100),
               currency_label: z.string().trim().min(1).max(16).default('EUR'),
               device_user_id: z.string().trim().min(1).max(128),
+              creator_display_name: z.string().trim().min(1).max(100),
             })
             .strict(),
         },
@@ -30,10 +32,15 @@ const createGroupRoute = createRoute({
   },
   responses: {
     201: {
-      description: 'The group and its creating-device capability were created.',
+      description:
+        'The group, creator member, and creating-device capability were created.',
       content: {
         'application/json': {
-          schema: z.object({ access_token: accessTokenSchema, group: groupSchema }),
+          schema: z.object({
+            access_token: accessTokenSchema,
+            group: groupSchema,
+            member: memberSchema,
+          }),
         },
       },
     },
@@ -164,6 +171,7 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
       name: input.name,
       currency_label: input.currency_label,
       device_user_id: input.device_user_id,
+      creator_display_name: input.creator_display_name,
     });
 
     if (!result.ok) {
@@ -171,7 +179,11 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
     }
 
     return context.json(
-      { access_token: result.access_token, group: result.group },
+      {
+        access_token: result.access_token,
+        group: result.group,
+        member: result.member,
+      },
       201,
     );
   })

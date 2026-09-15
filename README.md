@@ -33,9 +33,10 @@ Implemented in this slice:
 - server-generated group ids and 256-bit access tokens;
 - one singleton `group_state` record inside the SQLite Durable Object selected
   by group id;
-- SHA-256 token hashes stored beside that group in the Durable Object's
-  `access_tokens` table—the plaintext token is returned only at creation;
-- atomic creation of the group record and its initial access capability;
+- a required creator display name and an initial member created for that person;
+- SHA-256 token hashes linked to members in the Durable Object's
+  `member_access` table—the plaintext token is returned only at creation;
+- atomic creation of the group, creator member, and creator capability;
 - creating-device checks using `Authorization` and `X-Device-User-Id`;
 - OpenAPI documentation and Worker-runtime integration coverage.
 
@@ -50,22 +51,27 @@ Implemented in this slice:
 - `409 version_conflict` responses for stale writes;
 - deletion tombstones retained inside the group's Durable Object.
 
-### 4 — Create and retrieve members
+### 4 — Member lifecycle
 
 Implemented in this slice:
 
 - member creation at `POST /groups/{groupId}/members`;
 - active-member listing at `GET /groups/{groupId}/members`;
 - individual retrieval at `GET /groups/{groupId}/members/{memberId}`;
+- member renaming at `PATCH /groups/{groupId}/members/{memberId}`;
+- soft deletion at `DELETE /groups/{groupId}/members/{memberId}`;
 - server-generated member ids, timestamps, and initial versions;
+- optimistic concurrency and no-op detection for member mutations;
+- deletion tombstones retained for future expense references;
 - member records stored only in their group’s Durable Object;
+- deletion of a member revokes every capability linked to that member;
 - group capability checks on every member endpoint.
 
 D1 currently stores only global application metadata. It remains available for
 future cross-group discovery, but it does not own group records or capabilities.
 
-Intentionally deferred: member updates/deletion, additional access and invites,
-expenses, balances, activity history, and WebSockets.
+Intentionally deferred: additional access and invites, expenses, balances,
+activity history, and WebSockets.
 
 ## Review locally
 
@@ -89,11 +95,12 @@ Create a group:
 ```bash
 curl -i http://localhost:8787/groups \
   -H 'Content-Type: application/json' \
-  --data '{"name":"Berlin flat","currency_label":"EUR","device_user_id":"device-1"}'
+  --data '{"name":"Berlin flat","currency_label":"EUR","device_user_id":"device-1","creator_display_name":"Santi"}'
 ```
 
-The response contains `group.id` and `access_token`. Use both values with the
-same device id to retrieve the group:
+The response contains the `group`, its initial `member`, and an `access_token`
+belonging to that member on the creating device. Use the group id and token with
+the same device id to retrieve the group:
 
 ```bash
 curl -i http://localhost:8787/groups/GROUP_ID \
@@ -102,7 +109,8 @@ curl -i http://localhost:8787/groups/GROUP_ID \
 ```
 
 Treat the access token like a password. The API stores its SHA-256 hash, not the
-plaintext value, and cannot show the original token again.
+plaintext value, and cannot show the original token again. Deleting the member
+that owns it also revokes that access.
 
 Update the group using the latest version you received:
 
