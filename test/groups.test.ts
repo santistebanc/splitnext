@@ -79,6 +79,46 @@ describe('groups API', () => {
     expect(created.group.updated_at).toBe(created.group.created_at);
   });
 
+  it('records the schema migration for each new group database', async () => {
+    const { created } = await AuthenticatedGroupDriver.create();
+    const objectId = env.GROUPS.idFromName(created.group.id);
+
+    const schemaVersion = await runInDurableObject(
+      env.GROUPS.get(objectId),
+      (_instance, state) =>
+        state.storage.kv.get<number>('splitnext_group_schema_version'),
+    );
+
+    expect(schemaVersion).toBe(1);
+  });
+
+  it('does not provision storage for an unknown group probe', async () => {
+    const groupId = crypto.randomUUID();
+
+    const response = await retrieveGroup(
+      groupId,
+      '0'.repeat(64),
+      crypto.randomUUID(),
+    );
+
+    const objectId = env.GROUPS.idFromName(groupId);
+
+    const applicationTables = await runInDurableObject(
+      env.GROUPS.get(objectId),
+      (_instance, state) =>
+        state.storage.sql
+          .exec<{ name: string }>(
+            `SELECT name FROM sqlite_master
+             WHERE type = 'table'
+               AND name IN ('group_state', 'members', 'member_access')`,
+          )
+          .toArray(),
+    );
+
+    expect(response.status).toBe(401);
+    expect(applicationTables).toEqual([]);
+  });
+
   it('returns the group to the holder of its capability', async () => {
     const group = await AuthenticatedGroupDriver.create();
     const fetched = await group.getGroup();

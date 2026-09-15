@@ -7,11 +7,22 @@ import type {
 } from '../src/groupState';
 import { groupSchema } from '../src/groupState';
 import type {
+  CreateMemberInput,
   DeleteMemberInput,
   UpdateMemberInput,
 } from '../src/memberDirectory';
 import { accessTokenSchema } from '../src/accessCredential';
 import { memberSchema } from '../src/memberDirectory';
+import {
+  GroupClient,
+  SplitnextClient,
+  type SplitnextFetch,
+} from '../src/splitnextClient';
+
+const workerFetch: SplitnextFetch = (input, init) =>
+  exports.default.fetch(input, init);
+
+const api = new SplitnextClient('https://splitnext.test', workerFetch);
 
 const createGroupResponseSchema = z.object({
   access_token: accessTokenSchema,
@@ -41,12 +52,15 @@ export type TestReply<T> =
   | { ok: true; status: number; body: T }
   | { ok: false; status: number; body: ErrorResponse };
 
-export function postGroup(input: CreateGroupInput): Promise<Response> {
-  return exports.default.fetch('https://splitnext.test/groups', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(input),
-  });
+/** Only what readReply needs; the body is parsed by schema, not by this type. */
+type JsonResponse = {
+  ok: boolean;
+  status: number;
+  json(): Promise<object>;
+};
+
+export function postGroup(input: CreateGroupInput) {
+  return api.createGroup(input);
 }
 
 /** Carries one valid group identity while hiding routine HTTP request plumbing. */
@@ -54,9 +68,15 @@ export class AuthenticatedGroupDriver {
   readonly created: CreateGroupResponse;
   readonly input: CreateGroupInput;
 
+  private readonly client: GroupClient;
+
   private constructor(input: CreateGroupInput, created: CreateGroupResponse) {
     this.input = input;
     this.created = created;
+    this.client = api.group(created.group.id, {
+      accessToken: created.access_token,
+      deviceUserId: input.device_user_id,
+    });
   }
 
   static async create(
@@ -83,79 +103,54 @@ export class AuthenticatedGroupDriver {
   }
 
   getGroup(): Promise<TestReply<GroupResponse>> {
-    return this.request('', groupResponseSchema);
+    return this.read(this.client.getGroup(), groupResponseSchema);
   }
 
   updateGroup(input: UpdateGroupInput): Promise<TestReply<GroupResponse>> {
-    return this.request('', groupResponseSchema, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(input),
-    });
+    return this.read(this.client.updateGroup(input), groupResponseSchema);
   }
 
   deleteGroup(input: DeleteGroupInput): Promise<TestReply<GroupResponse>> {
-    return this.request(
-      `?expected_version=${encodeURIComponent(String(input.expected_version))}`,
-      groupResponseSchema,
-      { method: 'DELETE' },
-    );
+    return this.read(this.client.deleteGroup(input), groupResponseSchema);
   }
 
-  createMember(displayName: string): Promise<TestReply<MemberResponse>> {
-    return this.request('/members', memberResponseSchema, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ display_name: displayName }),
-    });
+  createMember(input: CreateMemberInput): Promise<TestReply<MemberResponse>> {
+    return this.read(this.client.createMember(input), memberResponseSchema);
   }
 
   listMembers(): Promise<TestReply<MembersResponse>> {
-    return this.request('/members', membersResponseSchema);
+    return this.read(this.client.listMembers(), membersResponseSchema);
   }
 
   getMember(memberId: string): Promise<TestReply<MemberResponse>> {
-    return this.request(`/members/${memberId}`, memberResponseSchema);
+    return this.read(this.client.getMember(memberId), memberResponseSchema);
   }
 
   updateMember(
     memberId: string,
     input: UpdateMemberInput,
   ): Promise<TestReply<MemberResponse>> {
-    return this.request(`/members/${memberId}`, memberResponseSchema, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(input),
-    });
+    return this.read(
+      this.client.updateMember(memberId, input),
+      memberResponseSchema,
+    );
   }
 
   deleteMember(
     memberId: string,
     input: DeleteMemberInput,
   ): Promise<TestReply<MemberResponse>> {
-    return this.request(
-      `/members/${memberId}?expected_version=${encodeURIComponent(String(input.expected_version))}`,
+    return this.read(
+      this.client.deleteMember(memberId, input),
       memberResponseSchema,
-      { method: 'DELETE' },
     );
   }
 
-  private async request<T>(
-    relativePath: string,
+  private async read<T>(
+    responsePromise: Promise<JsonResponse>,
     successSchema: z.ZodType<T>,
-    init: RequestInit = {},
   ): Promise<TestReply<T>> {
-    const headers = new Headers(init.headers);
-
-    headers.set('authorization', `Bearer ${this.created.access_token}`);
-    headers.set('x-device-user-id', this.input.device_user_id);
-
-    const response = await exports.default.fetch(
-      `https://splitnext.test/groups/${this.created.group.id}${relativePath}`,
-      { ...init, headers },
-    );
-
-    return readReply(response, successSchema);
+    return readReply(await responsePromise, successSchema);
   }
 }
 
@@ -191,7 +186,7 @@ export function failureBody<T>(
 }
 
 async function readReply<T>(
-  response: Response,
+  response: JsonResponse,
   successSchema: z.ZodType<T>,
 ): Promise<TestReply<T>> {
   const body: unknown = await response.json();

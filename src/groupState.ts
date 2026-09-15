@@ -72,15 +72,11 @@ type GroupChanges = {
   deleted?: boolean | undefined;
 };
 
-const SCHEMA_VERSION = '1';
-
 /** Owns one group's persisted shape, version policy, and tombstone lifecycle. */
 export class GroupState {
   constructor(private readonly sql: SqlStorage) {}
 
   create(groupId: string, input: CreateGroupStateInput): CreateStoredGroupResult {
-    this.provision();
-
     if (this.retrieve()) return { ok: false, error: 'group_exists' };
 
     const createdAt = new Date().toISOString();
@@ -136,30 +132,6 @@ export class GroupState {
     }
 
     return this.commit(group, { deleted: true });
-  }
-
-  private provision(): void {
-    this.sql.exec(`CREATE TABLE IF NOT EXISTS object_metadata (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    )`);
-    this.sql.exec(`CREATE TABLE IF NOT EXISTS group_state (
-      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-      id TEXT NOT NULL UNIQUE,
-      version INTEGER NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      deleted_at TEXT,
-      name TEXT NOT NULL,
-      currency_label TEXT NOT NULL
-    )`);
-    this.sql.exec(
-      `INSERT INTO object_metadata (key, value)
-       VALUES (?, ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-      'schema_version',
-      SCHEMA_VERSION,
-    );
   }
 
   private commit(group: Group, changes: GroupChanges): GroupMutationResult {

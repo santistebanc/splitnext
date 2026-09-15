@@ -12,7 +12,7 @@ import {
   capabilityFrom,
   groupParamsSchema,
 } from './groupRequest';
-import { errorResponse } from './responses';
+import { errorResponse, REFUSAL_STATUS } from './responses';
 
 const createGroupRoute = createRoute({
   method: 'post',
@@ -161,9 +161,7 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
     const result = await context.env.GROUPS.get(id).createGroup(input);
 
     if (!result.ok) {
-      return result.error === 'invalid_request'
-        ? context.json({ error: result.error }, 400)
-        : context.json({ error: result.error }, 409);
+      return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);
     }
 
     return context.json(
@@ -184,9 +182,7 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
     const result = await context.env.GROUPS.get(id).getGroup(credential);
 
     if (!result.ok) {
-      return result.error === 'group_deleted'
-        ? context.json({ error: result.error }, 410)
-        : context.json({ error: result.error }, 401);
+      return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);
     }
 
     return context.json({ group: result.group }, 200);
@@ -204,7 +200,7 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
     );
 
     if (!result.ok) {
-      return context.json({ error: result.error }, mutationStatus(result.error));
+      return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);
     }
 
     return context.json({ group: result.group }, 200);
@@ -222,19 +218,8 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
     );
 
     if (!result.ok) {
-      return context.json({ error: result.error }, mutationStatus(result.error));
+      return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);
     }
 
     return context.json({ group: result.group }, 200);
   });
-
-/** The one mapping from the group's refusals to statuses, for both mutations. */
-function mutationStatus(
-  error: 'invalid_request' | 'unauthorized' | 'group_deleted' | 'version_conflict',
-): 400 | 401 | 409 | 410 {
-  if (error === 'invalid_request') return 400;
-
-  if (error === 'group_deleted') return 410;
-
-  return error === 'version_conflict' ? 409 : 401;
-}

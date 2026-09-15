@@ -21,17 +21,6 @@ type MemberAccessRow = { member_id: string };
 export class MemberCredentials {
   constructor(private readonly sql: SqlStorage) {}
 
-  provision(): void {
-    this.sql.exec(`CREATE TABLE IF NOT EXISTS member_access (
-      token_hash TEXT PRIMARY KEY,
-      member_id TEXT NOT NULL,
-      device_user_id TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      revoked_at TEXT,
-      FOREIGN KEY (member_id) REFERENCES members(id)
-    )`);
-  }
-
   async prepareIssue(deviceUserId: string): Promise<PreparedCredentialIssue> {
     const accessToken = generateAccessToken();
 

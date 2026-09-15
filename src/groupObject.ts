@@ -12,6 +12,7 @@ import {
   type UpdateGroupInput,
 } from './groupState';
 import { type AccessCredential } from './accessCredential';
+import { GroupDatabase } from './groupDatabase';
 import {
   createMemberInputSchema,
   type CreateMemberInput,
@@ -57,11 +58,13 @@ type CreateGroupResult =
  * modules; persisted lifecycle rules stay inside those modules.
  */
 export class GroupObject extends DurableObject<Env> {
+  private readonly database: GroupDatabase;
   private readonly groupState: GroupState;
   private readonly members: MemberDirectory;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    this.database = new GroupDatabase(ctx.storage);
     this.groupState = new GroupState(ctx.storage.sql);
     this.members = new MemberDirectory(ctx.storage.sql);
   }
@@ -84,6 +87,8 @@ export class GroupObject extends DurableObject<Env> {
       display_name: input.creator_display_name,
       device_user_id: input.device_user_id,
     });
+
+    this.database.provision();
 
     return this.ctx.storage.transactionSync((): CreateGroupResult => {
       const storedGroup = this.groupState.create(groupId, input);
@@ -207,6 +212,8 @@ export class GroupObject extends DurableObject<Env> {
     credential: AccessCredential,
     act: (group: Group) => T,
   ): Promise<T | GroupRefusal> {
+    this.database.upgradeIfPresent();
+
     const prepared = await this.members.prepareAuthorization(credential);
 
     return this.ctx.storage.transactionSync((): T | GroupRefusal => {
