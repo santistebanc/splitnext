@@ -91,8 +91,79 @@ const getMemberRoute = createRoute({
     400: errorResponse('The group or member id is malformed.'),
     401: errorResponse('The group or capability is unavailable to this device.'),
     404: errorResponse('The member does not exist.'),
-    410: errorResponse('The group was deleted.'),
+    410: errorResponse('The group or member was deleted.'),
     500: errorResponse('The member could not be retrieved.'),
+  },
+});
+
+const updateMemberRoute = createRoute({
+  method: 'patch',
+  path: '/groups/{groupId}/members/{memberId}',
+  tags: ['Members'],
+  summary: 'Update a member',
+  description:
+    'Renames a member if the supplied version is still current.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: memberParamsSchema,
+    headers: accessHeadersSchema,
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: z
+            .object({
+              expected_version: z.number().int().positive(),
+              display_name: z.string().trim().min(1).max(100),
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'The updated member.',
+      content: { 'application/json': { schema: z.object({ member: memberSchema }) } },
+    },
+    400: errorResponse('The path, headers, or request body are invalid.'),
+    401: errorResponse('The group or capability is unavailable to this device.'),
+    404: errorResponse('The member does not exist.'),
+    409: errorResponse('The supplied version is stale.'),
+    410: errorResponse('The group or member was deleted.'),
+    500: errorResponse('The member could not be updated.'),
+  },
+});
+
+const deleteMemberRoute = createRoute({
+  method: 'delete',
+  path: '/groups/{groupId}/members/{memberId}',
+  tags: ['Members'],
+  summary: 'Delete a member',
+  description:
+    'Soft-deletes a member at its current version so referenced history is retained.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: memberParamsSchema,
+    headers: accessHeadersSchema,
+    query: z.object({
+      expected_version: z.coerce.number().int().positive().openapi({
+        param: { name: 'expected_version', in: 'query' },
+        description: 'The latest member version observed by the caller.',
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'The member deletion tombstone.',
+      content: { 'application/json': { schema: z.object({ member: memberSchema }) } },
+    },
+    400: errorResponse('The path, headers, or query are invalid.'),
+    401: errorResponse('The group or capability is unavailable to this device.'),
+    404: errorResponse('The member does not exist.'),
+    409: errorResponse('The supplied version is stale.'),
+    410: errorResponse('The group or member was already deleted.'),
+    500: errorResponse('The member could not be deleted.'),
   },
 });
 
@@ -155,6 +226,44 @@ export const memberRoutes = new OpenAPIHono<{ Bindings: Env }>({
     }
 
     return context.json({ member: result.member }, 200);
+  })
+  .openapi(updateMemberRoute, async (context) => {
+    const { groupId, memberId } = context.req.valid('param');
+    const { accessToken, deviceUserId } = capabilityFrom(context.req.valid('header'));
+    const input = context.req.valid('json');
+    const id = context.env.GROUPS.idFromName(groupId);
+
+    const result = await context.env.GROUPS.get(id).updateMember(
+      accessToken,
+      deviceUserId,
+      memberId,
+      input,
+    );
+
+    if (!result.ok) {
+      return context.json({ error: result.error }, memberMutationStatus(result.error));
+    }
+
+    return context.json({ member: result.member }, 200);
+  })
+  .openapi(deleteMemberRoute, async (context) => {
+    const { groupId, memberId } = context.req.valid('param');
+    const { accessToken, deviceUserId } = capabilityFrom(context.req.valid('header'));
+    const { expected_version } = context.req.valid('query');
+    const id = context.env.GROUPS.idFromName(groupId);
+
+    const result = await context.env.GROUPS.get(id).deleteMember(
+      accessToken,
+      deviceUserId,
+      memberId,
+      { expected_version },
+    );
+
+    if (!result.ok) {
+      return context.json({ error: result.error }, memberMutationStatus(result.error));
+    }
+
+    return context.json({ member: result.member }, 200);
   });
 
 function groupRefusalStatus(error: 'unauthorized' | 'group_deleted'): 401 | 410 {
@@ -162,9 +271,22 @@ function groupRefusalStatus(error: 'unauthorized' | 'group_deleted'): 401 | 410 
 }
 
 function memberRefusalStatus(
-  error: 'unauthorized' | 'group_deleted' | 'member_not_found',
+  error: 'unauthorized' | 'group_deleted' | 'member_not_found' | 'member_deleted',
 ): 401 | 404 | 410 {
-  if (error === 'group_deleted') return 410;
+  if (error === 'group_deleted' || error === 'member_deleted') return 410;
 
   return error === 'member_not_found' ? 404 : 401;
+}
+
+function memberMutationStatus(
+  error:
+    | 'unauthorized'
+    | 'group_deleted'
+    | 'member_not_found'
+    | 'member_deleted'
+    | 'version_conflict',
+): 401 | 404 | 409 | 410 {
+  if (error === 'version_conflict') return 409;
+
+  return memberRefusalStatus(error);
 }

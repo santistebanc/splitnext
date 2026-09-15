@@ -1,15 +1,18 @@
 import { exports } from 'cloudflare:workers';
 import type { Group } from '../src/groupObject';
+import type { Member } from '../src/member';
 
 export type CreateGroupResponse = {
   access_token: string;
   group: Group;
+  member: Member;
 };
 
 export function postGroup(body: {
   name: string;
   currency_label: string;
   device_user_id: string;
+  creator_display_name: string;
 }) {
   return exports.default.fetch('https://splitnext.test/groups', {
     method: 'POST',
@@ -23,12 +26,14 @@ export async function createGroup(
     name: string;
     currency_label: string;
     device_user_id: string;
+    creator_display_name: string;
   }> = {},
 ) {
   const body = {
     name: 'Berlin flat',
     currency_label: 'EUR',
     device_user_id: crypto.randomUUID(),
+    creator_display_name: 'Santi',
     ...overrides,
   };
 

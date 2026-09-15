@@ -2,6 +2,7 @@ import { env, exports } from 'cloudflare:workers';
 import { runInDurableObject } from 'cloudflare:test';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { accessTokenSchema, groupSchema, type Group } from '../src/groupObject';
+import { memberSchema } from '../src/member';
 import { createGroup, postGroup } from './groupFixture';
 import { applyTestMigrations, fetchOpenApiDocument } from './harness';
 
@@ -15,8 +16,9 @@ type GroupResponse = {
   group: Group;
 };
 
-type StoredAccessToken = {
+type StoredMemberAccess = {
   token_hash: string;
+  member_id: string;
   device_user_id: string;
   revoked_at: string | null;
 };
@@ -80,7 +82,7 @@ function deleteGroup(
 }
 
 describe('groups API', () => {
-  it('creates a group and returns it with a capability', async () => {
+  it('creates a group, its creator member, and their capability', async () => {
     const { body, created, response } = await createGroup();
 
     expect(response.status).toBe(201);
@@ -92,6 +94,15 @@ describe('groups API', () => {
       name: body.name,
       currency_label: body.currency_label,
     });
+    expect(Object.keys(created.member).sort()).toEqual(
+      Object.keys(memberSchema.shape).sort(),
+    );
+    expect(created.member).toMatchObject({
+      version: 1,
+      deleted_at: null,
+      display_name: body.creator_display_name,
+    });
+    expect(created.member.updated_at).toBe(created.member.created_at);
     expect(created.group.id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
@@ -319,11 +330,11 @@ describe('groups API', () => {
     expect(await deletion.json()).toEqual({ error: 'unauthorized' });
   });
 
-  it('stores the capability only as a hash, and only inside the group', async () => {
+  it('stores the capability as a hash linked to its member inside the group', async () => {
     const { body, created } = await createGroup();
 
     const d1AccessTable = await env.INDEX.prepare(
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'access_tokens'",
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'member_access'",
     ).first<{ name: string }>();
 
     const objectId = env.GROUPS.idFromName(created.group.id);
@@ -332,8 +343,8 @@ describe('groups API', () => {
       env.GROUPS.get(objectId),
       (_instance, state) =>
         state.storage.sql
-          .exec<StoredAccessToken>(
-            'SELECT token_hash, device_user_id, revoked_at FROM access_tokens',
+          .exec<StoredMemberAccess>(
+            'SELECT token_hash, member_id, device_user_id, revoked_at FROM member_access',
           )
           .toArray()[0],
     );
@@ -341,21 +352,38 @@ describe('groups API', () => {
     expect(d1AccessTable).toBeNull();
     expect(stored).toEqual({
       token_hash: expect.stringMatching(sha256Hex),
+      member_id: created.member.id,
       device_user_id: body.device_user_id,
       revoked_at: null,
     });
     expect(stored?.token_hash).not.toBe(created.access_token);
   });
 
-  it('rejects invalid group input', async () => {
-    const response = await postGroup({
+  it('rejects invalid group input and requires a creator name', async () => {
+    const invalidName = await postGroup({
       name: '',
       currency_label: 'EUR',
       device_user_id: crypto.randomUUID(),
+      creator_display_name: 'Santi',
     });
 
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: 'invalid_request' });
+    const missingCreator = await exports.default.fetch(
+      'https://splitnext.test/groups',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Berlin flat',
+          currency_label: 'EUR',
+          device_user_id: crypto.randomUUID(),
+        }),
+      },
+    );
+
+    expect(invalidName.status).toBe(400);
+    expect(await invalidName.json()).toEqual({ error: 'invalid_request' });
+    expect(missingCreator.status).toBe(400);
+    expect(await missingCreator.json()).toEqual({ error: 'invalid_request' });
   });
 
   it('rejects missing, malformed, incorrect, and wrong-device credentials', async () => {
@@ -419,6 +447,7 @@ describe('groups API', () => {
       name: 'Berlin flat',
       currency_label: 'EUR',
       device_user_id: crypto.randomUUID(),
+      creator_display_name: 'Santi',
     };
 
     const stub = env.GROUPS.get(objectId);
