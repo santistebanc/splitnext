@@ -2,6 +2,7 @@ import { env, exports } from 'cloudflare:workers';
 import { runInDurableObject } from 'cloudflare:test';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { accessTokenSchema, groupSchema, type Group } from '../src/groupObject';
+import { createGroup, postGroup } from './groupFixture';
 import { applyTestMigrations, fetchOpenApiDocument } from './harness';
 
 /** Read from the one declaration of the group's shape, never restated. */
@@ -9,11 +10,6 @@ const groupFields = Object.keys(groupSchema.shape).sort();
 
 /** A SHA-256 digest in hex. Same width as a capability, a different thing. */
 const sha256Hex = /^[a-f0-9]{64}$/;
-
-type CreateGroupResponse = {
-  access_token: string;
-  group: Group;
-};
 
 type GroupResponse = {
   group: Group;
@@ -33,36 +29,6 @@ type SqliteObject = {
 beforeAll(async () => {
   await applyTestMigrations();
 });
-
-function postGroup(body: {
-  name: string;
-  currency_label: string;
-  device_user_id: string;
-}) {
-  return exports.default.fetch('https://splitnext.test/groups', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-}
-
-async function createGroup(
-  overrides: Partial<{ name: string; currency_label: string; device_user_id: string }> = {},
-) {
-  const body = {
-    name: 'Berlin flat',
-    currency_label: 'EUR',
-    device_user_id: crypto.randomUUID(),
-    ...overrides,
-  };
-
-  const response = await postGroup(body);
-
-  // SAFETY: This response is produced by the typed POST /groups route under test.
-  const created = (await response.json()) as CreateGroupResponse;
-
-  return { body, created, response };
-}
 
 function retrieveGroup(groupId: string, accessToken: string, deviceUserId: string) {
   return exports.default.fetch(`https://splitnext.test/groups/${groupId}`, {

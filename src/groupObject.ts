@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { z } from 'zod';
+import { type CreateMemberInput, type Member } from './member';
 
 /**
  * The shape of a group, declared once because the group owns it. The storage
@@ -73,6 +74,15 @@ type GroupRefusal = { ok: false; error: 'unauthorized' | 'group_deleted' };
 type ResolvedGroup = { ok: true; group: Group } | GroupRefusal;
 
 type MutateGroupResult = ResolvedGroup | { ok: false; error: 'version_conflict' };
+
+type CreateMemberResult = { ok: true; member: Member } | GroupRefusal;
+
+type ListMembersResult = { ok: true; members: Member[] } | GroupRefusal;
+
+type GetMemberResult =
+  | { ok: true; member: Member }
+  | GroupRefusal
+  | { ok: false; error: 'member_not_found' };
 
 /** The columns a mutation may change; anything absent keeps its current value. */
 type GroupChanges = {
@@ -192,6 +202,73 @@ export class GroupObject extends DurableObject<Env> {
     });
   }
 
+  async createMember(
+    accessToken: string,
+    deviceUserId: string,
+    input: CreateMemberInput,
+  ): Promise<CreateMemberResult> {
+    return this.actOnGroup(accessToken, deviceUserId, (): CreateMemberResult => {
+      this.ensureMemberStorage();
+
+      const memberId = crypto.randomUUID();
+      const createdAt = new Date().toISOString();
+
+      this.ctx.storage.sql.exec(
+        `INSERT INTO members
+          (id, version, created_at, updated_at, deleted_at, display_name)
+         VALUES (?, 1, ?, ?, NULL, ?)`,
+        memberId,
+        createdAt,
+        createdAt,
+        input.display_name,
+      );
+
+      const member = this.readMember(memberId);
+
+      if (!member) throw new Error('member_insert_failed');
+
+      return { ok: true, member };
+    });
+  }
+
+  async listMembers(
+    accessToken: string,
+    deviceUserId: string,
+  ): Promise<ListMembersResult> {
+    return this.actOnGroup(accessToken, deviceUserId, (): ListMembersResult => {
+      this.ensureMemberStorage();
+
+      const members = this.ctx.storage.sql
+        .exec<Member>(
+          `SELECT id, version, created_at, updated_at, deleted_at, display_name
+           FROM members
+           WHERE deleted_at IS NULL
+           ORDER BY created_at, id`,
+        )
+        .toArray();
+
+      return { ok: true, members };
+    });
+  }
+
+  async getMember(
+    accessToken: string,
+    deviceUserId: string,
+    memberId: string,
+  ): Promise<GetMemberResult> {
+    return this.actOnGroup(accessToken, deviceUserId, (): GetMemberResult => {
+      this.ensureMemberStorage();
+
+      const member = this.readMember(memberId);
+
+      if (!member || member.deleted_at !== null) {
+        return { ok: false, error: 'member_not_found' };
+      }
+
+      return { ok: true, member };
+    });
+  }
+
   /**
    * Hashes the capability, opens the transaction and resolves the live group
    * the caller may act on, so each operation holds only its own intent.
@@ -287,6 +364,7 @@ export class GroupObject extends DurableObject<Env> {
       created_at TEXT NOT NULL,
       revoked_at TEXT
     )`);
+    this.ensureMemberStorage();
     this.ctx.storage.sql.exec(
       `INSERT INTO object_metadata (key, value)
        VALUES (?, ?)
@@ -327,6 +405,30 @@ export class GroupObject extends DurableObject<Env> {
       .toArray()[0];
 
     return row ?? null;
+  }
+
+  private ensureMemberStorage(): void {
+    this.ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS members (
+      id TEXT PRIMARY KEY,
+      version INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT,
+      display_name TEXT NOT NULL
+    )`);
+  }
+
+  private readMember(memberId: string): Member | null {
+    const member = this.ctx.storage.sql
+      .exec<Member>(
+        `SELECT id, version, created_at, updated_at, deleted_at, display_name
+         FROM members
+         WHERE id = ?`,
+        memberId,
+      )
+      .toArray()[0];
+
+    return member ?? null;
   }
 
   private hasAccess(tokenHash: string, deviceUserId: string): boolean {

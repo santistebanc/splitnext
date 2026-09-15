@@ -1,40 +1,11 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { accessTokenSchema, groupSchema } from '../groupObject';
 import {
-  ACCESS_TOKEN_PATTERN,
-  accessTokenSchema,
-  groupSchema,
-} from '../groupObject';
+  accessHeadersSchema,
+  capabilityFrom,
+  groupParamsSchema,
+} from './groupRequest';
 import { errorResponse } from './responses';
-
-const BEARER_PREFIX = 'Bearer ';
-
-const groupParamsSchema = z.object({
-  groupId: z.uuid().openapi({
-    param: { name: 'groupId', in: 'path' },
-  }),
-});
-
-const accessHeadersSchema = z.object({
-  authorization: z
-    .string()
-    .regex(new RegExp(`^${BEARER_PREFIX}${ACCESS_TOKEN_PATTERN}$`))
-    .openapi({
-      param: { name: 'authorization', in: 'header' },
-      description: 'The Bearer capability returned when the group was created.',
-    }),
-  'x-device-user-id': z.string().trim().min(1).max(128).openapi({
-    param: { name: 'x-device-user-id', in: 'header' },
-    description: 'The device identity that received this group capability.',
-  }),
-});
-
-/** Both credentials arrive validated, so this only strips the scheme. */
-function capabilityFrom(headers: z.infer<typeof accessHeadersSchema>) {
-  return {
-    accessToken: headers.authorization.slice(BEARER_PREFIX.length),
-    deviceUserId: headers['x-device-user-id'],
-  };
-}
 
 const createGroupRoute = createRoute({
   method: 'post',

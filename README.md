@@ -50,11 +50,22 @@ Implemented in this slice:
 - `409 version_conflict` responses for stale writes;
 - deletion tombstones retained inside the group's Durable Object.
 
+### 4 — Create and retrieve members
+
+Implemented in this slice:
+
+- member creation at `POST /groups/{groupId}/members`;
+- active-member listing at `GET /groups/{groupId}/members`;
+- individual retrieval at `GET /groups/{groupId}/members/{memberId}`;
+- server-generated member ids, timestamps, and initial versions;
+- member records stored only in their group’s Durable Object;
+- group capability checks on every member endpoint.
+
 D1 currently stores only global application metadata. It remains available for
 future cross-group discovery, but it does not own group records or capabilities.
 
-Intentionally deferred: members, additional access and invites, expenses,
-balances, activity history, and WebSockets.
+Intentionally deferred: member updates/deletion, additional access and invites,
+expenses, balances, activity history, and WebSockets.
 
 ## Review locally
 
@@ -110,6 +121,16 @@ curl -i -X DELETE \
   'http://localhost:8787/groups/GROUP_ID?expected_version=2' \
   -H 'Authorization: Bearer ACCESS_TOKEN' \
   -H 'X-Device-User-Id: device-1'
+```
+
+Create a member inside the group:
+
+```bash
+curl -i http://localhost:8787/groups/GROUP_ID/members \
+  -H 'Authorization: Bearer ACCESS_TOKEN' \
+  -H 'X-Device-User-Id: device-1' \
+  -H 'Content-Type: application/json' \
+  --data '{"display_name":"Ada"}'
 ```
 
 Expected readiness body after the local migration:
