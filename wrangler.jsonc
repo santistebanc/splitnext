@@ -1,0 +1,32 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "splitnext-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-14",
+  "workers_dev": true,
+  "vars": {
+    "DEPLOY_SHA": "local"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GROUPS",
+        "class_name": "GroupObject"
+      }
+    ]
+  },
+  "exports": {
+    "GroupObject": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "d1_databases": [
+    {
+      "binding": "INDEX",
+      "database_name": "splitnext-v4-index",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
