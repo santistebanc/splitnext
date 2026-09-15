@@ -1,13 +1,10 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { errorResponse } from './responses';
 
 type DependencyStatus = {
   d1: boolean;
   durable_object: boolean;
 };
-
-const errorResponseSchema = z.object({
-  error: z.string(),
-});
 
 const healthResponseSchema = z.object({
   ok: z.literal(true),
@@ -56,12 +53,7 @@ const readyRoute = createRoute({
         'application/json': { schema: readyResponseSchema },
       },
     },
-    500: {
-      description: 'An unexpected error occurred.',
-      content: {
-        'application/json': { schema: errorResponseSchema },
-      },
-    },
+    500: errorResponse('An unexpected error occurred.'),
   },
 });
 
@@ -107,9 +99,8 @@ async function probeIndex(env: Env): Promise<boolean> {
 async function probeGroupStorage(env: Env): Promise<boolean> {
   try {
     const id = env.GROUPS.idFromName('__readiness__');
-    const result = await env.GROUPS.get(id).health();
 
-    return result.ok && result.ready;
+    return await env.GROUPS.get(id).health();
   } catch {
     return false;
   }

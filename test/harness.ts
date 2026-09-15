@@ -30,7 +30,7 @@ export type OpenApiDocument = {
     '/ready': object;
     '/groups': {
       post: {
-        responses: { 201: object; 400: object; 409: object; 500: object };
+        responses: object;
       };
     };
     '/groups/{groupId}': {
@@ -38,31 +38,13 @@ export type OpenApiDocument = {
         parameters: { name: string; in: string }[];
         responses: {
           200: OpenApiJsonResponse;
-          400: object;
-          401: object;
-          410: object;
-          500: object;
         };
       };
       patch: {
-        responses: {
-          200: object;
-          400: object;
-          401: object;
-          409: object;
-          410: object;
-          500: object;
-        };
+        responses: object;
       };
       delete: {
-        responses: {
-          200: object;
-          400: object;
-          401: object;
-          409: object;
-          410: object;
-          500: object;
-        };
+        responses: object;
       };
     };
   };
