@@ -89,8 +89,8 @@ type GroupChanges = {
  * addressing a group id leaves nothing behind.
  */
 export class GroupObject extends DurableObject<Env> {
-  async health(): Promise<{ ok: true; storage: 'sqlite'; ready: boolean }> {
-    return { ok: true, storage: 'sqlite', ready: this.isStorageReachable() };
+  async health(): Promise<boolean> {
+    return this.isStorageReachable();
   }
 
   async createGroup(input: CreateGroupInput): Promise<CreateGroupResult> {

@@ -4,18 +4,9 @@ import {
   accessTokenSchema,
   groupSchema,
 } from '../groupObject';
+import { errorResponse } from './responses';
 
 const BEARER_PREFIX = 'Bearer ';
-
-const errorSchema = z.object({ error: z.string() });
-
-/** Every refusal has the same body, so a route supplies only what it means. */
-function errorResponse(description: string) {
-  return {
-    description,
-    content: { 'application/json': { schema: errorSchema } },
-  };
-}
 
 const groupParamsSchema = z.object({
   groupId: z.uuid().openapi({
