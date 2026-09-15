@@ -249,9 +249,66 @@ describe('groups API', () => {
           .toArray()[0],
     );
 
-    expect(fetched.status).toBe(401);
-    expect(await fetched.json()).toEqual({ error: 'unauthorized' });
+    // The capability is still valid; the group is what is gone.
+    expect(fetched.status).toBe(410);
+    expect(await fetched.json()).toEqual({ error: 'group_deleted' });
     expect(stored).toEqual({ singleton: 1, ...deleted.group });
+  });
+
+  it('reports a deleted group as gone to every operation', async () => {
+    const { body, created } = await createGroup();
+
+    await deleteGroup(
+      created.group.id,
+      created.access_token,
+      body.device_user_id,
+      created.group.version,
+    );
+
+    const update = await patchGroup(
+      created.group.id,
+      created.access_token,
+      body.device_user_id,
+      { expected_version: 2, name: 'After the end' },
+    );
+
+    const deletion = await deleteGroup(
+      created.group.id,
+      created.access_token,
+      body.device_user_id,
+      2,
+    );
+
+    expect(update.status).toBe(410);
+    expect(deletion.status).toBe(410);
+    expect(await update.json()).toEqual({ error: 'group_deleted' });
+  });
+
+  it('does not advance the version when an update changes nothing', async () => {
+    const { body, created } = await createGroup();
+
+    const response = await patchGroup(
+      created.group.id,
+      created.access_token,
+      body.device_user_id,
+      { expected_version: 1, name: created.group.name },
+    );
+
+    // SAFETY: This response is produced by the typed PATCH /groups/{groupId} route.
+    const unchanged = (await response.json()) as GroupResponse;
+
+    expect(response.status).toBe(200);
+    expect(unchanged.group).toEqual(created.group);
+
+    // A second device's expected_version survives the no-op.
+    const next = await patchGroup(
+      created.group.id,
+      created.access_token,
+      body.device_user_id,
+      { expected_version: 1, currency_label: 'USD' },
+    );
+
+    expect(next.status).toBe(200);
   });
 
   it('rejects deletion with a stale version', async () => {
@@ -439,12 +496,19 @@ describe('groups API', () => {
       '409',
       '500',
     ]);
-    expect(Object.keys(byId.get.responses)).toEqual(['200', '400', '401', '500']);
+    expect(Object.keys(byId.get.responses)).toEqual([
+      '200',
+      '400',
+      '401',
+      '410',
+      '500',
+    ]);
     expect(Object.keys(byId.patch.responses)).toEqual([
       '200',
       '400',
       '401',
       '409',
+      '410',
       '500',
     ]);
     expect(Object.keys(byId.delete.responses)).toEqual([
@@ -452,6 +516,7 @@ describe('groups API', () => {
       '400',
       '401',
       '409',
+      '410',
       '500',
     ]);
   });

@@ -69,11 +69,11 @@ type CreateGroupResult =
 
 type GetGroupResult =
   | { ok: true; group: Group }
-  | { ok: false; error: 'unauthorized' };
+  | { ok: false; error: 'unauthorized' | 'group_deleted' };
 
 type MutateGroupResult =
   | { ok: true; group: Group }
-  | { ok: false; error: 'unauthorized' | 'version_conflict' };
+  | { ok: false; error: 'unauthorized' | 'group_deleted' | 'version_conflict' };
 
 /**
  * The per-group SQLite Durable Object. Each instance owns exactly one group's
@@ -145,23 +145,9 @@ export class GroupObject extends DurableObject<Env> {
   async getGroup(accessToken: string, deviceUserId: string): Promise<GetGroupResult> {
     const tokenHash = await hashAccessToken(accessToken);
 
-    return this.ctx.storage.transactionSync((): GetGroupResult => {
-      if (!this.isProvisioned()) return { ok: false, error: 'unauthorized' };
-
-      if (!this.hasAccess(tokenHash, deviceUserId)) {
-        return { ok: false, error: 'unauthorized' };
-      }
-
-      const group = this.readGroup();
-
-      // A live capability without group state breaks the invariant that both
-      // are written in one transaction, so it is a fault, not a refusal.
-      if (!group) throw new Error('group_state_missing');
-
-      if (group.deleted_at !== null) return { ok: false, error: 'unauthorized' };
-
-      return { ok: true, group };
-    });
+    return this.ctx.storage.transactionSync(() =>
+      this.resolveGroup(tokenHash, deviceUserId),
+    );
   }
 
   async updateGroup(
@@ -172,36 +158,34 @@ export class GroupObject extends DurableObject<Env> {
     const tokenHash = await hashAccessToken(accessToken);
 
     return this.ctx.storage.transactionSync((): MutateGroupResult => {
-      if (!this.isProvisioned() || !this.hasAccess(tokenHash, deviceUserId)) {
-        return { ok: false, error: 'unauthorized' };
-      }
+      const resolved = this.resolveGroup(tokenHash, deviceUserId);
 
-      const group = this.readGroup();
+      if (!resolved.ok) return resolved;
 
-      if (!group) throw new Error('group_state_missing');
-
-      if (group.deleted_at !== null) return { ok: false, error: 'unauthorized' };
+      const { group } = resolved;
 
       if (group.version !== input.expected_version) {
         return { ok: false, error: 'version_conflict' };
       }
 
-      const updatedAt = new Date().toISOString();
+      const name = input.name ?? group.name;
+      const currencyLabel = input.currency_label ?? group.currency_label;
 
-      this.ctx.storage.sql.exec(
-        `UPDATE group_state
-         SET version = version + 1, updated_at = ?, name = ?, currency_label = ?
-         WHERE singleton = 1`,
-        updatedAt,
-        input.name ?? group.name,
-        input.currency_label ?? group.currency_label,
-      );
+      // A redundant edit must not advance the version, or one device's no-op
+      // makes every other device's expected_version stale.
+      if (name === group.name && currencyLabel === group.currency_label) {
+        return { ok: true, group };
+      }
 
-      const updated = this.readGroup();
-
-      if (!updated) throw new Error('group_update_failed');
-
-      return { ok: true, group: updated };
+      return this.commitMutation(() => {
+        this.ctx.storage.sql.exec(
+          `UPDATE group_state
+           SET name = ?, currency_label = ?
+           WHERE singleton = 1`,
+          name,
+          currencyLabel,
+        );
+      });
     });
   }
 
@@ -213,36 +197,67 @@ export class GroupObject extends DurableObject<Env> {
     const tokenHash = await hashAccessToken(accessToken);
 
     return this.ctx.storage.transactionSync((): MutateGroupResult => {
-      if (!this.isProvisioned() || !this.hasAccess(tokenHash, deviceUserId)) {
-        return { ok: false, error: 'unauthorized' };
-      }
+      const resolved = this.resolveGroup(tokenHash, deviceUserId);
 
-      const group = this.readGroup();
+      if (!resolved.ok) return resolved;
 
-      if (!group) throw new Error('group_state_missing');
-
-      if (group.deleted_at !== null) return { ok: false, error: 'unauthorized' };
-
-      if (group.version !== input.expected_version) {
+      if (resolved.group.version !== input.expected_version) {
         return { ok: false, error: 'version_conflict' };
       }
 
-      const deletedAt = new Date().toISOString();
-
-      this.ctx.storage.sql.exec(
-        `UPDATE group_state
-         SET version = version + 1, updated_at = ?, deleted_at = ?
-         WHERE singleton = 1`,
-        deletedAt,
-        deletedAt,
-      );
-
-      const deleted = this.readGroup();
-
-      if (!deleted) throw new Error('group_delete_failed');
-
-      return { ok: true, group: deleted };
+      return this.commitMutation((at) => {
+        this.ctx.storage.sql.exec(
+          'UPDATE group_state SET deleted_at = ? WHERE singleton = 1',
+          at,
+        );
+      });
     });
+  }
+
+  /**
+   * The single answer to "which live group may this caller act on". Every
+   * public operation goes through here, so a new one cannot forget a guard.
+   * Runs inside the caller's transaction.
+   */
+  private resolveGroup(tokenHash: string, deviceUserId: string): GetGroupResult {
+    if (!this.isProvisioned() || !this.hasAccess(tokenHash, deviceUserId)) {
+      return { ok: false, error: 'unauthorized' };
+    }
+
+    const group = this.readGroup();
+
+    // A live capability without group state breaks the invariant that both
+    // are written in one transaction, so it is a fault, not a refusal.
+    if (!group) throw new Error('group_state_missing');
+
+    // The caller holds a valid capability, so being told nothing would
+    // misinform rather than withhold.
+    if (group.deleted_at !== null) return { ok: false, error: 'group_deleted' };
+
+    return { ok: true, group };
+  }
+
+  /**
+   * Advances the version and stamps the clock, applies the caller's change,
+   * and returns the group as stored. Runs inside the caller's transaction.
+   */
+  private commitMutation(apply: (at: string) => void): MutateGroupResult {
+    const at = new Date().toISOString();
+
+    this.ctx.storage.sql.exec(
+      `UPDATE group_state
+       SET version = version + 1, updated_at = ?
+       WHERE singleton = 1`,
+      at,
+    );
+
+    apply(at);
+
+    const mutated = this.readGroup();
+
+    if (!mutated) throw new Error('group_mutation_failed');
+
+    return { ok: true, group: mutated };
   }
 
   /** Runs inside the caller's transaction; it does not open its own. */
