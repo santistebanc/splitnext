@@ -9,6 +9,14 @@ const BEARER_PREFIX = 'Bearer ';
 
 const errorSchema = z.object({ error: z.string() });
 
+/** Every refusal has the same body, so a route supplies only what it means. */
+function errorResponse(description: string) {
+  return {
+    description,
+    content: { 'application/json': { schema: errorSchema } },
+  };
+}
+
 const groupParamsSchema = z.object({
   groupId: z.uuid().openapi({
     param: { name: 'groupId', in: 'path' },
@@ -67,18 +75,9 @@ const createGroupRoute = createRoute({
         },
       },
     },
-    400: {
-      description: 'The request body is invalid.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
-    409: {
-      description: 'The generated group identity already exists.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
-    500: {
-      description: 'The group could not be created.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
+    400: errorResponse('The request body is invalid.'),
+    409: errorResponse('The generated group identity already exists.'),
+    500: errorResponse('The group could not be created.'),
   },
 });
 
@@ -99,23 +98,12 @@ const getGroupRoute = createRoute({
       description: 'The requested group.',
       content: { 'application/json': { schema: z.object({ group: groupSchema }) } },
     },
-    400: {
-      description: 'The group id is malformed.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
-    401: {
-      description:
-        'The capability or device identity is missing or invalid, or no such group exists. These are deliberately indistinguishable.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
-    410: {
-      description: 'The group was deleted. The capability itself is still valid.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
-    500: {
-      description: 'The group could not be retrieved.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
+    400: errorResponse('The group id is malformed.'),
+    401: errorResponse(
+      'The capability or device identity is missing or invalid, or no such group exists. These are deliberately indistinguishable.',
+    ),
+    410: errorResponse('The group was deleted. The capability itself is still valid.'),
+    500: errorResponse('The group could not be retrieved.'),
   },
 });
 
@@ -155,26 +143,11 @@ const updateGroupRoute = createRoute({
       description: 'The updated group.',
       content: { 'application/json': { schema: z.object({ group: groupSchema }) } },
     },
-    400: {
-      description: 'The path, headers, or request body are invalid.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
-    401: {
-      description: 'The group or capability is unavailable to this device.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
-    409: {
-      description: 'The supplied version is stale.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
-    410: {
-      description: 'The group was deleted. The capability itself is still valid.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
-    500: {
-      description: 'The group could not be updated.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
+    400: errorResponse('The path, headers, or request body are invalid.'),
+    401: errorResponse('The group or capability is unavailable to this device.'),
+    409: errorResponse('The supplied version is stale.'),
+    410: errorResponse('The group was deleted. The capability itself is still valid.'),
+    500: errorResponse('The group could not be updated.'),
   },
 });
 
@@ -201,26 +174,11 @@ const deleteGroupRoute = createRoute({
       description: 'The deletion tombstone.',
       content: { 'application/json': { schema: z.object({ group: groupSchema }) } },
     },
-    400: {
-      description: 'The path, headers, or query are invalid.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
-    401: {
-      description: 'The group or capability is unavailable to this device.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
-    409: {
-      description: 'The supplied version is stale.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
-    410: {
-      description: 'The group was already deleted.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
-    500: {
-      description: 'The group could not be deleted.',
-      content: { 'application/json': { schema: errorSchema } },
-    },
+    400: errorResponse('The path, headers, or query are invalid.'),
+    401: errorResponse('The group or capability is unavailable to this device.'),
+    409: errorResponse('The supplied version is stale.'),
+    410: errorResponse('The group was already deleted.'),
+    500: errorResponse('The group could not be deleted.'),
   },
 });
 

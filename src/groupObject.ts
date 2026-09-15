@@ -67,13 +67,19 @@ type CreateGroupResult =
   | { ok: true; group: Group; access_token: string }
   | { ok: false; error: 'group_exists' };
 
-type GetGroupResult =
-  | { ok: true; group: Group }
-  | { ok: false; error: 'unauthorized' | 'group_deleted' };
+/** Why a caller may not act on this group at all. */
+type GroupRefusal = { ok: false; error: 'unauthorized' | 'group_deleted' };
 
-type MutateGroupResult =
-  | { ok: true; group: Group }
-  | { ok: false; error: 'unauthorized' | 'group_deleted' | 'version_conflict' };
+type ResolvedGroup = { ok: true; group: Group } | GroupRefusal;
+
+type MutateGroupResult = ResolvedGroup | { ok: false; error: 'version_conflict' };
+
+/** The columns a mutation may change; anything absent keeps its current value. */
+type GroupChanges = {
+  name?: string | undefined;
+  currency_label?: string | undefined;
+  deleted?: boolean | undefined;
+};
 
 /**
  * The per-group SQLite Durable Object. Each instance owns exactly one group's
@@ -142,12 +148,11 @@ export class GroupObject extends DurableObject<Env> {
    * Whether the group exists is itself privileged, so an unknown group and a
    * wrong token are deliberately indistinguishable.
    */
-  async getGroup(accessToken: string, deviceUserId: string): Promise<GetGroupResult> {
-    const tokenHash = await hashAccessToken(accessToken);
-
-    return this.ctx.storage.transactionSync(() =>
-      this.resolveGroup(tokenHash, deviceUserId),
-    );
+  async getGroup(accessToken: string, deviceUserId: string): Promise<ResolvedGroup> {
+    return this.actOnGroup(accessToken, deviceUserId, (group): ResolvedGroup => ({
+      ok: true,
+      group,
+    }));
   }
 
   async updateGroup(
@@ -155,15 +160,7 @@ export class GroupObject extends DurableObject<Env> {
     deviceUserId: string,
     input: UpdateGroupInput,
   ): Promise<MutateGroupResult> {
-    const tokenHash = await hashAccessToken(accessToken);
-
-    return this.ctx.storage.transactionSync((): MutateGroupResult => {
-      const resolved = this.resolveGroup(tokenHash, deviceUserId);
-
-      if (!resolved.ok) return resolved;
-
-      const { group } = resolved;
-
+    return this.actOnGroup(accessToken, deviceUserId, (group): MutateGroupResult => {
       if (group.version !== input.expected_version) {
         return { ok: false, error: 'version_conflict' };
       }
@@ -177,15 +174,7 @@ export class GroupObject extends DurableObject<Env> {
         return { ok: true, group };
       }
 
-      return this.commitMutation(() => {
-        this.ctx.storage.sql.exec(
-          `UPDATE group_state
-           SET name = ?, currency_label = ?
-           WHERE singleton = 1`,
-          name,
-          currencyLabel,
-        );
-      });
+      return this.commitMutation(group, { name, currency_label: currencyLabel });
     });
   }
 
@@ -194,23 +183,32 @@ export class GroupObject extends DurableObject<Env> {
     deviceUserId: string,
     input: DeleteGroupInput,
   ): Promise<MutateGroupResult> {
+    return this.actOnGroup(accessToken, deviceUserId, (group): MutateGroupResult => {
+      if (group.version !== input.expected_version) {
+        return { ok: false, error: 'version_conflict' };
+      }
+
+      return this.commitMutation(group, { deleted: true });
+    });
+  }
+
+  /**
+   * Hashes the capability, opens the transaction and resolves the live group
+   * the caller may act on, so each operation holds only its own intent.
+   */
+  private async actOnGroup<T>(
+    accessToken: string,
+    deviceUserId: string,
+    act: (group: Group) => T,
+  ): Promise<T | GroupRefusal> {
     const tokenHash = await hashAccessToken(accessToken);
 
-    return this.ctx.storage.transactionSync((): MutateGroupResult => {
+    return this.ctx.storage.transactionSync((): T | GroupRefusal => {
       const resolved = this.resolveGroup(tokenHash, deviceUserId);
 
       if (!resolved.ok) return resolved;
 
-      if (resolved.group.version !== input.expected_version) {
-        return { ok: false, error: 'version_conflict' };
-      }
-
-      return this.commitMutation((at) => {
-        this.ctx.storage.sql.exec(
-          'UPDATE group_state SET deleted_at = ? WHERE singleton = 1',
-          at,
-        );
-      });
+      return act(resolved.group);
     });
   }
 
@@ -219,7 +217,7 @@ export class GroupObject extends DurableObject<Env> {
    * public operation goes through here, so a new one cannot forget a guard.
    * Runs inside the caller's transaction.
    */
-  private resolveGroup(tokenHash: string, deviceUserId: string): GetGroupResult {
+  private resolveGroup(tokenHash: string, deviceUserId: string): ResolvedGroup {
     if (!this.isProvisioned() || !this.hasAccess(tokenHash, deviceUserId)) {
       return { ok: false, error: 'unauthorized' };
     }
@@ -238,20 +236,27 @@ export class GroupObject extends DurableObject<Env> {
   }
 
   /**
-   * Advances the version and stamps the clock, applies the caller's change,
-   * and returns the group as stored. Runs inside the caller's transaction.
+   * The only writer of group_state after creation. Advances the version,
+   * stamps the clock and applies the described change in one statement, so a
+   * caller describes what changed rather than holding the SQL handle.
+   * Runs inside the caller's transaction.
    */
-  private commitMutation(apply: (at: string) => void): MutateGroupResult {
+  private commitMutation(group: Group, changes: GroupChanges): MutateGroupResult {
     const at = new Date().toISOString();
 
     this.ctx.storage.sql.exec(
       `UPDATE group_state
-       SET version = version + 1, updated_at = ?
+       SET version = version + 1,
+           updated_at = ?,
+           name = ?,
+           currency_label = ?,
+           deleted_at = ?
        WHERE singleton = 1`,
       at,
+      changes.name ?? group.name,
+      changes.currency_label ?? group.currency_label,
+      changes.deleted === true ? at : group.deleted_at,
     );
-
-    apply(at);
 
     const mutated = this.readGroup();
 
