@@ -108,6 +108,10 @@ const getGroupRoute = createRoute({
         'The capability or device identity is missing or invalid, or no such group exists. These are deliberately indistinguishable.',
       content: { 'application/json': { schema: errorSchema } },
     },
+    410: {
+      description: 'The group was deleted. The capability itself is still valid.',
+      content: { 'application/json': { schema: errorSchema } },
+    },
     500: {
       description: 'The group could not be retrieved.',
       content: { 'application/json': { schema: errorSchema } },
@@ -163,6 +167,10 @@ const updateGroupRoute = createRoute({
       description: 'The supplied version is stale.',
       content: { 'application/json': { schema: errorSchema } },
     },
+    410: {
+      description: 'The group was deleted. The capability itself is still valid.',
+      content: { 'application/json': { schema: errorSchema } },
+    },
     500: {
       description: 'The group could not be updated.',
       content: { 'application/json': { schema: errorSchema } },
@@ -203,6 +211,10 @@ const deleteGroupRoute = createRoute({
     },
     409: {
       description: 'The supplied version is stale.',
+      content: { 'application/json': { schema: errorSchema } },
+    },
+    410: {
+      description: 'The group was already deleted.',
       content: { 'application/json': { schema: errorSchema } },
     },
     500: {
@@ -255,7 +267,9 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
     );
 
     if (!result.ok) {
-      return context.json({ error: result.error }, 401);
+      return result.error === 'group_deleted'
+        ? context.json({ error: result.error }, 410)
+        : context.json({ error: result.error }, 401);
     }
 
     return context.json({ group: result.group }, 200);
@@ -274,9 +288,7 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
     );
 
     if (!result.ok) {
-      const status = result.error === 'version_conflict' ? 409 : 401;
-
-      return context.json({ error: result.error }, status);
+      return context.json({ error: result.error }, mutationStatus(result.error));
     }
 
     return context.json({ group: result.group }, 200);
@@ -295,10 +307,17 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
     );
 
     if (!result.ok) {
-      const status = result.error === 'version_conflict' ? 409 : 401;
-
-      return context.json({ error: result.error }, status);
+      return context.json({ error: result.error }, mutationStatus(result.error));
     }
 
     return context.json({ group: result.group }, 200);
   });
+
+/** The one mapping from the group's refusals to statuses, for both mutations. */
+function mutationStatus(
+  error: 'unauthorized' | 'group_deleted' | 'version_conflict',
+): 401 | 409 | 410 {
+  if (error === 'group_deleted') return 410;
+
+  return error === 'version_conflict' ? 409 : 401;
+}

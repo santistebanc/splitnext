@@ -40,6 +40,7 @@ export type OpenApiDocument = {
           200: OpenApiJsonResponse;
           400: object;
           401: object;
+          410: object;
           500: object;
         };
       };
@@ -49,6 +50,7 @@ export type OpenApiDocument = {
           400: object;
           401: object;
           409: object;
+          410: object;
           500: object;
         };
       };
@@ -58,6 +60,7 @@ export type OpenApiDocument = {
           400: object;
           401: object;
           409: object;
+          410: object;
           500: object;
         };
       };
