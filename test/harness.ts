@@ -47,6 +47,13 @@ export type OpenApiDocument = {
         responses: object;
       };
     };
+    '/groups/{groupId}/members': {
+      post: { responses: object };
+      get: { responses: object };
+    };
+    '/groups/{groupId}/members/{memberId}': {
+      get: { responses: object };
+    };
   };
 };
 

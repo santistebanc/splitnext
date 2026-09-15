@@ -3,6 +3,7 @@ import { Scalar } from '@scalar/hono-api-reference';
 import { cors } from 'hono/cors';
 import { GroupObject } from './groupObject';
 import { groupRoutes } from './routes/groups';
+import { memberRoutes } from './routes/members';
 import { systemRoutes } from './routes/system';
 
 export { GroupObject };
@@ -26,6 +27,8 @@ app.use(
 app.route('/', systemRoutes);
 
 app.route('/', groupRoutes);
+
+app.route('/', memberRoutes);
 
 app.doc('/openapi.json', {
   openapi: '3.0.0',
