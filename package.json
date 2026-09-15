@@ -1,0 +1,32 @@
+{
+  "name": "splitnext-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply INDEX --local",
+    "db:migrate:remote": "wrangler d1 migrations apply INDEX --remote",
+    "lint": "oxlint --type-aware .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run lint && npm run typecheck && npm test && wrangler deploy --dry-run --outdir .wrangler/dry-run"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.1.9",
+    "@oxlint/plugins": "1.83.0",
+    "@types/node": "^24.0.0",
+    "oxlint": "1.83.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.131.2"
+  },
+  "dependencies": {
+    "@hono/zod-openapi": "^1.6.3",
+    "@scalar/hono-api-reference": "^0.12.1",
+    "hono": "^4.13.7",
+    "zod": "^4.6.5"
+  }
+}
