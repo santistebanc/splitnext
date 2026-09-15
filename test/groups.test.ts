@@ -1,9 +1,14 @@
 import { env, exports } from 'cloudflare:workers';
 import { runInDurableObject } from 'cloudflare:test';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { accessTokenSchema, groupSchema, type Group } from '../src/groupObject';
-import { memberSchema } from '../src/member';
-import { createGroup, postGroup } from './groupFixture';
+import { groupSchema, type Group } from '../src/groupState';
+import { accessTokenSchema, memberSchema } from '../src/memberDirectory';
+import {
+  AuthenticatedGroupDriver,
+  failureBody,
+  postGroup,
+  successBody,
+} from './groupDriver';
 import { applyTestMigrations, fetchOpenApiDocument } from './harness';
 
 /** Read from the one declaration of the group's shape, never restated. */
@@ -11,10 +16,6 @@ const groupFields = Object.keys(groupSchema.shape).sort();
 
 /** A SHA-256 digest in hex. Same width as a capability, a different thing. */
 const sha256Hex = /^[a-f0-9]{64}$/;
-
-type GroupResponse = {
-  group: Group;
-};
 
 type StoredMemberAccess = {
   token_hash: string;
@@ -41,51 +42,13 @@ function retrieveGroup(groupId: string, accessToken: string, deviceUserId: strin
   });
 }
 
-function patchGroup(
-  groupId: string,
-  accessToken: string,
-  deviceUserId: string,
-  body: {
-    expected_version: number;
-    name?: string;
-    currency_label?: string;
-  },
-) {
-  return exports.default.fetch(`https://splitnext.test/groups/${groupId}`, {
-    method: 'PATCH',
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-      'content-type': 'application/json',
-      'x-device-user-id': deviceUserId,
-    },
-    body: JSON.stringify(body),
-  });
-}
-
-function deleteGroup(
-  groupId: string,
-  accessToken: string,
-  deviceUserId: string,
-  expectedVersion: number,
-) {
-  const url = new URL(`https://splitnext.test/groups/${groupId}`);
-
-  url.searchParams.set('expected_version', String(expectedVersion));
-
-  return exports.default.fetch(url, {
-    method: 'DELETE',
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-      'x-device-user-id': deviceUserId,
-    },
-  });
-}
-
 describe('groups API', () => {
   it('creates a group, its creator member, and their capability', async () => {
-    const { body, created, response } = await createGroup();
+    const {
+      input: body,
+      created,
+    } = await AuthenticatedGroupDriver.create();
 
-    expect(response.status).toBe(201);
     expect(accessTokenSchema.safeParse(created.access_token).success).toBe(true);
     expect(Object.keys(created.group).sort()).toEqual(groupFields);
     expect(created.group).toMatchObject({
@@ -109,112 +72,81 @@ describe('groups API', () => {
   });
 
   it('stamps its own clock when it creates the group', async () => {
-    const { created } = await createGroup();
+    const { created } = await AuthenticatedGroupDriver.create();
 
     expect(Number.isNaN(Date.parse(created.group.created_at))).toBe(false);
     expect(created.group.updated_at).toBe(created.group.created_at);
   });
 
   it('returns the group to the holder of its capability', async () => {
-    const { body, created } = await createGroup();
+    const group = await AuthenticatedGroupDriver.create();
+    const fetched = await group.getGroup();
 
-    const fetched = await retrieveGroup(
-      created.group.id,
-      created.access_token,
-      body.device_user_id,
-    );
-
-    expect(fetched.status).toBe(200);
-    expect(await fetched.json()).toEqual({ group: created.group });
+    expect(successBody(fetched, 200)).toEqual({ group: group.created.group });
   });
 
   it('updates editable fields and advances the version', async () => {
-    const { body, created } = await createGroup();
+    const group = await AuthenticatedGroupDriver.create();
+    const { created } = group;
 
-    const response = await patchGroup(
-      created.group.id,
-      created.access_token,
-      body.device_user_id,
-      { expected_version: 1, name: 'Lisbon flat' },
-    );
+    const updated = await group.updateGroup({
+      expected_version: 1,
+      name: 'Lisbon flat',
+    });
 
-    // SAFETY: This response is produced by the typed PATCH /groups/{groupId} route.
-    const updated = (await response.json()) as GroupResponse;
+    const updatedBody = successBody(updated, 200);
 
-    expect(response.status).toBe(200);
-    expect(updated.group).toEqual({
+    expect(updatedBody.group).toEqual({
       ...created.group,
       version: 2,
       updated_at: expect.any(String),
       name: 'Lisbon flat',
     });
-    expect(updated.group.currency_label).toBe(created.group.currency_label);
+    expect(updatedBody.group.currency_label).toBe(created.group.currency_label);
 
-    const fetched = await retrieveGroup(
-      created.group.id,
-      created.access_token,
-      body.device_user_id,
-    );
+    const fetched = await group.getGroup();
 
-    expect(await fetched.json()).toEqual(updated);
+    expect(successBody(fetched, 200)).toEqual(updatedBody);
   });
 
   it('rejects empty and stale group updates', async () => {
-    const { body, created } = await createGroup();
+    const group = await AuthenticatedGroupDriver.create();
 
-    const empty = await patchGroup(
-      created.group.id,
-      created.access_token,
-      body.device_user_id,
-      { expected_version: 1 },
-    );
+    const empty = await group.updateGroup({ expected_version: 1 });
 
-    const first = await patchGroup(
-      created.group.id,
-      created.access_token,
-      body.device_user_id,
-      { expected_version: 1, currency_label: 'USD' },
-    );
+    const first = await group.updateGroup({
+      expected_version: 1,
+      currency_label: 'USD',
+    });
 
-    const stale = await patchGroup(
-      created.group.id,
-      created.access_token,
-      body.device_user_id,
-      { expected_version: 1, name: 'Stale edit' },
-    );
+    const stale = await group.updateGroup({
+      expected_version: 1,
+      name: 'Stale edit',
+    });
 
-    expect(empty.status).toBe(400);
-    expect(first.status).toBe(200);
-    expect(stale.status).toBe(409);
-    expect(await stale.json()).toEqual({ error: 'version_conflict' });
+    expect(failureBody(empty, 400)).toEqual({ error: 'invalid_request' });
+    successBody(first, 200);
+    expect(failureBody(stale, 409)).toEqual({ error: 'version_conflict' });
   });
 
   it('soft-deletes a group and retains its tombstone', async () => {
-    const { body, created } = await createGroup();
+    const group = await AuthenticatedGroupDriver.create();
+    const { created } = group;
 
-    const response = await deleteGroup(
-      created.group.id,
-      created.access_token,
-      body.device_user_id,
-      created.group.version,
-    );
+    const deleted = await group.deleteGroup({
+      expected_version: created.group.version,
+    });
 
-    // SAFETY: This response is produced by the typed DELETE /groups/{groupId} route.
-    const deleted = (await response.json()) as GroupResponse;
+    const deletedBody = successBody(deleted, 200);
 
-    expect(response.status).toBe(200);
-    expect(deleted.group).toEqual({
+    expect(deletedBody.group).toEqual({
       ...created.group,
       version: 2,
       updated_at: expect.any(String),
       deleted_at: expect.any(String),
     });
 
-    const fetched = await retrieveGroup(
-      created.group.id,
-      created.access_token,
-      body.device_user_id,
-    );
+    const fetched = await group.getGroup();
 
     const objectId = env.GROUPS.idFromName(created.group.id);
 
@@ -227,90 +159,59 @@ describe('groups API', () => {
     );
 
     // The capability is still valid; the group is what is gone.
-    expect(fetched.status).toBe(410);
-    expect(await fetched.json()).toEqual({ error: 'group_deleted' });
-    expect(stored).toEqual({ singleton: 1, ...deleted.group });
+    expect(failureBody(fetched, 410)).toEqual({ error: 'group_deleted' });
+    expect(stored).toEqual({ singleton: 1, ...deletedBody.group });
   });
 
   it('reports a deleted group as gone to every operation', async () => {
-    const { body, created } = await createGroup();
+    const group = await AuthenticatedGroupDriver.create();
+    const { created } = group;
 
-    await deleteGroup(
-      created.group.id,
-      created.access_token,
-      body.device_user_id,
-      created.group.version,
-    );
+    await group.deleteGroup({ expected_version: created.group.version });
 
-    const update = await patchGroup(
-      created.group.id,
-      created.access_token,
-      body.device_user_id,
-      { expected_version: 2, name: 'After the end' },
-    );
+    const update = await group.updateGroup({
+      expected_version: 2,
+      name: 'After the end',
+    });
 
-    const deletion = await deleteGroup(
-      created.group.id,
-      created.access_token,
-      body.device_user_id,
-      2,
-    );
+    const deletion = await group.deleteGroup({ expected_version: 2 });
 
-    expect(update.status).toBe(410);
-    expect(deletion.status).toBe(410);
-    expect(await update.json()).toEqual({ error: 'group_deleted' });
+    expect(failureBody(update, 410)).toEqual({ error: 'group_deleted' });
+    expect(failureBody(deletion, 410)).toEqual({ error: 'group_deleted' });
   });
 
   it('does not advance the version when an update changes nothing', async () => {
-    const { body, created } = await createGroup();
+    const group = await AuthenticatedGroupDriver.create();
+    const { created } = group;
 
-    const response = await patchGroup(
-      created.group.id,
-      created.access_token,
-      body.device_user_id,
-      { expected_version: 1, name: created.group.name },
-    );
+    const unchanged = await group.updateGroup({
+      expected_version: 1,
+      name: created.group.name,
+    });
 
-    // SAFETY: This response is produced by the typed PATCH /groups/{groupId} route.
-    const unchanged = (await response.json()) as GroupResponse;
-
-    expect(response.status).toBe(200);
-    expect(unchanged.group).toEqual(created.group);
+    expect(successBody(unchanged, 200).group).toEqual(created.group);
 
     // A second device's expected_version survives the no-op.
-    const next = await patchGroup(
-      created.group.id,
-      created.access_token,
-      body.device_user_id,
-      { expected_version: 1, currency_label: 'USD' },
-    );
+    const next = await group.updateGroup({
+      expected_version: 1,
+      currency_label: 'USD',
+    });
 
-    expect(next.status).toBe(200);
+    successBody(next, 200);
   });
 
   it('rejects deletion with a stale version', async () => {
-    const { body, created } = await createGroup();
+    const group = await AuthenticatedGroupDriver.create();
 
-    await patchGroup(
-      created.group.id,
-      created.access_token,
-      body.device_user_id,
-      { expected_version: 1, name: 'Version two' },
-    );
+    await group.updateGroup({ expected_version: 1, name: 'Version two' });
 
-    const response = await deleteGroup(
-      created.group.id,
-      created.access_token,
-      body.device_user_id,
-      1,
-    );
+    const response = await group.deleteGroup({ expected_version: 1 });
 
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'version_conflict' });
+    expect(failureBody(response, 409)).toEqual({ error: 'version_conflict' });
   });
 
   it('requires a capability for group mutations', async () => {
-    const { created } = await createGroup();
+    const { created } = await AuthenticatedGroupDriver.create();
     const url = `https://splitnext.test/groups/${created.group.id}`;
 
     const update = await exports.default.fetch(url, {
@@ -331,7 +232,7 @@ describe('groups API', () => {
   });
 
   it('stores the capability as a hash linked to its member inside the group', async () => {
-    const { body, created } = await createGroup();
+    const { input: body, created } = await AuthenticatedGroupDriver.create();
 
     const d1AccessTable = await env.INDEX.prepare(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'member_access'",
@@ -387,7 +288,7 @@ describe('groups API', () => {
   });
 
   it('rejects missing, malformed, incorrect, and wrong-device credentials', async () => {
-    const { body, created } = await createGroup();
+    const { input: body, created } = await AuthenticatedGroupDriver.create();
     const url = `https://splitnext.test/groups/${created.group.id}`;
 
     const missing = await exports.default.fetch(url);
@@ -458,6 +359,34 @@ describe('groups API', () => {
     expect(second).toEqual({ ok: false, error: 'group_exists' });
   });
 
+  it('enforces group command validation at the Durable Object seam', async () => {
+    const invalidId = env.GROUPS.idFromName(crypto.randomUUID());
+    const invalidStub = env.GROUPS.get(invalidId);
+
+    await expect(
+      invalidStub.createGroup({
+        name: '   ',
+        currency_label: 'EUR',
+        device_user_id: crypto.randomUUID(),
+        creator_display_name: 'Santi',
+      }),
+    ).resolves.toEqual({ ok: false, error: 'invalid_request' });
+
+    const group = await AuthenticatedGroupDriver.create();
+    const objectId = env.GROUPS.idFromName(group.created.group.id);
+    const stub = env.GROUPS.get(objectId);
+
+    await expect(
+      stub.updateGroup(
+        {
+          accessToken: group.created.access_token,
+          deviceUserId: group.input.device_user_id,
+        },
+        { expected_version: group.created.group.version },
+      ),
+    ).resolves.toEqual({ ok: false, error: 'invalid_request' });
+  });
+
   it('publishes the group lifecycle in OpenAPI', async () => {
     const document = await fetchOpenApiDocument();
 
@@ -475,7 +404,7 @@ describe('groups API', () => {
         'application/json'
       ].schema.properties.group.properties;
 
-    const { created } = await createGroup();
+    const { created } = await AuthenticatedGroupDriver.create();
 
     expect(Object.keys(published).sort()).toEqual(groupFields);
     expect(Object.keys(created.group).sort()).toEqual(groupFields);

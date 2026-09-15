@@ -1,5 +1,9 @@
 import { z } from '@hono/zod-openapi';
-import { ACCESS_TOKEN_PATTERN } from '../groupObject';
+import {
+  ACCESS_TOKEN_PATTERN,
+  type AccessCredential,
+  deviceUserIdSchema,
+} from '../memberDirectory';
 
 const BEARER_PREFIX = 'Bearer ';
 
@@ -19,14 +23,16 @@ export const accessHeadersSchema = z.object({
       param: { name: 'authorization', in: 'header' },
       description: 'The Bearer capability returned when the group was created.',
     }),
-  'x-device-user-id': z.string().trim().min(1).max(128).openapi({
+  'x-device-user-id': deviceUserIdSchema.openapi({
     param: { name: 'x-device-user-id', in: 'header' },
     description: 'The device identity that received this group capability.',
   }),
 });
 
 /** Both credentials arrive validated, so this only strips the scheme. */
-export function capabilityFrom(headers: z.infer<typeof accessHeadersSchema>) {
+export function capabilityFrom(
+  headers: z.infer<typeof accessHeadersSchema>,
+): AccessCredential {
   return {
     accessToken: headers.authorization.slice(BEARER_PREFIX.length),
     deviceUserId: headers['x-device-user-id'],

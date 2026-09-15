@@ -1,122 +1,38 @@
 import { env, exports } from 'cloudflare:workers';
 import { runInDurableObject } from 'cloudflare:test';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { memberSchema, type Member } from '../src/member';
-import { createGroup, type CreateGroupResponse } from './groupFixture';
+import { memberSchema, type Member } from '../src/memberDirectory';
+import {
+  AuthenticatedGroupDriver,
+  failureBody,
+  successBody,
+} from './groupDriver';
 import { applyTestMigrations, fetchOpenApiDocument } from './harness';
 
 const memberFields = Object.keys(memberSchema.shape).sort();
-
-type MemberResponse = {
-  member: Member;
-};
 
 beforeAll(async () => {
   await applyTestMigrations();
 });
 
-function capabilityHeaders(created: CreateGroupResponse, deviceUserId: string) {
-  return {
-    authorization: `Bearer ${created.access_token}`,
-    'x-device-user-id': deviceUserId,
-  };
-}
-
-function postMember(
-  created: CreateGroupResponse,
-  deviceUserId: string,
-  displayName: string,
-) {
-  return exports.default.fetch(
-    `https://splitnext.test/groups/${created.group.id}/members`,
-    {
-      method: 'POST',
-      headers: {
-        ...capabilityHeaders(created, deviceUserId),
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ display_name: displayName }),
-    },
-  );
-}
-
-async function createMember(
-  created: CreateGroupResponse,
-  deviceUserId: string,
-  displayName = 'Ada',
-) {
-  const response = await postMember(created, deviceUserId, displayName);
-
-  // SAFETY: This response is produced by the typed member creation route.
-  const body = (await response.json()) as MemberResponse;
-
-  return { body, response };
-}
-
-function patchMember(
-  created: CreateGroupResponse,
-  deviceUserId: string,
-  memberId: string,
-  expectedVersion: number,
-  displayName: string,
-) {
-  return exports.default.fetch(
-    `https://splitnext.test/groups/${created.group.id}/members/${memberId}`,
-    {
-      method: 'PATCH',
-      headers: {
-        ...capabilityHeaders(created, deviceUserId),
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        expected_version: expectedVersion,
-        display_name: displayName,
-      }),
-    },
-  );
-}
-
-function deleteMember(
-  created: CreateGroupResponse,
-  deviceUserId: string,
-  memberId: string,
-  expectedVersion: number,
-) {
-  const url = new URL(
-    `https://splitnext.test/groups/${created.group.id}/members/${memberId}`,
-  );
-
-  url.searchParams.set('expected_version', String(expectedVersion));
-
-  return exports.default.fetch(url, {
-    method: 'DELETE',
-    headers: capabilityHeaders(created, deviceUserId),
-  });
-}
-
 describe('members API', () => {
   it('creates a versioned member inside its group object', async () => {
-    const { body: groupInput, created } = await createGroup();
+    const group = await AuthenticatedGroupDriver.create();
+    const createdReply = await group.createMember('Ada Lovelace');
+    const created = successBody(createdReply, 201).member;
 
-    const { body, response } = await createMember(
-      created,
-      groupInput.device_user_id,
-      'Ada Lovelace',
-    );
-
-    expect(response.status).toBe(201);
-    expect(Object.keys(body.member).sort()).toEqual(memberFields);
-    expect(body.member).toMatchObject({
+    expect(Object.keys(created).sort()).toEqual(memberFields);
+    expect(created).toMatchObject({
       version: 1,
       deleted_at: null,
       display_name: 'Ada Lovelace',
     });
-    expect(body.member.id).toMatch(
+    expect(created.id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
-    expect(body.member.updated_at).toBe(body.member.created_at);
+    expect(created.updated_at).toBe(created.created_at);
 
-    const objectId = env.GROUPS.idFromName(created.group.id);
+    const objectId = env.GROUPS.idFromName(group.created.group.id);
 
     const stored = await runInDurableObject(
       env.GROUPS.get(objectId),
@@ -125,260 +41,181 @@ describe('members API', () => {
           .exec<Member>(
             `SELECT id, version, created_at, updated_at, deleted_at, display_name
              FROM members WHERE id = ?`,
-            body.member.id,
+            created.id,
           )
           .toArray()[0],
     );
 
-    expect(stored).toEqual(body.member);
+    expect(stored).toEqual(created);
     expect(stored).not.toHaveProperty('group_id');
   });
 
   it('lists and retrieves members', async () => {
-    const { body: groupInput, created } = await createGroup();
+    const group = await AuthenticatedGroupDriver.create();
+    const createdReply = await group.createMember('Ada');
+    const created = successBody(createdReply, 201).member;
+    const listedReply = await group.listMembers();
+    const listed = successBody(listedReply, 200).members;
+    const retrievedReply = await group.getMember(created.id);
 
-    const { body: createdMember } = await createMember(
-      created,
-      groupInput.device_user_id,
+    expect(listed).toHaveLength(2);
+    expect(listed).toEqual(
+      expect.arrayContaining([group.created.member, created]),
     );
-
-    const headers = capabilityHeaders(created, groupInput.device_user_id);
-    const collectionUrl = `https://splitnext.test/groups/${created.group.id}/members`;
-
-    const listed = await exports.default.fetch(collectionUrl, { headers });
-
-    const retrieved = await exports.default.fetch(
-      `${collectionUrl}/${createdMember.member.id}`,
-      { headers },
-    );
-
-    // SAFETY: This response is produced by the typed member collection route.
-    const listedBody = (await listed.json()) as { members: Member[] };
-
-    expect(listed.status).toBe(200);
-    expect(listedBody.members).toHaveLength(2);
-    expect(listedBody.members).toEqual(
-      expect.arrayContaining([created.member, createdMember.member]),
-    );
-    expect(retrieved.status).toBe(200);
-    expect(await retrieved.json()).toEqual(createdMember);
+    expect(successBody(retrievedReply, 200)).toEqual({ member: created });
   });
 
   it('renames a member and advances its version', async () => {
-    const { body: groupInput, created } = await createGroup();
+    const group = await AuthenticatedGroupDriver.create();
+    const originalReply = await group.createMember('Ada');
+    const original = successBody(originalReply, 201).member;
 
-    const { body: original } = await createMember(
-      created,
-      groupInput.device_user_id,
-    );
+    const updatedReply = await group.updateMember(original.id, {
+      expected_version: original.version,
+      display_name: 'Grace',
+    });
 
-    const response = await patchMember(
-      created,
-      groupInput.device_user_id,
-      original.member.id,
-      original.member.version,
-      'Grace',
-    );
+    const updated = successBody(updatedReply, 200).member;
 
-    // SAFETY: This response is produced by the typed member update route.
-    const updated = (await response.json()) as MemberResponse;
-
-    expect(response.status).toBe(200);
-    expect(updated.member).toEqual({
-      ...original.member,
+    expect(updated).toEqual({
+      ...original,
       version: 2,
       updated_at: expect.any(String),
       display_name: 'Grace',
     });
 
-    const headers = capabilityHeaders(created, groupInput.device_user_id);
+    const retrieved = await group.getMember(original.id);
 
-    const retrieved = await exports.default.fetch(
-      `https://splitnext.test/groups/${created.group.id}/members/${original.member.id}`,
-      { headers },
-    );
-
-    expect(await retrieved.json()).toEqual(updated);
+    expect(successBody(retrieved, 200)).toEqual({ member: updated });
   });
 
   it('does not advance the version for a no-op rename and rejects a stale one', async () => {
-    const { body: groupInput, created } = await createGroup();
+    const group = await AuthenticatedGroupDriver.create();
+    const originalReply = await group.createMember('Ada');
+    const original = successBody(originalReply, 201).member;
 
-    const { body: original } = await createMember(
-      created,
-      groupInput.device_user_id,
-    );
+    const unchanged = await group.updateMember(original.id, {
+      expected_version: 1,
+      display_name: original.display_name,
+    });
 
-    const unchangedResponse = await patchMember(
-      created,
-      groupInput.device_user_id,
-      original.member.id,
-      1,
-      original.member.display_name,
-    );
+    const changed = await group.updateMember(original.id, {
+      expected_version: 1,
+      display_name: 'Version two',
+    });
 
-    // SAFETY: This response is produced by the typed member update route.
-    const unchanged = (await unchangedResponse.json()) as MemberResponse;
+    const stale = await group.updateMember(original.id, {
+      expected_version: 1,
+      display_name: 'Stale edit',
+    });
 
-    const changed = await patchMember(
-      created,
-      groupInput.device_user_id,
-      original.member.id,
-      1,
-      'Version two',
-    );
-
-    const stale = await patchMember(
-      created,
-      groupInput.device_user_id,
-      original.member.id,
-      1,
-      'Stale edit',
-    );
-
-    expect(unchanged.member).toEqual(original.member);
-    expect(changed.status).toBe(200);
-    expect(stale.status).toBe(409);
-    expect(await stale.json()).toEqual({ error: 'version_conflict' });
+    expect(successBody(unchanged, 200).member).toEqual(original);
+    successBody(changed, 200);
+    expect(failureBody(stale, 409)).toEqual({ error: 'version_conflict' });
   });
 
   it('soft-deletes a member and hides it from active reads', async () => {
-    const { body: groupInput, created } = await createGroup();
+    const group = await AuthenticatedGroupDriver.create();
+    const originalReply = await group.createMember('Ada');
+    const original = successBody(originalReply, 201).member;
 
-    const { body: original } = await createMember(
-      created,
-      groupInput.device_user_id,
-    );
+    const deletedReply = await group.deleteMember(original.id, {
+      expected_version: original.version,
+    });
 
-    const response = await deleteMember(
-      created,
-      groupInput.device_user_id,
-      original.member.id,
-      original.member.version,
-    );
+    const deleted = successBody(deletedReply, 200).member;
 
-    // SAFETY: This response is produced by the typed member deletion route.
-    const deleted = (await response.json()) as MemberResponse;
-
-    expect(response.status).toBe(200);
-    expect(deleted.member).toEqual({
-      ...original.member,
+    expect(deleted).toEqual({
+      ...original,
       version: 2,
       updated_at: expect.any(String),
       deleted_at: expect.any(String),
     });
 
-    const headers = capabilityHeaders(created, groupInput.device_user_id);
-    const collectionUrl = `https://splitnext.test/groups/${created.group.id}/members`;
-    const listed = await exports.default.fetch(collectionUrl, { headers });
-
-    const retrieved = await exports.default.fetch(
-      `${collectionUrl}/${original.member.id}`,
-      { headers },
-    );
-
-    const objectId = env.GROUPS.idFromName(created.group.id);
+    const listedReply = await group.listMembers();
+    const retrieved = await group.getMember(original.id);
+    const objectId = env.GROUPS.idFromName(group.created.group.id);
 
     const stored = await runInDurableObject(
       env.GROUPS.get(objectId),
       (_instance, state) =>
         state.storage.sql
-          .exec<Member>('SELECT * FROM members WHERE id = ?', original.member.id)
+          .exec<Member>('SELECT * FROM members WHERE id = ?', original.id)
           .toArray()[0],
     );
 
-    const repeatedDelete = await deleteMember(
-      created,
-      groupInput.device_user_id,
-      original.member.id,
-      deleted.member.version,
-    );
+    const repeatedDelete = await group.deleteMember(original.id, {
+      expected_version: deleted.version,
+    });
 
-    const deletedUpdate = await patchMember(
-      created,
-      groupInput.device_user_id,
-      original.member.id,
-      deleted.member.version,
-      'Too late',
-    );
+    const deletedUpdate = await group.updateMember(original.id, {
+      expected_version: deleted.version,
+      display_name: 'Too late',
+    });
 
-    expect(await listed.json()).toEqual({ members: [created.member] });
-    expect(retrieved.status).toBe(410);
-    expect(await retrieved.json()).toEqual({ error: 'member_deleted' });
-    expect(stored).toEqual(deleted.member);
-    expect(repeatedDelete.status).toBe(410);
-    expect(deletedUpdate.status).toBe(410);
+    expect(successBody(listedReply, 200)).toEqual({
+      members: [group.created.member],
+    });
+    expect(failureBody(retrieved, 410)).toEqual({ error: 'member_deleted' });
+    expect(stored).toEqual(deleted);
+    expect(failureBody(repeatedDelete, 410)).toEqual({ error: 'member_deleted' });
+    expect(failureBody(deletedUpdate, 410)).toEqual({ error: 'member_deleted' });
   });
 
   it('rejects stale deletion and mutations of an unknown member', async () => {
-    const { body: groupInput, created } = await createGroup();
+    const group = await AuthenticatedGroupDriver.create();
+    const originalReply = await group.createMember('Ada');
+    const original = successBody(originalReply, 201).member;
 
-    const { body: original } = await createMember(
-      created,
-      groupInput.device_user_id,
-    );
+    await group.updateMember(original.id, {
+      expected_version: 1,
+      display_name: 'Version two',
+    });
 
-    await patchMember(
-      created,
-      groupInput.device_user_id,
-      original.member.id,
-      1,
-      'Version two',
-    );
-
-    const stale = await deleteMember(
-      created,
-      groupInput.device_user_id,
-      original.member.id,
-      1,
-    );
+    const stale = await group.deleteMember(original.id, {
+      expected_version: 1,
+    });
 
     const missingId = crypto.randomUUID();
 
-    const missingUpdate = await patchMember(
-      created,
-      groupInput.device_user_id,
-      missingId,
-      1,
-      'Nobody',
-    );
+    const missingUpdate = await group.updateMember(missingId, {
+      expected_version: 1,
+      display_name: 'Nobody',
+    });
 
-    const missingDelete = await deleteMember(
-      created,
-      groupInput.device_user_id,
-      missingId,
-      1,
-    );
+    const missingDelete = await group.deleteMember(missingId, {
+      expected_version: 1,
+    });
 
-    expect(stale.status).toBe(409);
-    expect(missingUpdate.status).toBe(404);
-    expect(missingDelete.status).toBe(404);
+    expect(failureBody(stale, 409)).toEqual({ error: 'version_conflict' });
+    expect(failureBody(missingUpdate, 404)).toEqual({ error: 'member_not_found' });
+    expect(failureBody(missingDelete, 404)).toEqual({ error: 'member_not_found' });
   });
 
   it('lists the creator and returns 404 for an unknown member', async () => {
-    const { body: groupInput, created } = await createGroup();
-    const headers = capabilityHeaders(created, groupInput.device_user_id);
-    const collectionUrl = `https://splitnext.test/groups/${created.group.id}/members`;
+    const group = await AuthenticatedGroupDriver.create();
+    const listed = await group.listMembers();
+    const missing = await group.getMember(crypto.randomUUID());
 
-    const listed = await exports.default.fetch(collectionUrl, { headers });
-
-    const missing = await exports.default.fetch(
-      `${collectionUrl}/${crypto.randomUUID()}`,
-      { headers },
-    );
-
-    expect(await listed.json()).toEqual({ members: [created.member] });
-    expect(missing.status).toBe(404);
-    expect(await missing.json()).toEqual({ error: 'member_not_found' });
+    expect(successBody(listed, 200)).toEqual({ members: [group.created.member] });
+    expect(failureBody(missing, 404)).toEqual({ error: 'member_not_found' });
   });
 
   it('rejects invalid member input and missing credentials', async () => {
-    const { body: groupInput, created } = await createGroup();
-    const invalid = await postMember(created, groupInput.device_user_id, '');
+    const group = await AuthenticatedGroupDriver.create();
+    const url = `https://splitnext.test/groups/${group.created.group.id}/members`;
 
-    const unauthorized = await exports.default.fetch(
-      `https://splitnext.test/groups/${created.group.id}/members`,
-    );
+    const invalid = await exports.default.fetch(url, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${group.created.access_token}`,
+        'content-type': 'application/json',
+        'x-device-user-id': group.input.device_user_id,
+      },
+      body: JSON.stringify({ display_name: '' }),
+    });
+
+    const unauthorized = await exports.default.fetch(url);
 
     expect(invalid.status).toBe(400);
     expect(await invalid.json()).toEqual({ error: 'invalid_request' });
@@ -386,25 +223,37 @@ describe('members API', () => {
     expect(await unauthorized.json()).toEqual({ error: 'unauthorized' });
   });
 
+  it('enforces member command validation at the Durable Object seam', async () => {
+    const group = await AuthenticatedGroupDriver.create();
+    const objectId = env.GROUPS.idFromName(group.created.group.id);
+    const stub = env.GROUPS.get(objectId);
+
+    await expect(
+      stub.createMember(
+        {
+          accessToken: group.created.access_token,
+          deviceUserId: group.input.device_user_id,
+        },
+        { display_name: '   ' },
+      ),
+    ).resolves.toEqual({ ok: false, error: 'invalid_request' });
+
+    const listed = await group.listMembers();
+
+    expect(successBody(listed, 200)).toEqual({ members: [group.created.member] });
+  });
+
   it('revokes a member capability when that member is deleted', async () => {
-    const { body: groupInput, created } = await createGroup();
+    const group = await AuthenticatedGroupDriver.create();
 
-    const response = await deleteMember(
-      created,
-      groupInput.device_user_id,
-      created.member.id,
-      created.member.version,
-    );
+    const deleted = await group.deleteMember(group.created.member.id, {
+      expected_version: group.created.member.version,
+    });
 
-    // SAFETY: This response is produced by the typed member deletion route.
-    const deleted = (await response.json()) as MemberResponse;
+    const deletedMember = successBody(deleted, 200).member;
 
-    const denied = await exports.default.fetch(
-      `https://splitnext.test/groups/${created.group.id}`,
-      { headers: capabilityHeaders(created, groupInput.device_user_id) },
-    );
-
-    const objectId = env.GROUPS.idFromName(created.group.id);
+    const denied = await group.getGroup();
+    const objectId = env.GROUPS.idFromName(group.created.group.id);
 
     const storedAccess = await runInDurableObject(
       env.GROUPS.get(objectId),
@@ -412,33 +261,27 @@ describe('members API', () => {
         state.storage.sql
           .exec<{ revoked_at: string | null }>(
             'SELECT revoked_at FROM member_access WHERE member_id = ?',
-            created.member.id,
+            group.created.member.id,
           )
           .toArray()[0],
     );
 
-    expect(response.status).toBe(200);
-    expect(deleted.member.deleted_at).not.toBeNull();
-    expect(storedAccess?.revoked_at).toBe(deleted.member.deleted_at);
-    expect(denied.status).toBe(401);
-    expect(await denied.json()).toEqual({ error: 'unauthorized' });
+    expect(deletedMember.deleted_at).not.toBeNull();
+    expect(storedAccess?.revoked_at).toBe(deletedMember.deleted_at);
+    expect(failureBody(denied, 401)).toEqual({ error: 'unauthorized' });
   });
 
   it('refuses member operations after the group is deleted', async () => {
-    const { body: groupInput, created } = await createGroup();
-    const headers = capabilityHeaders(created, groupInput.device_user_id);
-    const groupUrl = `https://splitnext.test/groups/${created.group.id}`;
+    const group = await AuthenticatedGroupDriver.create();
 
-    const deletion = await exports.default.fetch(
-      `${groupUrl}?expected_version=${created.group.version}`,
-      { method: 'DELETE', headers },
-    );
+    const deletion = await group.deleteGroup({
+      expected_version: group.created.group.version,
+    });
 
-    const members = await exports.default.fetch(`${groupUrl}/members`, { headers });
+    const members = await group.listMembers();
 
-    expect(deletion.status).toBe(200);
-    expect(members.status).toBe(410);
-    expect(await members.json()).toEqual({ error: 'group_deleted' });
+    successBody(deletion, 200);
+    expect(failureBody(members, 410)).toEqual({ error: 'group_deleted' });
   });
 
   it('publishes the complete member lifecycle in OpenAPI', async () => {

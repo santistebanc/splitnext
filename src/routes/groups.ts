@@ -1,6 +1,11 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { accessTokenSchema, groupSchema } from '../groupObject';
-import { memberSchema } from '../member';
+import {
+  createGroupInputSchema,
+  groupSchema,
+  groupVersionSchema,
+  updateGroupInputSchema,
+} from '../groupState';
+import { accessTokenSchema, memberSchema } from '../memberDirectory';
 import {
   accessHeadersSchema,
   capabilityFrom,
@@ -18,14 +23,7 @@ const createGroupRoute = createRoute({
       required: true,
       content: {
         'application/json': {
-          schema: z
-            .object({
-              name: z.string().trim().min(1).max(100),
-              currency_label: z.string().trim().min(1).max(16).default('EUR'),
-              device_user_id: z.string().trim().min(1).max(128),
-              creator_display_name: z.string().trim().min(1).max(100),
-            })
-            .strict(),
+          schema: createGroupInputSchema,
         },
       },
     },
@@ -91,18 +89,7 @@ const updateGroupRoute = createRoute({
       required: true,
       content: {
         'application/json': {
-          schema: z
-            .object({
-              expected_version: z.number().int().positive(),
-              name: z.string().trim().min(1).max(100).optional(),
-              currency_label: z.string().trim().min(1).max(16).optional(),
-            })
-            .strict()
-            .refine(
-              ({ name, currency_label }) =>
-                name !== undefined || currency_label !== undefined,
-              { message: 'At least one editable field is required.' },
-            ),
+          schema: updateGroupInputSchema,
         },
       },
     },
@@ -132,10 +119,13 @@ const deleteGroupRoute = createRoute({
     params: groupParamsSchema,
     headers: accessHeadersSchema,
     query: z.object({
-      expected_version: z.coerce.number().int().positive().openapi({
-        param: { name: 'expected_version', in: 'query' },
-        description: 'The latest group version observed by the caller.',
-      }),
+      expected_version: z.coerce
+        .number()
+        .pipe(groupVersionSchema)
+        .openapi({
+          param: { name: 'expected_version', in: 'query' },
+          description: 'The latest group version observed by the caller.',
+        }),
     }),
   },
   responses: {
@@ -167,15 +157,12 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
     const groupId = crypto.randomUUID();
     const id = context.env.GROUPS.idFromName(groupId);
 
-    const result = await context.env.GROUPS.get(id).createGroup({
-      name: input.name,
-      currency_label: input.currency_label,
-      device_user_id: input.device_user_id,
-      creator_display_name: input.creator_display_name,
-    });
+    const result = await context.env.GROUPS.get(id).createGroup(input);
 
     if (!result.ok) {
-      return context.json({ error: result.error }, 409);
+      return result.error === 'invalid_request'
+        ? context.json({ error: result.error }, 400)
+        : context.json({ error: result.error }, 409);
     }
 
     return context.json(
@@ -189,14 +176,11 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
   })
   .openapi(getGroupRoute, async (context) => {
     const { groupId } = context.req.valid('param');
-    const { accessToken, deviceUserId } = capabilityFrom(context.req.valid('header'));
+    const credential = capabilityFrom(context.req.valid('header'));
 
     const id = context.env.GROUPS.idFromName(groupId);
 
-    const result = await context.env.GROUPS.get(id).getGroup(
-      accessToken,
-      deviceUserId,
-    );
+    const result = await context.env.GROUPS.get(id).getGroup(credential);
 
     if (!result.ok) {
       return result.error === 'group_deleted'
@@ -208,14 +192,13 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
   })
   .openapi(updateGroupRoute, async (context) => {
     const { groupId } = context.req.valid('param');
-    const { accessToken, deviceUserId } = capabilityFrom(context.req.valid('header'));
+    const credential = capabilityFrom(context.req.valid('header'));
     const input = context.req.valid('json');
 
     const id = context.env.GROUPS.idFromName(groupId);
 
     const result = await context.env.GROUPS.get(id).updateGroup(
-      accessToken,
-      deviceUserId,
+      credential,
       input,
     );
 
@@ -227,14 +210,13 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
   })
   .openapi(deleteGroupRoute, async (context) => {
     const { groupId } = context.req.valid('param');
-    const { accessToken, deviceUserId } = capabilityFrom(context.req.valid('header'));
+    const credential = capabilityFrom(context.req.valid('header'));
     const { expected_version } = context.req.valid('query');
 
     const id = context.env.GROUPS.idFromName(groupId);
 
     const result = await context.env.GROUPS.get(id).deleteGroup(
-      accessToken,
-      deviceUserId,
+      credential,
       { expected_version },
     );
 
@@ -247,8 +229,10 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
 
 /** The one mapping from the group's refusals to statuses, for both mutations. */
 function mutationStatus(
-  error: 'unauthorized' | 'group_deleted' | 'version_conflict',
-): 401 | 409 | 410 {
+  error: 'invalid_request' | 'unauthorized' | 'group_deleted' | 'version_conflict',
+): 400 | 401 | 409 | 410 {
+  if (error === 'invalid_request') return 400;
+
   if (error === 'group_deleted') return 410;
 
   return error === 'version_conflict' ? 409 : 401;

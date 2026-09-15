@@ -1,5 +1,10 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { memberSchema } from '../member';
+import {
+  createMemberInputSchema,
+  memberSchema,
+  memberVersionSchema,
+  updateMemberInputSchema,
+} from '../memberDirectory';
 import {
   accessHeadersSchema,
   capabilityFrom,
@@ -28,11 +33,7 @@ const createMemberRoute = createRoute({
       required: true,
       content: {
         'application/json': {
-          schema: z
-            .object({
-              display_name: z.string().trim().min(1).max(100),
-            })
-            .strict(),
+          schema: createMemberInputSchema,
         },
       },
     },
@@ -111,12 +112,7 @@ const updateMemberRoute = createRoute({
       required: true,
       content: {
         'application/json': {
-          schema: z
-            .object({
-              expected_version: z.number().int().positive(),
-              display_name: z.string().trim().min(1).max(100),
-            })
-            .strict(),
+          schema: updateMemberInputSchema,
         },
       },
     },
@@ -147,10 +143,13 @@ const deleteMemberRoute = createRoute({
     params: memberParamsSchema,
     headers: accessHeadersSchema,
     query: z.object({
-      expected_version: z.coerce.number().int().positive().openapi({
-        param: { name: 'expected_version', in: 'query' },
-        description: 'The latest member version observed by the caller.',
-      }),
+      expected_version: z.coerce
+        .number()
+        .pipe(memberVersionSchema)
+        .openapi({
+          param: { name: 'expected_version', in: 'query' },
+          description: 'The latest member version observed by the caller.',
+        }),
     }),
   },
   responses: {
@@ -178,31 +177,27 @@ export const memberRoutes = new OpenAPIHono<{ Bindings: Env }>({
 })
   .openapi(createMemberRoute, async (context) => {
     const { groupId } = context.req.valid('param');
-    const { accessToken, deviceUserId } = capabilityFrom(context.req.valid('header'));
+    const credential = capabilityFrom(context.req.valid('header'));
     const input = context.req.valid('json');
     const id = context.env.GROUPS.idFromName(groupId);
 
     const result = await context.env.GROUPS.get(id).createMember(
-      accessToken,
-      deviceUserId,
+      credential,
       input,
     );
 
     if (!result.ok) {
-      return context.json({ error: result.error }, groupRefusalStatus(result.error));
+      return context.json({ error: result.error }, memberCreateStatus(result.error));
     }
 
     return context.json({ member: result.member }, 201);
   })
   .openapi(listMembersRoute, async (context) => {
     const { groupId } = context.req.valid('param');
-    const { accessToken, deviceUserId } = capabilityFrom(context.req.valid('header'));
+    const credential = capabilityFrom(context.req.valid('header'));
     const id = context.env.GROUPS.idFromName(groupId);
 
-    const result = await context.env.GROUPS.get(id).listMembers(
-      accessToken,
-      deviceUserId,
-    );
+    const result = await context.env.GROUPS.get(id).listMembers(credential);
 
     if (!result.ok) {
       return context.json({ error: result.error }, groupRefusalStatus(result.error));
@@ -212,12 +207,11 @@ export const memberRoutes = new OpenAPIHono<{ Bindings: Env }>({
   })
   .openapi(getMemberRoute, async (context) => {
     const { groupId, memberId } = context.req.valid('param');
-    const { accessToken, deviceUserId } = capabilityFrom(context.req.valid('header'));
+    const credential = capabilityFrom(context.req.valid('header'));
     const id = context.env.GROUPS.idFromName(groupId);
 
     const result = await context.env.GROUPS.get(id).getMember(
-      accessToken,
-      deviceUserId,
+      credential,
       memberId,
     );
 
@@ -229,13 +223,12 @@ export const memberRoutes = new OpenAPIHono<{ Bindings: Env }>({
   })
   .openapi(updateMemberRoute, async (context) => {
     const { groupId, memberId } = context.req.valid('param');
-    const { accessToken, deviceUserId } = capabilityFrom(context.req.valid('header'));
+    const credential = capabilityFrom(context.req.valid('header'));
     const input = context.req.valid('json');
     const id = context.env.GROUPS.idFromName(groupId);
 
     const result = await context.env.GROUPS.get(id).updateMember(
-      accessToken,
-      deviceUserId,
+      credential,
       memberId,
       input,
     );
@@ -248,13 +241,12 @@ export const memberRoutes = new OpenAPIHono<{ Bindings: Env }>({
   })
   .openapi(deleteMemberRoute, async (context) => {
     const { groupId, memberId } = context.req.valid('param');
-    const { accessToken, deviceUserId } = capabilityFrom(context.req.valid('header'));
+    const credential = capabilityFrom(context.req.valid('header'));
     const { expected_version } = context.req.valid('query');
     const id = context.env.GROUPS.idFromName(groupId);
 
     const result = await context.env.GROUPS.get(id).deleteMember(
-      accessToken,
-      deviceUserId,
+      credential,
       memberId,
       { expected_version },
     );
@@ -270,6 +262,12 @@ function groupRefusalStatus(error: 'unauthorized' | 'group_deleted'): 401 | 410 
   return error === 'group_deleted' ? 410 : 401;
 }
 
+function memberCreateStatus(
+  error: 'invalid_request' | 'unauthorized' | 'group_deleted',
+): 400 | 401 | 410 {
+  return error === 'invalid_request' ? 400 : groupRefusalStatus(error);
+}
+
 function memberRefusalStatus(
   error: 'unauthorized' | 'group_deleted' | 'member_not_found' | 'member_deleted',
 ): 401 | 404 | 410 {
@@ -280,12 +278,15 @@ function memberRefusalStatus(
 
 function memberMutationStatus(
   error:
+    | 'invalid_request'
     | 'unauthorized'
     | 'group_deleted'
     | 'member_not_found'
     | 'member_deleted'
     | 'version_conflict',
-): 401 | 404 | 409 | 410 {
+): 400 | 401 | 404 | 409 | 410 {
+  if (error === 'invalid_request') return 400;
+
   if (error === 'version_conflict') return 409;
 
   return memberRefusalStatus(error);
