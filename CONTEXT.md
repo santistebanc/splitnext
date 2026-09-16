@@ -11,9 +11,6 @@ by itself.
 **Group invite**:
 A reusable invite that creates a new member when redeemed.
 
-**Individual invite**:
-A single-use invite for one pre-created member.
-
 **Invite redemption**:
 The exchange of a valid invite for member access. Redeeming a group invite does
 not consume it.
