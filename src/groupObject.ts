@@ -13,6 +13,7 @@ import {
 } from './groupState';
 import { type AccessCredential } from './accessCredential';
 import { GroupDatabase } from './groupDatabase';
+import { MemberAccess } from './memberAccess';
 import {
   createGroupInviteInputSchema,
   type CreateGroupInviteInput,
@@ -100,6 +101,7 @@ type PreviewGroupInviteResult =
 export class GroupObject extends DurableObject<Env> {
   private readonly database: GroupDatabase;
   private readonly groupState: GroupState;
+  private readonly access: MemberAccess;
   private readonly members: MemberDirectory;
   private readonly invites: InviteDirectory;
 
@@ -107,8 +109,13 @@ export class GroupObject extends DurableObject<Env> {
     super(ctx, env);
     this.database = new GroupDatabase(ctx.storage);
     this.groupState = new GroupState(ctx.storage.sql);
-    this.members = new MemberDirectory(ctx.storage.sql);
-    this.invites = new InviteDirectory(ctx.storage.sql, this.members);
+    this.access = new MemberAccess(ctx.storage.sql);
+    this.members = new MemberDirectory(ctx.storage.sql, this.access);
+    this.invites = new InviteDirectory(
+      ctx.storage.sql,
+      this.members,
+      this.access,
+    );
   }
 
   async health(): Promise<boolean> {
@@ -311,53 +318,56 @@ export class GroupObject extends DurableObject<Env> {
   }
 
   /**
-   * Prepares the credential before opening the synchronous SQLite transaction,
-   * then resolves the live group every operation is allowed to see.
+   * Member access as authority. Hashes first, unconditionally: an unknown group
+   * and a wrong capability are meant to be indistinguishable, so they must also
+   * cost the same.
    */
   private async actOnGroup<T>(
     credential: AccessCredential,
     act: (group: Group) => T,
   ): Promise<T | GroupRefusal> {
-    // Hash first, unconditionally. An unknown group and a wrong capability are
-    // meant to be indistinguishable, so they must also cost the same.
-    const prepared = await this.members.prepareAuthorization(credential);
+    const prepared = await this.access.prepareAuthorization(credential);
 
-    // The module that owns the schema is the one that knows whether there is
-    // one. Nothing below this line has to ask again.
-    if (!this.database.prepareExistingGroup()) {
-      return { ok: false, error: 'unauthorized' };
-    }
-
-    return this.ctx.storage.transactionSync((): T | GroupRefusal => {
-      const principal = this.members.authenticate(prepared);
-
-      if (!principal) return { ok: false, error: 'unauthorized' };
-
-      const group = this.groupState.retrieve();
-
-      // A live capability without group state breaks the invariant that both
-      // are written in one transaction, so it is a fault, not a refusal.
-      if (!group) throw new Error('group_state_missing');
-
-      if (group.deleted_at !== null) {
-        return { ok: false, error: 'group_deleted' };
-      }
-
-      return act(group);
-    });
+    return this.resolveLiveGroup(
+      'unauthorized',
+      () => this.access.authenticate(prepared) !== null,
+      act,
+    );
   }
 
-  /** Resolves a live group for someone whose authority is an invite token. */
+  /**
+   * An invite as authority. The caller has already hashed the token, and the
+   * invite itself is judged inside `act`, where invite redemption is atomic.
+   */
   private actOnInvitedGroup<T>(
     act: (group: Group) => T,
   ): T | { ok: false; error: 'invite_invalid' | 'group_deleted' } {
+    return this.resolveLiveGroup('invite_invalid', () => true, act);
+  }
+
+  /**
+   * The one definition of a live group, shared by every kind of authority.
+   * `refusal` is what this authority answers when there is no group or its
+   * proof does not hold; `authorize` runs inside the transaction.
+   */
+  private resolveLiveGroup<T, Refusal extends string>(
+    refusal: Refusal,
+    authorize: () => boolean,
+    act: (group: Group) => T,
+  ): T | { ok: false; error: Refusal | 'group_deleted' } {
+    // The module that owns the schema is the one that knows whether there is
+    // one. Nothing below this line has to ask again.
     if (!this.database.prepareExistingGroup()) {
-      return { ok: false, error: 'invite_invalid' };
+      return { ok: false, error: refusal };
     }
 
     return this.ctx.storage.transactionSync(() => {
+      if (!authorize()) return { ok: false as const, error: refusal };
+
       const group = this.groupState.retrieve();
 
+      // A proven authority without group state breaks the invariant that both
+      // are written in one transaction, so it is a fault, not a refusal.
       if (!group) throw new Error('group_state_missing');
 
       if (group.deleted_at !== null) {

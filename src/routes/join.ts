@@ -2,6 +2,11 @@ import { Hono } from 'hono';
 import { html } from 'hono/html';
 import { inviteTokenSchema } from '../inviteDirectory';
 import { groupIdParameterSchema } from './groupRequest';
+import {
+  forGroup,
+  INVITE_CONTEXT_PATH,
+  INVITE_REDEMPTIONS_PATH,
+} from './invites';
 
 /** Minimal browser form for exercising invite redemption without a product UI. */
 export const joinRoutes = new Hono<{ Bindings: Env }>().get(
@@ -63,7 +68,7 @@ export const joinRoutes = new Hono<{ Bindings: Env }>().get(
               deviceInput.value = crypto.randomUUID();
 
               const contextResponse = await fetch(
-                '/groups/${groupId.data}/invite-context',
+                '${forGroup(INVITE_CONTEXT_PATH, groupId.data)}',
                 {
                   method: 'POST',
                   headers: { 'content-type': 'application/json' },
@@ -104,7 +109,7 @@ export const joinRoutes = new Hono<{ Bindings: Env }>().get(
                 const fields = new FormData(form);
                 const memberId = fields.get('member_id');
                 const response = await fetch(
-                  '/groups/${groupId.data}/invite-redemptions',
+                  '${forGroup(INVITE_REDEMPTIONS_PATH, groupId.data)}',
                   {
                     method: 'POST',
                     headers: { 'content-type': 'application/json' },

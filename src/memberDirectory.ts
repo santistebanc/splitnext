@@ -1,14 +1,6 @@
 import { z } from 'zod';
-import {
-  type AccessCredential,
-  deviceUserIdSchema,
-  type MemberPrincipal,
-} from './accessCredential';
-import {
-  MemberCredentials,
-  type PreparedAuthorization,
-  type PreparedCredentialIssue,
-} from './memberCredentials.internal';
+import { deviceUserIdSchema } from './accessCredential';
+import { type MemberAccess, type PreparedCredentialIssue } from './memberAccess';
 
 export const memberDisplayNameSchema = z.string().trim().min(1).max(100);
 
@@ -93,13 +85,15 @@ const memberWithAccessInputSchema = z
   })
   .strict();
 
-/** Owns members and every permanent credential attached to those members. */
+/**
+ * Owns members. Member access is its own module; this one issues it when a
+ * member is created or claimed and revokes it when a member is deleted.
+ */
 export class MemberDirectory {
-  private readonly credentials: MemberCredentials;
-
-  constructor(private readonly sql: SqlStorage) {
-    this.credentials = new MemberCredentials(sql);
-  }
+  constructor(
+    private readonly sql: SqlStorage,
+    private readonly access: MemberAccess,
+  ) {}
 
   /**
    * Web Crypto is asynchronous while SQLite transactions are synchronous, so
@@ -112,7 +106,7 @@ export class MemberDirectory {
 
     return {
       displayName: input.display_name,
-      credential: await this.credentials.prepareIssue(input.device_user_id),
+      credential: await this.access.prepareIssue(input.device_user_id),
     };
   }
 
@@ -122,28 +116,13 @@ export class MemberDirectory {
   ): CreatedMemberWithAccess {
     const member = this.insert(prepared.displayName);
 
-    const accessToken = this.credentials.issue(
+    const accessToken = this.access.issue(
       prepared.credential,
       member.id,
       member.created_at,
     );
 
     return { member, access_token: accessToken };
-  }
-
-  async prepareAuthorization(
-    rawCredential: AccessCredential,
-  ): Promise<PreparedAuthorization> {
-    return this.credentials.prepareAuthorization(rawCredential);
-  }
-
-  async prepareAccess(deviceUserId: string): Promise<PreparedCredentialIssue> {
-    return this.credentials.prepareIssue(deviceUserId);
-  }
-
-  /** Runs inside the caller's transaction. */
-  authenticate(prepared: PreparedAuthorization): MemberPrincipal | null {
-    return this.credentials.authenticate(prepared);
   }
 
   create(input: CreateMemberInput): Member {
@@ -161,20 +140,17 @@ export class MemberDirectory {
       .toArray();
   }
 
+  /** Who an invite may offer. Reads the same definition redemption enforces. */
   listClaimable(): ClaimableMember[] {
-    return this.sql
-      .exec<ClaimableMember>(
-        `SELECT member.id, member.display_name
-         FROM members AS member
-         WHERE member.deleted_at IS NULL
-           AND NOT EXISTS (
-             SELECT 1
-             FROM member_access AS access
-             WHERE access.member_id = member.id
-           )
-         ORDER BY member.created_at, member.id`,
-      )
-      .toArray();
+    const claimable: ClaimableMember[] = [];
+
+    for (const member of this.listActive()) {
+      if (this.isClaimable(member)) {
+        claimable.push({ id: member.id, display_name: member.display_name });
+      }
+    }
+
+    return claimable;
   }
 
   retrieve(memberId: string): MemberReadResult {
@@ -213,23 +189,33 @@ export class MemberDirectory {
 
     if (!member) return { ok: false, error: 'member_not_found' };
 
+    // Report the more specific refusal first; whether the member may be
+    // claimed at all is decided by isClaimable alone.
     if (member.deleted_at !== null) {
       return { ok: false, error: 'member_deleted' };
     }
 
-    if (this.credentials.hasBeenIssued(member.id)) {
+    if (!this.isClaimable(member)) {
       return { ok: false, error: 'member_claimed' };
     }
 
     return {
       ok: true,
       member,
-      access_token: this.credentials.issue(
+      access_token: this.access.issue(
         prepared,
         member.id,
         new Date().toISOString(),
       ),
     };
+  }
+
+  /**
+   * CONTEXT.md: an active member who has never received member access. The
+   * only statement of that rule; listing and claiming both read it.
+   */
+  private isClaimable(member: Member): boolean {
+    return member.deleted_at === null && !this.access.hasBeenIssued(member.id);
   }
 
   private insert(displayName: string): Member {
@@ -288,7 +274,7 @@ export class MemberDirectory {
     );
 
     if (changes.deleted === true) {
-      this.credentials.revokeMember(member.id, at);
+      this.access.revokeMember(member.id, at);
     }
 
     const mutated = this.read(member.id);

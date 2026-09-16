@@ -1,6 +1,6 @@
 import { env, exports } from 'cloudflare:workers';
 import { runInDurableObject } from 'cloudflare:test';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { groupInviteSchema } from '../src/inviteDirectory';
 import {
   AuthenticatedGroupDriver,
@@ -24,6 +24,11 @@ type StoredInvite = {
 
 beforeAll(async () => {
   await applyTestMigrations();
+});
+
+// Expiry is tested by moving the clock, so no test may leave it moved.
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('group invite API', () => {
@@ -104,25 +109,15 @@ describe('group invite API', () => {
   it('derives expired status from the deadline instead of storing mutable state', async () => {
     const group = await AuthenticatedGroupDriver.create();
     const created = successBody(await group.createGroupInvite(), 201).invite;
-    const expiredAt = new Date(Date.now() - 1_000).toISOString();
-    const objectId = env.GROUPS.idFromName(group.created.group.id);
 
-    await runInDurableObject(
-      env.GROUPS.get(objectId),
-      (_instance, state) => {
-        state.storage.sql.exec(
-          'UPDATE invites SET expires_at = ? WHERE id = ?',
-          expiredAt,
-          created.id,
-        );
-      },
-    );
+    // Move past the deadline instead of rewriting the row. The stored invite is
+    // untouched; only the moment it is judged at has changed.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.parse(created.expires_at) + 1_000);
 
     const listed = successBody(await group.listGroupInvites(), 200);
 
-    expect(listed.invites).toEqual([
-      { ...created, expires_at: expiredAt, status: 'expired' },
-    ]);
+    expect(listed.invites).toEqual([{ ...created, status: 'expired' }]);
   });
 
   it('disables an invite idempotently and retains its record', async () => {

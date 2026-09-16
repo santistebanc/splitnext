@@ -7,13 +7,18 @@ import {
   type Member,
   MemberDirectory,
 } from './memberDirectory';
-import { generateSecretToken, hashSecretToken } from './secretToken.internal';
+import { type MemberAccess, type PreparedCredentialIssue } from './memberAccess';
+import {
+  generateSecretToken,
+  hashSecretToken,
+  SECRET_TOKEN_PATTERN,
+} from './secretToken.internal';
 
 const DEFAULT_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 
-const INVITE_TOKEN_PATTERN = /^[a-f0-9]{64}$/;
-
-export const inviteTokenSchema = z.string().regex(INVITE_TOKEN_PATTERN);
+export const inviteTokenSchema = z
+  .string()
+  .regex(new RegExp(`^${SECRET_TOKEN_PATTERN}$`));
 
 export const inviteStatusSchema = z.enum(['active', 'expired', 'revoked']);
 
@@ -123,11 +128,9 @@ type PreparedMemberWithAccess = Awaited<
   ReturnType<MemberDirectory['prepareMemberWithAccess']>
 >;
 
-type PreparedAccess = Awaited<ReturnType<MemberDirectory['prepareAccess']>>;
-
 type PreparedRedemptionMember =
   | { kind: 'new'; member: PreparedMemberWithAccess }
-  | { kind: 'existing'; memberId: string; access: PreparedAccess };
+  | { kind: 'existing'; memberId: string; access: PreparedCredentialIssue };
 
 type PreparedInviteRedemption = {
   tokenHash: string;
@@ -146,6 +149,7 @@ export class InviteDirectory {
   constructor(
     private readonly sql: SqlStorage,
     private readonly members: MemberDirectory,
+    private readonly access: MemberAccess,
   ) {}
 
   /**
@@ -218,7 +222,7 @@ export class InviteDirectory {
 
     const [tokenHash, access] = await Promise.all([
       hashSecretToken(input.invite_token),
-      this.members.prepareAccess(input.device_user_id),
+      this.access.prepareIssue(input.device_user_id),
     ]);
 
     return {
@@ -345,24 +349,27 @@ export class InviteDirectory {
 
     if (!invite) return { ok: false, error: 'invite_invalid' };
 
-    if (invite.revoked_at !== null) {
-      return { ok: false, error: 'invite_revoked' };
-    }
+    const status = statusOf(invite);
 
-    if (Date.parse(invite.expires_at) <= Date.now()) {
-      return { ok: false, error: 'invite_expired' };
-    }
+    if (status === 'revoked') return { ok: false, error: 'invite_revoked' };
+
+    if (status === 'expired') return { ok: false, error: 'invite_expired' };
 
     return { ok: true, invite };
   }
 
   private present(invite: StoredGroupInvite): GroupInvite {
-    const status = invite.revoked_at
-      ? 'revoked'
-      : Date.parse(invite.expires_at) <= Date.now()
-        ? 'expired'
-        : 'active';
-
-    return { ...invite, status };
+    return { ...invite, status: statusOf(invite) };
   }
+}
+
+/**
+ * The one judgement of where an invite stands. Refusing a redemption and
+ * reporting a status both read this, so they cannot disagree. Revocation
+ * outranks expiry, because a disabled invite stays disabled whatever its date.
+ */
+function statusOf(invite: StoredGroupInvite): GroupInvite['status'] {
+  if (invite.revoked_at !== null) return 'revoked';
+
+  return Date.parse(invite.expires_at) <= Date.now() ? 'expired' : 'active';
 }

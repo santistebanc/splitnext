@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SECRET_TOKEN_PATTERN } from './secretToken.internal';
 
 /**
  * The vocabulary of a group capability: what one looks like, what a caller
@@ -6,7 +7,7 @@ import { z } from 'zod';
  * shapes these, the member module issues and verifies them — so it lives
  * apart from the private implementation that does the verifying.
  */
-export const ACCESS_TOKEN_PATTERN = '[a-f0-9]{64}';
+export const ACCESS_TOKEN_PATTERN = SECRET_TOKEN_PATTERN;
 
 export const accessTokenSchema = z
   .string()
