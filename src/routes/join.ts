@@ -6,11 +6,12 @@ import {
   forGroup,
   INVITE_CONTEXT_PATH,
   INVITE_REDEMPTIONS_PATH,
-} from './invites';
+  JOIN_PATH,
+} from './invitePaths';
 
 /** Minimal browser form for exercising invite redemption without a product UI. */
 export const joinRoutes = new Hono<{ Bindings: Env }>().get(
-  '/join/:groupId/:inviteToken',
+  JOIN_PATH,
   (context) => {
     const groupId = groupIdParameterSchema.safeParse(context.req.param('groupId'));
 

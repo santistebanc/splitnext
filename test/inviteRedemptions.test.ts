@@ -13,7 +13,7 @@ import {
   forGroup,
   INVITE_CONTEXT_PATH,
   INVITE_REDEMPTIONS_PATH,
-} from '../src/routes/invites';
+} from '../src/routes/invitePaths';
 import { applyTestMigrations, fetchOpenApiDocument } from './harness';
 
 type StoredRedemption = {

@@ -4,6 +4,10 @@ An API-only shared-expense application built on Cloudflare Workers, D1, and one
 SQLite Durable Object per group. Development is intentionally split into small,
 reviewable slices.
 
+New to the project? Start with the [visual architecture guide](docs/architecture.html)
+for the runtime model, module interfaces, seams, storage ownership, and request
+flows.
+
 ## Completed slices
 
 ### 1 — Cloudflare foundation

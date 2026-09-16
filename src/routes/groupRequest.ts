@@ -23,7 +23,9 @@ export const accessHeadersSchema = z.object({
       param: { name: 'authorization', in: 'header' },
       description: 'The Bearer capability returned when the group was created.',
     }),
-  'x-device-user-id': deviceUserIdSchema.openapi({
+  // OpenAPI metadata belongs to this route-owned schema. The domain schema is
+  // only the validation target, so importing it before this module is safe.
+  'x-device-user-id': z.string().pipe(deviceUserIdSchema).openapi({
     param: { name: 'x-device-user-id', in: 'header' },
     description: 'The device identity that received this group capability.',
   }),
