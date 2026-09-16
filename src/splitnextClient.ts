@@ -6,6 +6,7 @@ import type {
   DeleteGroupInput,
   UpdateGroupInput,
 } from './groupState';
+import type { CreateGroupInviteInput } from './inviteDirectory';
 import type {
   CreateMemberInput,
   DeleteMemberInput,
@@ -104,6 +105,23 @@ export class GroupClient {
     });
   }
 
+  createGroupInvite(input: CreateGroupInviteInput = {}) {
+    return this.rpc.groups[':groupId'].invites.$post({
+      ...this.scope(),
+      json: input,
+    });
+  }
+
+  listGroupInvites() {
+    return this.rpc.groups[':groupId'].invites.$get(this.scope());
+  }
+
+  revokeGroupInvite(inviteId: string) {
+    return this.rpc.groups[':groupId'].invites[':inviteId'].$delete(
+      this.inviteScope(inviteId),
+    );
+  }
+
   /** Which group this session speaks for, and on whose authority. */
   private scope() {
     return {
@@ -115,6 +133,13 @@ export class GroupClient {
   private memberScope(memberId: string) {
     return {
       param: { groupId: this.groupId, memberId },
+      header: this.headers,
+    };
+  }
+
+  private inviteScope(inviteId: string) {
+    return {
+      param: { groupId: this.groupId, inviteId },
       header: this.headers,
     };
   }

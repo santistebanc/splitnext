@@ -56,6 +56,13 @@ export type OpenApiDocument = {
       patch: { responses: object };
       delete: { responses: object };
     };
+    '/groups/{groupId}/invites': {
+      post: { responses: object };
+      get: { responses: object };
+    };
+    '/groups/{groupId}/invites/{inviteId}': {
+      delete: { responses: object };
+    };
   };
 };
 

@@ -15,7 +15,7 @@ unless the user changes them, and update this file when a decision changes.
 
 - Do not invent owner/admin roles.
 
-## Invites (decided, not implemented)
+## Invites
 
 - Invites are temporary credentials; redemption issues separate member/device
   access. Expiring an invite does not revoke access already issued from it.

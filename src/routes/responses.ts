@@ -20,6 +20,7 @@ export const REFUSAL_STATUS = {
   invalid_request: 400,
   unauthorized: 401,
   member_not_found: 404,
+  invite_not_found: 404,
   group_exists: 409,
   version_conflict: 409,
   group_deleted: 410,

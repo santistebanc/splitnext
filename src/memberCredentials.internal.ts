@@ -3,6 +3,7 @@ import {
   accessCredentialSchema,
   type MemberPrincipal,
 } from './accessCredential';
+import { generateSecretToken, hashSecretToken } from './secretToken.internal';
 
 export type PreparedCredentialIssue = {
   accessToken: string;
@@ -22,11 +23,11 @@ export class MemberCredentials {
   constructor(private readonly sql: SqlStorage) {}
 
   async prepareIssue(deviceUserId: string): Promise<PreparedCredentialIssue> {
-    const accessToken = generateAccessToken();
+    const accessToken = generateSecretToken();
 
     return {
       accessToken,
-      tokenHash: await hashAccessToken(accessToken),
+      tokenHash: await hashSecretToken(accessToken),
       deviceUserId,
     };
   }
@@ -57,7 +58,7 @@ export class MemberCredentials {
     if (!parsed.success) return null;
 
     return {
-      tokenHash: await hashAccessToken(parsed.data.accessToken),
+      tokenHash: await hashSecretToken(parsed.data.accessToken),
       deviceUserId: parsed.data.deviceUserId,
     };
   }
@@ -91,24 +92,4 @@ export class MemberCredentials {
       memberId,
     );
   }
-
-}
-
-function generateAccessToken(): string {
-  const bytes = new Uint8Array(32);
-
-  crypto.getRandomValues(bytes);
-
-  return toHex(bytes);
-}
-
-async function hashAccessToken(token: string): Promise<string> {
-  const encoded = new TextEncoder().encode(token);
-  const digest = await crypto.subtle.digest('SHA-256', encoded);
-
-  return toHex(new Uint8Array(digest));
-}
-
-function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
