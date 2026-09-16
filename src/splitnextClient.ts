@@ -6,7 +6,11 @@ import type {
   DeleteGroupInput,
   UpdateGroupInput,
 } from './groupState';
-import type { CreateGroupInviteInput } from './inviteDirectory';
+import type {
+  CreateGroupInviteInput,
+  InviteContextInput,
+  RedeemGroupInviteInput,
+} from './inviteDirectory';
 import type {
   CreateMemberInput,
   DeleteMemberInput,
@@ -34,6 +38,20 @@ export class SplitnextClient {
 
   createGroup(input: CreateGroupInput) {
     return this.rpc.groups.$post({ json: input });
+  }
+
+  redeemGroupInvite(groupId: string, input: RedeemGroupInviteInput) {
+    return this.rpc.groups[':groupId']['invite-redemptions'].$post({
+      param: { groupId },
+      json: input,
+    });
+  }
+
+  previewGroupInvite(groupId: string, input: InviteContextInput) {
+    return this.rpc.groups[':groupId']['invite-context'].$post({
+      param: { groupId },
+      json: input,
+    });
   }
 
   group(groupId: string, credential: AccessCredential): GroupClient {

@@ -92,4 +92,18 @@ export class MemberCredentials {
       memberId,
     );
   }
+
+  hasBeenIssued(memberId: string): boolean {
+    const access = this.sql
+      .exec<{ issued: number }>(
+        `SELECT 1 AS issued
+         FROM member_access
+         WHERE member_id = ?
+         LIMIT 1`,
+        memberId,
+      )
+      .toArray()[0];
+
+    return access !== undefined;
+  }
 }

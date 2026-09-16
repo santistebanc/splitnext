@@ -29,6 +29,8 @@ unless the user changes them, and update this file when a decision changes.
   inviting again creates a fresh token.
 - "Disable link" sets `revoked_at` instead of deleting the record.
 - Group links remain usable until expiry, or revocation.
+- A member is claimable through a group link only while active and only if
+  member access has never been issued for that member.
 - Redemption atomically validates the invite, creates or claims the member,
   issues access, and records use.
 - Implement as separate slices: invite lifecycle, new-member redemption,

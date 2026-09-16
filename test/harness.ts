@@ -63,6 +63,12 @@ export type OpenApiDocument = {
     '/groups/{groupId}/invites/{inviteId}': {
       delete: { responses: object };
     };
+    '/groups/{groupId}/invite-redemptions': {
+      post: { responses: object };
+    };
+    '/groups/{groupId}/invite-context': {
+      post: { responses: object };
+    };
   };
 };
 

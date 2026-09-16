@@ -2,11 +2,18 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   createGroupInviteInputSchema,
   groupInviteSchema,
+  inviteContextInputSchema,
+  inviteContextSchema,
   inviteTokenSchema,
+  redeemGroupInviteInputSchema,
 } from '../inviteDirectory';
+import { accessTokenSchema } from '../accessCredential';
+import { groupSchema } from '../groupState';
+import { memberSchema } from '../memberDirectory';
 import {
   accessHeadersSchema,
   groupIdParameterSchema,
+  groupObject,
   groupParamsSchema,
   groupSession,
 } from './groupRequest';
@@ -54,6 +61,74 @@ const createGroupInviteRoute = createRoute({
     401: errorResponse('The group or capability is unavailable to this device.'),
     410: errorResponse('The group was deleted.'),
     500: errorResponse('The invite could not be created.'),
+  },
+});
+
+const redeemGroupInviteRoute = createRoute({
+  method: 'post',
+  path: '/groups/{groupId}/invite-redemptions',
+  tags: ['Invites'],
+  summary: 'Join a group with an invite',
+  description:
+    'Exchanges an active group invite for a new member and permanent device access.',
+  request: {
+    params: groupParamsSchema,
+    body: {
+      required: true,
+      content: {
+        'application/json': { schema: redeemGroupInviteInputSchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: 'The group, new member, and permanent access capability.',
+      content: {
+        'application/json': {
+          schema: z.object({
+            group: groupSchema,
+            member: memberSchema,
+            access_token: accessTokenSchema,
+          }),
+        },
+      },
+    },
+    400: errorResponse('The path or request body is invalid.'),
+    401: errorResponse('The invite is invalid for this group.'),
+    404: errorResponse('The selected member does not exist.'),
+    409: errorResponse('The selected member was already claimed.'),
+    410: errorResponse('The invite or group is no longer available.'),
+    500: errorResponse('The invite could not be redeemed.'),
+  },
+});
+
+const previewGroupInviteRoute = createRoute({
+  method: 'post',
+  path: '/groups/{groupId}/invite-context',
+  tags: ['Invites'],
+  summary: 'Inspect a group invite',
+  description:
+    'Returns the group identity and members that may still be claimed with this invite.',
+  request: {
+    params: groupParamsSchema,
+    body: {
+      required: true,
+      content: {
+        'application/json': { schema: inviteContextInputSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'The context needed to present the join choice.',
+      content: {
+        'application/json': { schema: inviteContextSchema },
+      },
+    },
+    400: errorResponse('The path or request body is invalid.'),
+    401: errorResponse('The invite is invalid for this group.'),
+    410: errorResponse('The invite or group is no longer available.'),
+    500: errorResponse('The invite context could not be loaded.'),
   },
 });
 
@@ -183,4 +258,33 @@ export const inviteRoutes = new OpenAPIHono<{ Bindings: Env }>({
     }
 
     return context.json({ invite: result.invite }, 200);
+  })
+  .openapi(redeemGroupInviteRoute, async (context) => {
+    const { groupId } = context.req.valid('param');
+    const group = groupObject(context.env, groupId);
+    const result = await group.redeemGroupInvite(context.req.valid('json'));
+
+    if (!result.ok) {
+      return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);
+    }
+
+    return context.json(
+      {
+        group: result.group,
+        member: result.member,
+        access_token: result.access_token,
+      },
+      201,
+    );
+  })
+  .openapi(previewGroupInviteRoute, async (context) => {
+    const { groupId } = context.req.valid('param');
+    const group = groupObject(context.env, groupId);
+    const result = await group.previewGroupInvite(context.req.valid('json'));
+
+    if (!result.ok) {
+      return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);
+    }
+
+    return context.json(result.context, 200);
   });

@@ -18,8 +18,13 @@ import {
   type CreateGroupInviteInput,
   type CreatedGroupInvite,
   type GroupInvite,
+  inviteContextInputSchema,
+  type InviteContext,
+  type InviteContextInput,
   InviteDirectory,
   type InviteReadResult,
+  redeemGroupInviteInputSchema,
+  type RedeemGroupInviteInput,
 } from './inviteDirectory';
 import {
   createMemberInputSchema,
@@ -60,6 +65,33 @@ type CreateGroupResult =
   | { ok: false; error: 'group_exists' }
   | InvalidCommand;
 
+type RedeemGroupInviteResult =
+  | { ok: true; group: Group; member: Member; access_token: string }
+  | {
+      ok: false;
+      error:
+        | 'invite_invalid'
+        | 'invite_expired'
+        | 'invite_revoked'
+        | 'group_deleted'
+        | 'member_not_found'
+        | 'member_deleted'
+        | 'member_claimed';
+    }
+  | InvalidCommand;
+
+type PreviewGroupInviteResult =
+  | { ok: true; context: InviteContext }
+  | {
+      ok: false;
+      error:
+        | 'invite_invalid'
+        | 'invite_expired'
+        | 'invite_revoked'
+        | 'group_deleted';
+    }
+  | InvalidCommand;
+
 /**
  * Cloudflare's adapter for one group. It owns the named object identity,
  * transaction scope, authorization guard, and coordination between deep state
@@ -76,7 +108,7 @@ export class GroupObject extends DurableObject<Env> {
     this.database = new GroupDatabase(ctx.storage);
     this.groupState = new GroupState(ctx.storage.sql);
     this.members = new MemberDirectory(ctx.storage.sql);
-    this.invites = new InviteDirectory(ctx.storage.sql);
+    this.invites = new InviteDirectory(ctx.storage.sql, this.members);
   }
 
   async health(): Promise<boolean> {
@@ -230,6 +262,38 @@ export class GroupObject extends DurableObject<Env> {
     return this.actOnGroup(credential, () => this.invites.revoke(inviteId));
   }
 
+  async redeemGroupInvite(
+    input: RedeemGroupInviteInput,
+  ): Promise<RedeemGroupInviteResult> {
+    return this.onCommand(
+      redeemGroupInviteInputSchema,
+      input,
+      async (command) => {
+        const prepared = await this.invites.prepareRedemption(command);
+
+        return this.actOnInvitedGroup((group) => {
+          const redemption = this.invites.redeemGroupInvite(prepared);
+
+          return redemption.ok
+            ? { ...redemption, group }
+            : redemption;
+        });
+      },
+    );
+  }
+
+  async previewGroupInvite(
+    input: InviteContextInput,
+  ): Promise<PreviewGroupInviteResult> {
+    return this.onCommand(inviteContextInputSchema, input, async (command) => {
+      const tokenHash = await this.invites.prepareContext(command);
+
+      return this.actOnInvitedGroup((group) =>
+        this.invites.previewGroupInvite(tokenHash, group),
+      );
+    });
+  }
+
   /**
    * Commands are validated here and nowhere else. This is the seam a command
    * crosses, so the state modules behind it receive shapes they can trust.
@@ -277,6 +341,27 @@ export class GroupObject extends DurableObject<Env> {
 
       if (group.deleted_at !== null) {
         return { ok: false, error: 'group_deleted' };
+      }
+
+      return act(group);
+    });
+  }
+
+  /** Resolves a live group for someone whose authority is an invite token. */
+  private actOnInvitedGroup<T>(
+    act: (group: Group) => T,
+  ): T | { ok: false; error: 'invite_invalid' | 'group_deleted' } {
+    if (!this.database.prepareExistingGroup()) {
+      return { ok: false, error: 'invite_invalid' };
+    }
+
+    return this.ctx.storage.transactionSync(() => {
+      const group = this.groupState.retrieve();
+
+      if (!group) throw new Error('group_state_missing');
+
+      if (group.deleted_at !== null) {
+        return { ok: false as const, error: 'group_deleted' as const };
       }
 
       return act(group);

@@ -25,6 +25,13 @@ export const memberSchema = z.object({
 
 export type Member = z.infer<typeof memberSchema>;
 
+export const claimableMemberSchema = memberSchema.pick({
+  id: true,
+  display_name: true,
+});
+
+export type ClaimableMember = z.infer<typeof claimableMemberSchema>;
+
 export const createMemberInputSchema = z
   .object({ display_name: memberDisplayNameSchema })
   .strict();
@@ -55,6 +62,13 @@ export type MemberMutationResult =
   | {
       ok: false;
       error: 'member_not_found' | 'member_deleted' | 'version_conflict';
+    };
+
+export type MemberClaimResult =
+  | { ok: true; member: Member; access_token: string }
+  | {
+      ok: false;
+      error: 'member_not_found' | 'member_deleted' | 'member_claimed';
     };
 
 type PreparedMemberWithAccess = {
@@ -123,6 +137,10 @@ export class MemberDirectory {
     return this.credentials.prepareAuthorization(rawCredential);
   }
 
+  async prepareAccess(deviceUserId: string): Promise<PreparedCredentialIssue> {
+    return this.credentials.prepareIssue(deviceUserId);
+  }
+
   /** Runs inside the caller's transaction. */
   authenticate(prepared: PreparedAuthorization): MemberPrincipal | null {
     return this.credentials.authenticate(prepared);
@@ -139,6 +157,22 @@ export class MemberDirectory {
          FROM members
          WHERE deleted_at IS NULL
          ORDER BY created_at, id`,
+      )
+      .toArray();
+  }
+
+  listClaimable(): ClaimableMember[] {
+    return this.sql
+      .exec<ClaimableMember>(
+        `SELECT member.id, member.display_name
+         FROM members AS member
+         WHERE member.deleted_at IS NULL
+           AND NOT EXISTS (
+             SELECT 1
+             FROM member_access AS access
+             WHERE access.member_id = member.id
+           )
+         ORDER BY member.created_at, member.id`,
       )
       .toArray();
   }
@@ -169,6 +203,33 @@ export class MemberDirectory {
     if (!resolved.ok) return resolved;
 
     return this.commit(resolved.member, { deleted: true });
+  }
+
+  claimWithAccess(
+    memberId: string,
+    prepared: PreparedCredentialIssue,
+  ): MemberClaimResult {
+    const member = this.read(memberId);
+
+    if (!member) return { ok: false, error: 'member_not_found' };
+
+    if (member.deleted_at !== null) {
+      return { ok: false, error: 'member_deleted' };
+    }
+
+    if (this.credentials.hasBeenIssued(member.id)) {
+      return { ok: false, error: 'member_claimed' };
+    }
+
+    return {
+      ok: true,
+      member,
+      access_token: this.credentials.issue(
+        prepared,
+        member.id,
+        new Date().toISOString(),
+      ),
+    };
   }
 
   private insert(displayName: string): Member {

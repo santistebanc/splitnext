@@ -15,7 +15,10 @@ import { accessTokenSchema } from '../src/accessCredential';
 import {
   type CreateGroupInviteInput,
   groupInviteSchema,
+  type InviteContextInput,
+  inviteContextSchema,
   inviteTokenSchema,
+  type RedeemGroupInviteInput,
 } from '../src/inviteDirectory';
 import { memberSchema } from '../src/memberDirectory';
 import {
@@ -59,6 +62,10 @@ const errorResponseSchema = z.object({ error: z.string() }).strict();
 
 export type CreateGroupResponse = z.infer<typeof createGroupResponseSchema>;
 
+export type InviteRedemptionResponse = CreateGroupResponse;
+
+export type InviteContextResponse = z.infer<typeof inviteContextSchema>;
+
 export type GroupResponse = z.infer<typeof groupResponseSchema>;
 
 export type MemberResponse = z.infer<typeof memberResponseSchema>;
@@ -88,6 +95,24 @@ type JsonResponse = {
 
 export function postGroup(input: CreateGroupInput) {
   return api.createGroup(input);
+}
+
+export async function redeemGroupInvite(
+  groupId: string,
+  input: RedeemGroupInviteInput,
+): Promise<TestReply<InviteRedemptionResponse>> {
+  const response = await api.redeemGroupInvite(groupId, input);
+
+  return readReply(response, createGroupResponseSchema);
+}
+
+export async function previewGroupInvite(
+  groupId: string,
+  input: InviteContextInput,
+): Promise<TestReply<InviteContextResponse>> {
+  const response = await api.previewGroupInvite(groupId, input);
+
+  return readReply(response, inviteContextSchema);
 }
 
 /** Carries one valid group identity while hiding routine HTTP request plumbing. */

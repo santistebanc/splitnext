@@ -92,7 +92,7 @@ describe('groups API', () => {
         state.storage.kv.get<number>(MIGRATION_VERSION_KEY),
     );
 
-    expect(schemaVersion).toBe(2);
+    expect(schemaVersion).toBe(3);
   });
 
   it('upgrades an existing group database and keeps what it stored', async () => {
@@ -106,6 +106,7 @@ describe('groups API', () => {
     const migration = await runInDurableObject(
       env.GROUPS.get(objectId),
       (_instance, state) => {
+        state.storage.sql.exec('DROP TABLE invite_redemptions');
         state.storage.sql.exec('DROP TABLE invites');
         state.storage.kv.put(MIGRATION_VERSION_KEY, 1);
 
@@ -116,6 +117,11 @@ describe('groups API', () => {
           pending: pending ?? null,
           existed,
           upgraded: state.storage.kv.get<number>(MIGRATION_VERSION_KEY),
+          redemptionsTable: state.storage.sql
+            .exec<{ name: string }>(
+              "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'invite_redemptions'",
+            )
+            .toArray()[0]?.name,
         };
       },
     );
@@ -124,7 +130,12 @@ describe('groups API', () => {
     const members = await group.listMembers();
     const invites = await group.listGroupInvites();
 
-    expect(migration).toEqual({ pending: 1, existed: true, upgraded: 2 });
+    expect(migration).toEqual({
+      pending: 1,
+      existed: true,
+      upgraded: 3,
+      redemptionsTable: 'invite_redemptions',
+    });
     // Every row written before the upgrade survived it.
     expect(successBody(fetched, 200)).toEqual({ group: group.created.group });
     expect(successBody(members, 200)).toEqual({
