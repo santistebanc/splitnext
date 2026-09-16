@@ -9,8 +9,9 @@ import { accessTokenSchema } from '../accessCredential';
 import { memberSchema } from '../memberDirectory';
 import {
   accessHeadersSchema,
-  capabilityFrom,
+  groupObject,
   groupParamsSchema,
+  groupSession,
 } from './groupRequest';
 import { errorResponse, REFUSAL_STATUS } from './responses';
 
@@ -156,9 +157,9 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
   .openapi(createGroupRoute, async (context) => {
     const input = context.req.valid('json');
     const groupId = crypto.randomUUID();
-    const id = context.env.GROUPS.idFromName(groupId);
+    const group = groupObject(context.env, groupId);
 
-    const result = await context.env.GROUPS.get(id).createGroup(input);
+    const result = await group.createGroup(input);
 
     if (!result.ok) {
       return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);
@@ -175,11 +176,14 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
   })
   .openapi(getGroupRoute, async (context) => {
     const { groupId } = context.req.valid('param');
-    const credential = capabilityFrom(context.req.valid('header'));
 
-    const id = context.env.GROUPS.idFromName(groupId);
+    const { group, credential } = groupSession(
+      context.env,
+      groupId,
+      context.req.valid('header'),
+    );
 
-    const result = await context.env.GROUPS.get(id).getGroup(credential);
+    const result = await group.getGroup(credential);
 
     if (!result.ok) {
       return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);
@@ -189,15 +193,16 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
   })
   .openapi(updateGroupRoute, async (context) => {
     const { groupId } = context.req.valid('param');
-    const credential = capabilityFrom(context.req.valid('header'));
+
+    const { group, credential } = groupSession(
+      context.env,
+      groupId,
+      context.req.valid('header'),
+    );
+
     const input = context.req.valid('json');
 
-    const id = context.env.GROUPS.idFromName(groupId);
-
-    const result = await context.env.GROUPS.get(id).updateGroup(
-      credential,
-      input,
-    );
+    const result = await group.updateGroup(credential, input);
 
     if (!result.ok) {
       return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);
@@ -207,15 +212,16 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
   })
   .openapi(deleteGroupRoute, async (context) => {
     const { groupId } = context.req.valid('param');
-    const credential = capabilityFrom(context.req.valid('header'));
+
+    const { group, credential } = groupSession(
+      context.env,
+      groupId,
+      context.req.valid('header'),
+    );
+
     const { expected_version } = context.req.valid('query');
 
-    const id = context.env.GROUPS.idFromName(groupId);
-
-    const result = await context.env.GROUPS.get(id).deleteGroup(
-      credential,
-      { expected_version },
-    );
+    const result = await group.deleteGroup(credential, { expected_version });
 
     if (!result.ok) {
       return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);

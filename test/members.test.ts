@@ -32,22 +32,11 @@ describe('members API', () => {
     );
     expect(created.updated_at).toBe(created.created_at);
 
-    const objectId = env.GROUPS.idFromName(group.created.group.id);
+    // Persistence is proven the way a caller would observe it. Which columns
+    // the row has is the column-parity test's job, not this one's.
+    const retrieved = await group.getMember(created.id);
 
-    const stored = await runInDurableObject(
-      env.GROUPS.get(objectId),
-      (_instance, state) =>
-        state.storage.sql
-          .exec<Member>(
-            `SELECT id, version, created_at, updated_at, deleted_at, display_name
-             FROM members WHERE id = ?`,
-            created.id,
-          )
-          .toArray()[0],
-    );
-
-    expect(stored).toEqual(created);
-    expect(stored).not.toHaveProperty('group_id');
+    expect(successBody(retrieved, 200)).toEqual({ member: created });
   });
 
   it('lists and retrieves members', async () => {

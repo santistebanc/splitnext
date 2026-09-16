@@ -7,9 +7,9 @@ import {
 } from '../memberDirectory';
 import {
   accessHeadersSchema,
-  capabilityFrom,
   groupIdParameterSchema,
   groupParamsSchema,
+  groupSession,
 } from './groupRequest';
 import { errorResponse, REFUSAL_STATUS } from './responses';
 
@@ -177,11 +177,16 @@ export const memberRoutes = new OpenAPIHono<{ Bindings: Env }>({
 })
   .openapi(createMemberRoute, async (context) => {
     const { groupId } = context.req.valid('param');
-    const credential = capabilityFrom(context.req.valid('header'));
-    const input = context.req.valid('json');
-    const id = context.env.GROUPS.idFromName(groupId);
 
-    const result = await context.env.GROUPS.get(id).createMember(
+    const { group, credential } = groupSession(
+      context.env,
+      groupId,
+      context.req.valid('header'),
+    );
+
+    const input = context.req.valid('json');
+
+    const result = await group.createMember(
       credential,
       input,
     );
@@ -194,10 +199,14 @@ export const memberRoutes = new OpenAPIHono<{ Bindings: Env }>({
   })
   .openapi(listMembersRoute, async (context) => {
     const { groupId } = context.req.valid('param');
-    const credential = capabilityFrom(context.req.valid('header'));
-    const id = context.env.GROUPS.idFromName(groupId);
 
-    const result = await context.env.GROUPS.get(id).listMembers(credential);
+    const { group, credential } = groupSession(
+      context.env,
+      groupId,
+      context.req.valid('header'),
+    );
+
+    const result = await group.listMembers(credential);
 
     if (!result.ok) {
       return context.json({ error: result.error }, REFUSAL_STATUS[result.error]);
@@ -207,10 +216,14 @@ export const memberRoutes = new OpenAPIHono<{ Bindings: Env }>({
   })
   .openapi(getMemberRoute, async (context) => {
     const { groupId, memberId } = context.req.valid('param');
-    const credential = capabilityFrom(context.req.valid('header'));
-    const id = context.env.GROUPS.idFromName(groupId);
 
-    const result = await context.env.GROUPS.get(id).getMember(
+    const { group, credential } = groupSession(
+      context.env,
+      groupId,
+      context.req.valid('header'),
+    );
+
+    const result = await group.getMember(
       credential,
       memberId,
     );
@@ -223,11 +236,16 @@ export const memberRoutes = new OpenAPIHono<{ Bindings: Env }>({
   })
   .openapi(updateMemberRoute, async (context) => {
     const { groupId, memberId } = context.req.valid('param');
-    const credential = capabilityFrom(context.req.valid('header'));
-    const input = context.req.valid('json');
-    const id = context.env.GROUPS.idFromName(groupId);
 
-    const result = await context.env.GROUPS.get(id).updateMember(
+    const { group, credential } = groupSession(
+      context.env,
+      groupId,
+      context.req.valid('header'),
+    );
+
+    const input = context.req.valid('json');
+
+    const result = await group.updateMember(
       credential,
       memberId,
       input,
@@ -241,11 +259,16 @@ export const memberRoutes = new OpenAPIHono<{ Bindings: Env }>({
   })
   .openapi(deleteMemberRoute, async (context) => {
     const { groupId, memberId } = context.req.valid('param');
-    const credential = capabilityFrom(context.req.valid('header'));
-    const { expected_version } = context.req.valid('query');
-    const id = context.env.GROUPS.idFromName(groupId);
 
-    const result = await context.env.GROUPS.get(id).deleteMember(
+    const { group, credential } = groupSession(
+      context.env,
+      groupId,
+      context.req.valid('header'),
+    );
+
+    const { expected_version } = context.req.valid('query');
+
+    const result = await group.deleteMember(
       credential,
       memberId,
       { expected_version },

@@ -88,7 +88,7 @@ export class GroupObject extends DurableObject<Env> {
       device_user_id: input.device_user_id,
     });
 
-    this.database.provision();
+    this.database.createForNewGroup();
 
     return this.ctx.storage.transactionSync((): CreateGroupResult => {
       const storedGroup = this.groupState.create(groupId, input);
@@ -212,9 +212,15 @@ export class GroupObject extends DurableObject<Env> {
     credential: AccessCredential,
     act: (group: Group) => T,
   ): Promise<T | GroupRefusal> {
-    this.database.upgradeIfPresent();
-
+    // Hash first, unconditionally. An unknown group and a wrong capability are
+    // meant to be indistinguishable, so they must also cost the same.
     const prepared = await this.members.prepareAuthorization(credential);
+
+    // The module that owns the schema is the one that knows whether there is
+    // one. Nothing below this line has to ask again.
+    if (!this.database.prepareExistingGroup()) {
+      return { ok: false, error: 'unauthorized' };
+    }
 
     return this.ctx.storage.transactionSync((): T | GroupRefusal => {
       const principal = this.members.authenticate(prepared);

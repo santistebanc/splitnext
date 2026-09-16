@@ -43,7 +43,7 @@ const migrations: SQLSchemaMigration[] = [
   },
 ];
 
-const MIGRATION_VERSION_KEY = 'splitnext_group_schema_version';
+export const MIGRATION_VERSION_KEY = 'splitnext_group_schema_version';
 
 /** Owns schema creation and upgrades for every individual group database. */
 export class GroupDatabase {
@@ -57,19 +57,24 @@ export class GroupDatabase {
     });
   }
 
-  provision(): void {
+  /** For a group being created: makes the database and brings it to schema. */
+  createForNewGroup(): void {
     this.migrationRunner.runAllSync();
   }
 
-  upgradeIfPresent(): void {
-    if (
-      !this.migrationRunner.hasMigrationsToRun() ||
-      !this.hasGroupTable()
-    ) {
-      return;
+  /**
+   * For a group being visited: upgrades the database when there is one, and
+   * reports whether this group has storage at all. A group that was never
+   * created is left alone, so merely addressing an id provisions nothing.
+   */
+  prepareExistingGroup(): boolean {
+    if (!this.hasGroupTable()) return false;
+
+    if (this.migrationRunner.hasMigrationsToRun()) {
+      this.migrationRunner.runAllSync();
     }
 
-    this.migrationRunner.runAllSync();
+    return true;
   }
 
   private hasGroupTable(): boolean {
