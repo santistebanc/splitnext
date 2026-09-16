@@ -102,7 +102,7 @@ Implemented in this slice:
 D1 currently stores only global application metadata. It remains available for
 future cross-group discovery, but it does not own group records or capabilities.
 
-Intentionally deferred: individual invites, expenses, balances, activity
+Intentionally deferred: additional invite types, expenses, balances, activity
 history, and WebSockets.
 
 ## Review locally

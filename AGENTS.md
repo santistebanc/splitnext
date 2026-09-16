@@ -19,10 +19,9 @@ unless the user changes them, and update this file when a decision changes.
 
 - Invites are temporary credentials; redemption issues separate member/device
   access. Expiring an invite does not revoke access already issued from it.
-- Present reusable **group links** and single-use **individual member links** as
-  one Invite feature.
-- Initially, a group link creates a new member. Claiming a pre-created member is
-  a later slice. An individual link targets one pre-created member.
+- Use reusable **group links** as the only invite type for now. Do not implement
+  individual member links unless the user explicitly revisits this decision.
+- A group link can create a new member or claim an eligible pre-created member.
 - Join URLs include group id and secret: `/join/{groupId}/{inviteToken}`. Persist
   only the token hash in the relevant group's Durable Object.
 - Default expiry is seven days. Never reactivate an expired or revoked link;
@@ -33,5 +32,3 @@ unless the user changes them, and update this file when a decision changes.
   member access has never been issued for that member.
 - Redemption atomically validates the invite, creates or claims the member,
   issues access, and records use.
-- Implement as separate slices: invite lifecycle, new-member redemption,
-  claiming existing members, then individual invites.
