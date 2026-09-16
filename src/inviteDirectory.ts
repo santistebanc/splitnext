@@ -6,6 +6,7 @@ import {
   memberDisplayNameSchema,
   type Member,
   MemberDirectory,
+  type PreparedMemberWithAccess,
 } from './memberDirectory';
 import { type MemberAccess, type PreparedCredentialIssue } from './memberAccess';
 import {
@@ -123,10 +124,6 @@ type PreparedGroupInvite = {
   tokenHash: string;
   inviteToken: string;
 };
-
-type PreparedMemberWithAccess = Awaited<
-  ReturnType<MemberDirectory['prepareMemberWithAccess']>
->;
 
 type PreparedRedemptionMember =
   | { kind: 'new'; member: PreparedMemberWithAccess }

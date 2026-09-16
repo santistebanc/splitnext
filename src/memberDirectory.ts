@@ -63,7 +63,7 @@ export type MemberClaimResult =
       error: 'member_not_found' | 'member_deleted' | 'member_claimed';
     };
 
-type PreparedMemberWithAccess = {
+export type PreparedMemberWithAccess = {
   displayName: string;
   credential: PreparedCredentialIssue;
 };
