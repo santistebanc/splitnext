@@ -67,11 +67,43 @@ Implemented in this slice:
 - deletion of a member revokes every capability linked to that member;
 - group capability checks on every member endpoint.
 
+### 5 — Group invite lifecycle
+
+Implemented in this slice:
+
+- reusable group-link creation at `POST /groups/{groupId}/invites`;
+- invite listing and permanent disabling;
+- seven-day default expiry with optional custom deadlines;
+- plaintext invite secrets returned only when a link is created;
+- invite token hashes stored inside the relevant group Durable Object.
+
+### 6 — New-member invite redemption
+
+Implemented in this slice:
+
+- public redemption at `POST /groups/{groupId}/invite-redemptions`;
+- a minimal `/join/{groupId}/{inviteToken}` browser form for testing redemption;
+- creation of a new member and permanent device access from a valid link;
+- reusable group links that can admit multiple distinct members;
+- explicit invalid, expired, revoked, and deleted-group outcomes;
+- atomic invite validation, member creation, capability issuance, and usage
+  recording inside the group Durable Object.
+
+### 7 — Claim pre-created members
+
+Implemented in this slice:
+
+- invite-authorized join context at `POST /groups/{groupId}/invite-context`;
+- disclosure of only active members that have never received access;
+- redemption into an existing member without creating a duplicate;
+- one-time claiming enforced inside the Durable Object transaction;
+- a join form that offers existing names alongside new-member creation.
+
 D1 currently stores only global application metadata. It remains available for
 future cross-group discovery, but it does not own group records or capabilities.
 
-Intentionally deferred: additional access and invites, expenses, balances,
-activity history, and WebSockets.
+Intentionally deferred: individual invites, expenses, balances, activity
+history, and WebSockets.
 
 ## Review locally
 
@@ -139,6 +171,20 @@ curl -i http://localhost:8787/groups/GROUP_ID/members \
   -H 'X-Device-User-Id: device-1' \
   -H 'Content-Type: application/json' \
   --data '{"display_name":"Ada"}'
+```
+
+Create a reusable invite, then redeem the returned `invite_token`:
+
+```bash
+curl -i http://localhost:8787/groups/GROUP_ID/invites \
+  -H 'Authorization: Bearer ACCESS_TOKEN' \
+  -H 'X-Device-User-Id: device-1' \
+  -H 'Content-Type: application/json' \
+  --data '{}'
+
+curl -i http://localhost:8787/groups/GROUP_ID/invite-redemptions \
+  -H 'Content-Type: application/json' \
+  --data '{"invite_token":"INVITE_TOKEN","device_user_id":"device-2","member":{"kind":"new","display_name":"Alex"}}'
 ```
 
 Expected readiness body after the local migration:

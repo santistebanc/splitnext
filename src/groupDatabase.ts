@@ -58,6 +58,22 @@ const migrations: SQLSchemaMigration[] = [
         ON invites(expires_at);
     `,
   },
+  {
+    idMonotonicInc: 3,
+    description: 'Record invite redemptions',
+    sql: `
+      CREATE TABLE IF NOT EXISTS invite_redemptions (
+        member_id TEXT PRIMARY KEY,
+        invite_id TEXT NOT NULL,
+        redeemed_at TEXT NOT NULL,
+        FOREIGN KEY (member_id) REFERENCES members(id),
+        FOREIGN KEY (invite_id) REFERENCES invites(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS invite_redemptions_invite_id
+        ON invite_redemptions(invite_id);
+    `,
+  },
 ];
 
 export const MIGRATION_VERSION_KEY = 'splitnext_group_schema_version';

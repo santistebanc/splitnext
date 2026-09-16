@@ -19,10 +19,14 @@ export function errorResponse(description: string) {
 export const REFUSAL_STATUS = {
   invalid_request: 400,
   unauthorized: 401,
+  invite_invalid: 401,
   member_not_found: 404,
   invite_not_found: 404,
+  member_claimed: 409,
   group_exists: 409,
   version_conflict: 409,
   group_deleted: 410,
+  invite_expired: 410,
+  invite_revoked: 410,
   member_deleted: 410,
 } as const;

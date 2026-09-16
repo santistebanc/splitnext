@@ -1,4 +1,12 @@
 import { z } from 'zod';
+import { deviceUserIdSchema } from './accessCredential';
+import { groupSchema, type Group } from './groupState';
+import {
+  claimableMemberSchema,
+  memberDisplayNameSchema,
+  type Member,
+  MemberDirectory,
+} from './memberDirectory';
 import { generateSecretToken, hashSecretToken } from './secretToken.internal';
 
 const DEFAULT_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
@@ -28,6 +36,52 @@ export type CreateGroupInviteInput = z.infer<
   typeof createGroupInviteInputSchema
 >;
 
+const redemptionMemberSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('new'),
+      display_name: memberDisplayNameSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('existing'),
+      member_id: z.uuid(),
+    })
+    .strict(),
+]);
+
+export const redeemGroupInviteInputSchema = z
+  .object({
+    invite_token: inviteTokenSchema,
+    device_user_id: deviceUserIdSchema,
+    member: redemptionMemberSchema,
+  })
+  .strict();
+
+export type RedeemGroupInviteInput = z.infer<
+  typeof redeemGroupInviteInputSchema
+>;
+
+export const inviteContextInputSchema = z
+  .object({ invite_token: inviteTokenSchema })
+  .strict();
+
+export type InviteContextInput = z.infer<typeof inviteContextInputSchema>;
+
+export const inviteContextSchema = z
+  .object({
+    group: groupSchema.pick({
+      id: true,
+      name: true,
+      currency_label: true,
+    }),
+    claimable_members: z.array(claimableMemberSchema),
+  })
+  .strict();
+
+export type InviteContext = z.infer<typeof inviteContextSchema>;
+
 export type CreatedGroupInvite = {
   invite: GroupInvite;
   invite_token: string;
@@ -37,6 +91,26 @@ export type InviteReadResult =
   | { ok: true; invite: GroupInvite }
   | { ok: false; error: 'invite_not_found' };
 
+export type InviteRedemptionResult =
+  | { ok: true; member: Member; access_token: string }
+  | {
+      ok: false;
+      error:
+        | 'invite_invalid'
+        | 'invite_expired'
+        | 'invite_revoked'
+        | 'member_not_found'
+        | 'member_deleted'
+        | 'member_claimed';
+    };
+
+export type InviteContextResult =
+  | { ok: true; context: InviteContext }
+  | {
+      ok: false;
+      error: 'invite_invalid' | 'invite_expired' | 'invite_revoked';
+    };
+
 type StoredGroupInvite = Omit<GroupInvite, 'status'>;
 
 type PreparedGroupInvite = {
@@ -45,9 +119,34 @@ type PreparedGroupInvite = {
   inviteToken: string;
 };
 
+type PreparedMemberWithAccess = Awaited<
+  ReturnType<MemberDirectory['prepareMemberWithAccess']>
+>;
+
+type PreparedAccess = Awaited<ReturnType<MemberDirectory['prepareAccess']>>;
+
+type PreparedRedemptionMember =
+  | { kind: 'new'; member: PreparedMemberWithAccess }
+  | { kind: 'existing'; memberId: string; access: PreparedAccess };
+
+type PreparedInviteRedemption = {
+  tokenHash: string;
+  member: PreparedRedemptionMember;
+};
+
+type ActiveInviteResult =
+  | { ok: true; invite: StoredGroupInvite }
+  | {
+      ok: false;
+      error: 'invite_invalid' | 'invite_expired' | 'invite_revoked';
+    };
+
 /** Owns temporary invitations stored inside one group's database. */
 export class InviteDirectory {
-  constructor(private readonly sql: SqlStorage) {}
+  constructor(
+    private readonly sql: SqlStorage,
+    private readonly members: MemberDirectory,
+  ) {}
 
   /**
    * Token hashing is asynchronous, so preparation happens before the caller's
@@ -101,6 +200,87 @@ export class InviteDirectory {
     };
   }
 
+  /** Prepares both secrets before the caller opens its SQLite transaction. */
+  async prepareRedemption(
+    input: RedeemGroupInviteInput,
+  ): Promise<PreparedInviteRedemption> {
+    if (input.member.kind === 'new') {
+      const [tokenHash, member] = await Promise.all([
+        hashSecretToken(input.invite_token),
+        this.members.prepareMemberWithAccess({
+          display_name: input.member.display_name,
+          device_user_id: input.device_user_id,
+        }),
+      ]);
+
+      return { tokenHash, member: { kind: 'new', member } };
+    }
+
+    const [tokenHash, access] = await Promise.all([
+      hashSecretToken(input.invite_token),
+      this.members.prepareAccess(input.device_user_id),
+    ]);
+
+    return {
+      tokenHash,
+      member: {
+        kind: 'existing',
+        memberId: input.member.member_id,
+        access,
+      },
+    };
+  }
+
+  async prepareContext(input: InviteContextInput): Promise<string> {
+    return hashSecretToken(input.invite_token);
+  }
+
+  previewGroupInvite(tokenHash: string, group: Group): InviteContextResult {
+    const resolved = this.resolveActiveInvite(tokenHash);
+
+    if (!resolved.ok) return resolved;
+
+    return {
+      ok: true,
+      context: {
+        group: {
+          id: group.id,
+          name: group.name,
+          currency_label: group.currency_label,
+        },
+        claimable_members: this.members.listClaimable(),
+      },
+    };
+  }
+
+  /** Validates, creates permanent access, and records use in one transaction. */
+  redeemGroupInvite(
+    prepared: PreparedInviteRedemption,
+  ): InviteRedemptionResult {
+    const resolved = this.resolveActiveInvite(prepared.tokenHash);
+
+    if (!resolved.ok) return resolved;
+
+    const created = prepared.member.kind === 'new'
+      ? { ok: true as const, ...this.members.createWithAccess(prepared.member.member) }
+      : this.members.claimWithAccess(
+          prepared.member.memberId,
+          prepared.member.access,
+        );
+
+    if (!created.ok) return created;
+
+    this.sql.exec(
+      `INSERT INTO invite_redemptions (member_id, invite_id, redeemed_at)
+       VALUES (?, ?, ?)`,
+      created.member.id,
+      resolved.invite.id,
+      new Date().toISOString(),
+    );
+
+    return created;
+  }
+
   list(): GroupInvite[] {
     return this.sql
       .exec<StoredGroupInvite>(
@@ -145,6 +325,35 @@ export class InviteDirectory {
       .toArray()[0];
 
     return invite ?? null;
+  }
+
+  private readByTokenHash(tokenHash: string): StoredGroupInvite | null {
+    const invite = this.sql
+      .exec<StoredGroupInvite>(
+        `SELECT id, kind, created_at, expires_at, revoked_at
+         FROM invites
+         WHERE token_hash = ? AND kind = 'group'`,
+        tokenHash,
+      )
+      .toArray()[0];
+
+    return invite ?? null;
+  }
+
+  private resolveActiveInvite(tokenHash: string): ActiveInviteResult {
+    const invite = this.readByTokenHash(tokenHash);
+
+    if (!invite) return { ok: false, error: 'invite_invalid' };
+
+    if (invite.revoked_at !== null) {
+      return { ok: false, error: 'invite_revoked' };
+    }
+
+    if (Date.parse(invite.expires_at) <= Date.now()) {
+      return { ok: false, error: 'invite_expired' };
+    }
+
+    return { ok: true, invite };
   }
 
   private present(invite: StoredGroupInvite): GroupInvite {
