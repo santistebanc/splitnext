@@ -14,6 +14,14 @@ import {
 import { type AccessCredential } from './accessCredential';
 import { GroupDatabase } from './groupDatabase';
 import {
+  createGroupInviteInputSchema,
+  type CreateGroupInviteInput,
+  type CreatedGroupInvite,
+  type GroupInvite,
+  InviteDirectory,
+  type InviteReadResult,
+} from './inviteDirectory';
+import {
   createMemberInputSchema,
   type CreateMemberInput,
   deleteMemberInputSchema,
@@ -61,12 +69,14 @@ export class GroupObject extends DurableObject<Env> {
   private readonly database: GroupDatabase;
   private readonly groupState: GroupState;
   private readonly members: MemberDirectory;
+  private readonly invites: InviteDirectory;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.database = new GroupDatabase(ctx.storage);
     this.groupState = new GroupState(ctx.storage.sql);
     this.members = new MemberDirectory(ctx.storage.sql);
+    this.invites = new InviteDirectory(ctx.storage.sql);
   }
 
   async health(): Promise<boolean> {
@@ -186,6 +196,38 @@ export class GroupObject extends DurableObject<Env> {
     return this.onCommand(deleteMemberInputSchema, input, (command) =>
       this.actOnGroup(credential, () => this.members.remove(memberId, command)),
     );
+  }
+
+  async createGroupInvite(
+    credential: AccessCredential,
+    input: CreateGroupInviteInput,
+  ): Promise<Commanded<{ ok: true } & CreatedGroupInvite>> {
+    return this.onCommand(createGroupInviteInputSchema, input, async (command) => {
+      const prepared = await this.invites.prepareGroupInvite(command);
+
+      if (!prepared) return { ok: false as const, error: 'invalid_request' as const };
+
+      return this.actOnGroup(credential, () => ({
+        ok: true as const,
+        ...this.invites.createGroupInvite(prepared),
+      }));
+    });
+  }
+
+  async listGroupInvites(
+    credential: AccessCredential,
+  ): Promise<Guarded<{ ok: true; invites: GroupInvite[] }>> {
+    return this.actOnGroup(credential, () => ({
+      ok: true as const,
+      invites: this.invites.list(),
+    }));
+  }
+
+  async revokeGroupInvite(
+    credential: AccessCredential,
+    inviteId: string,
+  ): Promise<Guarded<InviteReadResult>> {
+    return this.actOnGroup(credential, () => this.invites.revoke(inviteId));
   }
 
   /**

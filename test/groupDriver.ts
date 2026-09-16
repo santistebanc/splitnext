@@ -12,6 +12,11 @@ import type {
   UpdateMemberInput,
 } from '../src/memberDirectory';
 import { accessTokenSchema } from '../src/accessCredential';
+import {
+  type CreateGroupInviteInput,
+  groupInviteSchema,
+  inviteTokenSchema,
+} from '../src/inviteDirectory';
 import { memberSchema } from '../src/memberDirectory';
 import {
   GroupClient,
@@ -36,6 +41,20 @@ const memberResponseSchema = z.object({ member: memberSchema });
 
 const membersResponseSchema = z.object({ members: z.array(memberSchema) });
 
+const createGroupInviteResponseSchema = z.object({
+  invite: groupInviteSchema,
+  invite_token: inviteTokenSchema,
+  join_url: z.url(),
+}).strict();
+
+const groupInviteResponseSchema = z
+  .object({ invite: groupInviteSchema })
+  .strict();
+
+const groupInvitesResponseSchema = z.object({
+  invites: z.array(groupInviteSchema),
+}).strict();
+
 const errorResponseSchema = z.object({ error: z.string() }).strict();
 
 export type CreateGroupResponse = z.infer<typeof createGroupResponseSchema>;
@@ -45,6 +64,14 @@ export type GroupResponse = z.infer<typeof groupResponseSchema>;
 export type MemberResponse = z.infer<typeof memberResponseSchema>;
 
 export type MembersResponse = z.infer<typeof membersResponseSchema>;
+
+export type CreateGroupInviteResponse = z.infer<
+  typeof createGroupInviteResponseSchema
+>;
+
+export type GroupInviteResponse = z.infer<typeof groupInviteResponseSchema>;
+
+export type GroupInvitesResponse = z.infer<typeof groupInvitesResponseSchema>;
 
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
 
@@ -143,6 +170,31 @@ export class AuthenticatedGroupDriver {
     return this.read(
       this.client.deleteMember(memberId, input),
       memberResponseSchema,
+    );
+  }
+
+  createGroupInvite(
+    input: CreateGroupInviteInput = {},
+  ): Promise<TestReply<CreateGroupInviteResponse>> {
+    return this.read(
+      this.client.createGroupInvite(input),
+      createGroupInviteResponseSchema,
+    );
+  }
+
+  listGroupInvites(): Promise<TestReply<GroupInvitesResponse>> {
+    return this.read(
+      this.client.listGroupInvites(),
+      groupInvitesResponseSchema,
+    );
+  }
+
+  revokeGroupInvite(
+    inviteId: string,
+  ): Promise<TestReply<GroupInviteResponse>> {
+    return this.read(
+      this.client.revokeGroupInvite(inviteId),
+      groupInviteResponseSchema,
     );
   }
 

@@ -41,6 +41,23 @@ const migrations: SQLSchemaMigration[] = [
         ON member_access(member_id);
     `,
   },
+  {
+    idMonotonicInc: 2,
+    description: 'Create temporary invitation storage',
+    sql: `
+      CREATE TABLE IF NOT EXISTS invites (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS invites_expires_at
+        ON invites(expires_at);
+    `,
+  },
 ];
 
 export const MIGRATION_VERSION_KEY = 'splitnext_group_schema_version';
