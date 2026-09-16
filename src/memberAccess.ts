@@ -18,8 +18,13 @@ export type PreparedAuthorization = {
 
 type MemberAccessRow = { member_id: string };
 
-/** Private credential implementation used only through MemberDirectory. */
-export class MemberCredentials {
+/**
+ * Member access, as CONTEXT.md defines it: the lasting capability issued to a
+ * member and device. It is issued when a group is created and on invite
+ * redemption, and checked on every authorized request, so each module that
+ * does one of those reaches it directly rather than through the member module.
+ */
+export class MemberAccess {
   constructor(private readonly sql: SqlStorage) {}
 
   async prepareIssue(deviceUserId: string): Promise<PreparedCredentialIssue> {

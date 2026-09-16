@@ -19,6 +19,20 @@ import {
 } from './groupRequest';
 import { errorResponse, REFUSAL_STATUS } from './responses';
 
+/**
+ * The two routes a joiner calls before holding member access. Declared once so
+ * the development join form and its test address them by the same value the
+ * route is registered under.
+ */
+export const INVITE_REDEMPTIONS_PATH = '/groups/{groupId}/invite-redemptions';
+
+export const INVITE_CONTEXT_PATH = '/groups/{groupId}/invite-context';
+
+/** A route path with its group filled in, as a browser would request it. */
+export function forGroup(path: string, groupId: string): string {
+  return path.replace('{groupId}', groupId);
+}
+
 const inviteParamsSchema = z.object({
   groupId: groupIdParameterSchema,
   inviteId: z.uuid().openapi({
@@ -66,7 +80,7 @@ const createGroupInviteRoute = createRoute({
 
 const redeemGroupInviteRoute = createRoute({
   method: 'post',
-  path: '/groups/{groupId}/invite-redemptions',
+  path: INVITE_REDEMPTIONS_PATH,
   tags: ['Invites'],
   summary: 'Join a group with an invite',
   description:
@@ -104,7 +118,7 @@ const redeemGroupInviteRoute = createRoute({
 
 const previewGroupInviteRoute = createRoute({
   method: 'post',
-  path: '/groups/{groupId}/invite-context',
+  path: INVITE_CONTEXT_PATH,
   tags: ['Invites'],
   summary: 'Inspect a group invite',
   description:

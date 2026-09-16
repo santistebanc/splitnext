@@ -1,6 +1,6 @@
 import { env, exports } from 'cloudflare:workers';
 import { runInDurableObject } from 'cloudflare:test';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { accessTokenSchema } from '../src/accessCredential';
 import {
   AuthenticatedGroupDriver,
@@ -9,6 +9,11 @@ import {
   redeemGroupInvite,
   successBody,
 } from './groupDriver';
+import {
+  forGroup,
+  INVITE_CONTEXT_PATH,
+  INVITE_REDEMPTIONS_PATH,
+} from '../src/routes/invites';
 import { applyTestMigrations, fetchOpenApiDocument } from './harness';
 
 type StoredRedemption = {
@@ -29,6 +34,11 @@ beforeAll(async () => {
   await applyTestMigrations();
 });
 
+// Expiry is tested by moving the clock, so no test may leave it moved.
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe('group invite redemption API', () => {
   it('serves a browser form from the generated join URL', async () => {
     const group = await AuthenticatedGroupDriver.create();
@@ -39,10 +49,16 @@ describe('group invite redemption API', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/html');
     expect(page).toContain('id="join-form"');
-    expect(page).toContain(
-      `/groups/${group.created.group.id}/invite-redemptions`,
-    );
-    expect(page).toContain(`/groups/${group.created.group.id}/invite-context`);
+
+    // The form must call routes that are actually registered, not merely agree
+    // with itself about a string.
+    const { paths } = await fetchOpenApiDocument();
+
+    for (const route of [INVITE_REDEMPTIONS_PATH, INVITE_CONTEXT_PATH]) {
+      expect(paths).toHaveProperty([route]);
+      expect(page).toContain(forGroup(route, group.created.group.id));
+    }
+
     expect(page).toContain('name="member_id"');
     expect(page).toContain(invite.invite_token);
   });
@@ -377,17 +393,12 @@ describe('group invite redemption API', () => {
     const revoked = successBody(await group.createGroupInvite(), 201);
     const objectId = env.GROUPS.idFromName(group.created.group.id);
 
-    await runInDurableObject(
-      env.GROUPS.get(objectId),
-      (_instance, state) => {
-        state.storage.sql.exec(
-          'UPDATE invites SET expires_at = ? WHERE id = ?',
-          new Date(Date.now() - 1_000).toISOString(),
-          expired.invite.id,
-        );
-      },
-    );
     await group.revokeGroupInvite(revoked.invite.id);
+
+    // Move past both deadlines instead of rewriting rows. The revoked invite is
+    // now also past its date, so this checks revocation still wins.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.parse(expired.invite.expires_at) + 1_000);
 
     const expiredReply = await redeemGroupInvite(group.created.group.id, {
       invite_token: expired.invite_token,
