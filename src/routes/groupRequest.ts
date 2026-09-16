@@ -30,11 +30,28 @@ export const accessHeadersSchema = z.object({
 });
 
 /** Both credentials arrive validated, so this only strips the scheme. */
-export function capabilityFrom(
+function capabilityFrom(
   headers: z.infer<typeof accessHeadersSchema>,
 ): AccessCredential {
   return {
     accessToken: headers.authorization.slice(BEARER_PREFIX.length),
     deviceUserId: headers['x-device-user-id'],
+  };
+}
+
+/** How a group id becomes an object, decided once for every route. */
+export function groupObject(env: Env, groupId: string) {
+  return env.GROUPS.get(env.GROUPS.idFromName(groupId));
+}
+
+/** The same, for a route that also carries the authority to act on the group. */
+export function groupSession(
+  env: Env,
+  groupId: string,
+  headers: z.infer<typeof accessHeadersSchema>,
+) {
+  return {
+    group: groupObject(env, groupId),
+    credential: capabilityFrom(headers),
   };
 }

@@ -1,6 +1,7 @@
 import { env, exports } from 'cloudflare:workers';
 import { runInDurableObject } from 'cloudflare:test';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { GroupDatabase, MIGRATION_VERSION_KEY } from '../src/groupDatabase';
 import { groupSchema, type Group } from '../src/groupState';
 import { accessTokenSchema } from '../src/accessCredential';
 import { memberSchema } from '../src/memberDirectory';
@@ -29,6 +30,8 @@ type SqliteObject = {
   name: string;
   sql: string;
 };
+
+type TableColumn = { name: string };
 
 beforeAll(async () => {
   await applyTestMigrations();
@@ -86,37 +89,73 @@ describe('groups API', () => {
     const schemaVersion = await runInDurableObject(
       env.GROUPS.get(objectId),
       (_instance, state) =>
-        state.storage.kv.get<number>('splitnext_group_schema_version'),
+        state.storage.kv.get<number>(MIGRATION_VERSION_KEY),
     );
 
     expect(schemaVersion).toBe(1);
   });
 
-  it('does not provision storage for an unknown group probe', async () => {
-    const groupId = crypto.randomUUID();
+  it('upgrades an existing group database and keeps what it stored', async () => {
+    const group = await AuthenticatedGroupDriver.create();
+    const objectId = env.GROUPS.idFromName(group.created.group.id);
 
-    const response = await retrieveGroup(
-      groupId,
-      '0'.repeat(64),
-      crypto.randomUUID(),
-    );
-
-    const objectId = env.GROUPS.idFromName(groupId);
-
-    const applicationTables = await runInDurableObject(
+    // Make this database look like it predates the current migration list,
+    // which is the state the next migration will actually meet in production.
+    // A migration runner reads its position when it is built, so a fresh
+    // GroupDatabase over the same storage sees the older database as older.
+    const migration = await runInDurableObject(
       env.GROUPS.get(objectId),
-      (_instance, state) =>
-        state.storage.sql
-          .exec<{ name: string }>(
-            `SELECT name FROM sqlite_master
-             WHERE type = 'table'
-               AND name IN ('group_state', 'members', 'member_access')`,
-          )
-          .toArray(),
+      (_instance, state) => {
+        state.storage.kv.delete(MIGRATION_VERSION_KEY);
+
+        const pending = state.storage.kv.get<number>(MIGRATION_VERSION_KEY);
+        const existed = new GroupDatabase(state.storage).prepareExistingGroup();
+
+        return {
+          pending: pending ?? null,
+          existed,
+          upgraded: state.storage.kv.get<number>(MIGRATION_VERSION_KEY),
+        };
+      },
     );
 
-    expect(response.status).toBe(401);
-    expect(applicationTables).toEqual([]);
+    const fetched = await group.getGroup();
+    const members = await group.listMembers();
+
+    expect(migration).toEqual({ pending: null, existed: true, upgraded: 1 });
+    // Every row written before the upgrade survived it.
+    expect(successBody(fetched, 200)).toEqual({ group: group.created.group });
+    expect(successBody(members, 200)).toEqual({
+      members: [group.created.member],
+    });
+  });
+
+  it('creates a column for every field its schemas declare', async () => {
+    const { created } = await AuthenticatedGroupDriver.create();
+    const objectId = env.GROUPS.idFromName(created.group.id);
+
+    const columns = await runInDurableObject(
+      env.GROUPS.get(objectId),
+      (_instance, state) => ({
+        group_state: state.storage.sql
+          .exec<TableColumn>("PRAGMA table_info('group_state')")
+          .toArray()
+          .map(({ name }) => name),
+        members: state.storage.sql
+          .exec<TableColumn>("PRAGMA table_info('members')")
+          .toArray()
+          .map(({ name }) => name),
+      }),
+    );
+
+    // The migration and the schemas are written apart and read by different
+    // mechanisms, so this is what relates them.
+    expect(columns.group_state.sort()).toEqual(
+      ['singleton', ...Object.keys(groupSchema.shape)].sort(),
+    );
+    expect(columns.members.sort()).toEqual(
+      Object.keys(memberSchema.shape).sort(),
+    );
   });
 
   it('returns the group to the holder of its capability', async () => {

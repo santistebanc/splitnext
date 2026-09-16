@@ -63,7 +63,7 @@ export class MemberCredentials {
   }
 
   authenticate(prepared: PreparedAuthorization): MemberPrincipal | null {
-    if (!prepared || !this.isProvisioned()) return null;
+    if (!prepared) return null;
 
     const access = this.sql
       .exec<MemberAccessRow>(
@@ -92,15 +92,6 @@ export class MemberCredentials {
     );
   }
 
-  private isProvisioned(): boolean {
-    const table = this.sql
-      .exec<{ name: string }>(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'member_access'",
-      )
-      .toArray()[0];
-
-    return table !== undefined;
-  }
 }
 
 function generateAccessToken(): string {
