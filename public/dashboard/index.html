@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A small console for exercising the current Splitnext API.">
+    <title>Splitnext control room</title>
+    <link rel="stylesheet" href="/dashboard/styles.css">
+    <script type="module" src="/dashboard/app.js"></script>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/dashboard/"><span>S</span><strong>Splitnext</strong></a>
+      <nav><a href="/docs">API reference</a><a href="/openapi.json">OpenAPI</a></nav>
+    </header>
+    <main>
+      <section class="intro">
+        <p class="eyebrow">Developer control room</p>
+        <h1>Current API surface</h1>
+        <p>This console intentionally exposes only the foundation and anonymous-identity slice. Group behavior will return through the new offline-first model.</p>
+        <div class="dependencies" aria-label="Dependency status">
+          <span id="health-status">Worker checking</span>
+          <span id="ready-status">Storage checking</span>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="identity-title">
+        <div class="card-heading">
+          <div><p class="eyebrow">Device authentication</p><h2 id="identity-title">Anonymous identity</h2></div>
+          <code>POST /identities/anonymous</code>
+        </div>
+        <div id="identity-status" class="identity-status">No identity created for this page.</div>
+        <div class="actions">
+          <button id="create-identity" type="button">Create identity</button>
+          <button id="verify-identity" class="secondary" type="button" disabled>Verify credential</button>
+        </div>
+        <p class="note">The generated device secret exists only in memory. It is never displayed or persisted and disappears when this page reloads.</p>
+      </section>
+
+      <section class="card" aria-labelledby="activity-title">
+        <div class="card-heading"><div><p class="eyebrow">HTTP traffic</p><h2 id="activity-title">Activity</h2></div><button id="clear-activity" class="text-button" type="button">Clear</button></div>
+        <div id="activity-list" class="activity-list"><p class="empty">Requests will appear here.</p></div>
+      </section>
+    </main>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>

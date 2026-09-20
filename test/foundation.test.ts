@@ -1,4 +1,4 @@
-import { exports } from 'cloudflare:workers';
+import { env, exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { applyTestMigrations, fetchOpenApiDocument } from './harness';
 
@@ -66,12 +66,26 @@ describe('Cloudflare foundation', () => {
     expect(html).toContain('/openapi.json');
   });
 
-  it('redirects the root URL to the API reference', async () => {
+  it('serves the API test dashboard as a static asset', async () => {
+    const response = await env.ASSETS.fetch(
+      'https://splitnext.test/dashboard/',
+    );
+
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(html).toContain('Splitnext control room');
+    expect(html).toContain('Anonymous identity');
+    expect(html).toContain('/dashboard/app.js');
+  });
+
+  it('redirects the root URL to the API test dashboard', async () => {
     const response = await exports.default.fetch('https://splitnext.test/', {
       redirect: 'manual',
     });
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/docs');
+    expect(response.headers.get('location')).toBe('/dashboard/');
   });
 });

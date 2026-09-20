@@ -11,9 +11,10 @@
     "db:migrate:local": "wrangler d1 migrations apply INDEX --local",
     "db:migrate:remote": "wrangler d1 migrations apply INDEX --remote",
     "lint": "oxlint --type-aware .",
+    "frontend:check": "node --check public/dashboard/app.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "check": "npm run types:check && npm run lint && npm run typecheck && npm test && wrangler deploy --dry-run --outdir .wrangler/dry-run"
+    "check": "npm run types:check && npm run lint && npm run typecheck && npm run frontend:check && npm test && wrangler deploy --dry-run --outdir .wrangler/dry-run"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.1.9",
@@ -28,8 +29,8 @@
   "dependencies": {
     "@hono/zod-openapi": "^1.6.3",
     "@scalar/hono-api-reference": "^0.12.1",
-    "durable-utils": "0.3.7",
     "hono": "^4.13.7",
+    "uuid": "^14.0.2",
     "zod": "^4.6.5"
   }
 }

@@ -1,0 +1,115 @@
+import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { IdentityDirectory } from '../identityDirectory';
+import { errorResponse } from './responses';
+
+const identitySchema = z.object({
+  id: z.uuid(),
+  created_at: z.iso.datetime(),
+});
+
+const deviceSchema = z.object({
+  id: z.uuid(),
+  created_at: z.iso.datetime(),
+});
+
+const deviceSecretSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9_-]{43}$/)
+  .openapi({
+    description: 'A client-generated 32-byte base64url secret without padding.',
+  });
+
+const createAnonymousIdentityRoute = createRoute({
+  method: 'post',
+  path: '/identities/anonymous',
+  tags: ['Identities'],
+  summary: 'Create or recover an anonymous identity for a device secret',
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: z.object({ device_secret: deviceSecretSchema }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: 'The identity and its first device.',
+      content: {
+        'application/json': {
+          schema: z.object({
+            identity: identitySchema,
+            device: deviceSchema,
+          }),
+        },
+      },
+    },
+    400: errorResponse('The request body is invalid.'),
+    500: errorResponse('The identity could not be created.'),
+  },
+});
+
+const authorizationHeadersSchema = z.object({
+  authorization: z
+    .string()
+    .regex(/^Bearer v1\.[A-Za-z0-9_-]{43}$/)
+    .openapi({
+      param: { name: 'authorization', in: 'header' },
+      example: `Bearer v1.${'a'.repeat(43)}`,
+    }),
+});
+
+const currentIdentityRoute = createRoute({
+  method: 'get',
+  path: '/identity',
+  tags: ['Identities'],
+  summary: 'Read the identity authenticated by a device credential',
+  security: [{ bearerAuth: [] }],
+  request: { headers: authorizationHeadersSchema },
+  responses: {
+    200: {
+      description: 'The authenticated identity and device.',
+      content: {
+        'application/json': {
+          schema: z.object({
+            identity: identitySchema,
+            device: deviceSchema,
+          }),
+        },
+      },
+    },
+    401: errorResponse('The device credential is unavailable or invalid.'),
+    500: errorResponse('The identity could not be read.'),
+  },
+});
+
+export const identityRoutes = new OpenAPIHono<{ Bindings: Env }>({
+  defaultHook: (result, context) => {
+    if (result.success) return;
+
+    return result.target === 'header'
+      ? context.json({ error: 'unauthorized' }, 401)
+      : context.json({ error: 'invalid_request' }, 400);
+  },
+})
+  .openapi(createAnonymousIdentityRoute, async (context) => {
+    const { device_secret } = context.req.valid('json');
+    const directory = new IdentityDirectory(context.env.INDEX);
+    const session = await directory.ensureAnonymousIdentity(device_secret);
+
+    return context.json(session, 201);
+  })
+  .openapi(currentIdentityRoute, async (context) => {
+    const { authorization } = context.req.valid('header');
+    const directory = new IdentityDirectory(context.env.INDEX);
+
+    const session = await directory.authenticateDevice(
+      authorization.slice('Bearer v1.'.length),
+    );
+
+    return session
+      ? context.json(session, 200)
+      : context.json({ error: 'unauthorized' }, 401);
+  });

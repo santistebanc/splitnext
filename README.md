@@ -1,115 +1,25 @@
 # Splitnext API
 
-An API-only shared-expense application built on Cloudflare Workers, D1, and one
-SQLite Durable Object per group. Development is intentionally split into small,
-reviewable slices.
+Splitnext is an offline-first shared-expense API built on Cloudflare Workers,
+D1, and one SQLite Durable Object per group. Development proceeds in small,
+reviewable vertical slices.
 
-New to the project? Start with the [visual architecture guide](docs/architecture.html)
-for the runtime model, module interfaces, seams, storage ownership, and request
-flows.
+## Current implementation
 
-## Completed slices
+- `GET /health` reports Worker liveness.
+- `GET /ready` checks D1 and Durable Object storage.
+- `POST /identities/anonymous` idempotently creates an anonymous access identity
+  and device from a client-generated secret.
+- `GET /identity` authenticates `Bearer v1.<device-secret>` and returns the
+  current identity and device.
+- `/openapi.json` and `/docs` expose the generated API contract and console.
+- `/dashboard/` provides a small browser tester for the implemented endpoints.
 
-### 1 — Cloudflare foundation
+The older member-bound group capability API was intentionally removed before
+the new offline-first group and synchronization model is built. Group access,
+ledger members, expenses, and synchronization are not implemented yet.
 
-Implemented in this slice:
-
-- TypeScript Cloudflare Worker;
-- D1 binding and first migration;
-- SQLite-backed `GroupObject` Durable Object binding;
-- liveness endpoint at `GET /health`;
-- dependency readiness endpoint at `GET /ready`;
-- Worker-runtime tests and deployment dry-run.
-
-### API framework and generated console
-
-- Hono routing and CORS middleware;
-- Zod-backed endpoint contracts and request validation foundation;
-- generated OpenAPI document served at `/openapi.json`;
-- interactive Scalar API reference and request console served at `/docs`.
-
-### 2 — Create and retrieve groups
-
-Implemented in this slice:
-
-- validated group creation at `POST /groups`;
-- capability-protected retrieval at `GET /groups/{groupId}`;
-- server-generated group ids and 256-bit access tokens;
-- one singleton `group_state` record inside the SQLite Durable Object selected
-  by group id;
-- a required creator display name and an initial member created for that person;
-- SHA-256 token hashes linked to members in the Durable Object's
-  `member_access` table—the plaintext token is returned only at creation;
-- atomic creation of the group, creator member, and creator capability;
-- creating-device checks using `Authorization` and `X-Device-User-Id`;
-- OpenAPI documentation and Worker-runtime integration coverage.
-
-### 3 — Update and delete groups
-
-Implemented in this slice:
-
-- capability-protected updates at `PATCH /groups/{groupId}`;
-- capability-protected soft deletion at `DELETE /groups/{groupId}`;
-- server-owned timestamps and monotonically increasing group versions;
-- optimistic concurrency through `expected_version`;
-- `409 version_conflict` responses for stale writes;
-- deletion tombstones retained inside the group's Durable Object.
-
-### 4 — Member lifecycle
-
-Implemented in this slice:
-
-- member creation at `POST /groups/{groupId}/members`;
-- active-member listing at `GET /groups/{groupId}/members`;
-- individual retrieval at `GET /groups/{groupId}/members/{memberId}`;
-- member renaming at `PATCH /groups/{groupId}/members/{memberId}`;
-- soft deletion at `DELETE /groups/{groupId}/members/{memberId}`;
-- server-generated member ids, timestamps, and initial versions;
-- optimistic concurrency and no-op detection for member mutations;
-- deletion tombstones retained for future expense references;
-- member records stored only in their group’s Durable Object;
-- deletion of a member revokes every capability linked to that member;
-- group capability checks on every member endpoint.
-
-### 5 — Group invite lifecycle
-
-Implemented in this slice:
-
-- reusable group-link creation at `POST /groups/{groupId}/invites`;
-- invite listing and permanent disabling;
-- seven-day default expiry with optional custom deadlines;
-- plaintext invite secrets returned only when a link is created;
-- invite token hashes stored inside the relevant group Durable Object.
-
-### 6 — New-member invite redemption
-
-Implemented in this slice:
-
-- public redemption at `POST /groups/{groupId}/invite-redemptions`;
-- a minimal `/join/{groupId}/{inviteToken}` browser form for testing redemption;
-- creation of a new member and permanent device access from a valid link;
-- reusable group links that can admit multiple distinct members;
-- explicit invalid, expired, revoked, and deleted-group outcomes;
-- atomic invite validation, member creation, capability issuance, and usage
-  recording inside the group Durable Object.
-
-### 7 — Claim pre-created members
-
-Implemented in this slice:
-
-- invite-authorized join context at `POST /groups/{groupId}/invite-context`;
-- disclosure of only active members that have never received access;
-- redemption into an existing member without creating a duplicate;
-- one-time claiming enforced inside the Durable Object transaction;
-- a join form that offers existing names alongside new-member creation.
-
-D1 currently stores only global application metadata. It remains available for
-future cross-group discovery, but it does not own group records or capabilities.
-
-Intentionally deferred: additional invite types, expenses, balances, activity
-history, and WebSockets.
-
-## Review locally
+## Run locally
 
 ```bash
 npm install
@@ -117,100 +27,35 @@ npm run db:migrate:local
 npm run dev
 ```
 
-In another terminal:
+Open `http://localhost:8787/` for the control room or
+`http://localhost:8787/docs` for the API reference.
+
+Create an anonymous identity with a 32-byte base64url secret:
 
 ```bash
-curl -i http://localhost:8787/health
-curl -i http://localhost:8787/ready
-```
-
-Or open `http://localhost:8787/docs` in a browser to inspect and test the API.
-
-Create a group:
-
-```bash
-curl -i http://localhost:8787/groups \
+curl -i http://localhost:8787/identities/anonymous \
   -H 'Content-Type: application/json' \
-  --data '{"name":"Berlin flat","currency_label":"EUR","device_user_id":"device-1","creator_display_name":"Santi"}'
+  --data '{"device_secret":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}'
 ```
 
-The response contains the `group`, its initial `member`, and an `access_token`
-belonging to that member on the creating device. Use the group id and token with
-the same device id to retrieve the group:
+Authenticate that device:
 
 ```bash
-curl -i http://localhost:8787/groups/GROUP_ID \
-  -H 'Authorization: Bearer ACCESS_TOKEN' \
-  -H 'X-Device-User-Id: device-1'
+curl -i http://localhost:8787/identity \
+  -H 'Authorization: Bearer v1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
 ```
 
-Treat the access token like a password. The API stores its SHA-256 hash, not the
-plaintext value, and cannot show the original token again. Deleting the member
-that owns it also revokes that access.
-
-Update the group using the latest version you received:
-
-```bash
-curl -i -X PATCH http://localhost:8787/groups/GROUP_ID \
-  -H 'Authorization: Bearer ACCESS_TOKEN' \
-  -H 'X-Device-User-Id: device-1' \
-  -H 'Content-Type: application/json' \
-  --data '{"expected_version":1,"name":"Lisbon flat"}'
-```
-
-Delete it using its current version:
-
-```bash
-curl -i -X DELETE \
-  'http://localhost:8787/groups/GROUP_ID?expected_version=2' \
-  -H 'Authorization: Bearer ACCESS_TOKEN' \
-  -H 'X-Device-User-Id: device-1'
-```
-
-Create a member inside the group:
-
-```bash
-curl -i http://localhost:8787/groups/GROUP_ID/members \
-  -H 'Authorization: Bearer ACCESS_TOKEN' \
-  -H 'X-Device-User-Id: device-1' \
-  -H 'Content-Type: application/json' \
-  --data '{"display_name":"Ada"}'
-```
-
-Create a reusable invite, then redeem the returned `invite_token`:
-
-```bash
-curl -i http://localhost:8787/groups/GROUP_ID/invites \
-  -H 'Authorization: Bearer ACCESS_TOKEN' \
-  -H 'X-Device-User-Id: device-1' \
-  -H 'Content-Type: application/json' \
-  --data '{}'
-
-curl -i http://localhost:8787/groups/GROUP_ID/invite-redemptions \
-  -H 'Content-Type: application/json' \
-  --data '{"invite_token":"INVITE_TOKEN","device_user_id":"device-2","member":{"kind":"new","display_name":"Alex"}}'
-```
-
-Expected readiness body after the local migration:
-
-```json
-{"ok":true,"checks":{"d1":true,"durable_object":true}}
-```
-
-Run all project checks:
+Run all checks:
 
 ```bash
 npm run check
 ```
 
-## Remote Cloudflare setup
+## Cloudflare resources
 
-Remote deployment is deliberately not performed by this slice. To prepare it:
-
-1. Run `npx wrangler d1 create splitnext-v4-index`.
-2. Replace the placeholder `database_id` in `wrangler.jsonc` with the returned id.
-3. Run `npm run db:migrate:remote`.
-4. Run `npm run deploy`.
-
-Do not rename `GroupObject` after production data exists without declaring the
-corresponding state transition in Wrangler's `exports` configuration.
+- D1 stores global identities and devices.
+- `GroupObject` is currently a minimal SQLite Durable Object shell used by the
+  readiness probe. Later slices will make each instance the consistency boundary
+  and source of truth for one group.
+- Remote deployment has not been performed. `wrangler.jsonc` still contains a
+  placeholder D1 database id.

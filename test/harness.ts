@@ -10,14 +10,6 @@ declare global {
   }
 }
 
-type OpenApiGroupSchema = {
-  properties: { group: { properties: object } };
-};
-
-type OpenApiJsonResponse = {
-  content: { 'application/json': { schema: OpenApiGroupSchema } };
-};
-
 /**
  * The generated document, described once and with nothing optional, so a
  * renamed path or a dropped response fails where it is read rather than
@@ -28,46 +20,16 @@ export type OpenApiDocument = {
   paths: {
     '/health': object;
     '/ready': object;
-    '/groups': {
+    '/identities/anonymous': {
       post: {
         responses: object;
       };
     };
-    '/groups/{groupId}': {
+    '/identity': {
       get: {
         parameters: { name: string; in: string }[];
-        responses: {
-          200: OpenApiJsonResponse;
-        };
-      };
-      patch: {
         responses: object;
       };
-      delete: {
-        responses: object;
-      };
-    };
-    '/groups/{groupId}/members': {
-      post: { responses: object };
-      get: { responses: object };
-    };
-    '/groups/{groupId}/members/{memberId}': {
-      get: { responses: object };
-      patch: { responses: object };
-      delete: { responses: object };
-    };
-    '/groups/{groupId}/invites': {
-      post: { responses: object };
-      get: { responses: object };
-    };
-    '/groups/{groupId}/invites/{inviteId}': {
-      delete: { responses: object };
-    };
-    '/groups/{groupId}/invite-redemptions': {
-      post: { responses: object };
-    };
-    '/groups/{groupId}/invite-context': {
-      post: { responses: object };
     };
   };
 };
