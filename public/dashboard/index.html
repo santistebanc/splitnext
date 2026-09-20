@@ -37,6 +37,23 @@
         <p class="note">The generated device secret exists only in memory. It is never displayed or persisted and disappears when this page reloads.</p>
       </section>
 
+      <section class="card" aria-labelledby="group-title">
+        <div class="card-heading">
+          <div><p class="eyebrow">Authenticated setup</p><h2 id="group-title">Create a group</h2></div>
+          <code>POST /groups</code>
+        </div>
+        <form id="create-group-form">
+          <fieldset id="group-fields" disabled>
+            <label>Group name<input name="name" required maxlength="100" value="Berlin flat"></label>
+            <label>Currency code<input name="currency_code" required minlength="3" maxlength="3" value="EUR"></label>
+            <label>Your ledger name<input name="creator_member_name" required maxlength="100" value="Santi"></label>
+            <button type="submit">Create group</button>
+          </fieldset>
+        </form>
+        <div id="group-result" class="group-result">Create an anonymous identity first.</div>
+        <p class="note">The browser generates the group ID before sending the request, so a network retry targets the same group.</p>
+      </section>
+
       <section class="card" aria-labelledby="activity-title">
         <div class="card-heading"><div><p class="eyebrow">HTTP traffic</p><h2 id="activity-title">Activity</h2></div><button id="clear-activity" class="text-button" type="button">Clear</button></div>
         <div id="activity-list" class="activity-list"><p class="empty">Requests will appear here.</p></div>

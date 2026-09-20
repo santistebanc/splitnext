@@ -31,6 +31,12 @@ export type OpenApiDocument = {
         responses: object;
       };
     };
+    '/groups': {
+      post: {
+        parameters: { name: string; in: string }[];
+        responses: object;
+      };
+    };
   };
 };
 

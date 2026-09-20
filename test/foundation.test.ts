@@ -77,6 +77,7 @@ describe('Cloudflare foundation', () => {
     expect(response.headers.get('content-type')).toContain('text/html');
     expect(html).toContain('Splitnext control room');
     expect(html).toContain('Anonymous identity');
+    expect(html).toContain('Create a group');
     expect(html).toContain('/dashboard/app.js');
   });
 

@@ -4,6 +4,9 @@ const elements = {
   identityStatus: document.querySelector('#identity-status'),
   createIdentity: document.querySelector('#create-identity'),
   verifyIdentity: document.querySelector('#verify-identity'),
+  createGroupForm: document.querySelector('#create-group-form'),
+  groupFields: document.querySelector('#group-fields'),
+  groupResult: document.querySelector('#group-result'),
   activityList: document.querySelector('#activity-list'),
   clearActivity: document.querySelector('#clear-activity'),
   toast: document.querySelector('#toast'),
@@ -14,6 +17,8 @@ let deviceSecret = null;
 
 const state = {
   identitySession: null,
+  pendingGroupInput: null,
+  createdGroup: null,
   activity: [],
 };
 
@@ -117,6 +122,7 @@ function renderIdentity() {
     elements.identityStatus.innerHTML = `<dl><div><dt>Identity</dt><dd>${escapeHtml(identity.id)}</dd></div><div><dt>Device</dt><dd>${escapeHtml(device.id)}</dd></div></dl>`;
     elements.createIdentity.hidden = true;
     elements.verifyIdentity.disabled = false;
+    elements.groupFields.disabled = false;
 
     return;
   }
@@ -127,6 +133,47 @@ function renderIdentity() {
   elements.createIdentity.hidden = false;
   elements.createIdentity.textContent = deviceSecret ? 'Retry setup' : 'Create identity';
   elements.verifyIdentity.disabled = true;
+  elements.groupFields.disabled = true;
+}
+
+async function createGroup(event) {
+  event.preventDefault();
+
+  if (!state.identitySession) return;
+
+  const button = event.submitter;
+  const fields = new FormData(elements.createGroupForm);
+
+  state.pendingGroupInput ??= {
+    group_id: crypto.randomUUID(),
+    name: readText(fields, 'name'),
+    currency_code: readText(fields, 'currency_code'),
+    creator_member_name: readText(fields, 'creator_member_name'),
+  };
+  setBusy(button, true);
+
+  try {
+    state.createdGroup = await request('/groups', {
+      method: 'POST',
+      authenticated: true,
+      body: state.pendingGroupInput,
+    });
+    state.pendingGroupInput = null;
+    showToast('Group created');
+    renderGroup();
+  } catch (error) {
+    showToast(describeError(error), true);
+  } finally {
+    setBusy(button, false);
+  }
+}
+
+function renderGroup() {
+  if (!state.createdGroup) return;
+
+  const { group, member, access } = state.createdGroup;
+
+  elements.groupResult.innerHTML = `<dl><div><dt>Group</dt><dd>${escapeHtml(group.id)}</dd></div><div><dt>Cursor</dt><dd>${group.cursor}</dd></div><div><dt>Member</dt><dd>${escapeHtml(member.display_name)}</dd></div><div><dt>Actor</dt><dd>${escapeHtml(access.actor_handle)}</dd></div></dl>`;
 }
 
 function recordActivity(method, path, status, duration, error = null) {
@@ -152,6 +199,10 @@ function generateDeviceSecret() {
   const binary = String.fromCharCode(...bytes);
 
   return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+}
+
+function readText(fields, name) {
+  return fields.get(name)?.toString().trim() ?? '';
 }
 
 function setBusy(button, busy) {
@@ -188,6 +239,8 @@ function escapeHtml(value) {
 elements.createIdentity.addEventListener('click', createIdentity);
 
 elements.verifyIdentity.addEventListener('click', verifyIdentity);
+
+elements.createGroupForm.addEventListener('submit', createGroup);
 
 elements.clearActivity.addEventListener('click', () => {
   state.activity = [];

@@ -21,6 +21,8 @@ unless the user changes them, and update this file when a decision changes.
   device credentials.
 - Ledger members are active or archived; never physically delete them. Active
   member names are unique within a group.
+- Clients generate group ids before creation. Reusing an id with identical
+  normalized input is a retry; reusing it with different input is a conflict.
 - Consumer apps are offline-first. Network delivery, including WebSockets, is
   never a source of truth: writes must be retry-safe, deletions must synchronize,
   concurrent changes must reconcile without silently discarding history, and

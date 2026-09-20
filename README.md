@@ -12,12 +12,15 @@ reviewable vertical slices.
   and device from a client-generated secret.
 - `GET /identity` authenticates `Bearer v1.<device-secret>` and returns the
   current identity and device.
+- `POST /groups` atomically creates a group, its first ledger member, the
+  creator's permanent access grant and preferred-member selection, and the first
+  audit event inside one SQLite Durable Object.
 - `/openapi.json` and `/docs` expose the generated API contract and console.
 - `/dashboard/` provides a small browser tester for the implemented endpoints.
 
-The older member-bound group capability API was intentionally removed before
-the new offline-first group and synchronization model is built. Group access,
-ledger members, expenses, and synchronization are not implemented yet.
+The older member-bound capability API was intentionally removed. Group reads,
+additional members and access grants, expenses, and synchronization are not
+implemented yet.
 
 ## Run locally
 
@@ -45,6 +48,15 @@ curl -i http://localhost:8787/identity \
   -H 'Authorization: Bearer v1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
 ```
 
+Create a group using a client-generated UUID so retries remain idempotent:
+
+```bash
+curl -i http://localhost:8787/groups \
+  -H 'Authorization: Bearer v1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' \
+  -H 'Content-Type: application/json' \
+  --data '{"group_id":"31c1af48-9f97-4a91-ac72-3ae70d259a4d","name":"Berlin flat","currency_code":"EUR","creator_member_name":"Santi"}'
+```
+
 Run all checks:
 
 ```bash
@@ -54,8 +66,7 @@ npm run check
 ## Cloudflare resources
 
 - D1 stores global identities and devices.
-- `GroupObject` is currently a minimal SQLite Durable Object shell used by the
-  readiness probe. Later slices will make each instance the consistency boundary
-  and source of truth for one group.
+- Each created group has its own `GroupObject`. Its private SQLite database is
+  the authoritative consistency boundary for group state, access, and history.
 - Remote deployment has not been performed. `wrangler.jsonc` still contains a
   placeholder D1 database id.

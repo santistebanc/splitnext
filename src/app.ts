@@ -1,6 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { Scalar } from '@scalar/hono-api-reference';
 import { cors } from 'hono/cors';
+import { groupRoutes } from './routes/groups';
 import { identityRoutes } from './routes/identities';
 import { systemRoutes } from './routes/system';
 
@@ -22,7 +23,8 @@ app.use(
 
 const routedApp = app
   .route('/', systemRoutes)
-  .route('/', identityRoutes);
+  .route('/', identityRoutes)
+  .route('/', groupRoutes);
 
 routedApp.doc('/openapi.json', {
   openapi: '3.0.0',
