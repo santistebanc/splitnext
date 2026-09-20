@@ -1,5 +1,9 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { IdentityDirectory } from '../identityDirectory';
+import {
+  deviceAuthorizationHeadersSchema,
+  readDeviceSecret,
+} from './deviceAuthorization';
 import { errorResponse } from './responses';
 
 const identitySchema = z.object({
@@ -51,23 +55,13 @@ const createAnonymousIdentityRoute = createRoute({
   },
 });
 
-const authorizationHeadersSchema = z.object({
-  authorization: z
-    .string()
-    .regex(/^Bearer v1\.[A-Za-z0-9_-]{43}$/)
-    .openapi({
-      param: { name: 'authorization', in: 'header' },
-      example: `Bearer v1.${'a'.repeat(43)}`,
-    }),
-});
-
 const currentIdentityRoute = createRoute({
   method: 'get',
   path: '/identity',
   tags: ['Identities'],
   summary: 'Read the identity authenticated by a device credential',
   security: [{ bearerAuth: [] }],
-  request: { headers: authorizationHeadersSchema },
+  request: { headers: deviceAuthorizationHeadersSchema },
   responses: {
     200: {
       description: 'The authenticated identity and device.',
@@ -106,7 +100,7 @@ export const identityRoutes = new OpenAPIHono<{ Bindings: Env }>({
     const directory = new IdentityDirectory(context.env.INDEX);
 
     const session = await directory.authenticateDevice(
-      authorization.slice('Bearer v1.'.length),
+      readDeviceSecret(authorization),
     );
 
     return session

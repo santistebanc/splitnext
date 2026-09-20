@@ -35,11 +35,18 @@ h2 { margin: 0; font-size: 1.15rem; }
 .card-heading { display: flex; justify-content: space-between; gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
 .card-heading > code { color: var(--muted); font-size: .75rem; }
 .identity-status { padding: 24px 0; color: var(--muted); }
+.group-result { margin-top: 20px; padding-top: 20px; color: var(--muted); border-top: 1px solid var(--line); }
 dl { display: grid; gap: 12px; margin: 0; }
 dl div { display: grid; grid-template-columns: 90px 1fr; gap: 10px; }
 dt { color: var(--muted); font-size: .78rem; }
 dd { margin: 0; font-family: ui-monospace, monospace; font-size: .8rem; overflow-wrap: anywhere; }
 .actions { display: flex; gap: 10px; }
+form { margin-top: 22px; }
+fieldset { display: grid; grid-template-columns: minmax(0, 1fr) 130px minmax(0, 1fr) auto; gap: 10px; align-items: end; margin: 0; padding: 0; border: 0; }
+fieldset:disabled { opacity: .48; }
+label { display: grid; gap: 6px; color: var(--muted); font-size: .78rem; font-weight: 650; }
+input { min-width: 0; min-height: 40px; padding: 8px 10px; color: var(--ink); background: #fff; border: 1px solid #aebbc1; border-radius: 5px; font: inherit; }
+input:focus { border-color: var(--blue); outline: 3px solid rgba(44, 103, 221, .12); }
 button { min-height: 40px; padding: 8px 14px; color: #1e2900; background: var(--accent); border: 0; border-radius: 5px; cursor: pointer; font-weight: 650; }
 button:disabled { cursor: not-allowed; opacity: .5; }
 button.secondary { color: var(--muted); background: transparent; border: 1px solid #aebbc1; }
@@ -61,6 +68,7 @@ button.text-button { min-height: auto; padding: 2px; color: var(--blue); backgro
   main { padding-top: 38px; }
   .card-heading, .activity-entry { grid-template-columns: 1fr; display: grid; }
   .actions { display: grid; }
+  fieldset { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
