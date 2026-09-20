@@ -1,24 +1,22 @@
 # Splitnext
 
-Splitnext coordinates membership and shared spending inside a group.
+Splitnext is an offline-first shared-expense ledger. These terms are distinct:
 
-## Language
+**Access identity**: the actor behind one or more authenticated devices. The
+first release uses anonymous identities; accounts may be added later.
 
-**Invite**:
-A temporary credential used to enter a group. It does not grant lasting access
-by itself.
+**Device credential**: a secret held by one device that authenticates its access
+identity. A user may revoke their own device credential.
 
-**Group invite**:
-A reusable invite that creates a new member when redeemed.
+**Group access grant**: permanent permission for an access identity to use a
+group. Group participants cannot revoke it. Leaving hides the group and stops
+syncing; it does not destroy the grant.
 
-**Invite redemption**:
-The exchange of a valid invite for member access. Redeeming a group invite does
-not consume it.
+**Ledger member**: a name used in expenses, balances, and settlements. It is not
+an account or an access-control record. Members are active or archived.
 
-**Claimable member**:
-An active member who has never received member access and may therefore be
-selected during group-invite redemption.
+**Preferred member**: an access identity's nonexclusive choice of which ledger
+member the UI calls “you.” Multiple identities may choose the same member.
 
-**Member access**:
-The lasting capability issued to a member and device after group creation or
-invite redemption.
+**Group invite**: a temporary, reusable credential that issues a group access
+grant and lets the joining identity select an active member or create one.
