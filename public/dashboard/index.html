@@ -17,7 +17,7 @@
       <section class="intro">
         <p class="eyebrow">Developer control room</p>
         <h1>Current API surface</h1>
-        <p>This console intentionally exposes only the foundation and anonymous-identity slice. Group behavior will return through the new offline-first model.</p>
+        <p>This console follows the implemented API slices: device identity, group creation, offline member commands, and revision-based snapshot synchronization.</p>
         <div class="dependencies" aria-label="Dependency status">
           <span id="health-status">Worker checking</span>
           <span id="ready-status">Storage checking</span>
@@ -26,15 +26,17 @@
 
       <section class="card" aria-labelledby="identity-title">
         <div class="card-heading">
-          <div><p class="eyebrow">Device authentication</p><h2 id="identity-title">Anonymous identity</h2></div>
+          <div><p class="eyebrow">Device authentication</p><h2 id="identity-title">Two independent devices</h2></div>
           <code>POST /identities/anonymous</code>
         </div>
-        <div id="identity-status" class="identity-status">No identity created for this page.</div>
-        <div class="actions">
-          <button id="create-identity" type="button">Create identity</button>
-          <button id="verify-identity" class="secondary" type="button" disabled>Verify credential</button>
+        <div class="device-identity-grid">
+          <div><p class="eyebrow">Device A</p><div id="identity-a-status" class="identity-status">Not initialized.</div></div>
+          <div><p class="eyebrow">Device B</p><div id="identity-b-status" class="identity-status">Not initialized.</div></div>
         </div>
-        <p class="note">The generated device secret exists only in memory. It is never displayed or persisted and disappears when this page reloads.</p>
+        <div class="actions">
+          <button id="create-identities" type="button">Create both identities</button>
+        </div>
+        <p class="note">Each simulated device receives a different identity and in-memory credential. Neither credential is displayed or persisted.</p>
       </section>
 
       <section class="card" aria-labelledby="group-title">
@@ -52,6 +54,90 @@
         </form>
         <div id="group-result" class="group-result">Create an anonymous identity first.</div>
         <p class="note">The browser generates the group ID before sending the request, so a network retry targets the same group.</p>
+        <form id="join-device-form" hidden>
+          <fieldset>
+            <label>Device B member name<input name="display_name" required maxlength="100" value="Robin"></label>
+            <button type="submit">Create link and join Device B</button>
+          </fieldset>
+          <p class="note">Device A rotates the reusable group link; Device B redeems it and receives its own permanent access grant.</p>
+        </form>
+        <div id="sync-controls" class="sync-controls" hidden>
+          <div class="sync-heading"><div><p class="eyebrow">Offline reconciliation seam</p><h3>Synchronize group</h3></div><code>POST /groups/{groupId}/sync</code></div>
+          <p class="note replica-note">Each device owns its local snapshot and outbox. The server panel observes requests and the latest authoritative snapshot without sharing client state.</p>
+          <div class="simulation-grid">
+            <section class="replica" data-replica="a">
+              <div class="replica-heading">
+                <div><p class="eyebrow">Device A</p><h4>Creator</h4><code data-role="identity-id">No identity</code></div>
+                <span class="connection-status" data-role="connection-status">Online</span>
+              </div>
+              <div class="actions">
+                <button class="secondary" data-action="toggle-connection" type="button">Go offline</button>
+                <button class="secondary" data-action="load-snapshot" type="button">Load snapshot</button>
+                <button class="secondary" data-action="sync-current" type="button">Sync known revision</button>
+              </div>
+              <form class="command-form" data-role="member-form">
+                <label>New member name<input name="display_name" required maxlength="100" value="Alex"></label>
+                <button type="submit">Create or queue</button>
+                <button class="secondary" data-action="retry-command" type="button" disabled>Retry last</button>
+              </form>
+              <form class="command-form rename-form" data-role="rename-form">
+                <label>Member<select name="member_id" required><option value="">Load a snapshot first</option></select></label>
+                <label>Rename to<input name="display_name" required maxlength="100" value="Thomas"></label>
+                <button type="submit">Rename or queue</button>
+              </form>
+              <form class="command-form archive-form" data-role="archive-form">
+                <label>Active member<select name="member_id" required><option value="">Load a snapshot first</option></select></label>
+                <button class="danger" type="submit">Archive or queue</button>
+              </form>
+              <div class="pending-heading"><strong>Pending commands</strong><span data-role="pending-count">0 queued</span></div>
+              <div class="pending-commands" data-role="pending-commands"><p class="empty">The offline queue is empty.</p></div>
+              <p class="note" data-role="sync-meta">Known revision 1 · no sync response yet.</p>
+              <p class="data-label">Current local state</p><pre data-role="local-state">{}</pre>
+              <p class="data-label">Outgoing data</p><pre data-role="outgoing-data">[]</pre>
+              <p class="data-label">Incoming data</p><pre data-role="incoming-data">[]</pre>
+            </section>
+            <section class="replica" data-replica="b">
+              <div class="replica-heading">
+                <div><p class="eyebrow">Device B</p><h4>Joined participant</h4><code data-role="identity-id">No identity</code></div>
+                <span class="connection-status" data-role="connection-status">Online</span>
+              </div>
+              <div class="actions">
+                <button class="secondary" data-action="toggle-connection" type="button">Go offline</button>
+                <button class="secondary" data-action="load-snapshot" type="button">Load snapshot</button>
+                <button class="secondary" data-action="sync-current" type="button">Sync known revision</button>
+              </div>
+              <form class="command-form" data-role="member-form">
+                <label>New member name<input name="display_name" required maxlength="100" value="Robin"></label>
+                <button type="submit">Create or queue</button>
+                <button class="secondary" data-action="retry-command" type="button" disabled>Retry last</button>
+              </form>
+              <form class="command-form rename-form" data-role="rename-form">
+                <label>Member<select name="member_id" required><option value="">Load a snapshot first</option></select></label>
+                <label>Rename to<input name="display_name" required maxlength="100" value="Robin"></label>
+                <button type="submit">Rename or queue</button>
+              </form>
+              <form class="command-form archive-form" data-role="archive-form">
+                <label>Active member<select name="member_id" required><option value="">Load a snapshot first</option></select></label>
+                <button class="danger" type="submit">Archive or queue</button>
+              </form>
+              <div class="pending-heading"><strong>Pending commands</strong><span data-role="pending-count">0 queued</span></div>
+              <div class="pending-commands" data-role="pending-commands"><p class="empty">The offline queue is empty.</p></div>
+              <p class="note" data-role="sync-meta">No server revision loaded yet.</p>
+              <p class="data-label">Current local state</p><pre data-role="local-state">{}</pre>
+              <p class="data-label">Outgoing data</p><pre data-role="outgoing-data">[]</pre>
+              <p class="data-label">Incoming data</p><pre data-role="incoming-data">[]</pre>
+            </section>
+            <section class="replica server-panel">
+              <div class="replica-heading">
+                <div><p class="eyebrow">Durable Object</p><h4>Server</h4></div>
+                <span id="server-revision" class="connection-status">No state</span>
+              </div>
+              <p class="note">This is the latest authoritative snapshot observed in a server response.</p>
+              <p class="data-label">Current server state</p><pre id="server-state">{}</pre>
+              <p class="data-label">Incoming data from devices</p><pre id="server-incoming">[]</pre>
+            </section>
+          </div>
+        </div>
       </section>
 
       <section class="card" aria-labelledby="activity-title">

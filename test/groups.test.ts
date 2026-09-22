@@ -9,7 +9,7 @@ const createdGroupSchema = z.object({
     name: z.string(),
     currency_code: z.string(),
     created_at: z.iso.datetime(),
-    cursor: z.number().int(),
+    revision: z.number().int(),
   }),
   member: z.object({
     id: z.uuid(),
@@ -23,6 +23,7 @@ const createdGroupSchema = z.object({
     actor_handle: z.string(),
     preferred_member_id: z.uuid(),
     granted_at: z.iso.datetime(),
+    hidden_at: z.null(),
   }),
 });
 
@@ -42,7 +43,7 @@ describe('group creation API', () => {
       id: input.group_id,
       name: input.name,
       currency_code: 'EUR',
-      cursor: 1,
+      revision: 1,
     });
     expect(created.member).toMatchObject({
       display_name: input.creator_member_name,
@@ -53,6 +54,7 @@ describe('group creation API', () => {
       actor_handle: 'User 1',
       preferred_member_id: created.member.id,
       granted_at: created.group.created_at,
+      hidden_at: null,
     });
   });
 
