@@ -76,9 +76,29 @@ describe('Cloudflare foundation', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/html');
     expect(html).toContain('Splitnext control room');
-    expect(html).toContain('Anonymous identity');
+    expect(html).toContain('Two independent devices');
     expect(html).toContain('Create a group');
+    expect(html).toContain('Synchronize group');
+    expect(html).toContain('Device A');
+    expect(html).toContain('Device B');
+    expect(html).toContain('Current server state');
+    expect(html).toContain('Pending commands');
+    expect(html).toContain('Rename or queue');
+    expect(html).toContain('Archive or queue');
     expect(html).toContain('/dashboard/app.js');
+  });
+
+  it('serves the browser client SDK used by the dashboard', async () => {
+    const response = await env.ASSETS.fetch(
+      'https://splitnext.test/sdk/splitnext-client.js',
+    );
+
+    const javascript = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('javascript');
+    expect(javascript).toContain('SplitnextClient');
+    expect(javascript).toContain('SplitnextRequestError');
   });
 
   it('redirects the root URL to the API test dashboard', async () => {

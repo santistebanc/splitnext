@@ -1,27 +1,14 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import {
+  deviceSecretSchema,
+  identitySessionSchema,
+} from '../domain/identities';
 import { IdentityDirectory } from '../identityDirectory';
 import {
   deviceAuthorizationHeadersSchema,
   readDeviceSecret,
 } from './deviceAuthorization';
 import { errorResponse } from './responses';
-
-const identitySchema = z.object({
-  id: z.uuid(),
-  created_at: z.iso.datetime(),
-});
-
-const deviceSchema = z.object({
-  id: z.uuid(),
-  created_at: z.iso.datetime(),
-});
-
-const deviceSecretSchema = z
-  .string()
-  .regex(/^[A-Za-z0-9_-]{43}$/)
-  .openapi({
-    description: 'A client-generated 32-byte base64url secret without padding.',
-  });
 
 const createAnonymousIdentityRoute = createRoute({
   method: 'post',
@@ -43,10 +30,7 @@ const createAnonymousIdentityRoute = createRoute({
       description: 'The identity and its first device.',
       content: {
         'application/json': {
-          schema: z.object({
-            identity: identitySchema,
-            device: deviceSchema,
-          }),
+          schema: identitySessionSchema,
         },
       },
     },
@@ -67,10 +51,7 @@ const currentIdentityRoute = createRoute({
       description: 'The authenticated identity and device.',
       content: {
         'application/json': {
-          schema: z.object({
-            identity: identitySchema,
-            device: deviceSchema,
-          }),
+          schema: identitySessionSchema,
         },
       },
     },

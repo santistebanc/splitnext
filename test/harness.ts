@@ -37,6 +37,18 @@ export type OpenApiDocument = {
         responses: object;
       };
     };
+    '/groups/{groupId}/sync': {
+      post: {
+        parameters: { name: string; in: string }[];
+        responses: object;
+      };
+    };
+    '/groups/{groupId}/invite-link': {
+      post: { responses: object };
+    };
+    '/join/{groupId}/{inviteToken}': {
+      post: { responses: object };
+    };
   };
 };
 

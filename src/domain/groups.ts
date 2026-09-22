@@ -10,6 +10,27 @@ const currencyCodeSchema = z
   .regex(/^[A-Za-z]{3}$/)
   .transform((value) => value.toUpperCase());
 
+export const groupDetailsSchema = z.object({
+  id: identifierSchema,
+  name: z.string(),
+  currency_code: z.string(),
+  created_at: z.iso.datetime(),
+});
+
+export const groupProjectionSchema = groupDetailsSchema.extend({
+  revision: z.number().int().positive(),
+});
+
+export const groupAccessGrantSchema = z.object({
+  identity_id: identifierSchema,
+  actor_handle: z.string(),
+  preferred_member_id: identifierSchema.nullable(),
+  granted_at: z.iso.datetime(),
+  hidden_at: z.iso.datetime().nullable(),
+});
+
+export type GroupAccessGrant = z.output<typeof groupAccessGrantSchema>;
+
 export const createGroupRequestSchema = z.object({
   group_id: identifierSchema,
   name: nameSchema,
@@ -17,10 +38,11 @@ export const createGroupRequestSchema = z.object({
   creator_member_name: nameSchema,
 });
 
+export type CreateGroupRequest = z.output<typeof createGroupRequestSchema>;
+
 export const initializeGroupCommandSchema = createGroupRequestSchema.extend({
   creator_identity_id: identifierSchema,
   member_id: identifierSchema,
-  event_id: identifierSchema,
   created_at: z.iso.datetime(),
 });
 
@@ -29,13 +51,7 @@ export type InitializeGroupCommand = z.output<
 >;
 
 export const createdGroupSchema = z.object({
-  group: z.object({
-    id: identifierSchema,
-    name: z.string(),
-    currency_code: z.string(),
-    created_at: z.iso.datetime(),
-    cursor: z.number().int().positive(),
-  }),
+  group: groupProjectionSchema,
   member: z.object({
     id: identifierSchema,
     display_name: z.string(),
@@ -43,36 +59,27 @@ export const createdGroupSchema = z.object({
     created_at: z.iso.datetime(),
     updated_at: z.iso.datetime(),
   }),
-  access: z.object({
-    identity_id: identifierSchema,
-    actor_handle: z.string(),
-    preferred_member_id: identifierSchema,
-    granted_at: z.iso.datetime(),
-  }),
+  access: groupAccessGrantSchema,
 });
 
 export type CreatedGroup = z.output<typeof createdGroupSchema>;
 
 export type InitialGroupState = {
   view: CreatedGroup;
-  event: {
-    id: string;
-    cursor: number;
-    type: 'group.created.v1';
+  audit: {
+    sequence: number;
+    revision: number;
+    action: 'group.created';
     actor_identity_id: string;
     actor_number: number;
     actor_member_name: string;
     occurred_at: string;
-    payload: {
-      name: string;
-      currency_code: string;
-      initial_member: { id: string; display_name: string };
-    };
+    target_id: string;
   };
 };
 
 export function initializeGroup(command: InitializeGroupCommand): InitialGroupState {
-  const cursor = 1;
+  const revision = 1;
   const actorNumber = 1;
   const actorHandle = `User ${actorNumber}`;
 
@@ -91,7 +98,7 @@ export function initializeGroup(command: InitializeGroupCommand): InitialGroupSt
         name: command.name,
         currency_code: command.currency_code,
         created_at: command.created_at,
-        cursor,
+        revision,
       },
       member,
       access: {
@@ -99,21 +106,18 @@ export function initializeGroup(command: InitializeGroupCommand): InitialGroupSt
         actor_handle: actorHandle,
         preferred_member_id: member.id,
         granted_at: command.created_at,
+        hidden_at: null,
       },
     },
-    event: {
-      id: command.event_id,
-      cursor,
-      type: 'group.created.v1',
+    audit: {
+      sequence: 1,
+      revision,
+      action: 'group.created',
       actor_identity_id: command.creator_identity_id,
       actor_number: actorNumber,
       actor_member_name: member.display_name,
       occurred_at: command.created_at,
-      payload: {
-        name: command.name,
-        currency_code: command.currency_code,
-        initial_member: { id: member.id, display_name: member.display_name },
-      },
+      target_id: command.group_id,
     },
   };
 }
