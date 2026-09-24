@@ -123,3 +123,10 @@ is currently enough to join. Invitations should replace it before public use.
 
 Remote deployment has not been performed. `wrangler.jsonc` still contains a
 placeholder D1 database id.
+
+## Project documentation
+
+- [Domain language](./CONTEXT.md)
+- [Accepted product behavior](./docs/product-spec.md)
+- [Architecture decisions](./docs/adr/)
+- [Agent working agreement](./AGENTS.md)

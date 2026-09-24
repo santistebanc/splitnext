@@ -1,23 +1,76 @@
 # Splitnext
 
-Splitnext is an offline-first shared-expense ledger. These terms are distinct:
+Splitnext is an offline-first shared-expense ledger. Its language keeps access,
+people represented in the ledger, synchronization, and history distinct.
 
-**Access identity**: the actor behind one or more authenticated devices. The
-first release uses anonymous identities; accounts may be added later.
+## Access
 
-**Device credential**: a secret held by one device that authenticates its access
-identity. A user may revoke their own device credential.
+**Access identity**:
+The enduring actor behind one or more authenticated devices.
+_Avoid_: Member, device, account
 
-**Group access grant**: permanent permission for an access identity to use a
-group. Group participants cannot revoke it. Leaving hides the group and stops
-syncing; it does not destroy the grant.
+**Device credential**:
+A secret held by one device that authenticates an access identity.
+_Avoid_: Access grant, member token
 
-**Ledger member**: a name used in expenses, balances, and settlements. It is not
-an account or an access-control record. Members are active or archived.
+**Group access grant**:
+Permanent permission for an access identity to participate in a group.
+_Avoid_: Membership, member access
 
-**Preferred member**: an access identity's nonexclusive choice of which ledger
-member the UI calls “you.” Multiple identities may choose the same member.
+**Actor handle**:
+A stable, group-local label such as “User 6” assigned to an access identity.
+_Avoid_: Username, member name
 
-**Direct join**: the temporary MVP mechanism in which an authenticated identity
-that knows a group id receives a permanent grant while selecting an active
-member or creating one. Invitations will replace this before public use.
+**Direct join**:
+The temporary MVP mechanism that grants access to an authenticated identity
+that knows a group identifier.
+
+**Group invite**:
+A temporary reusable credential that can issue a permanent group access grant.
+_Avoid_: Access grant, individual invite
+
+## Ledger
+
+**Ledger member**:
+A named person represented in expenses, balances, and settlements; it is not an
+access identity or authorization record.
+_Avoid_: User, account
+
+**Preferred member**:
+An access identity's nonexclusive choice of which active ledger member its UI
+calls “you.”
+_Avoid_: Claimed member, owned member
+
+**Archived member**:
+A ledger member no longer available for new activity but retained for history.
+_Avoid_: Deleted member
+
+## Synchronization and history
+
+**Command**:
+A retry-safe statement of user intent submitted by a client.
+_Avoid_: Event
+
+**Group revision**:
+A monotonically increasing marker for the current authoritative group state.
+_Avoid_: Member version, audit sequence
+
+**Snapshot**:
+The complete current state of one group at a particular revision.
+_Avoid_: Event log
+
+**Outbox**:
+A client's ordered collection of commands not yet acknowledged by the server.
+
+**Command outcome**:
+The server's permanent result for a command: applied, no effect, superseded, or
+rejected.
+
+**Conflict notice**:
+A local, dismissible record of a rejected or superseded command and the server
+state that prevented it.
+
+**Audit event**:
+An immutable historical record of an applied transition, including its actor,
+time, target, and before and after state.
+_Avoid_: Sync event
