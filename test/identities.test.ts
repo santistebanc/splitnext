@@ -1,6 +1,7 @@
 import { env, exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import app from '../src/app';
+import { createIdentifier } from '../src/domain/ids';
 import { identitySessionSchema } from '../src/domain/identities';
 import { applyTestMigrations, fetchOpenApiDocument } from './harness';
 
@@ -100,13 +101,23 @@ describe('anonymous identities API', () => {
       ENABLE_DEBUG_INSPECTION: 'false',
     };
 
-    const response = await app.fetch(
-      new Request('https://splitnext.test/debug/identity-directory'),
-      disabledEnv,
-    );
+    const [identityResponse, groupResponse] = await Promise.all([
+      app.fetch(
+        new Request('https://splitnext.test/debug/identity-directory'),
+        disabledEnv,
+      ),
+      app.fetch(
+        new Request(
+          `https://splitnext.test/debug/groups/${createIdentifier()}`,
+        ),
+        disabledEnv,
+      ),
+    ]);
 
-    expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ error: 'not_found' });
+    expect(identityResponse.status).toBe(404);
+    expect(await identityResponse.json()).toEqual({ error: 'not_found' });
+    expect(groupResponse.status).toBe(404);
+    expect(await groupResponse.json()).toEqual({ error: 'not_found' });
   });
 
   it('rejects malformed identity creation input', async () => {

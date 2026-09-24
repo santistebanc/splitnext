@@ -50,9 +50,12 @@ describe('in-memory group repository adapter', () => {
       },
     });
     expect(repository.inspect()).toMatchObject({
-      revision: 2,
-      snapshot: { group: { name: 'Renamed group' } },
+      state: {
+        revision: 2,
+        snapshot: { group: { name: 'Renamed group' } },
+      },
       audit_events: [{ action: 'group.created' }, { action: 'group.renamed' }],
+      command_outcomes: [{ command_id: expect.any(String) }],
     });
   });
 
@@ -64,6 +67,11 @@ describe('in-memory group repository adapter', () => {
         throw new Error('stop');
       }),
     ).toThrow('stop');
-    expect(repository.inspect()).toBeNull();
+    expect(repository.inspect()).toEqual({
+      state: null,
+      audit_events: [],
+      command_outcomes: [],
+      join_outcomes: [],
+    });
   });
 });

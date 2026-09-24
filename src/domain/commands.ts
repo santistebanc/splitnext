@@ -1,21 +1,78 @@
 import { z } from 'zod';
+import type { JoinGroupCommand, PreferredMemberChoice } from './access';
 import {
-  leaveGroupCommandSchema,
-  setPreferredMemberCommandSchema,
-} from './access';
-import {
-  renameGroupCommandSchema,
+  groupAccessGrantSchema,
+  groupDetailsSchema,
+  groupNameSchema,
   type GroupAccessGrant,
 } from './groups';
+import { identifierSchema } from './ids';
 import {
-  archiveMemberCommandSchema,
-  createMemberCommandSchema,
-  decideMemberArchive,
-  decideMemberCreation,
-  decideMemberRename,
-  renameMemberCommandSchema,
+  ledgerMemberSchema,
+  memberNameKey,
+  memberNameSchema,
+  type LedgerMember,
 } from './members';
 import type { GroupSnapshot } from './sync';
+
+export const groupCommandTypes = {
+  renameGroup: 'group.rename',
+  createMember: 'member.create',
+  renameMember: 'member.rename',
+  archiveMember: 'member.archive',
+  setPreference: 'preference.set',
+  leaveGroup: 'group.leave',
+} as const;
+
+export const groupCommandTypeSchema = z.enum(groupCommandTypes);
+
+export const renameGroupCommandSchema = z.object({
+  command_id: identifierSchema,
+  type: z.literal(groupCommandTypes.renameGroup),
+  payload: z.object({
+    expected_name: groupNameSchema,
+    name: groupNameSchema,
+  }),
+});
+
+export const createMemberCommandSchema = z.object({
+  command_id: identifierSchema,
+  type: z.literal(groupCommandTypes.createMember),
+  payload: z.object({
+    member_id: identifierSchema,
+    display_name: memberNameSchema,
+  }),
+});
+
+export const renameMemberCommandSchema = z.object({
+  command_id: identifierSchema,
+  type: z.literal(groupCommandTypes.renameMember),
+  payload: z.object({
+    member_id: identifierSchema,
+    expected_display_name: memberNameSchema,
+    display_name: memberNameSchema,
+  }),
+});
+
+export const archiveMemberCommandSchema = z.object({
+  command_id: identifierSchema,
+  type: z.literal(groupCommandTypes.archiveMember),
+  payload: z.object({
+    member_id: identifierSchema,
+  }),
+});
+
+export const setPreferredMemberCommandSchema = z.object({
+  command_id: identifierSchema,
+  type: z.literal(groupCommandTypes.setPreference),
+  payload: z.object({ member_id: identifierSchema }),
+});
+
+export const leaveGroupCommandSchema = z.object({
+  command_id: identifierSchema,
+  type: z.literal(groupCommandTypes.leaveGroup),
+  payload: z.object({}),
+});
 
 export const groupCommandSchema = z.discriminatedUnion('type', [
   renameGroupCommandSchema,
@@ -28,25 +85,54 @@ export const groupCommandSchema = z.discriminatedUnion('type', [
 
 export type GroupCommand = z.output<typeof groupCommandSchema>;
 
-export type CommandReason =
-  | 'access_not_found'
-  | 'group_changed'
-  | 'idempotency_conflict'
-  | 'member_archived'
-  | 'member_changed'
-  | 'member_id_exists'
-  | 'member_name_taken'
-  | 'member_not_found';
+export type CreateMemberCommand = z.output<typeof createMemberCommandSchema>;
 
-export type CommandTarget =
-  | { kind: 'group'; id: string }
-  | { kind: 'member'; id: string }
-  | { kind: 'access'; id: string };
+export type RenameMemberCommand = z.output<typeof renameMemberCommandSchema>;
 
-export type CommandServerState =
-  | { kind: 'group'; group: GroupSnapshot['group'] }
-  | { kind: 'member'; member: GroupSnapshot['members'][number] }
-  | { kind: 'access'; access: GroupAccessGrant };
+export type ArchiveMemberCommand = z.output<typeof archiveMemberCommandSchema>;
+
+export const commandReasons = {
+  accessNotFound: 'access_not_found',
+  groupChanged: 'group_changed',
+  idempotencyConflict: 'idempotency_conflict',
+  memberArchived: 'member_archived',
+  memberChanged: 'member_changed',
+  memberIdExists: 'member_id_exists',
+  memberNameTaken: 'member_name_taken',
+  memberNotFound: 'member_not_found',
+} as const;
+
+export const commandReasonSchema = z.enum(commandReasons);
+
+export type CommandReason = z.output<typeof commandReasonSchema>;
+
+export const commandTargetSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('group'), id: identifierSchema }),
+  z.object({ kind: z.literal('member'), id: identifierSchema }),
+  z.object({ kind: z.literal('access'), id: identifierSchema }),
+]);
+
+export type CommandTarget = z.output<typeof commandTargetSchema>;
+
+export const commandServerStateSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('group'), group: groupDetailsSchema }),
+  z.object({ kind: z.literal('member'), member: ledgerMemberSchema }),
+  z.object({ kind: z.literal('access'), access: groupAccessGrantSchema }),
+]);
+
+export type CommandServerState = z.output<typeof commandServerStateSchema>;
+
+export const commandOutcomeSchema = z.object({
+  command_id: identifierSchema,
+  command_type: groupCommandTypeSchema,
+  status: z.enum(['applied', 'no_effect', 'superseded', 'rejected']),
+  reason: commandReasonSchema.nullable(),
+  audit_id: identifierSchema.nullable(),
+  target: commandTargetSchema,
+  server_state: commandServerStateSchema.nullable(),
+});
+
+export type CommandOutcome = z.output<typeof commandOutcomeSchema>;
 
 export type CommandTransition = {
   snapshot: GroupSnapshot;
@@ -60,6 +146,143 @@ export type CommandTransition = {
     after: unknown;
   } | null;
 };
+
+export type JoinTransition =
+  | {
+      ok: true;
+      changed: boolean;
+      snapshot: GroupSnapshot;
+      access: GroupAccessGrant;
+      nextActorNumber: number;
+      audit: CommandTransition['audit'];
+    }
+  | {
+      ok: false;
+      error:
+        | 'member_not_found'
+        | 'member_archived'
+        | 'member_name_taken'
+        | 'member_id_exists';
+    };
+
+type PreferredMemberResult =
+  | { ok: true; member: LedgerMember; created: boolean }
+  | {
+      ok: false;
+      error:
+        | 'member_not_found'
+        | 'member_archived'
+        | 'member_name_taken'
+        | 'member_id_exists';
+    };
+
+type MemberCreationDecision =
+  | { kind: 'apply'; member: LedgerMember }
+  | {
+      kind: 'supersede';
+      reason: 'member_name_taken';
+      current: LedgerMember;
+    }
+  | {
+      kind: 'reject';
+      reason: 'member_id_exists';
+      current: LedgerMember;
+    };
+
+type MemberRenameDecision =
+  | { kind: 'apply'; before: LedgerMember; member: LedgerMember }
+  | { kind: 'no_effect'; current: LedgerMember }
+  | {
+      kind: 'supersede';
+      reason: 'member_changed' | 'member_name_taken';
+      current: LedgerMember;
+    }
+  | {
+      kind: 'reject';
+      reason: 'member_archived';
+      current: LedgerMember;
+    }
+  | { kind: 'reject'; reason: 'member_not_found'; current: null };
+
+type MemberArchiveDecision =
+  | {
+      kind: 'apply';
+      before: LedgerMember;
+      member: LedgerMember;
+      orphaned_identity_ids: string[];
+    }
+  | { kind: 'no_effect'; current: LedgerMember }
+  | { kind: 'reject'; reason: 'member_not_found'; current: null };
+
+export function applyGroupJoin(
+  snapshot: GroupSnapshot,
+  nextActorNumber: number,
+  command: JoinGroupCommand,
+): JoinTransition {
+  const preferred = resolvePreferredMember(
+    command.preferred_member,
+    snapshot.members,
+    command.joined_at,
+  );
+
+  if (!preferred.ok) return preferred;
+
+  const previousAccess = snapshot.access_grants.find(
+    (grant) => grant.identity_id === command.identity_id,
+  );
+
+  const access = previousAccess
+    ? {
+        ...previousAccess,
+        preferred_member_id: preferred.member.id,
+        hidden_at: null,
+      }
+    : {
+        identity_id: command.identity_id,
+        actor_handle: `User ${nextActorNumber}`,
+        preferred_member_id: preferred.member.id,
+        granted_at: command.joined_at,
+        hidden_at: null,
+      };
+
+  const changed =
+    preferred.created ||
+    !previousAccess ||
+    previousAccess.preferred_member_id !== access.preferred_member_id ||
+    previousAccess.hidden_at !== null;
+
+  const members = preferred.created
+    ? [...snapshot.members, preferred.member]
+    : snapshot.members;
+
+  const accessGrants = previousAccess
+    ? snapshot.access_grants.map((grant) =>
+        grant.identity_id === access.identity_id ? access : grant,
+      )
+    : [...snapshot.access_grants, access];
+
+  return {
+    ok: true,
+    changed,
+    snapshot: {
+      ...snapshot,
+      members,
+      access_grants: accessGrants,
+    },
+    access,
+    nextActorNumber: previousAccess ? nextActorNumber : nextActorNumber + 1,
+    audit: changed
+      ? {
+          action: previousAccess ? 'group.rejoined' : 'group.joined',
+          before: previousAccess ?? null,
+          after: {
+            access,
+            created_member: preferred.created ? preferred.member : null,
+          },
+        }
+      : null,
+  };
+}
 
 export function applyGroupCommand(
   snapshot: GroupSnapshot,
@@ -345,6 +568,179 @@ function applyGroupLeave(
     target,
     serverState: { kind: 'access', access: updated },
     audit: { action: 'group.left', before: access, after: updated },
+  };
+}
+
+function decideMemberCreation(
+  command: CreateMemberCommand,
+  members: readonly LedgerMember[],
+  appliedAt: string,
+): MemberCreationDecision {
+  const memberWithId = members.find(
+    (member) => member.id === command.payload.member_id,
+  );
+
+  if (memberWithId) {
+    return {
+      kind: 'reject',
+      reason: 'member_id_exists',
+      current: memberWithId,
+    };
+  }
+
+  const requestedNameKey = memberNameKey(command.payload.display_name);
+
+  const memberWithName = members.find(
+    (member) =>
+      member.status === 'active' &&
+      memberNameKey(member.display_name) === requestedNameKey,
+  );
+
+  if (memberWithName) {
+    return {
+      kind: 'supersede',
+      reason: 'member_name_taken',
+      current: memberWithName,
+    };
+  }
+
+  return {
+    kind: 'apply',
+    member: {
+      id: command.payload.member_id,
+      display_name: command.payload.display_name,
+      status: 'active',
+      created_at: appliedAt,
+      updated_at: appliedAt,
+    },
+  };
+}
+
+function decideMemberRename(
+  command: RenameMemberCommand,
+  members: readonly LedgerMember[],
+  appliedAt: string,
+): MemberRenameDecision {
+  const current = members.find(
+    (member) => member.id === command.payload.member_id,
+  );
+
+  if (!current) {
+    return { kind: 'reject', reason: 'member_not_found', current: null };
+  }
+
+  if (current.status === 'archived') {
+    return { kind: 'reject', reason: 'member_archived', current };
+  }
+
+  if (current.display_name === command.payload.display_name) {
+    return { kind: 'no_effect', current };
+  }
+
+  if (current.display_name !== command.payload.expected_display_name) {
+    return { kind: 'supersede', reason: 'member_changed', current };
+  }
+
+  const requestedNameKey = memberNameKey(command.payload.display_name);
+
+  const nameIsTaken = members.some(
+    (member) =>
+      member.id !== current.id &&
+      member.status === 'active' &&
+      memberNameKey(member.display_name) === requestedNameKey,
+  );
+
+  if (nameIsTaken) {
+    return { kind: 'supersede', reason: 'member_name_taken', current };
+  }
+
+  return {
+    kind: 'apply',
+    before: current,
+    member: {
+      ...current,
+      display_name: command.payload.display_name,
+      updated_at: appliedAt,
+    },
+  };
+}
+
+function decideMemberArchive(
+  command: ArchiveMemberCommand,
+  members: readonly LedgerMember[],
+  accessGrants: readonly {
+    identity_id: string;
+    preferred_member_id: string | null;
+  }[],
+  appliedAt: string,
+): MemberArchiveDecision {
+  const current = members.find(
+    (member) => member.id === command.payload.member_id,
+  );
+
+  if (!current) {
+    return { kind: 'reject', reason: 'member_not_found', current: null };
+  }
+
+  if (current.status === 'archived') {
+    return { kind: 'no_effect', current };
+  }
+
+  return {
+    kind: 'apply',
+    before: current,
+    member: {
+      ...current,
+      status: 'archived',
+      updated_at: appliedAt,
+    },
+    orphaned_identity_ids: accessGrants.flatMap((grant) =>
+      grant.preferred_member_id === current.id ? [grant.identity_id] : [],
+    ),
+  };
+}
+
+function resolvePreferredMember(
+  choice: PreferredMemberChoice,
+  members: readonly LedgerMember[],
+  joinedAt: string,
+): PreferredMemberResult {
+  if (choice.kind === 'existing') {
+    const member = members.find(
+      (candidate) => candidate.id === choice.member_id,
+    );
+
+    if (!member) return { ok: false, error: 'member_not_found' };
+
+    return member.status === 'active'
+      ? { ok: true, member, created: false }
+      : { ok: false, error: 'member_archived' };
+  }
+
+  if (members.some((member) => member.id === choice.member_id)) {
+    return { ok: false, error: 'member_id_exists' };
+  }
+
+  const requestedNameKey = memberNameKey(choice.display_name);
+
+  const nameIsTaken = members.some(
+    (member) =>
+      member.status === 'active' &&
+      memberNameKey(member.display_name) === requestedNameKey,
+  );
+
+  if (nameIsTaken) return { ok: false, error: 'member_name_taken' };
+
+  return {
+    ok: true,
+    created: true,
+    member: {
+      id: choice.member_id,
+      display_name: choice.display_name,
+      status: 'active',
+      created_at: joinedAt,
+      updated_at: joinedAt,
+    },
   };
 }
 

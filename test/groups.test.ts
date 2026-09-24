@@ -71,6 +71,23 @@ describe('group creation API', () => {
     expect(await repeated.json()).toEqual(await first.json());
   });
 
+  it('exposes the authoritative snapshot to the local sync lab', async () => {
+    const session = await createIdentity('i');
+    const input = newGroupInput();
+
+    await createGroup(session.deviceSecret, input);
+
+    const response = await exports.default.fetch(
+      `https://splitnext.test/debug/groups/${input.group_id}`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      revision: 1,
+      snapshot: { group: { id: input.group_id, name: input.name } },
+    });
+  });
+
   it('rejects reuse of a group id with different creation input', async () => {
     const session = await createIdentity('e');
     const input = newGroupInput();

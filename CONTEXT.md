@@ -59,6 +59,11 @@ _Avoid_: Member version, audit sequence
 The complete current state of one group at a particular revision.
 _Avoid_: Event log
 
+**Client replica**:
+A device's durable local view of one group, including its confirmed snapshot,
+pending outbox, and conflict notices.
+_Avoid_: Server state, cache
+
 **Outbox**:
 A client's ordered collection of commands not yet acknowledged by the server.
 

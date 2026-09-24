@@ -25,18 +25,6 @@ export const joinGroupCommandSchema = joinGroupRequestSchema.extend({
   joined_at: z.iso.datetime(),
 });
 
-export const setPreferredMemberCommandSchema = z.object({
-  command_id: identifierSchema,
-  type: z.literal('preference.set'),
-  payload: z.object({ member_id: identifierSchema }),
-});
-
-export const leaveGroupCommandSchema = z.object({
-  command_id: identifierSchema,
-  type: z.literal('group.leave'),
-  payload: z.object({}),
-});
-
 export type PreferredMemberChoice = z.output<
   typeof preferredMemberChoiceSchema
 >;
@@ -44,9 +32,3 @@ export type PreferredMemberChoice = z.output<
 export type JoinGroupRequest = z.output<typeof joinGroupRequestSchema>;
 
 export type JoinGroupCommand = z.output<typeof joinGroupCommandSchema>;
-
-export type SetPreferredMemberCommand = z.output<
-  typeof setPreferredMemberCommandSchema
->;
-
-export type LeaveGroupCommand = z.output<typeof leaveGroupCommandSchema>;

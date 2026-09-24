@@ -37,17 +37,6 @@ export const createGroupRequestSchema = z.object({
   creator_member_name: groupNameSchema,
 });
 
-export const renameGroupCommandSchema = z.object({
-  command_id: identifierSchema,
-  type: z.literal('group.rename'),
-  payload: z.object({
-    expected_name: groupNameSchema,
-    name: groupNameSchema,
-  }),
-});
-
-export type RenameGroupCommand = z.output<typeof renameGroupCommandSchema>;
-
 export type CreateGroupRequest = z.output<typeof createGroupRequestSchema>;
 
 export const initializeGroupCommandSchema = createGroupRequestSchema.extend({

@@ -1,10 +1,8 @@
 import {
   ClientOfflineError,
-  MemoryClientStorage,
-  SplitnextClient,
   SplitnextRequestError,
-  SplitnextSyncClient,
-} from '/sdk/splitnext-client.js';
+  SyncLab,
+} from '/sdk/splitnext-lab.js';
 
 const elements = {
   health: document.querySelector('#health-status'),
@@ -50,48 +48,21 @@ const deviceViews = Object.fromEntries(
   ]),
 );
 
-function newDevice(label) {
-  return {
-    label,
-    online: true,
-    secret: null,
-    session: null,
-    api: null,
-    client: null,
-    replica: null,
-    commands: [],
-    requests: [],
-  };
-}
+const lab = new SyncLab({
+  baseUrl: window.location.origin,
+  onChange: () => renderAll(),
+});
 
-const state = {
-  groupId: null,
-  devices: {
-    one: newDevice('Device 1'),
-    two: newDevice('Device 2'),
-  },
-  server: {
-    online: true,
-    identityDirectory: null,
-    revision: null,
-    snapshot: null,
-    incoming: [],
-  },
-};
+const state = lab.state;
 
-const systemApi = new SplitnextClient({ baseUrl: window.location.origin });
-
-await Promise.all([checkDependencies(), refreshIdentityDirectory()]);
+await Promise.all([checkDependencies(), lab.refreshServer()]);
 
 bindEvents();
 
 renderAll();
 
 async function checkDependencies() {
-  const [health, ready] = await Promise.allSettled([
-    systemApi.health(),
-    systemApi.readiness(),
-  ]);
+  const [health, ready] = await lab.checkDependencies();
 
   renderDependency(elements.health, health.status === 'fulfilled', 'Worker');
   renderDependency(elements.ready, ready.status === 'fulfilled', 'Storage');
@@ -109,8 +80,7 @@ function bindEvents() {
   elements.serverToggle.addEventListener('click', toggleServer);
   elements.refreshServer.addEventListener('click', refreshServer);
   elements.clearServerTraffic.addEventListener('click', () => {
-    state.server.incoming = [];
-    renderServer();
+    lab.clearServerTraffic();
   });
 
   for (const [key, view] of Object.entries(deviceViews)) {
@@ -135,14 +105,7 @@ async function initializeDevices() {
   setBusy(elements.initialize, true, 'Initializing…');
 
   try {
-    await Promise.all(
-      Object.entries(state.devices).map(async ([key, device]) => {
-        if (!device.client) buildDevice(key);
-
-        device.session = await device.client.initializeIdentity();
-      }),
-    );
-    await refreshIdentityDirectory();
+    await lab.initializeDevices();
     showToast('Both independent device identities are ready');
   } catch (error) {
     showToast(describeError(error), true);
@@ -152,88 +115,8 @@ async function initializeDevices() {
   }
 }
 
-function buildDevice(key) {
-  const device = state.devices[key];
-
-  device.secret = generateDeviceSecret();
-  device.api = new SplitnextClient({
-    baseUrl: window.location.origin,
-    fetch: async (input, init) => {
-      if (!device.online) throw new TypeError('device_offline');
-
-      if (!state.server.online) throw new TypeError('server_offline');
-
-      return globalThis.fetch(input, init);
-    },
-    observer: {
-      onRequest(event) {
-        const entry = {
-          at: timestamp(),
-          method: event.method,
-          path: event.path,
-          body: redactBody(event.body),
-          result: null,
-        };
-
-        pushLog(device.requests, entry);
-        markCommands(device, event.body?.commands, 'syncing');
-
-        if (device.online && state.server.online) {
-          pushLog(state.server.incoming, { from: device.label, ...entry });
-        }
-
-        renderCommands(key);
-        renderTraffic(key);
-        renderServerTraffic();
-      },
-      onResponse(event) {
-        const result = {
-          kind: 'response',
-          status: event.status,
-          duration_ms: event.duration_ms,
-          body: event.response,
-        };
-
-        completeRequest(device.requests, event, result);
-        completeRequest(state.server.incoming, event, result, device.label);
-        recordCommandResponse(device, event);
-        observeServerResponse(event.response);
-        renderCommands(key);
-        renderTraffic(key);
-        renderServer();
-      },
-      onNetworkError(event) {
-        completeRequest(device.requests, event, {
-          kind: 'network_error',
-          status: 0,
-          duration_ms: event.duration_ms,
-          error: event.error.message,
-        });
-        markCommands(
-          device,
-          event.body?.commands,
-          'queued',
-          'Network unavailable; still queued',
-        );
-        renderCommands(key);
-        renderTraffic(key);
-      },
-    },
-  });
-  device.client = new SplitnextSyncClient({
-    api: device.api,
-    device_secret: device.secret,
-    storage: new MemoryClientStorage(),
-  });
-  device.client.setOnline(device.online);
-}
-
 async function createGroup(event) {
   event.preventDefault();
-
-  const device = state.devices.one;
-
-  if (!device.client) return;
 
   const button = event.submitter;
   const fields = new FormData(elements.createForm);
@@ -241,16 +124,13 @@ async function createGroup(event) {
   setBusy(button, true, 'Creating…');
 
   try {
-    const replica = await device.client.createGroup({
+    const replica = await lab.createGroup({
       name: readText(fields, 'name'),
       currency_code: readText(fields, 'currency_code'),
       creator_member_name: readText(fields, 'creator_member_name'),
     });
 
-    state.groupId = replica.group_id;
     elements.joinGroupId.value = replica.group_id;
-    device.replica = replica;
-    await refreshReplicaStates();
     showToast('Device 1 created the authoritative group');
   } catch (error) {
     showToast(describeError(error), true);
@@ -263,10 +143,6 @@ async function createGroup(event) {
 async function joinGroup(event) {
   event.preventDefault();
 
-  const device = state.devices.two;
-
-  if (!device.client) return;
-
   const button = event.submitter;
   const fields = new FormData(elements.joinForm);
   const groupId = readText(fields, 'group_id');
@@ -274,14 +150,7 @@ async function joinGroup(event) {
   setBusy(button, true, 'Joining…');
 
   try {
-    const replica = await device.client.joinGroup(groupId, {
-      kind: 'new',
-      display_name: readText(fields, 'display_name'),
-    });
-
-    state.groupId = groupId;
-    device.replica = replica;
-    await refreshReplicaStates();
+    await lab.joinGroup(groupId, readText(fields, 'display_name'));
     showToast('Device 2 joined and received its own local replica');
   } catch (error) {
     showToast(describeError(error), true);
@@ -293,27 +162,27 @@ async function joinGroup(event) {
 
 async function toggleDevice(key) {
   const device = state.devices[key];
+  const goingOnline = !device.online;
 
-  device.online = !device.online;
-  device.client?.setOnline(device.online);
-  renderDevice(key);
+  try {
+    await lab.toggleDevice(key);
+  } catch (error) {
+    showToast(describeError(error), true);
 
-  if (!device.online) {
+    return;
+  }
+
+  if (!goingOnline) {
     showToast(`${device.label} is offline. New changes stay in its outbox.`);
 
     return;
   }
 
-  showToast(`${device.label} is online and will reconcile now.`);
-
-  if (state.groupId && device.replica && !device.replica.hidden) {
-    await synchronizeDevice(key, false);
-  }
+  showToast(`${device.label} is online and reconciled.`);
 }
 
 function toggleServer() {
-  state.server.online = !state.server.online;
-  renderServer();
+  lab.toggleServer();
   showToast(
     state.server.online
       ? 'Server is available again. Bring devices online or sync manually.'
@@ -322,18 +191,15 @@ function toggleServer() {
 }
 
 async function synchronizeDevice(key, announce = true) {
-  const device = state.devices[key];
-
-  if (!device.client || !state.groupId || !device.replica) return;
-
   try {
-    device.replica = await device.client.syncGroup(state.groupId);
+    const replica = await lab.syncDevice(key);
 
-    if (announce) showToast(`${device.label} synchronized successfully`);
+    if (announce && replica) {
+      showToast(`${state.devices[key].label} synchronized successfully`);
+    }
   } catch (error) {
     showToast(describeError(error), true);
   } finally {
-    await refreshReplicaStates();
     renderAll();
   }
 }
@@ -342,11 +208,7 @@ async function renameGroup(event, key) {
   event.preventDefault();
   const fields = new FormData(event.currentTarget);
 
-  await runMutation(
-    key,
-    (client) => client.renameGroup(state.groupId, readText(fields, 'name')),
-    'Group rename recorded',
-  );
+  await runMutation(key, () => lab.renameGroup(key, readText(fields, 'name')), 'Group rename recorded');
 }
 
 async function addMember(event, key) {
@@ -354,14 +216,7 @@ async function addMember(event, key) {
   const form = event.currentTarget;
   const fields = new FormData(form);
 
-  await runMutation(
-    key,
-    (client) => client.addMember(
-      state.groupId,
-      readText(fields, 'display_name'),
-    ),
-    'Member addition recorded',
-  );
+  await runMutation(key, () => lab.addMember(key, readText(fields, 'display_name')), 'Member addition recorded');
   form.reset();
 }
 
@@ -379,7 +234,7 @@ async function performMemberAction(event, key) {
   let message;
 
   if (intent === 'prefer') {
-    operation = (client) => client.selectPreferredMember(state.groupId, memberId);
+    operation = () => lab.selectPreferredMember(key, memberId);
     message = 'Preferred “you” member updated';
   } else if (intent === 'rename') {
     const displayName = readText(fields, 'display_name');
@@ -390,11 +245,10 @@ async function performMemberAction(event, key) {
       return;
     }
 
-    operation = (client) =>
-      client.renameMember(state.groupId, memberId, displayName);
+    operation = () => lab.renameMember(key, memberId, displayName);
     message = 'Member rename recorded';
   } else {
-    operation = (client) => client.removeMember(state.groupId, memberId);
+    operation = () => lab.removeMember(key, memberId);
     message = 'Member removal recorded';
   }
 
@@ -404,34 +258,25 @@ async function performMemberAction(event, key) {
 async function leaveGroup(key) {
   await runMutation(
     key,
-    (client) => client.leaveGroup(state.groupId),
+    () => lab.leaveGroup(key),
     'Group hidden and preferred member cleared',
   );
 }
 
 async function rejoinGroup(key) {
-  const device = state.devices[key];
-
-  const member = device.replica?.confirmed_snapshot?.members.find(
-    (candidate) => candidate.status === 'active',
-  );
-
-  if (!device.client || !state.groupId || !member) {
-    showToast('An active member is required to rejoin', true);
-
-    return;
-  }
-
   try {
-    device.replica = await device.client.joinGroup(state.groupId, {
-      kind: 'existing',
-      member_id: member.id,
-    });
-    showToast(`${device.label} rejoined using ${member.display_name}`);
+    const replica = await lab.rejoinGroup(key);
+
+    const member = replica.projected_snapshot.members.find(
+      ({ id }) => id === replica.projected_snapshot.access_grants.find(
+        ({ identity_id }) => identity_id === replica.session.identity.id,
+      )?.preferred_member_id,
+    );
+
+    showToast(`${state.devices[key].label} rejoined using ${member?.display_name ?? 'an active member'}`);
   } catch (error) {
     showToast(describeError(error), true);
   } finally {
-    await refreshReplicaStates();
     renderAll();
   }
 }
@@ -439,10 +284,10 @@ async function rejoinGroup(key) {
 async function runMutation(key, operation, successMessage) {
   const device = state.devices[key];
 
-  if (!device.client || !state.groupId) return;
+  if (!device.session || !state.groupId) return;
 
   try {
-    device.replica = await operation(device.client);
+    await operation();
     showToast(
       device.online
         ? successMessage
@@ -451,99 +296,21 @@ async function runMutation(key, operation, successMessage) {
   } catch (error) {
     showToast(describeError(error), true);
   } finally {
-    await refreshReplicaStates();
     renderAll();
   }
 }
 
 async function refreshServer() {
-  await refreshIdentityDirectory();
-
-  const candidate = Object.entries(state.devices).find(([, device]) =>
-    device.online && device.client && device.replica && !device.replica.hidden,
-  );
-
-  if (!candidate) {
-    showToast('Identity directory refreshed');
-
-    return;
-  }
-
-  await synchronizeDevice(candidate[0], false);
-}
-
-async function refreshIdentityDirectory() {
-  if (!state.server.online) return;
-
   try {
-    const response = await fetch('/debug/identity-directory');
-
-    if (response.status === 404) {
-      state.server.identityDirectory = null;
-
-      return;
-    }
-
-    if (!response.ok) throw new Error(`identity_inspection_${response.status}`);
-
-    state.server.identityDirectory = await response.json();
-  } catch {
-    state.server.identityDirectory = null;
+    await lab.refreshServer();
+    showToast('Authoritative server state refreshed');
+  } catch (error) {
+    showToast(describeError(error), true);
   }
-}
-
-async function refreshReplicaStates() {
-  if (!state.groupId) return;
-
-  await Promise.all(
-    Object.values(state.devices).map(async (device) => {
-      if (!device.client) return;
-
-      device.replica = await device.client.inspect(state.groupId);
-      captureReplicaCommands(device);
-    }),
-  );
 }
 
 function clearDeviceTraffic(key) {
-  state.devices[key].requests = [];
-  renderTraffic(key);
-}
-
-function observeServerResponse(body) {
-  if (!body) return;
-
-  if (body.state?.kind === 'snapshot') {
-    state.server.revision = body.revision;
-    state.server.snapshot = body.state.snapshot;
-
-    return;
-  }
-
-  if (body.snapshot && body.revision) {
-    state.server.revision = body.revision;
-    state.server.snapshot = body.snapshot;
-
-    return;
-  }
-
-  if (body.group?.revision && body.member && body.access) {
-    state.server.revision = body.group.revision;
-    state.server.snapshot = {
-      group: {
-        id: body.group.id,
-        name: body.group.name,
-        currency_code: body.group.currency_code,
-        created_at: body.group.created_at,
-      },
-      members: [body.member],
-      access_grants: [body.access],
-    };
-
-    return;
-  }
-
-  if (body.revision) state.server.revision = body.revision;
+  lab.clearDeviceTraffic(key);
 }
 
 function renderAll() {
@@ -726,91 +493,6 @@ function renderMembers(element, snapshot, identityId, editable = false) {
     row.append(memberId, name, save, prefer, remove);
     element.append(row);
   }
-}
-
-function captureReplicaCommands(device) {
-  if (!device.replica) return;
-
-  for (const pending of device.replica.outbox) {
-    upsertCommand(device, pending.command, 'queued', pending.queued_at);
-  }
-
-  for (const notice of device.replica.notices) {
-    upsertCommand(
-      device,
-      notice.command,
-      notice.outcome.status,
-      notice.recorded_at,
-      notice.outcome.reason,
-    );
-  }
-}
-
-function markCommands(device, commands, status, detail = null) {
-  if (!Array.isArray(commands)) return;
-
-  for (const command of commands) {
-    upsertCommand(device, command, status, timestamp(), detail);
-  }
-}
-
-function recordCommandResponse(device, event) {
-  const outcomes = event.response?.outcomes;
-
-  if (Array.isArray(outcomes)) {
-    for (const outcome of outcomes) {
-      const existing = device.commands.find(
-        ({ command }) => command.command_id === outcome.command_id,
-      );
-
-      const command = existing?.command ?? {
-        command_id: outcome.command_id,
-        type: outcome.command_type,
-        payload: {},
-      };
-
-      upsertCommand(
-        device,
-        command,
-        outcome.status,
-        timestamp(),
-        outcome.reason,
-      );
-    }
-
-    return;
-  }
-
-  if (event.status >= 400) {
-    markCommands(
-      device,
-      event.body?.commands,
-      'queued',
-      `Server returned ${event.status}; still queued`,
-    );
-  }
-}
-
-function upsertCommand(device, command, status, updatedAt, detail = null) {
-  const existing = device.commands.find(
-    (entry) => entry.command.command_id === command.command_id,
-  );
-
-  if (existing) {
-    existing.command = command;
-    existing.status = status;
-    existing.updated_at = updatedAt;
-    existing.detail = detail;
-  } else {
-    device.commands.unshift({
-      command,
-      status,
-      updated_at: updatedAt,
-      detail,
-    });
-  }
-
-  if (device.commands.length > 20) device.commands.length = 20;
 }
 
 function renderCommands(key) {
@@ -1073,27 +755,6 @@ function renderConnection(button, online) {
   button.textContent = online ? 'Online' : 'Offline';
 }
 
-function pushLog(log, entry) {
-  log.unshift(entry);
-
-  if (log.length > 20) log.length = 20;
-}
-
-function completeRequest(log, event, result, source) {
-  const body = JSON.stringify(redactBody(event.body));
-
-  const entry = log.find(
-    (candidate) =>
-      !candidate.result &&
-      candidate.method === event.method &&
-      candidate.path === event.path &&
-      (!source || candidate.from === source) &&
-      JSON.stringify(candidate.body) === body,
-  );
-
-  if (entry) entry.result = result;
-}
-
 function readText(formData, name) {
   return String(formData.get(name) ?? '').trim();
 }
@@ -1102,32 +763,6 @@ function shortId(value) {
   if (!value) return '—';
 
   return `${value.slice(0, 8)}…${value.slice(-4)}`;
-}
-
-function timestamp() {
-  return new Date().toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
-
-function redactBody(body) {
-  if (body?.device_secret) {
-    return { ...body, device_secret: '[redacted]' };
-  }
-
-  return body;
-}
-
-function generateDeviceSecret() {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  const binary = String.fromCharCode(...bytes);
-
-  return btoa(binary)
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replace(/=+$/, '');
 }
 
 function setBusy(button, busy, label) {

@@ -102,6 +102,18 @@ describe('Cloudflare foundation', () => {
     expect(javascript).toContain('SplitnextRequestError');
   });
 
+  it('serves the browser synchronization lab model', async () => {
+    const response = await env.ASSETS.fetch(
+      'https://splitnext.test/sdk/splitnext-lab.js',
+    );
+
+    const javascript = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('javascript');
+    expect(javascript).toContain('SyncLab');
+  });
+
   it('redirects the root URL to the API test dashboard', async () => {
     const response = await exports.default.fetch('https://splitnext.test/', {
       redirect: 'manual',
