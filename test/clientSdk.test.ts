@@ -6,6 +6,7 @@ import {
   type ClientRequestEvent,
   type ClientResponseEvent,
 } from '../src/client';
+import { createIdentifier } from '../src/domain/ids';
 
 const deviceSecret = 'A'.repeat(43);
 
@@ -69,11 +70,11 @@ describe('Splitnext client SDK', () => {
 
         return Response.json({
           identity: {
-            id: crypto.randomUUID(),
+            id: createIdentifier(),
             created_at: '2026-09-22T00:00:00.000Z',
           },
           device: {
-            id: crypto.randomUUID(),
+            id: createIdentifier(),
             created_at: '2026-09-22T00:00:00.000Z',
           },
         });
@@ -100,10 +101,11 @@ describe('Splitnext client SDK', () => {
       }),
     }).forDevice(deviceSecret);
 
-    const request = client.redeemGroupLink('group', 'secret/token', {
+    const request = client.joinGroup('group', {
+      join_id: createIdentifier(),
       preferred_member: {
         kind: 'new',
-        member_id: crypto.randomUUID(),
+        member_id: createIdentifier(),
         display_name: 'Santi',
       },
     });
@@ -118,7 +120,7 @@ describe('Splitnext client SDK', () => {
     expect(requests).toMatchObject([
       {
         method: 'POST',
-        path: '/join/group/secret%2Ftoken',
+        path: '/groups/group/join',
       },
     ]);
     expect(responses).toMatchObject([

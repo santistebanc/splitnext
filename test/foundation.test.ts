@@ -75,16 +75,15 @@ describe('Cloudflare foundation', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/html');
-    expect(html).toContain('Splitnext control room');
-    expect(html).toContain('Two independent devices');
-    expect(html).toContain('Create a group');
-    expect(html).toContain('Synchronize group');
-    expect(html).toContain('Device A');
-    expect(html).toContain('Device B');
-    expect(html).toContain('Current server state');
-    expect(html).toContain('Pending commands');
-    expect(html).toContain('Rename or queue');
-    expect(html).toContain('Archive or queue');
+    expect(html).toContain('Splitnext tester');
+    expect(html).toContain('Device 1');
+    expect(html).toContain('Device 2');
+    expect(html).toContain('Server');
+    expect(html).toContain('Revision');
+    expect(html).toContain('Add member');
+    expect(html).toContain('Requests');
+    expect(html).toContain('Local data');
+    expect(html).toContain('Server data');
     expect(html).toContain('/dashboard/app.js');
   });
 
@@ -98,6 +97,8 @@ describe('Cloudflare foundation', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('javascript');
     expect(javascript).toContain('SplitnextClient');
+    expect(javascript).toContain('SplitnextSyncClient');
+    expect(javascript).toContain('MemoryClientStorage');
     expect(javascript).toContain('SplitnextRequestError');
   });
 

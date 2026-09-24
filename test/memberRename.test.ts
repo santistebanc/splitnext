@@ -1,13 +1,14 @@
 import { exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { createIdentifier, identifierSchema } from '../src/domain/ids';
 import { applyTestMigrations } from './harness';
 
-const identitySchema = z.object({ identity: z.object({ id: z.uuid() }) });
+const identitySchema = z.object({ identity: z.object({ id: identifierSchema }) });
 
 const createdGroupSchema = z.object({
-  group: z.object({ id: z.uuid(), revision: z.number() }),
-  member: z.object({ id: z.uuid(), display_name: z.string() }),
+  group: z.object({ id: identifierSchema, revision: z.number() }),
+  member: z.object({ id: identifierSchema, display_name: z.string() }),
 });
 
 beforeAll(async () => {
@@ -156,7 +157,7 @@ describe('member.rename sync command', () => {
     const command = {
       ...renameCommand(fixture, 'Missing', 'Robin'),
       payload: {
-        member_id: crypto.randomUUID(),
+        member_id: createIdentifier(),
         expected_display_name: 'Missing',
         display_name: 'Robin',
       },
@@ -185,7 +186,7 @@ function renameCommand(
   displayName: string,
 ) {
   return {
-    command_id: crypto.randomUUID(),
+    command_id: createIdentifier(),
     type: 'member.rename',
     payload: {
       member_id: fixture.created.member.id,
@@ -197,10 +198,10 @@ function renameCommand(
 
 function createMemberCommand(displayName: string) {
   return {
-    command_id: crypto.randomUUID(),
+    command_id: createIdentifier(),
     type: 'member.create',
     payload: {
-      member_id: crypto.randomUUID(),
+      member_id: createIdentifier(),
       display_name: displayName,
     },
   };
@@ -226,7 +227,7 @@ async function createGroupFixture(seed: string) {
       method: 'POST',
       headers: requestHeaders(deviceSecret),
       body: JSON.stringify({
-        group_id: crypto.randomUUID(),
+        group_id: createIdentifier(),
         name: 'Berlin flat',
         currency_code: 'EUR',
         creator_member_name: 'Santi',

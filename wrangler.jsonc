@@ -9,7 +9,8 @@
     "binding": "ASSETS"
   },
   "vars": {
-    "DEPLOY_SHA": "local"
+    "DEPLOY_SHA": "local",
+    "ENABLE_DEBUG_INSPECTION": "false"
   },
   "durable_objects": {
     "bindings": [

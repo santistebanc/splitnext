@@ -1,11 +1,8 @@
 import { z } from 'zod';
+import { groupCommandSchema } from './commands';
 import { groupAccessGrantSchema, groupDetailsSchema } from './groups';
-import {
-  ledgerMemberSchema,
-  memberCommandSchema,
-} from './members';
-
-const identifierSchema = z.uuid();
+import { identifierSchema } from './ids';
+import { ledgerMemberSchema } from './members';
 
 export const groupSnapshotSchema = z.object({
   group: groupDetailsSchema,
@@ -15,7 +12,7 @@ export const groupSnapshotSchema = z.object({
 
 export const syncGroupRequestSchema = z.object({
   known_revision: z.number().int().nonnegative().nullable(),
-  commands: z.array(memberCommandSchema).max(100),
+  commands: z.array(groupCommandSchema).max(100),
 });
 
 export const syncGroupCommandSchema = syncGroupRequestSchema.extend({
@@ -26,9 +23,12 @@ export const syncGroupCommandSchema = syncGroupRequestSchema.extend({
 export const commandOutcomeSchema = z.object({
   command_id: identifierSchema,
   command_type: z.enum([
+    'group.rename',
     'member.create',
     'member.rename',
     'member.archive',
+    'preference.set',
+    'group.leave',
   ]),
   status: z.enum(['applied', 'no_effect', 'superseded', 'rejected']),
   reason: z
@@ -38,19 +38,23 @@ export const commandOutcomeSchema = z.object({
       'member_changed',
       'member_archived',
       'member_not_found',
+      'group_changed',
+      'access_not_found',
       'idempotency_conflict',
     ])
     .nullable(),
   audit_id: identifierSchema.nullable(),
-  target: z.object({
-    kind: z.literal('member'),
-    id: identifierSchema,
-  }),
+  target: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('group'), id: identifierSchema }),
+    z.object({ kind: z.literal('member'), id: identifierSchema }),
+    z.object({ kind: z.literal('access'), id: identifierSchema }),
+  ]),
   server_state: z
-    .object({
-      kind: z.literal('member'),
-      member: ledgerMemberSchema,
-    })
+    .discriminatedUnion('kind', [
+      z.object({ kind: z.literal('group'), group: groupDetailsSchema }),
+      z.object({ kind: z.literal('member'), member: ledgerMemberSchema }),
+      z.object({ kind: z.literal('access'), access: groupAccessGrantSchema }),
+    ])
     .nullable(),
 });
 
@@ -66,6 +70,12 @@ export const syncGroupResponseSchema = z.object({
   ]),
 });
 
+export const groupSessionSchema = z.object({
+  revision: z.number().int().positive(),
+  snapshot: groupSnapshotSchema,
+  access: groupAccessGrantSchema,
+});
+
 export type GroupSnapshot = z.output<typeof groupSnapshotSchema>;
 
 export type SyncGroupRequest = z.output<typeof syncGroupRequestSchema>;
@@ -75,3 +85,5 @@ export type SyncGroupCommand = z.output<typeof syncGroupCommandSchema>;
 export type SyncGroupResponse = z.output<typeof syncGroupResponseSchema>;
 
 export type CommandOutcome = z.output<typeof commandOutcomeSchema>;
+
+export type GroupSession = z.output<typeof groupSessionSchema>;

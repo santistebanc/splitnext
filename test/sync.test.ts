@@ -1,31 +1,32 @@
 import { exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { createIdentifier, identifierSchema } from '../src/domain/ids';
 import { applyTestMigrations, fetchOpenApiDocument } from './harness';
 
 const identityResponseSchema = z.object({
-  identity: z.object({ id: z.uuid() }),
+  identity: z.object({ id: identifierSchema }),
 });
 
 const groupResponseSchema = z.object({
   group: z.object({
-    id: z.uuid(),
+    id: identifierSchema,
     name: z.string(),
     currency_code: z.string(),
     created_at: z.iso.datetime(),
     revision: z.number(),
   }),
   member: z.object({
-    id: z.uuid(),
+    id: identifierSchema,
     display_name: z.string(),
     status: z.string(),
     created_at: z.iso.datetime(),
     updated_at: z.iso.datetime(),
   }),
   access: z.object({
-    identity_id: z.uuid(),
+    identity_id: identifierSchema,
     actor_handle: z.string(),
-    preferred_member_id: z.uuid(),
+    preferred_member_id: identifierSchema,
     granted_at: z.iso.datetime(),
     hidden_at: z.null(),
   }),
@@ -136,7 +137,7 @@ describe('group sync API', () => {
 
 async function createGroupFixture(seed: string) {
   const identity = await createIdentity(seed);
-  const groupId = crypto.randomUUID();
+  const groupId = createIdentifier();
 
   const response = await exports.default.fetch(
     'https://splitnext.test/groups',

@@ -1,12 +1,10 @@
 import { z } from 'zod';
 import {
   createdGroupSchema,
-  groupAccessGrantSchema,
 } from '../domain/groups';
 import { identitySessionSchema } from '../domain/identities';
-import { inviteTokenSchema } from '../domain/invites';
 import {
-  groupSnapshotSchema,
+  groupSessionSchema,
   syncGroupResponseSchema,
 } from '../domain/sync';
 
@@ -26,26 +24,9 @@ export const readinessResponseSchema = z.object({
   }),
 });
 
-export const groupLinkSchema = z.object({
-  revision: z.number().int().positive(),
-  snapshot: groupSnapshotSchema,
-  invite: z.object({
-    id: z.uuid(),
-    token: inviteTokenSchema,
-    join_url: z.string(),
-    created_at: z.iso.datetime(),
-    expires_at: z.iso.datetime(),
-  }),
-});
-
-export const redeemedGroupLinkSchema = z.object({
-  revision: z.number().int().positive(),
-  snapshot: groupSnapshotSchema,
-  access: groupAccessGrantSchema,
-});
-
 export {
   createdGroupSchema,
+  groupSessionSchema,
   identitySessionSchema,
   syncGroupResponseSchema,
 };

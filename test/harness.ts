@@ -43,10 +43,7 @@ export type OpenApiDocument = {
         responses: object;
       };
     };
-    '/groups/{groupId}/invite-link': {
-      post: { responses: object };
-    };
-    '/join/{groupId}/{inviteToken}': {
+    '/groups/{groupId}/join': {
       post: { responses: object };
     };
   };
