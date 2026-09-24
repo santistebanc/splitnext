@@ -91,16 +91,24 @@ await client.syncGroup(group.group_id);
 `MemoryClientStorage` is useful for tests and the dashboard.
 `JsonClientStorage` works with a browser-like string key-value store. A future
 PWA can provide IndexedDB and React Native can provide SQLite without changing
-the synchronization module.
+the synchronization module. `ClientReplicaStore` serializes local replica
+changes so concurrent mutations and in-flight synchronization cannot discard
+newly queued intent.
 
 ## Storage seams
 
 - D1 stores global access identities and device credentials.
-- `DurableObjectGroupRepository` persists a group's document transactionally in
-  its SQLite Durable Object.
+- `DurableObjectGroupRepository` transactionally persists current group state,
+  audit events, command outcomes, and join outcomes in normalized SQLite tables
+  inside that group's Durable Object.
 - `MemoryGroupRepository` runs the same group engine without Cloudflare and is
-  used for fast tests.
+  used for fast tests with the same commit and rollback behavior.
 - Client storage is accessed only through `ClientStorageAdapter`.
+
+The dashboard delegates its experiment state to `SyncLab`, which can be tested
+without a browser. In local development, its server panel reads the current
+Durable Object state through debug-only inspection routes; those routes return
+404 unless `ENABLE_DEBUG_INSPECTION` is enabled.
 
 The pure command transition rules are shared by the server and the optimistic
 client projection. Cloudflare storage and client-local persistence remain

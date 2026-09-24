@@ -26,7 +26,7 @@ import {
   syncGroupResponseSchema,
 } from './contracts';
 
-type JsonValue = z.output<typeof jsonSchema>;
+export type JsonValue = z.output<typeof jsonSchema>;
 
 type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 

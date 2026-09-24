@@ -1,7 +1,12 @@
-import type { JoinGroupCommand, PreferredMemberChoice } from './domain/access';
+import type { JoinGroupCommand } from './domain/access';
 import {
   applyGroupCommand,
+  applyGroupJoin,
+  commandOutcomeSchema,
   commandTarget,
+  type CommandOutcome,
+  type CommandTarget,
+  type CommandTransition,
   type GroupCommand,
 } from './domain/commands';
 import {
@@ -11,18 +16,16 @@ import {
   type InitialGroupState,
 } from './domain/groups';
 import { createIdentifier } from './domain/ids';
-import { memberNameKey, type LedgerMember } from './domain/members';
-import {
-  commandOutcomeSchema,
-  type CommandOutcome,
-  type GroupSnapshot,
-  type SyncGroupCommand,
-  type SyncGroupResponse,
+import type {
+  GroupSnapshot,
+  SyncGroupCommand,
+  SyncGroupResponse,
 } from './domain/sync';
 import type {
-  GroupDocument,
+  GroupPersistence,
   GroupRepository,
-  StoredAuditEvent,
+  NewAuditEvent,
+  StoredGroupState,
 } from './groupRepository';
 
 export type CreateStoredGroupResult =
@@ -51,16 +54,10 @@ export type JoinStoredGroupResult =
         | 'member_id_exists';
     };
 
-type PreferredMemberResult =
-  | { ok: true; member: LedgerMember; created: boolean }
-  | {
-      ok: false;
-      error:
-        | 'member_not_found'
-        | 'member_archived'
-        | 'member_name_taken'
-        | 'member_id_exists';
-    };
+export type GroupInspection = {
+  revision: number;
+  snapshot: GroupSnapshot;
+};
 
 export class GroupStore {
   constructor(
@@ -69,31 +66,38 @@ export class GroupStore {
   ) {}
 
   create(initial: InitialGroupState): CreateStoredGroupResult {
-    return this.repository.transaction((document) => {
-      if (document) {
-        return {
-          document,
-          result: this.resolveCreateRetry(document, initial.view),
-        };
-      }
+    return this.repository.transaction((persistence) => {
+      const existing = persistence.loadState();
 
-      const createdDocument = this.createDocument(initial);
+      if (existing) return this.resolveCreateRetry(existing, initial.view);
 
-      return {
-        document: createdDocument,
-        result: { ok: true as const, created: initial.view },
-      };
+      const state = this.createState(initial);
+
+      persistence.saveState(state);
+      persistence.appendAudit({
+        id: this.createId(),
+        revision: initial.audit.revision,
+        action: initial.audit.action,
+        command_id: null,
+        actor_identity_id: initial.audit.actor_identity_id,
+        actor_handle: initial.view.access.actor_handle,
+        actor_member_name: initial.audit.actor_member_name,
+        target_kind: 'group',
+        target_id: initial.audit.target_id,
+        occurred_at: initial.audit.occurred_at,
+        before: null,
+        after: initial.view,
+      });
+
+      return { ok: true, created: initial.view };
     });
   }
 
   join(command: JoinGroupCommand): JoinStoredGroupResult {
-    return this.repository.transaction<JoinStoredGroupResult>((document) => {
-      if (!document) {
-        return {
-          document,
-          result: { ok: false as const, error: 'group_not_found' as const },
-        };
-      }
+    return this.repository.transaction((persistence) => {
+      const state = persistence.loadState();
+
+      if (!state) return { ok: false, error: 'group_not_found' };
 
       const requestJson = JSON.stringify({
         group_id: command.group_id,
@@ -102,147 +106,121 @@ export class GroupStore {
         preferred_member: command.preferred_member,
       });
 
-      const stored = document.join_outcomes.find(
-        (outcome) => outcome.join_id === command.join_id,
-      );
+      const stored = persistence.findJoinOutcome(command.join_id);
 
       if (stored) {
-        const result =
-          stored.identity_id === command.identity_id &&
+        return stored.identity_id === command.identity_id &&
           stored.request_json === requestJson
-            ? { ok: true as const, ...stored.response }
-            : {
-                ok: false as const,
-                error: 'idempotency_conflict' as const,
-              };
-
-        return { document, result };
+          ? { ok: true, ...stored.response }
+          : { ok: false, error: 'idempotency_conflict' };
       }
 
-      const preferred = this.resolvePreferredMember(
-        command.preferred_member,
-        document.snapshot.members,
-        command.joined_at,
+      const transition = applyGroupJoin(
+        state.snapshot,
+        state.next_actor_number,
+        command,
       );
 
-      if (!preferred.ok) return { document, result: preferred };
+      if (!transition.ok) return transition;
 
-      const previousAccess = document.snapshot.access_grants.find(
-        (grant) => grant.identity_id === command.identity_id,
-      );
+      if (transition.changed && transition.audit) {
+        state.next_actor_number = transition.nextActorNumber;
 
-      const access = previousAccess
-        ? {
-            ...previousAccess,
-            preferred_member_id: preferred.member.id,
-            hidden_at: null,
-          }
-        : {
-            identity_id: command.identity_id,
-            actor_handle: `User ${document.next_actor_number}`,
-            preferred_member_id: preferred.member.id,
-            granted_at: command.joined_at,
-            hidden_at: null,
-          };
+        const actorMemberName =
+          transition.snapshot.members.find(
+            (member) => member.id === transition.access.preferred_member_id,
+          )?.display_name ?? null;
 
-      const changed =
-        preferred.created ||
-        !previousAccess ||
-        previousAccess.preferred_member_id !== access.preferred_member_id ||
-        previousAccess.hidden_at !== null;
-
-      if (preferred.created) {
-        document.snapshot.members.push(preferred.member);
-      }
-
-      if (previousAccess) {
-        document.snapshot.access_grants = document.snapshot.access_grants.map(
-          (grant) => (grant.identity_id === access.identity_id ? access : grant),
+        this.commitTransition(
+          persistence,
+          state,
+          transition.snapshot,
+          transition.audit,
+          transition.access,
+          actorMemberName,
+          { kind: 'access', id: command.identity_id },
+          null,
+          command.joined_at,
         );
-      } else {
-        document.snapshot.access_grants.push(access);
-        document.next_actor_number += 1;
-      }
-
-      if (changed) {
-        document.revision += 1;
-        document.audit_events.push(
-          this.auditEvent(
-            document,
-            previousAccess ? 'group.rejoined' : 'group.joined',
-            null,
-            access,
-            preferred.member.display_name,
-            { kind: 'access', id: command.identity_id },
-            command.joined_at,
-            previousAccess,
-            {
-              access,
-              created_member: preferred.created ? preferred.member : null,
-            },
-          ),
-        );
+        persistence.saveState(state);
       }
 
       const response = {
-        revision: document.revision,
-        snapshot: structuredClone(document.snapshot),
-        access,
+        revision: state.revision,
+        snapshot: structuredClone(state.snapshot),
+        access: transition.access,
       };
 
-      document.join_outcomes.push({
+      persistence.recordJoinOutcome({
         join_id: command.join_id,
         identity_id: command.identity_id,
         request_json: requestJson,
         response,
       });
 
-      return { document, result: { ok: true as const, ...response } };
+      return { ok: true, ...response };
     });
   }
 
   sync(command: SyncGroupCommand, appliedAt: string): SyncStoredGroupResult {
-    return this.repository.transaction<SyncStoredGroupResult>((document) => {
-      if (!document || !this.accessFor(document, command.identity_id)) {
-        return {
-          document,
-          result: { ok: false as const, error: 'unauthorized' as const },
-        };
+    return this.repository.transaction((persistence) => {
+      const state = persistence.loadState();
+
+      if (!state || !this.accessFor(state, command.identity_id)) {
+        return { ok: false, error: 'unauthorized' };
       }
+
+      const revisionBefore = state.revision;
 
       const outcomes = command.commands.map((groupCommand) =>
         this.processCommand(
-          document,
+          persistence,
+          state,
           command.identity_id,
           groupCommand,
           appliedAt,
         ),
       );
 
-      const state =
+      if (state.revision !== revisionBefore) persistence.saveState(state);
+
+      const synchronizedState =
         command.commands.length > 0 ||
-        command.known_revision !== document.revision
+        command.known_revision !== state.revision
           ? {
               kind: 'snapshot' as const,
-              snapshot: structuredClone(document.snapshot),
+              snapshot: structuredClone(state.snapshot),
             }
           : { kind: 'unchanged' as const };
 
       return {
-        document,
-        result: {
-          ok: true as const,
-          response: { revision: document.revision, outcomes, state },
+        ok: true,
+        response: {
+          revision: state.revision,
+          outcomes,
+          state: synchronizedState,
         },
       };
     });
   }
 
-  private createDocument(initial: InitialGroupState): GroupDocument {
+  inspect(): GroupInspection | null {
+    return this.repository.transaction((persistence) => {
+      const state = persistence.loadState();
+
+      return state
+        ? {
+            revision: state.revision,
+            snapshot: structuredClone(state.snapshot),
+          }
+        : null;
+    });
+  }
+
+  private createState(initial: InitialGroupState): StoredGroupState {
     const { group, member, access } = initial.view;
 
     return {
-      schema_version: 1,
       revision: group.revision,
       next_actor_number: 2,
       creation: {
@@ -265,33 +243,14 @@ export class GroupStore {
         members: [member],
         access_grants: [access],
       },
-      audit_events: [
-        {
-          sequence: initial.audit.sequence,
-          id: this.createId(),
-          revision: initial.audit.revision,
-          action: initial.audit.action,
-          command_id: null,
-          actor_identity_id: initial.audit.actor_identity_id,
-          actor_handle: access.actor_handle,
-          actor_member_name: initial.audit.actor_member_name,
-          target_kind: 'group',
-          target_id: initial.audit.target_id,
-          occurred_at: initial.audit.occurred_at,
-          before: null,
-          after: initial.view,
-        },
-      ],
-      command_outcomes: [],
-      join_outcomes: [],
     };
   }
 
   private resolveCreateRetry(
-    document: GroupDocument,
+    state: StoredGroupState,
     requested: CreatedGroup,
   ): CreateStoredGroupResult {
-    const stored = document.creation;
+    const stored = state.creation;
 
     if (stored.creator_identity_id !== requested.access.identity_id) {
       return { ok: false, error: 'group_exists' };
@@ -312,16 +271,14 @@ export class GroupStore {
   }
 
   private processCommand(
-    document: GroupDocument,
+    persistence: GroupPersistence,
+    state: StoredGroupState,
     identityId: string,
     command: GroupCommand,
     appliedAt: string,
   ): CommandOutcome {
     const commandJson = JSON.stringify(command);
-
-    const stored = document.command_outcomes.find(
-      (outcome) => outcome.command_id === command.command_id,
-    );
+    const stored = persistence.findCommandOutcome(command.command_id);
 
     if (stored) {
       if (
@@ -337,19 +294,19 @@ export class GroupStore {
         status: 'rejected',
         reason: 'idempotency_conflict',
         audit_id: null,
-        target: commandTarget(document.snapshot, identityId, command),
+        target: commandTarget(state.snapshot, identityId, command),
         server_state: null,
       };
     }
 
-    const actor = this.accessFor(document, identityId);
+    const actor = this.accessFor(state, identityId);
 
     if (!actor) throw new Error('actor_missing_inside_transaction');
 
-    const actorMemberName = this.memberNameFor(document, actor);
+    const actorMemberName = this.memberNameFor(state, actor);
 
     const transition = applyGroupCommand(
-      document.snapshot,
+      state.snapshot,
       identityId,
       command,
       appliedAt,
@@ -358,22 +315,16 @@ export class GroupStore {
     let auditId: string | null = null;
 
     if (transition.status === 'applied' && transition.audit) {
-      document.snapshot = transition.snapshot;
-      document.revision += 1;
-      auditId = this.createId();
-      document.audit_events.push(
-        this.auditEvent(
-          document,
-          transition.audit.action,
-          command.command_id,
-          actor,
-          actorMemberName,
-          transition.target,
-          appliedAt,
-          transition.audit.before,
-          transition.audit.after,
-          auditId,
-        ),
+      auditId = this.commitTransition(
+        persistence,
+        state,
+        transition.snapshot,
+        transition.audit,
+        actor,
+        actorMemberName,
+        transition.target,
+        command.command_id,
+        appliedAt,
       );
     }
 
@@ -387,7 +338,7 @@ export class GroupStore {
       server_state: transition.serverState,
     };
 
-    document.command_outcomes.push({
+    persistence.recordCommandOutcome({
       command_id: command.command_id,
       identity_id: identityId,
       command_json: commandJson,
@@ -397,64 +348,55 @@ export class GroupStore {
     return outcome;
   }
 
-  private resolvePreferredMember(
-    choice: PreferredMemberChoice,
-    members: readonly LedgerMember[],
-    joinedAt: string,
-  ): PreferredMemberResult {
-    if (choice.kind === 'existing') {
-      const member = members.find((candidate) => candidate.id === choice.member_id);
+  private commitTransition(
+    persistence: GroupPersistence,
+    state: StoredGroupState,
+    snapshot: GroupSnapshot,
+    audit: NonNullable<CommandTransition['audit']>,
+    actor: GroupAccessGrant,
+    actorMemberName: string | null,
+    target: CommandTarget,
+    commandId: string | null,
+    occurredAt: string,
+  ): string {
+    state.snapshot = snapshot;
+    state.revision += 1;
 
-      if (!member) return { ok: false, error: 'member_not_found' };
+    const auditId = this.createId();
 
-      return member.status === 'active'
-        ? { ok: true, member, created: false }
-        : { ok: false, error: 'member_archived' };
-    }
-
-    if (members.some((member) => member.id === choice.member_id)) {
-      return { ok: false, error: 'member_id_exists' };
-    }
-
-    const requestedNameKey = memberNameKey(choice.display_name);
-
-    const nameIsTaken = members.some(
-      (member) =>
-        member.status === 'active' &&
-        memberNameKey(member.display_name) === requestedNameKey,
+    persistence.appendAudit(
+      this.auditEvent(
+        state,
+        audit.action,
+        commandId,
+        actor,
+        actorMemberName,
+        target,
+        occurredAt,
+        audit.before,
+        audit.after,
+        auditId,
+      ),
     );
 
-    if (nameIsTaken) return { ok: false, error: 'member_name_taken' };
-
-    return {
-      ok: true,
-      created: true,
-      member: {
-        id: choice.member_id,
-        display_name: choice.display_name,
-        status: 'active',
-        created_at: joinedAt,
-        updated_at: joinedAt,
-      },
-    };
+    return auditId;
   }
 
   private auditEvent(
-    document: GroupDocument,
+    state: StoredGroupState,
     action: string,
     commandId: string | null,
     actor: GroupAccessGrant,
     actorMemberName: string | null,
-    target: { kind: 'access' | 'group' | 'member'; id: string },
+    target: CommandTarget,
     occurredAt: string,
-    before: StoredAuditEvent['before'],
-    after: StoredAuditEvent['after'],
-    auditId: string = this.createId(),
-  ): StoredAuditEvent {
+    before: NewAuditEvent['before'],
+    after: NewAuditEvent['after'],
+    auditId: string,
+  ): NewAuditEvent {
     return {
-      sequence: document.audit_events.length + 1,
       id: auditId,
-      revision: document.revision,
+      revision: state.revision,
       action,
       command_id: commandId,
       actor_identity_id: actor.identity_id,
@@ -469,24 +411,24 @@ export class GroupStore {
   }
 
   private accessFor(
-    document: GroupDocument,
+    state: StoredGroupState,
     identityId: string,
   ): GroupAccessGrant | null {
     return (
-      document.snapshot.access_grants.find(
+      state.snapshot.access_grants.find(
         (grant) => grant.identity_id === identityId,
       ) ?? null
     );
   }
 
   private memberNameFor(
-    document: GroupDocument,
+    state: StoredGroupState,
     access: GroupAccessGrant,
   ): string | null {
     if (!access.preferred_member_id) return null;
 
     return (
-      document.snapshot.members.find(
+      state.snapshot.members.find(
         (member) => member.id === access.preferred_member_id,
       )?.display_name ?? null
     );

@@ -62,4 +62,10 @@ export class GroupObject extends DurableObject<Env> {
 
     return this.store.join(parsed.data);
   }
+
+  inspectGroup(groupId: string) {
+    if (this.ctx.id.name !== groupId) return null;
+
+    return this.store.inspect();
+  }
 }

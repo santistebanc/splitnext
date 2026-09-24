@@ -43,6 +43,93 @@ describe('stateful offline client SDK', () => {
     expect(synchronized.confirmed_snapshot?.members).toHaveLength(2);
   });
 
+  it('retains simultaneous offline commands', async () => {
+    const client = createSyncClient('S');
+
+    await client.initializeIdentity();
+
+    const created = await client.createGroup({
+      name: 'Berlin flat',
+      currency_code: 'EUR',
+      creator_member_name: 'Santi',
+    });
+
+    client.setOnline(false);
+
+    await Promise.all([
+      client.addMember(created.group_id, 'Robin'),
+      client.addMember(created.group_id, 'Taylor'),
+    ]);
+
+    const replica = await client.inspect(created.group_id);
+
+    expect(replica.outbox).toHaveLength(2);
+    expect(
+      replica.projected_snapshot?.members.map((member) => member.display_name),
+    ).toEqual(['Santi', 'Robin', 'Taylor']);
+  });
+
+  it('retains a command queued while synchronization is in flight', async () => {
+    let holdNextSync = false;
+    let releaseResponse = () => {};
+
+    let responseReached = () => {};
+
+    const responseStarted = new Promise<void>((resolve) => {
+      responseReached = resolve;
+    });
+
+    const responseReleased = new Promise<void>((resolve) => {
+      releaseResponse = resolve;
+    });
+
+    const api = new SplitnextClient({
+      baseUrl: 'https://splitnext.test',
+      fetch: async (input, init) => {
+        const response = await exports.default.fetch(input, init);
+
+        if (holdNextSync && new URL(input).pathname.endsWith('/sync')) {
+          holdNextSync = false;
+          responseReached();
+          await responseReleased;
+        }
+
+        return response;
+      },
+    });
+
+    const client = new SplitnextSyncClient({
+      api,
+      device_secret: 'T'.repeat(43),
+      storage: new MemoryClientStorage(),
+    });
+
+    await client.initializeIdentity();
+
+    const created = await client.createGroup({
+      name: 'Berlin flat',
+      currency_code: 'EUR',
+      creator_member_name: 'Santi',
+    });
+
+    holdNextSync = true;
+    const synchronization = client.syncGroup(created.group_id);
+
+    await responseStarted;
+    client.setOnline(false);
+    await client.addMember(created.group_id, 'Robin');
+    releaseResponse();
+    await synchronization;
+
+    const replica = await client.inspect(created.group_id);
+
+    expect(replica.outbox).toHaveLength(1);
+    expect(replica.projected_snapshot?.members).toMatchObject([
+      { display_name: 'Santi' },
+      { display_name: 'Robin' },
+    ]);
+  });
+
   it('turns a concurrent offline conflict into a local notice', async () => {
     const first = createSyncClient('N');
     const second = createSyncClient('O');
