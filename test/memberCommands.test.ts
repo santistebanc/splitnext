@@ -88,7 +88,7 @@ describe('member.create sync command', () => {
     });
   });
 
-  it('supersedes a command when its active member name is already used', async () => {
+  it('merges a creation into the active member that already has its name', async () => {
     const fixture = await createGroupFixture('r');
     const command = createMemberCommand('  ＳaｎTi  ');
     const response = await sync(fixture, 1, [command]);
@@ -98,8 +98,8 @@ describe('member.create sync command', () => {
       outcomes: [
         {
           command_id: command.command_id,
-          status: 'superseded',
-          reason: 'member_name_taken',
+          status: 'no_effect',
+          reason: 'member_merged',
           audit_id: null,
           server_state: {
             kind: 'member',
@@ -148,8 +148,8 @@ describe('member.create sync command', () => {
         { command_id: first.command_id, status: 'applied' },
         {
           command_id: second.command_id,
-          status: 'superseded',
-          reason: 'member_name_taken',
+          status: 'no_effect',
+          reason: 'member_merged',
           server_state: {
             kind: 'member',
             member: { id: first.payload.member_id, display_name: 'Alex' },

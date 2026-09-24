@@ -5,7 +5,7 @@ import {
   type AuditEventStore,
   type NewAuditEvent,
 } from './domain/audit';
-import type { CommandOutcome } from './domain/commands';
+import type { CommandOutcome, MemberAlias } from './domain/commands';
 import type { CreatedGroup } from './domain/groups';
 import type { GroupSnapshot } from './domain/sync';
 
@@ -52,6 +52,8 @@ export interface GroupPersistence extends AuditEventStore {
   recordCommandOutcome(outcome: StoredCommandOutcome): void;
   findJoinOutcome(joinId: string): StoredJoinOutcome | null;
   recordJoinOutcome(outcome: StoredJoinOutcome): void;
+  memberAliases(): Map<string, string>;
+  recordMemberAlias(alias: MemberAlias): void;
 }
 
 export interface GroupRepository {
@@ -120,6 +122,11 @@ export class DurableObjectGroupRepository implements GroupRepository {
          identity_id TEXT NOT NULL,
          request_json TEXT NOT NULL CHECK (json_valid(request_json)),
          response_json TEXT NOT NULL CHECK (json_valid(response_json))
+       );
+
+       CREATE TABLE IF NOT EXISTS group_member_aliases (
+         alias_id TEXT PRIMARY KEY,
+         member_id TEXT NOT NULL
        );`,
     );
   }
@@ -249,6 +256,22 @@ class SQLiteGroupPersistence implements GroupPersistence {
     );
   }
 
+  memberAliases(): Map<string, string> {
+    const rows = this.sql
+      .exec<MemberAlias>('SELECT alias_id, member_id FROM group_member_aliases')
+      .toArray();
+
+    return new Map(rows.map((row) => [row.alias_id, row.member_id]));
+  }
+
+  recordMemberAlias(alias: MemberAlias): void {
+    this.sql.exec(
+      `INSERT INTO group_member_aliases (alias_id, member_id) VALUES (?, ?)`,
+      alias.alias_id,
+      alias.member_id,
+    );
+  }
+
   appendAudit(event: NewAuditEvent): AuditEvent {
     const validated = newAuditEventSchema.parse(event);
 
@@ -294,6 +317,7 @@ type MemoryGroupData = {
   auditEvents: AuditEvent[];
   commandOutcomes: StoredCommandOutcome[];
   joinOutcomes: StoredJoinOutcome[];
+  memberAliases: MemberAlias[];
 };
 
 export type GroupRepositoryInspection = {
@@ -301,6 +325,7 @@ export type GroupRepositoryInspection = {
   audit_events: AuditEvent[];
   command_outcomes: StoredCommandOutcome[];
   join_outcomes: StoredJoinOutcome[];
+  member_aliases: MemberAlias[];
 };
 
 export class MemoryGroupRepository implements GroupRepository {
@@ -313,6 +338,7 @@ export class MemoryGroupRepository implements GroupRepository {
           auditEvents: clone(initial.audit_events),
           commandOutcomes: clone(initial.command_outcomes),
           joinOutcomes: clone(initial.join_outcomes),
+          memberAliases: clone(initial.member_aliases),
         }
       : emptyMemoryData();
   }
@@ -332,6 +358,7 @@ export class MemoryGroupRepository implements GroupRepository {
       audit_events: clone(this.data.auditEvents),
       command_outcomes: clone(this.data.commandOutcomes),
       join_outcomes: clone(this.data.joinOutcomes),
+      member_aliases: clone(this.data.memberAliases),
     };
   }
 }
@@ -379,6 +406,16 @@ class MemoryGroupPersistence implements GroupPersistence {
     this.data.joinOutcomes.push(clone(outcome));
   }
 
+  memberAliases(): Map<string, string> {
+    return new Map(
+      this.data.memberAliases.map((alias) => [alias.alias_id, alias.member_id]),
+    );
+  }
+
+  recordMemberAlias(alias: MemberAlias): void {
+    this.data.memberAliases.push(clone(alias));
+  }
+
   appendAudit(event: NewAuditEvent): AuditEvent {
     const stored = auditEventSchema.parse({
       sequence: this.data.auditEvents.length + 1,
@@ -405,6 +442,7 @@ function emptyMemoryData(): MemoryGroupData {
     auditEvents: [],
     commandOutcomes: [],
     joinOutcomes: [],
+    memberAliases: [],
   };
 }
 

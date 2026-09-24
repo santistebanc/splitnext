@@ -10,6 +10,7 @@ import {
   syncGroupRequestSchema,
   syncGroupResponseSchema,
 } from '../domain/sync';
+import { realtimeIdentityHeader } from '../groupObject';
 import {
   authenticateDevice,
   type AuthenticatedRequestEnvironment,
@@ -97,6 +98,25 @@ const syncGroupRoute = createRoute({
     400: errorResponse('The sync request is invalid.'),
     401: errorResponse('The identity has no access to this group.'),
     500: errorResponse('The group could not be synchronized.'),
+  },
+});
+
+const realtimeRoute = createRoute({
+  method: 'get',
+  path: '/groups/{groupId}/realtime',
+  tags: ['Groups'],
+  summary: 'Subscribe to revision announcements over a WebSocket',
+  description:
+    'Offer the subprotocols `splitnext.v1` and `splitnext.auth.v1.<device secret>`. ' +
+    'The server selects `splitnext.v1` and sends `{ "type": "revision", "revision": n }` ' +
+    'on connect and after every applied change. Clients synchronize in response.',
+  request: { params: groupIdParameter },
+  responses: {
+    101: { description: 'The WebSocket subscription was accepted.' },
+    401: errorResponse('The identity has no access to this group.'),
+    403: errorResponse('The identity has left this group.'),
+    404: errorResponse('The group does not exist.'),
+    426: errorResponse('The request is not a WebSocket upgrade.'),
   },
 });
 
@@ -199,4 +219,22 @@ export const groupRoutes = authenticatedGroupRoutes
     }
 
     return context.json(result.response, 200);
+  })
+  .openapi(realtimeRoute, async (context) => {
+    const { groupId } = context.req.valid('param');
+    const session = context.get('identitySession');
+
+    if (context.req.header('upgrade')?.toLowerCase() !== 'websocket') {
+      return context.json({ error: 'upgrade_required' as const }, 426);
+    }
+
+    const group = context.env.GROUPS.get(
+      context.env.GROUPS.idFromName(groupId),
+    );
+
+    const headers = new Headers(context.req.raw.headers);
+
+    headers.set(realtimeIdentityHeader, session.identity.id);
+
+    return group.fetch(new Request(context.req.raw, { headers }));
   });

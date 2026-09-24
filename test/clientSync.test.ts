@@ -130,6 +130,41 @@ describe('stateful offline client SDK', () => {
     ]);
   });
 
+  it('supersedes a rename based on a name that changed while editing', async () => {
+    const editor = createSyncClient('X');
+    const other = createSyncClient('Y');
+
+    await editor.initializeIdentity();
+    await other.initializeIdentity();
+
+    const created = await editor.createGroup({
+      name: 'Berlin flat',
+      currency_code: 'EUR',
+      creator_member_name: 'Santi',
+    });
+
+    await other.joinGroup(created.group_id, {
+      kind: 'new',
+      display_name: 'Robin',
+    });
+
+    const seen = created.projected_snapshot?.group.name;
+
+    await other.renameGroup(created.group_id, 'Their name');
+    await editor.syncGroup(created.group_id);
+
+    const renamed = await editor.renameGroup(
+      created.group_id,
+      'My name',
+      seen,
+    );
+
+    expect(renamed.projected_snapshot?.group.name).toBe('Their name');
+    expect(renamed.notices).toMatchObject([
+      { outcome: { status: 'superseded', reason: 'group_changed' } },
+    ]);
+  });
+
   it('turns a concurrent offline conflict into a local notice', async () => {
     const first = createSyncClient('N');
     const second = createSyncClient('O');
@@ -273,10 +308,10 @@ describe('stateful offline client SDK', () => {
 
     loseNextSyncResponse = true;
 
-    await expect(client.addMember(created.group_id, 'Robin')).rejects.toThrow(
-      'simulated_response_loss',
-    );
-    expect((await client.inspect(created.group_id)).outbox).toHaveLength(1);
+    const queued = await client.addMember(created.group_id, 'Robin');
+
+    expect(queued.outbox).toHaveLength(1);
+    expect(queued.projected_snapshot?.members).toHaveLength(2);
 
     const retried = await client.syncGroup(created.group_id);
 

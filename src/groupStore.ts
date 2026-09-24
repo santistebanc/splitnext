@@ -9,6 +9,7 @@ import {
   applyGroupJoin,
   commandOutcomeSchema,
   commandTarget,
+  resolveMemberAliases,
   type CommandOutcome,
   type CommandTarget,
   type GroupCommand,
@@ -56,6 +57,10 @@ export type JoinStoredGroupResult =
         | 'member_name_taken'
         | 'member_id_exists';
     };
+
+export type SubscriptionAccessResult =
+  | { ok: true; revision: number }
+  | { ok: false; error: 'group_not_found' | 'unauthorized' | 'group_hidden' };
 
 export type GroupInspection = {
   revision: number;
@@ -206,6 +211,23 @@ export class GroupStore {
     });
   }
 
+  /** Only identities that can currently see the group receive announcements. */
+  subscriptionAccess(identityId: string): SubscriptionAccessResult {
+    return this.repository.transaction((persistence) => {
+      const state = persistence.loadState();
+
+      if (!state) return { ok: false, error: 'group_not_found' };
+
+      const access = this.accessFor(state, identityId);
+
+      if (!access) return { ok: false, error: 'unauthorized' };
+
+      if (access.hidden_at) return { ok: false, error: 'group_hidden' };
+
+      return { ok: true, revision: state.revision };
+    });
+  }
+
   inspect(): GroupInspection | null {
     return this.repository.transaction((persistence) => {
       const state = persistence.loadState();
@@ -316,9 +338,13 @@ export class GroupStore {
     const transition = applyGroupCommand(
       state.snapshot,
       identityId,
-      command,
+      resolveMemberAliases(command, persistence.memberAliases()),
       appliedAt,
     );
+
+    if (transition.memberAlias) {
+      persistence.recordMemberAlias(transition.memberAlias);
+    }
 
     let auditId: string | null = null;
 

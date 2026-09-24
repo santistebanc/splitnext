@@ -17,9 +17,11 @@ const elements = {
   serverIdentityList: document.querySelector('#server-identity-list'),
   serverGroupSummary: document.querySelector('#server-group-summary'),
   serverMemberList: document.querySelector('#server-member-list'),
+  serverSubscribers: document.querySelector('#server-subscribers'),
   serverIncoming: document.querySelector('#server-incoming'),
   serverState: document.querySelector('#server-state'),
   refreshServer: document.querySelector('#refresh-server'),
+  resetServer: document.querySelector('#reset-server'),
   clearServerTraffic: document.querySelector('#clear-server-traffic'),
   toast: document.querySelector('#toast'),
 };
@@ -30,15 +32,16 @@ const deviceViews = Object.fromEntries(
     {
       root,
       toggle: root.querySelector('[data-action="toggle-device"]'),
+      realtimeToggle: root.querySelector('[data-action="toggle-realtime"]'),
+      realtimeEvents: root.querySelector('[data-role="realtime-events"]'),
       identity: root.querySelector('[data-role="identity"]'),
       revision: root.querySelector('[data-role="revision"]'),
-      groupSummary: root.querySelector('[data-action-form="rename-group"]'),
+      groupEditor: root.querySelector('[data-role="group-editor"]'),
       memberList: root.querySelector('[data-role="member-list"]'),
       actions: root.querySelector('[data-role="actions"]'),
       sync: root.querySelector('[data-action="sync"]'),
       leave: root.querySelector('[data-action="leave"]'),
       rejoin: root.querySelector('[data-action="rejoin"]'),
-      renameGroupForm: root.querySelector('[data-action-form="rename-group"]'),
       addMemberForm: root.querySelector('[data-action-form="add-member"]'),
       commands: root.querySelector('[data-role="commands"]'),
       requests: root.querySelector('[data-role="requests"]'),
@@ -79,19 +82,19 @@ function bindEvents() {
   elements.joinForm.addEventListener('submit', joinGroup);
   elements.serverToggle.addEventListener('click', toggleServer);
   elements.refreshServer.addEventListener('click', refreshServer);
+  elements.resetServer.addEventListener('click', resetServer);
   elements.clearServerTraffic.addEventListener('click', () => {
     lab.clearServerTraffic();
   });
 
   for (const [key, view] of Object.entries(deviceViews)) {
     view.toggle.addEventListener('click', () => toggleDevice(key));
+    view.realtimeToggle.addEventListener('click', () => toggleRealtime(key));
     view.sync.addEventListener('click', () => synchronizeDevice(key));
     view.leave.addEventListener('click', () => leaveGroup(key));
     view.rejoin.addEventListener('click', () => rejoinGroup(key));
     view.clearTraffic.addEventListener('click', () => clearDeviceTraffic(key));
-    view.renameGroupForm.addEventListener('submit', (event) =>
-      renameGroup(event, key),
-    );
+    view.actions.addEventListener('click', (event) => beginRename(event, key));
     view.addMemberForm.addEventListener('submit', (event) =>
       addMember(event, key),
     );
@@ -131,6 +134,7 @@ async function createGroup(event) {
     });
 
     elements.joinGroupId.value = replica.group_id;
+    rememberGroup(replica.group_id);
     showToast('Device 1 created the authoritative group');
   } catch (error) {
     showToast(describeError(error), true);
@@ -151,6 +155,7 @@ async function joinGroup(event) {
 
   try {
     await lab.joinGroup(groupId, readText(fields, 'display_name'));
+    rememberGroup(groupId);
     showToast('Device 2 joined and received its own local replica');
   } catch (error) {
     showToast(describeError(error), true);
@@ -181,13 +186,33 @@ async function toggleDevice(key) {
   showToast(`${device.label} is online and reconciled.`);
 }
 
-function toggleServer() {
-  lab.toggleServer();
+function toggleRealtime(key) {
+  const device = state.devices[key];
+
+  lab.toggleRealtime(key);
   showToast(
-    state.server.online
-      ? 'Server is available again. Bring devices online or sync manually.'
-      : 'Server outage simulated. Device requests will fail but outboxes remain safe.',
+    device.realtime
+      ? `${device.label} subscribed to revision announcements`
+      : `${device.label} stopped listening; sync manually or turn Live back on to catch up`,
   );
+}
+
+async function toggleServer() {
+  const goingOnline = !state.server.online;
+
+  showToast(
+    goingOnline
+      ? 'Server is available again. Online devices are delivering their outboxes.'
+      : 'Server outage simulated. Devices keep working and queue changes locally.',
+  );
+
+  try {
+    await lab.toggleServer();
+  } catch (error) {
+    showToast(describeError(error), true);
+  } finally {
+    renderAll();
+  }
 }
 
 async function synchronizeDevice(key, announce = true) {
@@ -204,11 +229,112 @@ async function synchronizeDevice(key, announce = true) {
   }
 }
 
-async function renameGroup(event, key) {
-  event.preventDefault();
-  const fields = new FormData(event.currentTarget);
+/** Clicking a group or member name, or its pencil button, starts a rename. */
+function beginRename(event, key) {
+  const trigger =
+    event.target instanceof Element
+      ? event.target.closest('[data-action="edit-name"], [data-role="name-label"]')
+      : null;
 
-  await runMutation(key, () => lab.renameGroup(key, readText(fields, 'name')), 'Group rename recorded');
+  const line = trigger?.closest('.name-line');
+  const button = line?.querySelector('[data-action="edit-name"]');
+
+  if (!line || !button || button.disabled || line.classList.contains('editing')) {
+    return;
+  }
+
+  event.preventDefault();
+
+  if (line.dataset.edit === 'group') {
+    const seen = currentGroupName(key);
+
+    if (seen === undefined) return;
+
+    editInline(line, seen, (name) =>
+      runMutation(key, () => lab.renameGroup(key, name, seen), 'Group renamed'),
+    );
+
+    return;
+  }
+
+  const memberId = memberIdOf(line);
+  const seen = currentMemberName(key, memberId);
+
+  if (seen === undefined) return;
+
+  editInline(line, seen, (name) =>
+    runMutation(
+      key,
+      () => lab.renameMember(key, memberId, name, seen),
+      'Member renamed',
+    ),
+  );
+}
+
+/**
+ * Swaps a name label for a text field. Enter or leaving the field saves a
+ * changed name; Escape, or a blank or unchanged name, just closes it. The
+ * rename carries the name seen when editing began, so a concurrent rename by
+ * another device produces a conflict notice instead of being overwritten.
+ */
+function editInline(line, seen, save) {
+  const input = document.createElement('input');
+  let finished = false;
+
+  const finish = (commit) => {
+    if (finished) return;
+
+    finished = true;
+    line.classList.remove('editing');
+    input.remove();
+
+    const name = input.value.trim();
+
+    if (!commit || name === seen) return;
+
+    if (!name) {
+      showToast('A name cannot be empty; the previous name was kept', true);
+
+      return;
+    }
+
+    void save(name);
+  };
+
+  input.className = 'name-input';
+  input.value = seen;
+  input.maxLength = 100;
+  input.setAttribute('aria-label', `New name for ${seen}`);
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      finish(true);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      finish(false);
+    }
+  });
+  input.addEventListener('blur', () => finish(true));
+  line.classList.add('editing');
+  line.append(input);
+  input.focus();
+  input.select();
+}
+
+function currentGroupName(key) {
+  return state.devices[key].replica?.projected_snapshot?.group.name;
+}
+
+function currentMemberName(key, memberId) {
+  return state.devices[key].replica?.projected_snapshot?.members.find(
+    ({ id }) => id === memberId,
+  )?.display_name;
+}
+
+function memberIdOf(element) {
+  return element instanceof Element
+    ? element.closest('[data-member-id]')?.dataset.memberId
+    : undefined;
 }
 
 async function addMember(event, key) {
@@ -227,32 +353,41 @@ async function performMemberAction(event, key) {
 
   if (!(form instanceof HTMLFormElement)) return;
 
-  const fields = new FormData(form);
-  const memberId = readText(fields, 'member_id');
+  const memberId = form.dataset.memberId;
   const intent = event.submitter?.value;
   let operation;
   let message;
 
+  if (!intent) return;
+
   if (intent === 'prefer') {
+    const sharedWith = otherUsersOf(key, memberId);
+
     operation = () => lab.selectPreferredMember(key, memberId);
-    message = 'Preferred “you” member updated';
-  } else if (intent === 'rename') {
-    const displayName = readText(fields, 'display_name');
-
-    if (!displayName) {
-      showToast('Enter a new member name before renaming', true);
-
-      return;
-    }
-
-    operation = () => lab.renameMember(key, memberId, displayName);
-    message = 'Member rename recorded';
+    message = sharedWith.length
+      ? `Preferred “you” member updated. Heads up: ${sharedWith.join(', ')} also uses this member`
+      : 'Preferred “you” member updated';
   } else {
     operation = () => lab.removeMember(key, memberId);
     message = 'Member removal recorded';
   }
 
   await runMutation(key, operation, message);
+}
+
+function otherUsersOf(key, memberId) {
+  const device = state.devices[key];
+  const snapshot = device.replica?.projected_snapshot;
+  const identityId = device.session?.identity.id;
+
+  return (snapshot?.access_grants ?? [])
+    .filter(
+      (grant) =>
+        grant.preferred_member_id === memberId &&
+        !grant.hidden_at &&
+        grant.identity_id !== identityId,
+    )
+    .map((grant) => grant.actor_handle);
 }
 
 async function leaveGroup(key) {
@@ -287,12 +422,15 @@ async function runMutation(key, operation, successMessage) {
   if (!device.session || !state.groupId) return;
 
   try {
-    await operation();
-    showToast(
-      device.online
-        ? successMessage
-        : `${successMessage}; queued locally while offline`,
-    );
+    const replica = await operation();
+
+    if (!replica?.outbox.length) {
+      showToast(successMessage);
+    } else if (!device.online) {
+      showToast(`${successMessage}; queued locally while offline`);
+    } else {
+      showToast(`${successMessage}; queued until the server is reachable`);
+    }
   } catch (error) {
     showToast(describeError(error), true);
   } finally {
@@ -307,6 +445,55 @@ async function refreshServer() {
   } catch (error) {
     showToast(describeError(error), true);
   }
+}
+
+async function resetServer() {
+  const confirmed = window.confirm(
+    'Erase every identity and every group this dashboard has created or joined, then start over with two new devices?',
+  );
+
+  if (!confirmed) return;
+
+  setBusy(elements.resetServer, true, 'Resetting…');
+
+  try {
+    const cleared = await lab.reset(rememberedGroups());
+
+    localStorage.removeItem(rememberedGroupsKey);
+    elements.joinGroupId.value = '';
+    showToast(
+      `Server data erased (${cleared.length} group${cleared.length === 1 ? '' : 's'}). Initialize the devices to start again.`,
+    );
+  } catch (error) {
+    showToast(describeError(error), true);
+  } finally {
+    setBusy(elements.resetServer, false, 'Reset data');
+    renderAll();
+  }
+}
+
+// Durable Objects cannot be listed, so the dashboard remembers which groups it
+// has touched across reloads in order to erase them on reset.
+const rememberedGroupsKey = 'splitnext-lab-groups';
+
+function rememberedGroups() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(rememberedGroupsKey) ?? '[]');
+
+    // Anything unexpected would make the server reject the whole reset.
+    return Array.isArray(stored)
+      ? stored.filter((id) => /^[A-Za-z0-9_-]{22}$/.test(id))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberGroup(groupId) {
+  const groups = new Set(rememberedGroups());
+
+  groups.add(groupId);
+  localStorage.setItem(rememberedGroupsKey, JSON.stringify([...groups].slice(-100)));
 }
 
 function clearDeviceTraffic(key) {
@@ -364,16 +551,18 @@ function renderDevice(key) {
   const snapshot = replica?.projected_snapshot;
 
   renderConnection(view.toggle, device.online);
+  renderRealtimeToggle(view.realtimeToggle, device);
+  renderRealtimeEvents(view.realtimeEvents, device.realtimeEvents);
   view.identity.textContent = device.session
     ? `Identity ${shortId(device.session.identity.id)} · Device ${shortId(device.session.device.id)}`
     : 'Identity not initialized';
   view.revision.textContent = replica?.revision ?? '—';
 
+  renderGroupEditor(view.groupEditor, snapshot?.group ?? null);
+
   if (!snapshot) {
-    renderEmptyGroupEditor(view.groupSummary);
     view.memberList.replaceChildren();
   } else {
-    renderGroupSummary(view.groupSummary, snapshot.group);
     renderMembers(view.memberList, snapshot, device.session?.identity.id, true);
   }
 
@@ -402,18 +591,16 @@ function renderDevice(key) {
   );
 }
 
+// The label keeps updating while a rename is open; only its field is left alone.
+function renderGroupEditor(element, group) {
+  element.querySelector('[data-role="name-label"]').textContent =
+    group?.name ?? 'No group';
+  element.querySelector('[data-role="group-detail"]').textContent = group
+    ? `${group.currency_code} · ${group.id}`
+    : '';
+}
+
 function renderGroupSummary(element, group) {
-  const input = element.querySelector('input[name="name"]');
-  const existingDetail = element.querySelector('[data-role="group-detail"]');
-
-  if (input && existingDetail) {
-    if (document.activeElement !== input) input.value = group.name;
-
-    existingDetail.textContent = `${group.currency_code} · ${group.id}`;
-
-    return;
-  }
-
   element.replaceChildren();
   const title = document.createElement('strong');
   const detail = document.createElement('p');
@@ -424,75 +611,116 @@ function renderGroupSummary(element, group) {
   element.append(title, detail);
 }
 
-function renderEmptyGroupEditor(element) {
-  const input = element.querySelector('input[name="name"]');
-  const detail = element.querySelector('[data-role="group-detail"]');
-
-  if (input && document.activeElement !== input) input.value = '';
-
-  if (detail) detail.textContent = 'No group';
-}
-
 function renderMembers(element, snapshot, identityId, editable = false) {
-  element.replaceChildren();
+  const members = snapshot.members.filter(({ status }) => status === 'active');
 
-  for (const member of snapshot.members.filter(({ status }) => status === 'active')) {
-    const preferredBy = snapshot.access_grants.filter(
+  const preferredByMember = (member) =>
+    snapshot.access_grants.filter(
       (grant) => grant.preferred_member_id === member.id && !grant.hidden_at,
     );
 
-    const isYou = preferredBy.some((grant) => grant.identity_id === identityId);
-    const row = document.createElement(editable ? 'form' : 'div');
+  if (!editable) {
+    element.replaceChildren(
+      ...members.map((member) => {
+        const row = document.createElement('div');
+        const name = document.createElement('span');
+        const note = document.createElement('span');
 
-    row.className = `member-row${editable ? '' : ' server-member'}`;
+        row.className = 'member-row server-member';
+        name.className = 'member-name';
+        name.textContent = member.display_name;
+        note.className = 'member-note';
+        note.textContent = describeUsers(preferredByMember(member), null);
+        row.append(name, note);
 
-    if (!editable) {
-      const name = document.createElement('span');
-      const note = document.createElement('span');
+        return row;
+      }),
+    );
 
-      name.className = 'member-name';
-      name.textContent = member.display_name;
-      note.className = 'member-note';
-      note.textContent = preferredBy.length
-        ? preferredBy.map(({ actor_handle }) => actor_handle).join(', ')
-        : 'Not preferred';
-      row.append(name, note);
-      element.append(row);
-
-      continue;
-    }
-
-    const memberId = document.createElement('input');
-    const name = document.createElement('input');
-    const save = document.createElement('button');
-    const prefer = document.createElement('button');
-    const remove = document.createElement('button');
-
-    memberId.type = 'hidden';
-    memberId.name = 'member_id';
-    memberId.value = member.id;
-    name.name = 'display_name';
-    name.value = member.display_name;
-    name.maxLength = 100;
-    name.required = true;
-    name.setAttribute('aria-label', `${member.display_name} name`);
-    save.type = 'submit';
-    save.name = 'intent';
-    save.value = 'rename';
-    save.textContent = 'Save';
-    prefer.type = 'submit';
-    prefer.name = 'intent';
-    prefer.value = 'prefer';
-    prefer.className = `you-button${isYou ? ' selected' : ''}`;
-    prefer.textContent = isYou ? 'You' : 'Set as you';
-    remove.type = 'submit';
-    remove.name = 'intent';
-    remove.value = 'remove';
-    remove.className = 'remove-button';
-    remove.textContent = 'Delete';
-    row.append(memberId, name, save, prefer, remove);
-    element.append(row);
+    return;
   }
+
+  // Rows are updated in place so a background synchronization never
+  // replaces, and thereby closes and saves, an open rename field.
+  const existing = new Map(
+    [...element.children].map((row) => [row.dataset.memberId, row]),
+  );
+
+  members.forEach((member, index) => {
+    const row = existing.get(member.id) ?? createMemberRow(member.id);
+
+    existing.delete(member.id);
+    updateMemberRow(row, member, preferredByMember(member), identityId);
+
+    if (element.children[index] !== row) {
+      element.insertBefore(row, element.children[index] ?? null);
+    }
+  });
+
+  for (const row of existing.values()) row.remove();
+}
+
+function createMemberRow(memberId) {
+  const row = document.createElement('form');
+  const line = document.createElement('div');
+  const name = document.createElement('span');
+  const edit = document.createElement('button');
+  const prefer = document.createElement('button');
+  const remove = document.createElement('button');
+  const users = document.createElement('span');
+
+  row.className = 'member-row';
+  row.dataset.memberId = memberId;
+  line.className = 'name-line';
+  line.dataset.edit = 'member';
+  name.className = 'editable-name';
+  name.dataset.role = 'name-label';
+  edit.type = 'button';
+  edit.className = 'edit-button';
+  edit.dataset.action = 'edit-name';
+  edit.textContent = '✎';
+  line.append(name, edit);
+  prefer.type = 'submit';
+  prefer.name = 'intent';
+  prefer.value = 'prefer';
+  remove.type = 'submit';
+  remove.name = 'intent';
+  remove.value = 'remove';
+  remove.className = 'remove-button';
+  remove.textContent = 'Delete';
+  users.dataset.role = 'member-users';
+  row.append(line, prefer, remove, users);
+
+  return row;
+}
+
+function updateMemberRow(row, member, preferredBy, identityId) {
+  const name = row.querySelector('[data-role="name-label"]');
+  const edit = row.querySelector('[data-action="edit-name"]');
+  const prefer = row.querySelector('button[value="prefer"]');
+  const users = row.querySelector('[data-role="member-users"]');
+  const isYou = preferredBy.some((grant) => grant.identity_id === identityId);
+
+  name.textContent = member.display_name;
+  edit.title = `Rename ${member.display_name}`;
+  edit.setAttribute('aria-label', `Rename ${member.display_name}`);
+  prefer.className = `you-button${isYou ? ' selected' : ''}`;
+  prefer.textContent = isYou ? 'You' : 'Set as you';
+  users.className = `member-users${preferredBy.length > 1 ? ' shared' : ''}`;
+  users.textContent = describeUsers(preferredBy, identityId);
+}
+
+// Several identities may use the same member, so list every actor handle.
+function describeUsers(preferredBy, identityId) {
+  if (preferredBy.length === 0) return 'Not used by anyone';
+
+  const handles = preferredBy.map((grant) =>
+    grant.identity_id === identityId
+      ? `${grant.actor_handle} (you)`
+      : grant.actor_handle,
+  );
+
+  return `Used by ${handles.join(', ')}`;
 }
 
 function renderCommands(key) {
@@ -517,10 +745,16 @@ function renderCommands(key) {
     summary.textContent = summarizeCommand(entry.command);
     status.className = 'command-status';
     status.textContent = entry.status.replace('_', ' ');
-    detail.textContent = `${shortId(entry.command.command_id)}${entry.detail ? ` · ${entry.detail}` : ''}`;
+    detail.textContent = `${shortId(entry.command.command_id)}${entry.detail ? ` · ${describeReason(entry.detail)}` : ''}`;
     card.append(summary, status, detail);
     element.append(card);
   }
+}
+
+function describeReason(reason) {
+  return reason === 'member_merged'
+    ? 'already added by someone else; merged into that member'
+    : reason;
 }
 
 function renderTraffic(key) {
@@ -682,8 +916,10 @@ function renderServer() {
   renderConnection(elements.serverToggle, state.server.online);
   elements.serverRevision.textContent = state.server.revision ?? '—';
   elements.refreshServer.disabled = !state.server.online;
+  elements.resetServer.disabled = !state.server.online;
 
   renderIdentityDirectory();
+  renderSubscribers();
 
   if (snapshot) {
     renderGroupSummary(elements.serverGroupSummary, snapshot.group);
@@ -750,6 +986,69 @@ function renderServerTraffic() {
   });
 }
 
+function renderRealtimeToggle(button, device) {
+  const status = device.realtime ? device.realtimeStatus : 'off';
+
+  const labels = {
+    off: device.realtime ? 'Live idle' : 'Live off',
+    connecting: 'Live …',
+    open: 'Live',
+    disconnected: 'Live retrying',
+  };
+
+  button.className = `realtime-toggle ${status}`;
+  button.textContent = labels[status];
+  button.setAttribute('aria-pressed', String(device.realtime));
+}
+
+function renderRealtimeEvents(element, events) {
+  if (events.length === 0) {
+    element.innerHTML = '<span class="empty">No realtime activity.</span>';
+
+    return;
+  }
+
+  element.replaceChildren(
+    ...events.map((event) => {
+      const row = document.createElement('div');
+      const time = document.createElement('time');
+      const detail = document.createElement('span');
+
+      row.className = `realtime-event ${event.phase}`;
+      time.textContent = event.at;
+      detail.textContent = event.detail;
+      row.append(time, detail);
+
+      return row;
+    }),
+  );
+}
+
+function renderSubscribers() {
+  const subscribers = state.server.subscribers;
+
+  if (subscribers.length === 0) {
+    elements.serverSubscribers.innerHTML = '<span class="empty">No subscribers.</span>';
+
+    return;
+  }
+
+  elements.serverSubscribers.replaceChildren(
+    ...subscribers.map((identityId) => {
+      const row = document.createElement('div');
+
+      const label = Object.values(state.devices).find(
+        (device) => device.session?.identity.id === identityId,
+      )?.label;
+
+      row.className = 'realtime-event open';
+      row.textContent = `${label ?? 'Identity'} · ${shortId(identityId)}`;
+
+      return row;
+    }),
+  );
+}
+
 function renderConnection(button, online) {
   button.className = `connection-toggle ${online ? 'online' : 'offline'}`;
   button.textContent = online ? 'Online' : 'Offline';
@@ -800,3 +1099,4 @@ function describeError(error) {
 
   return 'Unexpected error';
 }
+

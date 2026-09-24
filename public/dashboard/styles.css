@@ -266,7 +266,7 @@ h2 {
 .group-editor,
 .server-group {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
   gap: 0.3rem;
   padding: 0.4rem;
   border: 1px solid #bed1e4;
@@ -304,7 +304,7 @@ h2 {
 
 .member-row {
   display: grid;
-  grid-template-columns: minmax(6rem, 1fr) auto auto auto;
+  grid-template-columns: minmax(6rem, 1fr) auto auto;
   align-items: center;
   gap: 0.25rem;
   padding: 0.3rem;
@@ -659,4 +659,127 @@ pre {
   .exchange {
     grid-template-columns: 1fr;
   }
+}
+
+.realtime-toggle {
+  border-color: transparent;
+  padding: 0.32rem 0.5rem;
+  color: var(--ink);
+  background: #e4e8e6;
+}
+
+.realtime-toggle.open {
+  color: var(--white);
+  background: var(--green);
+}
+
+.realtime-toggle.connecting {
+  background: var(--blue-soft);
+}
+
+.realtime-toggle.disconnected {
+  color: var(--white);
+  background: var(--red);
+}
+
+.realtime-section {
+  margin-top: 0.6rem;
+}
+
+.section-note {
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
+.realtime-log {
+  display: grid;
+  gap: 0.15rem;
+  max-height: 8rem;
+  overflow: auto;
+}
+
+.realtime-event {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem;
+  padding: 0.2rem 0.4rem;
+  border-left: 3px solid var(--line);
+  font: 0.65rem/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+
+.realtime-event.open,
+.realtime-event.message {
+  border-left-color: var(--green);
+  background: var(--green-soft);
+}
+
+.realtime-event.closed {
+  border-left-color: var(--red);
+  background: var(--red-soft);
+}
+
+.realtime-event time {
+  color: var(--muted);
+}
+
+.member-users {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.member-users.shared {
+  color: var(--blue);
+  font-weight: 700;
+}
+
+.group-editor input:focus,
+.member-row input:focus {
+  outline: 2px solid var(--blue);
+  outline-offset: -1px;
+}
+
+.name-line {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.editable-name {
+  overflow: hidden;
+  cursor: text;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-row .editable-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.edit-button {
+  padding: 0.1rem 0.3rem;
+  border-color: transparent;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.edit-button:hover:not(:disabled) {
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.name-line.editing .editable-name,
+.name-line.editing .edit-button {
+  display: none;
+}
+
+.name-input {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
 }

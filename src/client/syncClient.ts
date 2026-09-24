@@ -13,12 +13,19 @@ import {
   ClientReplicaStore,
   type ClientReplicaState,
 } from './replicaStore';
+import {
+  defaultReconnectDelayMs,
+  RealtimeSubscriptions,
+  type RealtimeSocket,
+  type RealtimeSocketHandlers,
+} from './realtime';
 import type { ClientStorageAdapter } from './storage';
 
 export type SyncDeviceTransport = {
   createGroup(input: CreateGroupRequest): Promise<CreatedGroup>;
   joinGroup(groupId: string, input: JoinGroupRequest): Promise<GroupSession>;
   syncGroup(groupId: string, input: SyncGroupRequest): Promise<SyncGroupResponse>;
+  openRealtime(groupId: string, handlers: RealtimeSocketHandlers): RealtimeSocket;
 };
 
 export type SyncTransport = {
@@ -46,6 +53,9 @@ export type SplitnextSyncClientOptions = {
   storage: ClientStorageAdapter;
   create_id?: () => string;
   now?: () => string;
+  /** Receives replicas refreshed by realtime announcements. */
+  on_background_sync?: (state: ClientReplicaState) => void;
+  realtime_reconnect_delay_ms?: (attempt: number) => number;
 };
 
 export class ClientOfflineError extends Error {
@@ -61,6 +71,9 @@ export class SplitnextSyncClient {
   private readonly deviceSecret: string;
   private readonly replicas: ClientReplicaStore;
   private readonly createId: () => string;
+  private readonly realtime: RealtimeSubscriptions;
+  private readonly onBackgroundSync: (state: ClientReplicaState) => void;
+  private readonly syncQueues = new Map<string, Promise<unknown>>();
   private online = true;
 
   constructor(options: SplitnextSyncClientOptions) {
@@ -71,6 +84,15 @@ export class SplitnextSyncClient {
     this.deviceSecret = options.device_secret;
     this.replicas = new ClientReplicaStore(options.storage, now);
     this.createId = options.create_id ?? createIdentifier;
+    this.onBackgroundSync = options.on_background_sync ?? (() => undefined);
+    this.realtime = new RealtimeSubscriptions({
+      connect: (groupId, handlers) =>
+        this.deviceApi.openRealtime(groupId, handlers),
+      onAnnouncement: (groupId, revision) =>
+        this.onAnnouncement(groupId, revision),
+      reconnectDelayMs:
+        options.realtime_reconnect_delay_ms ?? defaultReconnectDelayMs,
+    });
   }
 
   isOnline(): boolean {
@@ -79,6 +101,7 @@ export class SplitnextSyncClient {
 
   setOnline(online: boolean): void {
     this.online = online;
+    this.realtime.setOnline(online);
   }
 
   async initializeIdentity(): Promise<IdentitySession> {
@@ -147,11 +170,20 @@ export class SplitnextSyncClient {
     }
   }
 
-  renameGroup(groupId: string, name: string): Promise<ClientReplicaState> {
+  /**
+   * `expectedName` is the name the user saw when they began editing, so a
+   * concurrent rename supersedes this one instead of being overwritten. It
+   * defaults to the current local name.
+   */
+  renameGroup(
+    groupId: string,
+    name: string,
+    expectedName?: string,
+  ): Promise<ClientReplicaState> {
     return this.queueCommand(groupId, (snapshot) => ({
       command_id: this.createId(),
       type: 'group.rename',
-      payload: { expected_name: snapshot.group.name, name },
+      payload: { expected_name: expectedName ?? snapshot.group.name, name },
     }));
   }
 
@@ -163,10 +195,12 @@ export class SplitnextSyncClient {
     }));
   }
 
+  /** `expectedDisplayName` works like `renameGroup`'s `expectedName`. */
   renameMember(
     groupId: string,
     memberId: string,
     displayName: string,
+    expectedDisplayName?: string,
   ): Promise<ClientReplicaState> {
     return this.queueCommand(groupId, (snapshot) => {
       const member = snapshot.members.find(
@@ -180,7 +214,7 @@ export class SplitnextSyncClient {
         type: 'member.rename',
         payload: {
           member_id: memberId,
-          expected_display_name: member.display_name,
+          expected_display_name: expectedDisplayName ?? member.display_name,
           display_name: displayName,
         },
       };
@@ -206,28 +240,39 @@ export class SplitnextSyncClient {
     }));
   }
 
+  /** Leaving needs a server decision, so a transport failure is reported. */
   async leaveGroup(groupId: string): Promise<ClientReplicaState> {
     this.requireOnline();
 
-    return this.queueCommand(groupId, () => ({
+    await this.replicas.queueCommand(groupId, () => ({
       command_id: this.createId(),
       type: 'group.leave',
       payload: {},
     }));
+
+    return this.syncGroup(groupId);
   }
 
   async syncGroup(groupId: string): Promise<ClientReplicaState> {
     this.requireOnline();
 
-    const prepared = await this.replicas.prepareSync(groupId);
+    return this.serialize(groupId, () => this.synchronize(groupId));
+  }
 
-    if (!prepared) return this.replicas.state(groupId, this.online);
+  /**
+   * Subscribes to revision announcements for a group while online. The
+   * subscription ends when the group becomes hidden.
+   */
+  watchGroup(groupId: string): void {
+    this.realtime.watch(groupId);
+  }
 
-    const response = await this.deviceApi.syncGroup(groupId, prepared.request);
+  unwatchGroup(groupId: string): void {
+    this.realtime.unwatch(groupId);
+  }
 
-    await this.replicas.reconcile(groupId, prepared.commands, response);
-
-    return this.replicas.state(groupId, this.online);
+  isWatching(groupId: string): boolean {
+    return this.realtime.isWatching(groupId);
   }
 
   inspect(groupId: string): Promise<ClientReplicaState> {
@@ -252,9 +297,83 @@ export class SplitnextSyncClient {
   ): Promise<ClientReplicaState> {
     await this.replicas.queueCommand(groupId, createCommand);
 
-    return this.online
-      ? this.syncGroup(groupId)
-      : this.replicas.state(groupId, this.online);
+    if (!this.online) return this.replicas.state(groupId, this.online);
+
+    try {
+      return await this.syncGroup(groupId);
+    } catch (error) {
+      // An unreachable server is indistinguishable from being offline: the
+      // intent is safely queued and a later synchronization delivers it.
+      if (error instanceof Error && isTransportFailure(error)) {
+        return this.replicas.state(groupId, this.online);
+      }
+
+      throw error;
+    }
+  }
+
+  private async synchronize(groupId: string): Promise<ClientReplicaState> {
+    const prepared = await this.replicas.prepareSync(groupId);
+
+    if (prepared) {
+      const response = await this.deviceApi.syncGroup(
+        groupId,
+        prepared.request,
+      );
+
+      await this.replicas.reconcile(groupId, prepared.commands, response);
+    }
+
+    const state = await this.replicas.state(groupId, this.online);
+
+    if (state.hidden) this.realtime.unwatch(groupId);
+
+    return state;
+  }
+
+  /**
+   * One synchronization per group at a time. Announcements that arrive while
+   * a synchronization is running are checked against its result, so a burst
+   * of announcements costs at most one extra request.
+   */
+  private serialize<T>(groupId: string, task: () => Promise<T>): Promise<T> {
+    const previous = this.syncQueues.get(groupId) ?? Promise.resolve();
+    const next = previous.then(task, task);
+    const settled = next.catch(() => undefined);
+
+    this.syncQueues.set(groupId, settled);
+    void settled.then(() => {
+      if (this.syncQueues.get(groupId) === settled) {
+        this.syncQueues.delete(groupId);
+      }
+    });
+
+    return next;
+  }
+
+  private onAnnouncement(groupId: string, revision: number): void {
+    const background = this.serialize(groupId, async () => {
+      if (!this.online) return null;
+
+      const state = await this.replicas.state(groupId, this.online);
+
+      const current =
+        state.revision !== null &&
+        revision <= state.revision &&
+        state.outbox.length === 0;
+
+      if (state.hidden || current) return null;
+
+      return this.synchronize(groupId);
+    });
+
+    // Transport failures leave the outbox intact and are reported to the
+    // observer; the next announcement or reconnect retries.
+    void background
+      .then((state) => {
+        if (state) this.onBackgroundSync(state);
+      })
+      .catch(() => undefined);
   }
 
   private requireOnline(): void {
@@ -264,6 +383,13 @@ export class SplitnextSyncClient {
 
 function isServerRejection(error: Error): boolean {
   return error.name === 'SplitnextRequestError';
+}
+
+/** The request never produced a server answer, as opposed to a rejection. */
+function isTransportFailure(error: Error): boolean {
+  return (
+    !isServerRejection(error) && error.name !== 'SplitnextProtocolError'
+  );
 }
 
 export type { ClientReplicaState } from './replicaStore';

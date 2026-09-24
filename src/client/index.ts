@@ -18,6 +18,7 @@ import {
   deviceSecretSchema,
   type IdentitySession,
 } from '../domain/identities';
+import { realtimeProtocols } from '../domain/realtime';
 import {
   syncGroupRequestSchema,
   type SyncGroupRequest,
@@ -31,6 +32,12 @@ import {
   readinessResponseSchema,
   syncGroupResponseSchema,
 } from './contracts';
+import {
+  browserWebSocket,
+  type RealtimeSocket,
+  type RealtimeSocketFactory,
+  type RealtimeSocketHandlers,
+} from './realtime';
 
 export type JsonValue = z.output<typeof jsonSchema>;
 
@@ -59,13 +66,26 @@ export type ClientTransportEvent =
       kind: 'network_error';
       error: Error;
       duration_ms: number;
-    });
+    })
+  | ClientRealtimeEvent;
+
+export type ClientRealtimeEvent = {
+  kind: 'realtime';
+  request_id: string;
+  path: string;
+} & (
+  | { phase: 'connecting' }
+  | { phase: 'open' }
+  | { phase: 'message'; data: string }
+  | { phase: 'closed'; code: number; reason: string }
+);
 
 export type ClientObserver = (event: ClientTransportEvent) => void;
 
 export type SplitnextClientOptions = {
   baseUrl: string;
   fetch?: Fetch;
+  webSocket?: RealtimeSocketFactory;
   observer?: ClientObserver;
 };
 
@@ -176,6 +196,15 @@ export class SplitnextDeviceClient {
     );
   }
 
+  /** Opens one revision-announcement subscription; see RealtimeSubscriptions. */
+  openRealtime(groupId: string, handlers: RealtimeSocketHandlers): RealtimeSocket {
+    return this.transport.openRealtime(
+      `/groups/${encodeURIComponent(groupId)}/realtime`,
+      realtimeProtocols(this.deviceSecret),
+      handlers,
+    );
+  }
+
   private request<TSchema extends z.ZodType>(
     method: string,
     path: string,
@@ -192,11 +221,13 @@ export class SplitnextDeviceClient {
 class Transport {
   private readonly baseUrl: string;
   private readonly fetch: Fetch;
+  private readonly webSocket: RealtimeSocketFactory;
   private readonly observer: ClientObserver;
 
   constructor(options: SplitnextClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
     this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.webSocket = options.webSocket ?? browserWebSocket;
     this.observer = options.observer ?? (() => undefined);
   }
 
@@ -279,6 +310,39 @@ class Transport {
 
     return parsed.data;
   }
+
+  openRealtime(
+    path: string,
+    protocols: string[],
+    handlers: RealtimeSocketHandlers,
+  ): RealtimeSocket {
+    const connection = {
+      kind: 'realtime' as const,
+      request_id: createRequestId(),
+      path,
+    };
+
+    const url = `${this.baseUrl.replace(/^http/, 'ws')}${path}`;
+
+    notify(() => this.observer({ ...connection, phase: 'connecting' }));
+
+    return this.webSocket(url, protocols, {
+      open: () => {
+        notify(() => this.observer({ ...connection, phase: 'open' }));
+        handlers.open();
+      },
+      message: (data) => {
+        notify(() => this.observer({ ...connection, phase: 'message', data }));
+        handlers.message(data);
+      },
+      close: (code, reason) => {
+        notify(() =>
+          this.observer({ ...connection, phase: 'closed', code, reason }),
+        );
+        handlers.close(code, reason);
+      },
+    });
+  }
 }
 
 async function readResponseBody(response: Response): Promise<JsonValue> {
@@ -342,6 +406,13 @@ export {
   type ClientStorageAdapter,
   type IndexedDbClientStorageOptions,
 } from './storage';
+
+export {
+  browserWebSocket,
+  type RealtimeSocket,
+  type RealtimeSocketFactory,
+  type RealtimeSocketHandlers,
+} from './realtime';
 
 export {
   ClientOfflineError,

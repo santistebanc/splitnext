@@ -36,6 +36,11 @@ A named person represented in expenses, balances, and settlements; it is not an
 access identity or authorization record.
 _Avoid_: User, account
 
+**Member alias**:
+A member id a client generated for a creation that merged into an existing
+member with the same name; commands naming it act on that member.
+_Avoid_: Duplicate member
+
 **Preferred member**:
 An access identity's nonexclusive choice of which active ledger member its UI
 calls “you.”
@@ -74,6 +79,11 @@ rejected.
 **Conflict notice**:
 A local, dismissible record of a rejected or superseded command and the server
 state that prevented it.
+
+**Revision announcement**:
+A realtime hint that a group may have a newer revision; the client
+synchronizes in response and never treats it as state.
+_Avoid_: Push update, realtime event
 
 **Audit event**:
 An immutable historical record of an applied transition, including its actor,
