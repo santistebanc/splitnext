@@ -49,14 +49,103 @@ describe('in-memory group repository adapter', () => {
         state: { snapshot: { group: { name: 'Renamed group' } } },
       },
     });
+
+    store.sync(
+      {
+        group_id: groupId,
+        identity_id: identityId,
+        known_revision: 1,
+        commands: [
+          {
+            command_id: createIdentifier(),
+            type: 'group.rename',
+            payload: {
+              expected_name: 'Test group',
+              name: 'Stale rename',
+            },
+          },
+        ],
+      },
+      '2026-09-23T10:02:00.000Z',
+    );
+
+    expect(store.history()).toMatchObject([
+      {
+        sequence: 1,
+        revision: 1,
+        change: { action: 'group.created' },
+        actor_member_name: 'Santi',
+      },
+      {
+        sequence: 2,
+        revision: 2,
+        change: { action: 'group.renamed' },
+        actor_member_name: 'Santi',
+      },
+    ]);
     expect(repository.inspect()).toMatchObject({
       state: {
         revision: 2,
         snapshot: { group: { name: 'Renamed group' } },
       },
-      audit_events: [{ action: 'group.created' }, { action: 'group.renamed' }],
-      command_outcomes: [{ command_id: expect.any(String) }],
+      audit_events: [{ sequence: 1 }, { sequence: 2 }],
     });
+    expect(repository.inspect().command_outcomes).toHaveLength(2);
+  });
+
+  it('keeps actor attribution as it was when each transition occurred', () => {
+    const repository = new MemoryGroupRepository();
+    const store = new GroupStore(repository);
+    const groupId = createIdentifier();
+    const identityId = createIdentifier();
+    const memberId = createIdentifier();
+
+    store.create(
+      initializeGroup({
+        group_id: groupId,
+        creator_identity_id: identityId,
+        member_id: memberId,
+        name: 'Trip',
+        currency_code: 'EUR',
+        creator_member_name: 'Santi',
+        created_at: '2026-09-23T10:00:00.000Z',
+      }),
+    );
+    store.sync(
+      {
+        group_id: groupId,
+        identity_id: identityId,
+        known_revision: 1,
+        commands: [
+          {
+            command_id: createIdentifier(),
+            type: 'member.rename',
+            payload: {
+              member_id: memberId,
+              expected_display_name: 'Santi',
+              display_name: 'Santiago',
+            },
+          },
+          {
+            command_id: createIdentifier(),
+            type: 'group.rename',
+            payload: { expected_name: 'Trip', name: 'Summer trip' },
+          },
+        ],
+      },
+      '2026-09-23T10:01:00.000Z',
+    );
+
+    expect(
+      store.history().map((event) => ({
+        action: event.change.action,
+        actor_member_name: event.actor_member_name,
+      })),
+    ).toEqual([
+      { action: 'group.created', actor_member_name: 'Santi' },
+      { action: 'member.renamed', actor_member_name: 'Santi' },
+      { action: 'group.renamed', actor_member_name: 'Santiago' },
+    ]);
   });
 
   it('does not commit a transaction that throws', () => {

@@ -5,6 +5,12 @@ import {
 } from '../domain/access';
 import { errorSchema } from '../domain/errors';
 import {
+  commandOutcomeSchema,
+  groupCommandSchema,
+  type CommandOutcome,
+  type GroupCommand,
+} from '../domain/commands';
+import {
   createGroupRequestSchema,
   type CreateGroupRequest,
 } from '../domain/groups';
@@ -32,28 +38,30 @@ type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 export type JoinedGroup = z.output<typeof groupSessionSchema>;
 
-export type ClientRequestEvent = {
+type ClientExchange = {
+  request_id: string;
   method: string;
   path: string;
   body: JsonValue;
+  commands: GroupCommand[];
 };
 
-export type ClientResponseEvent = ClientRequestEvent & {
-  status: number;
-  response: JsonValue;
-  duration_ms: number;
-};
+export type ClientTransportEvent =
+  | (ClientExchange & { kind: 'request' })
+  | (ClientExchange & {
+      kind: 'response';
+      status: number;
+      response: JsonValue;
+      outcomes: CommandOutcome[];
+      duration_ms: number;
+    })
+  | (ClientExchange & {
+      kind: 'network_error';
+      error: Error;
+      duration_ms: number;
+    });
 
-export type ClientNetworkErrorEvent = ClientRequestEvent & {
-  error: Error;
-  duration_ms: number;
-};
-
-export type ClientObserver = {
-  onRequest?: (event: ClientRequestEvent) => void;
-  onResponse?: (event: ClientResponseEvent) => void;
-  onNetworkError?: (event: ClientNetworkErrorEvent) => void;
-};
+export type ClientObserver = (event: ClientTransportEvent) => void;
 
 export type SplitnextClientOptions = {
   baseUrl: string;
@@ -189,7 +197,7 @@ class Transport {
   constructor(options: SplitnextClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
     this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
-    this.observer = options.observer ?? {};
+    this.observer = options.observer ?? (() => undefined);
   }
 
   async request<TSchema extends z.ZodType>(
@@ -200,9 +208,16 @@ class Transport {
   ): Promise<z.output<TSchema>> {
     const startedAt = Date.now();
     const body = options.body ?? null;
-    const event = { method, path, body };
 
-    notify(() => this.observer.onRequest?.(event));
+    const exchange = {
+      request_id: createRequestId(),
+      method,
+      path,
+      body: diagnosticBody(body),
+      commands: commandsFrom(body),
+    };
+
+    notify(() => this.observer({ kind: 'request', ...exchange }));
 
     const headers = new Headers({ accept: 'application/json' });
 
@@ -228,8 +243,9 @@ class Transport {
       const error = cause instanceof Error ? cause : new Error('network_error');
 
       notify(() =>
-        this.observer.onNetworkError?.({
-          ...event,
+        this.observer({
+          kind: 'network_error',
+          ...exchange,
           error,
           duration_ms: Date.now() - startedAt,
         }),
@@ -241,10 +257,12 @@ class Transport {
     const responseBody = await readResponseBody(response);
 
     notify(() =>
-      this.observer.onResponse?.({
-        ...event,
+      this.observer({
+        kind: 'response',
+        ...exchange,
         status: response.status,
         response: responseBody,
+        outcomes: outcomesFrom(responseBody),
         duration_ms: Date.now() - startedAt,
       }),
     );
@@ -283,10 +301,46 @@ function notify(callback: () => void): void {
   }
 }
 
+const commandEnvelopeSchema = z.object({
+  commands: z.array(groupCommandSchema),
+});
+
+const outcomeEnvelopeSchema = z.object({
+  outcomes: z.array(commandOutcomeSchema),
+});
+
+const diagnosticObjectSchema = z.record(z.string(), jsonSchema);
+
+function commandsFrom(body: JsonValue): GroupCommand[] {
+  const parsed = commandEnvelopeSchema.safeParse(body);
+
+  return parsed.success ? parsed.data.commands : [];
+}
+
+function outcomesFrom(body: JsonValue): CommandOutcome[] {
+  const parsed = outcomeEnvelopeSchema.safeParse(body);
+
+  return parsed.success ? parsed.data.outcomes : [];
+}
+
+function diagnosticBody(body: JsonValue): JsonValue {
+  const parsed = diagnosticObjectSchema.safeParse(body);
+
+  return parsed.success && parsed.data.device_secret
+    ? { ...parsed.data, device_secret: '[redacted]' }
+    : body;
+}
+
+function createRequestId(): string {
+  return crypto.randomUUID();
+}
+
 export {
-  JsonClientStorage,
+  ClientStorageError,
+  IndexedDbClientStorage,
   MemoryClientStorage,
   type ClientStorageAdapter,
+  type IndexedDbClientStorageOptions,
 } from './storage';
 
 export {

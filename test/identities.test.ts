@@ -150,6 +150,52 @@ describe('anonymous identities API', () => {
     expect(await response.json()).toEqual({ error: 'unauthorized' });
   });
 
+  it('rejects a revoked device across protected route families', async () => {
+    const deviceSecret = 'r'.repeat(43);
+
+    const created = await exports.default.fetch(
+      'https://splitnext.test/identities/anonymous',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ device_secret: deviceSecret }),
+      },
+    );
+
+    const session = identitySessionSchema.parse(await created.json());
+
+    await env.INDEX
+      .prepare('UPDATE identity_devices SET revoked_at = ? WHERE id = ?')
+      .bind('2026-09-24T12:00:00.000Z', session.device.id)
+      .run();
+
+    const authorization = `Bearer v1.${deviceSecret}`;
+
+    const [identityResponse, groupResponse] = await Promise.all([
+      exports.default.fetch('https://splitnext.test/identity', {
+        headers: { authorization },
+      }),
+      exports.default.fetch('https://splitnext.test/groups', {
+        method: 'POST',
+        headers: {
+          authorization,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          group_id: createIdentifier(),
+          name: 'Rejected group',
+          currency_code: 'EUR',
+          creator_member_name: 'Santi',
+        }),
+      }),
+    ]);
+
+    expect(identityResponse.status).toBe(401);
+    expect(await identityResponse.json()).toEqual({ error: 'unauthorized' });
+    expect(groupResponse.status).toBe(401);
+    expect(await groupResponse.json()).toEqual({ error: 'unauthorized' });
+  });
+
   it('publishes both identity operations in OpenAPI', async () => {
     const document = await fetchOpenApiDocument();
 

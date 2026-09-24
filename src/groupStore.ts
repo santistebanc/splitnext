@@ -1,12 +1,16 @@
 import type { JoinGroupCommand } from './domain/access';
 import {
+  AuditHistory,
+  type AuditChange,
+  type AuditEvent,
+} from './domain/audit';
+import {
   applyGroupCommand,
   applyGroupJoin,
   commandOutcomeSchema,
   commandTarget,
   type CommandOutcome,
   type CommandTarget,
-  type CommandTransition,
   type GroupCommand,
 } from './domain/commands';
 import {
@@ -24,7 +28,6 @@ import type {
 import type {
   GroupPersistence,
   GroupRepository,
-  NewAuditEvent,
   StoredGroupState,
 } from './groupRepository';
 
@@ -72,22 +75,21 @@ export class GroupStore {
       if (existing) return this.resolveCreateRetry(existing, initial.view);
 
       const state = this.createState(initial);
+      const { group, member, access } = initial.view;
 
       persistence.saveState(state);
-      persistence.appendAudit({
-        id: this.createId(),
-        revision: initial.audit.revision,
-        action: initial.audit.action,
-        command_id: null,
-        actor_identity_id: initial.audit.actor_identity_id,
-        actor_handle: initial.view.access.actor_handle,
-        actor_member_name: initial.audit.actor_member_name,
-        target_kind: 'group',
-        target_id: initial.audit.target_id,
-        occurred_at: initial.audit.occurred_at,
-        before: null,
-        after: initial.view,
-      });
+      this.auditHistory(persistence).record(
+        { action: 'group.created', before: null, after: initial.view },
+        {
+          revision: group.revision,
+          command_id: null,
+          actor_identity_id: access.identity_id,
+          actor_handle: access.actor_handle,
+          actor_member_name: member.display_name,
+          target: { kind: 'group', id: group.id },
+          occurred_at: group.created_at,
+        },
+      );
 
       return { ok: true, created: initial.view };
     });
@@ -215,6 +217,12 @@ export class GroupStore {
           }
         : null;
     });
+  }
+
+  history(): AuditEvent[] {
+    return this.repository.transaction((persistence) =>
+      this.auditHistory(persistence).read(),
+    );
   }
 
   private createState(initial: InitialGroupState): StoredGroupState {
@@ -352,7 +360,7 @@ export class GroupStore {
     persistence: GroupPersistence,
     state: StoredGroupState,
     snapshot: GroupSnapshot,
-    audit: NonNullable<CommandTransition['audit']>,
+    audit: AuditChange,
     actor: GroupAccessGrant,
     actorMemberName: string | null,
     target: CommandTarget,
@@ -362,52 +370,19 @@ export class GroupStore {
     state.snapshot = snapshot;
     state.revision += 1;
 
-    const auditId = this.createId();
-
-    persistence.appendAudit(
-      this.auditEvent(
-        state,
-        audit.action,
-        commandId,
-        actor,
-        actorMemberName,
-        target,
-        occurredAt,
-        audit.before,
-        audit.after,
-        auditId,
-      ),
-    );
-
-    return auditId;
-  }
-
-  private auditEvent(
-    state: StoredGroupState,
-    action: string,
-    commandId: string | null,
-    actor: GroupAccessGrant,
-    actorMemberName: string | null,
-    target: CommandTarget,
-    occurredAt: string,
-    before: NewAuditEvent['before'],
-    after: NewAuditEvent['after'],
-    auditId: string,
-  ): NewAuditEvent {
-    return {
-      id: auditId,
+    return this.auditHistory(persistence).record(audit, {
       revision: state.revision,
-      action,
       command_id: commandId,
       actor_identity_id: actor.identity_id,
       actor_handle: actor.actor_handle,
       actor_member_name: actorMemberName,
-      target_kind: target.kind,
-      target_id: target.id,
+      target,
       occurred_at: occurredAt,
-      before,
-      after,
-    };
+    }).id;
+  }
+
+  private auditHistory(persistence: GroupPersistence): AuditHistory {
+    return new AuditHistory(persistence, this.createId);
   }
 
   private accessFor(

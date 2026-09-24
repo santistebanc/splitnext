@@ -15,8 +15,9 @@ import {
   type ClientGroupReplica,
   type ClientStorageAdapter,
   type ClientStorageDocument,
-  emptyClientDocument,
+  parseClientDocument,
   type PendingCommand,
+  serializeClientDocument,
 } from './storage';
 
 export type ClientReplicaState = {
@@ -38,8 +39,6 @@ export type PreparedSync = {
 };
 
 export class ClientReplicaStore {
-  private tail: Promise<void> = Promise.resolve();
-
   constructor(
     private readonly storage: ClientStorageAdapter,
     private readonly now: () => string,
@@ -299,8 +298,8 @@ export class ClientReplicaStore {
   private read<T>(
     operation: (document: ClientStorageDocument) => T,
   ): Promise<T> {
-    return this.exclusive(async () => {
-      const document = (await this.storage.load()) ?? emptyClientDocument();
+    return this.storage.read().then((serialized) => {
+      const document = parseClientDocument(serialized);
 
       return structuredClone(operation(document));
     });
@@ -309,31 +308,15 @@ export class ClientReplicaStore {
   private change<T>(
     operation: (document: ClientStorageDocument) => T,
   ): Promise<T> {
-    return this.exclusive(async () => {
-      const document = (await this.storage.load()) ?? emptyClientDocument();
+    return this.storage.update((serialized) => {
+      const document = parseClientDocument(serialized);
       const result = operation(document);
 
-      await this.storage.save(document);
-
-      return structuredClone(result);
+      return {
+        serialized: serializeClientDocument(document),
+        result: structuredClone(result),
+      };
     });
-  }
-
-  private async exclusive<T>(operation: () => Promise<T>): Promise<T> {
-    const previous = this.tail;
-    let release = () => {};
-
-    this.tail = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-
-    await previous;
-
-    try {
-      return await operation();
-    } finally {
-      release();
-    }
   }
 }
 

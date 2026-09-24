@@ -1,3 +1,10 @@
+import {
+  auditEventSchema,
+  newAuditEventSchema,
+  type AuditEvent,
+  type AuditEventStore,
+  type NewAuditEvent,
+} from './domain/audit';
 import type { CommandOutcome } from './domain/commands';
 import type { CreatedGroup } from './domain/groups';
 import type { GroupSnapshot } from './domain/sync';
@@ -20,24 +27,6 @@ export type StoredGroupState = {
   snapshot: GroupSnapshot;
 };
 
-export type StoredAuditEvent = {
-  sequence: number;
-  id: string;
-  revision: number;
-  action: string;
-  command_id: string | null;
-  actor_identity_id: string;
-  actor_handle: string;
-  actor_member_name: string | null;
-  target_kind: 'access' | 'group' | 'member';
-  target_id: string;
-  occurred_at: string;
-  before: unknown;
-  after: unknown;
-};
-
-export type NewAuditEvent = Omit<StoredAuditEvent, 'sequence'>;
-
 export type StoredCommandOutcome = {
   command_id: string;
   identity_id: string;
@@ -56,14 +45,13 @@ export type StoredJoinOutcome = {
   };
 };
 
-export interface GroupPersistence {
+export interface GroupPersistence extends AuditEventStore {
   loadState(): StoredGroupState | null;
   saveState(state: StoredGroupState): void;
   findCommandOutcome(commandId: string): StoredCommandOutcome | null;
   recordCommandOutcome(outcome: StoredCommandOutcome): void;
   findJoinOutcome(joinId: string): StoredJoinOutcome | null;
   recordJoinOutcome(outcome: StoredJoinOutcome): void;
-  appendAudit(event: NewAuditEvent): StoredAuditEvent;
 }
 
 export interface GroupRepository {
@@ -89,6 +77,11 @@ type JoinOutcomeRow = {
   identity_id: string;
   request_json: string;
   response_json: string;
+};
+
+type AuditEventRow = {
+  sequence: number;
+  event_json: string;
 };
 
 export class DurableObjectGroupRepository implements GroupRepository {
@@ -256,7 +249,9 @@ class SQLiteGroupPersistence implements GroupPersistence {
     );
   }
 
-  appendAudit(event: NewAuditEvent): StoredAuditEvent {
+  appendAudit(event: NewAuditEvent): AuditEvent {
+    const validated = newAuditEventSchema.parse(event);
+
     const row = this.sql
       .exec<{ sequence: number }>(
         `SELECT COALESCE(MAX(sequence), 0) + 1 AS sequence
@@ -270,24 +265,40 @@ class SQLiteGroupPersistence implements GroupPersistence {
       `INSERT INTO group_audit_events (sequence, event_id, event_json)
        VALUES (?, ?, ?)`,
       row.sequence,
-      event.id,
-      JSON.stringify(event),
+      validated.id,
+      JSON.stringify(validated),
     );
 
-    return { sequence: row.sequence, ...event };
+    return auditEventSchema.parse({ sequence: row.sequence, ...validated });
+  }
+
+  readAudit(): AuditEvent[] {
+    return this.sql
+      .exec<AuditEventRow>(
+        `SELECT sequence, event_json
+         FROM group_audit_events
+         ORDER BY sequence`,
+      )
+      .toArray()
+      .map((row) =>
+        auditEventSchema.parse({
+          sequence: row.sequence,
+          ...newAuditEventSchema.parse(parseJson(row.event_json)),
+        }),
+      );
   }
 }
 
 type MemoryGroupData = {
   state: StoredGroupState | null;
-  auditEvents: StoredAuditEvent[];
+  auditEvents: AuditEvent[];
   commandOutcomes: StoredCommandOutcome[];
   joinOutcomes: StoredJoinOutcome[];
 };
 
 export type GroupRepositoryInspection = {
   state: StoredGroupState | null;
-  audit_events: StoredAuditEvent[];
+  audit_events: AuditEvent[];
   command_outcomes: StoredCommandOutcome[];
   join_outcomes: StoredJoinOutcome[];
 };
@@ -368,15 +379,19 @@ class MemoryGroupPersistence implements GroupPersistence {
     this.data.joinOutcomes.push(clone(outcome));
   }
 
-  appendAudit(event: NewAuditEvent): StoredAuditEvent {
-    const stored = {
+  appendAudit(event: NewAuditEvent): AuditEvent {
+    const stored = auditEventSchema.parse({
       sequence: this.data.auditEvents.length + 1,
-      ...clone(event),
-    };
+      ...newAuditEventSchema.parse(clone(event)),
+    });
 
     this.data.auditEvents.push(stored);
 
     return clone(stored);
+  }
+
+  readAudit(): AuditEvent[] {
+    return clone(this.data.auditEvents);
   }
 
   commit(): MemoryGroupData {

@@ -1,5 +1,4 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { Context } from 'hono';
 import { joinGroupRequestSchema } from '../domain/access';
 import {
   createdGroupSchema,
@@ -11,11 +10,11 @@ import {
   syncGroupRequestSchema,
   syncGroupResponseSchema,
 } from '../domain/sync';
-import { IdentityDirectory } from '../identityDirectory';
 import {
+  authenticateDevice,
+  type AuthenticatedRequestEnvironment,
   deviceAuthorizationHeadersSchema,
-  readDeviceSecret,
-} from './deviceAuthorization';
+} from './authenticatedRequest';
 import { errorResponse } from './responses';
 
 const groupIdParameter = z.object({
@@ -101,7 +100,7 @@ const syncGroupRoute = createRoute({
   },
 });
 
-export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
+const authenticatedGroupRoutes = new OpenAPIHono<AuthenticatedRequestEnvironment>({
   defaultHook: (result, context) => {
     if (result.success) return;
 
@@ -109,12 +108,16 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
       ? context.json({ error: 'unauthorized' }, 401)
       : context.json({ error: 'invalid_request' }, 400);
   },
-})
+});
+
+authenticatedGroupRoutes.use('/groups', authenticateDevice);
+
+authenticatedGroupRoutes.use('/groups/*', authenticateDevice);
+
+export const groupRoutes = authenticatedGroupRoutes
   .openapi(createGroupRoute, async (context) => {
     const input = context.req.valid('json');
-    const session = await authenticate(context);
-
-    if (!session) return context.json({ error: 'unauthorized' }, 401);
+    const session = context.get('identitySession');
 
     const group = context.env.GROUPS.get(
       context.env.GROUPS.idFromName(input.group_id),
@@ -140,9 +143,7 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
   .openapi(joinGroupRoute, async (context) => {
     const input = context.req.valid('json');
     const { groupId } = context.req.valid('param');
-    const session = await authenticate(context);
-
-    if (!session) return context.json({ error: 'unauthorized' }, 401);
+    const session = context.get('identitySession');
 
     const group = context.env.GROUPS.get(
       context.env.GROUPS.idFromName(groupId),
@@ -179,9 +180,7 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
   .openapi(syncGroupRoute, async (context) => {
     const input = context.req.valid('json');
     const { groupId } = context.req.valid('param');
-    const session = await authenticate(context);
-
-    if (!session) return context.json({ error: 'unauthorized' }, 401);
+    const session = context.get('identitySession');
 
     const group = context.env.GROUPS.get(
       context.env.GROUPS.idFromName(groupId),
@@ -201,15 +200,3 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
 
     return context.json(result.response, 200);
   });
-
-async function authenticate(
-  context: Context<{ Bindings: Env }>,
-) {
-  const authorization = context.req.header('authorization');
-
-  if (!authorization) return null;
-
-  const identities = new IdentityDirectory(context.env.INDEX);
-
-  return identities.authenticateDevice(readDeviceSecret(authorization));
-}

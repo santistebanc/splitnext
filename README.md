@@ -59,7 +59,9 @@ snapshot and preserves those outcomes as local notices.
 
 The low-level transport validates shared request and response contracts. The
 stateful client owns identity initialization, confirmed snapshots, optimistic
-projections, ordered outboxes, reconciliation, and conflict notices:
+projections, ordered outboxes, reconciliation, and conflict notices. An
+optional observer receives one credential-redacted event stream whose stable
+request identifiers correlate requests with responses or network failures:
 
 ```ts
 import {
@@ -88,12 +90,12 @@ client.setOnline(true);
 await client.syncGroup(group.group_id);
 ```
 
-`MemoryClientStorage` is useful for tests and the dashboard.
-`JsonClientStorage` works with a browser-like string key-value store. A future
-PWA can provide IndexedDB and React Native can provide SQLite without changing
-the synchronization module. `ClientReplicaStore` serializes local replica
-changes so concurrent mutations and in-flight synchronization cannot discard
-newly queued intent.
+`MemoryClientStorage` is useful for tests and keeps the dashboard ephemeral.
+`IndexedDbClientStorage` is the atomic browser adapter prepared for a future
+PWA. React Native can provide a SQLite adapter at the same opaque storage seam.
+The client persistence module validates its versioned document and serializes
+updates so concurrent client instances and in-flight synchronization cannot
+discard newly queued intent.
 
 ## Storage seams
 
@@ -104,6 +106,12 @@ newly queued intent.
 - `MemoryGroupRepository` runs the same group engine without Cloudflare and is
   used for fast tests with the same commit and rollback behavior.
 - Client storage is accessed only through `ClientStorageAdapter`.
+
+`AuditHistory` validates action-specific before/after state, captures actor
+attribution, and reads events in durable order. It remains internal until a
+future history or recovery slice exposes product behavior. Protected Hono
+routes share one authenticated-request module for credential parsing, device
+authentication, identity availability, and consistent unauthorized responses.
 
 The dashboard delegates its experiment state to `SyncLab`, which can be tested
 without a browser. In local development, its server panel reads the current
