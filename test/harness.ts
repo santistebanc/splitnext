@@ -1,6 +1,7 @@
 import { env, exports } from 'cloudflare:workers';
 import { applyD1Migrations, type D1Migration } from 'cloudflare:test';
 import { expect } from 'vitest';
+import type { RealtimeSocketFactory } from '../src/client';
 
 declare global {
   namespace Cloudflare {
@@ -60,4 +61,65 @@ export async function fetchOpenApiDocument(): Promise<OpenApiDocument> {
 
   // SAFETY: The Worker generates this document from its registered OpenAPI routes.
   return (await response.json()) as OpenApiDocument;
+}
+
+/**
+ * Opens realtime connections through the Worker in-process, since tests have
+ * no network listener for a browser WebSocket to reach.
+ */
+export const workerWebSocket: RealtimeSocketFactory = (
+  url,
+  protocols,
+  handlers,
+) => {
+  let socket: WebSocket | null = null;
+  let closedByClient = false;
+
+  void (async () => {
+    const response = await exports.default.fetch(url.replace(/^ws/, 'http'), {
+      headers: {
+        upgrade: 'websocket',
+        'sec-websocket-protocol': protocols.join(', '),
+      },
+    });
+
+    const accepted = response.webSocket;
+
+    if (!accepted) {
+      handlers.close(1006, `http_${response.status}`);
+
+      return;
+    }
+
+    accepted.accept();
+    socket = accepted;
+    accepted.addEventListener('message', (event) =>
+      handlers.message(String(event.data)),
+    );
+    accepted.addEventListener('close', (event) =>
+      handlers.close(event.code, event.reason),
+    );
+
+    if (closedByClient) {
+      accepted.close(1000, 'unsubscribed');
+    } else {
+      handlers.open();
+    }
+  })().catch(() => handlers.close(1006, 'network_error'));
+
+  return {
+    close: (code, reason) => {
+      closedByClient = true;
+      socket?.close(code ?? 1000, reason);
+    },
+  };
+};
+
+export function randomDeviceSecret(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+
+  return btoa(String.fromCharCode(...bytes))
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replace(/=+$/, '');
 }

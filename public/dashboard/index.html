@@ -49,6 +49,7 @@
             <span class="revision">Revision <strong data-role="revision">—</strong></span>
             <div class="header-actions">
               <button class="connection-toggle online" data-action="toggle-device" type="button">Online</button>
+              <button class="realtime-toggle off" data-action="toggle-realtime" type="button" title="Receive revision announcements over a WebSocket">Live off</button>
               <button class="secondary" data-action="sync" type="button">Sync</button>
               <button class="danger-text" data-action="leave" type="button">Leave</button>
               <button data-action="rejoin" type="button" hidden>Rejoin</button>
@@ -57,11 +58,13 @@
           <div class="identity-line" data-role="identity">Not initialized</div>
 
           <div data-role="actions">
-            <form class="group-editor" data-action-form="rename-group">
-              <input name="name" aria-label="Group name" maxlength="100" required placeholder="Group name">
-              <button type="submit">Save</button>
+            <div class="group-editor" data-role="group-editor">
+              <div class="name-line" data-edit="group">
+                <strong class="editable-name" data-role="name-label">No group</strong>
+                <button class="edit-button" data-action="edit-name" type="button" title="Rename group" aria-label="Rename group">✎</button>
+              </div>
               <small data-role="group-detail"></small>
-            </form>
+            </div>
 
             <div class="member-list" data-role="member-list"></div>
             <form class="add-member" data-action-form="add-member">
@@ -74,6 +77,11 @@
           <section class="command-section">
             <div class="section-bar"><strong>Commands</strong></div>
             <div class="command-list" data-role="commands"><span class="empty">No commands.</span></div>
+          </section>
+
+          <section class="realtime-section">
+            <div class="section-bar"><strong>Realtime</strong><span class="section-note">Announcements only; state arrives by sync</span></div>
+            <div class="realtime-log" data-role="realtime-events"><span class="empty">No realtime activity.</span></div>
           </section>
 
           <section class="traffic-section">
@@ -91,6 +99,7 @@
             <div class="header-actions">
               <button id="toggle-server" class="connection-toggle online" type="button">Online</button>
               <button id="refresh-server" class="secondary" type="button">Refresh</button>
+              <button id="reset-server" class="danger-text" type="button" title="Erase identities and known groups, then start over">Reset data</button>
             </div>
           </header>
           <div class="identity-line">D1 · Identity directory</div>
@@ -100,6 +109,9 @@
 
           <div class="server-group" id="server-group-summary"><span class="empty">No group.</span></div>
           <div class="member-list" id="server-member-list"></div>
+
+          <div class="identity-line">Durable Object · Realtime subscribers</div>
+          <div id="server-subscribers" class="realtime-log"><span class="empty">No subscribers.</span></div>
 
           <section class="traffic-section">
             <div class="section-bar"><strong>Incoming requests</strong><button id="clear-server-traffic" class="text-button" type="button">Clear</button></div>
@@ -115,6 +127,7 @@
             <span class="revision">Revision <strong data-role="revision">—</strong></span>
             <div class="header-actions">
               <button class="connection-toggle online" data-action="toggle-device" type="button">Online</button>
+              <button class="realtime-toggle off" data-action="toggle-realtime" type="button" title="Receive revision announcements over a WebSocket">Live off</button>
               <button class="secondary" data-action="sync" type="button">Sync</button>
               <button class="danger-text" data-action="leave" type="button">Leave</button>
               <button data-action="rejoin" type="button" hidden>Rejoin</button>
@@ -123,11 +136,13 @@
           <div class="identity-line" data-role="identity">Not initialized</div>
 
           <div data-role="actions">
-            <form class="group-editor" data-action-form="rename-group">
-              <input name="name" aria-label="Group name" maxlength="100" required placeholder="Group name">
-              <button type="submit">Save</button>
+            <div class="group-editor" data-role="group-editor">
+              <div class="name-line" data-edit="group">
+                <strong class="editable-name" data-role="name-label">No group</strong>
+                <button class="edit-button" data-action="edit-name" type="button" title="Rename group" aria-label="Rename group">✎</button>
+              </div>
               <small data-role="group-detail"></small>
-            </form>
+            </div>
 
             <div class="member-list" data-role="member-list"></div>
             <form class="add-member" data-action-form="add-member">
@@ -140,6 +155,11 @@
           <section class="command-section">
             <div class="section-bar"><strong>Commands</strong></div>
             <div class="command-list" data-role="commands"><span class="empty">No commands.</span></div>
+          </section>
+
+          <section class="realtime-section">
+            <div class="section-bar"><strong>Realtime</strong><span class="section-note">Announcements only; state arrives by sync</span></div>
+            <div class="realtime-log" data-role="realtime-events"><span class="empty">No realtime activity.</span></div>
           </section>
 
           <section class="traffic-section">

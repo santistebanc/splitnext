@@ -8,10 +8,10 @@ were made.
 
 ## Status and scope
 
-The current MVP establishes identities, groups, ledger members, and offline
-synchronization. Invitations, expenses, settlements, realtime delivery, account
-sign-in, audit browsing, and group recovery are accepted future behavior unless
-this document says otherwise.
+The current MVP establishes identities, groups, ledger members, offline
+synchronization, and realtime revision announcements. Invitations, expenses,
+settlements, account sign-in, audit browsing, and group recovery are accepted
+future behavior unless this document says otherwise.
 
 The MVP temporarily permits an authenticated identity that knows a group
 identifier to join directly. This is for development and must be replaced by
@@ -68,6 +68,10 @@ group invitations before public use.
 - A ledger member is a group-local name used by expenses, balances, and
   settlements. It is not a user account, identity, or access slot.
 - Active member names are unique within a group after normalization.
+- Adding a member whose normalized name matches an active member means the same
+  person. The command has no effect, and the member id the client generated
+  becomes a permanent alias: later commands naming it act on the existing
+  member, so work queued offline against it is not lost.
 - Any participant may add or rename a member.
 - Removing a member archives it rather than erasing it. Historical references
   remain valid, and an archived member is unavailable for new activity.
@@ -99,6 +103,8 @@ group invitations before public use.
   group, managing invites, and revoking a device credential.
 - Reconnecting sends the ordered outbox as one synchronization batch. Transport
   failure leaves the outbox intact for retry.
+- An unreachable server is treated like being offline: ordinary edits still
+  queue and project locally, and are delivered once the server responds.
 - Local storage implementations and Cloudflare persistence are adapters; their
   details are not shared between clients and the server.
 
@@ -133,6 +139,9 @@ group invitations before public use.
 - Every acknowledged command receives exactly one durable outcome:
   - **Applied**: the requested transition changed authoritative state.
   - **No effect**: authoritative state already satisfies the intent.
+    Converging on the same result, such as renaming to the name another device
+    already chose or adding a member someone else already added, is no effect
+    and never produces a conflict notice.
   - **Superseded**: another accepted transition made the original intent stale.
   - **Rejected**: the intent is invalid or unauthorized and was not applied.
 - An outcome identifies the target, a machine-readable reason when applicable,
@@ -164,6 +173,10 @@ group invitations before public use.
 - Disconnects, duplicate messages, missed messages, and reordered messages must
   be harmless.
 - A client that leaves or hides a group stops receiving its announcements.
+- Every new connection first announces the current revision, so reconnecting
+  is how a client catches up on anything it missed.
+- Announcements follow applied changes. Synchronizations that apply nothing do
+  not wake other clients.
 
 ## Audit history and recovery
 

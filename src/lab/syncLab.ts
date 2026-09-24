@@ -1,8 +1,13 @@
 import type {
+  ClientRealtimeEvent,
   ClientTransportEvent,
   JsonValue,
+  RealtimeSocket,
+  RealtimeSocketFactory,
+  RealtimeSocketHandlers,
 } from '../client';
 import {
+  browserWebSocket,
   MemoryClientStorage,
   SplitnextClient,
   SplitnextSyncClient,
@@ -12,6 +17,7 @@ import { z } from 'zod';
 import type { GroupCommand } from '../domain/commands';
 import type { CreateGroupRequest } from '../domain/groups';
 import type { IdentitySession } from '../domain/identities';
+import { revisionAnnouncementSchema } from '../domain/realtime';
 import { groupSnapshotSchema, type GroupSnapshot } from '../domain/sync';
 import type { IdentityDirectoryInspection } from '../identityDirectory';
 
@@ -50,9 +56,20 @@ export type LabCommand = {
   detail: string | null;
 };
 
+export type LabRealtimeStatus = 'off' | 'connecting' | 'open' | 'disconnected';
+
+export type LabRealtimeEvent = {
+  at: string;
+  phase: ClientRealtimeEvent['phase'];
+  detail: string;
+};
+
 export type LabDevice = {
   label: string;
   online: boolean;
+  realtime: boolean;
+  realtimeStatus: LabRealtimeStatus;
+  realtimeEvents: LabRealtimeEvent[];
   session: IdentitySession | null;
   replica: ClientReplicaState | null;
   commands: LabCommand[];
@@ -64,6 +81,7 @@ export type LabServer = {
   identityDirectory: IdentityDirectoryInspection | null;
   revision: number | null;
   snapshot: GroupSnapshot | null;
+  subscribers: string[];
   incoming: LabRequest[];
 };
 
@@ -78,6 +96,8 @@ type DeviceRuntime = {
   client: SplitnextSyncClient;
 };
 
+type LabSocket = { drop(reason: string): void };
+
 type ClientRequestEvent = Extract<ClientTransportEvent, { kind: 'request' }>;
 
 type ClientResponseEvent = Extract<ClientTransportEvent, { kind: 'response' }>;
@@ -90,6 +110,7 @@ type ClientNetworkErrorEvent = Extract<
 export type SyncLabOptions = {
   baseUrl: string;
   fetch?: LabFetch;
+  webSocket?: RealtimeSocketFactory;
   createDeviceSecret?: () => string;
   now?: () => Date;
   onChange?: (state: SyncLabState) => void;
@@ -111,21 +132,25 @@ export class SyncLab {
       identityDirectory: null,
       revision: null,
       snapshot: null,
+      subscribers: [],
       incoming: [],
     },
   };
 
   private readonly baseUrl: string;
   private readonly fetch: LabFetch;
+  private readonly webSocket: RealtimeSocketFactory;
   private readonly createDeviceSecret: () => string;
   private readonly now: () => Date;
   private readonly onChange: (state: SyncLabState) => void;
   private readonly runtimes = new Map<LabDeviceKey, DeviceRuntime>();
+  private readonly sockets = new Set<LabSocket>();
   private readonly systemApi: SplitnextClient;
 
   constructor(options: SyncLabOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
     this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.webSocket = options.webSocket ?? browserWebSocket;
     this.createDeviceSecret = options.createDeviceSecret ?? generateDeviceSecret;
     this.now = options.now ?? (() => new Date());
     this.onChange = options.onChange ?? (() => undefined);
@@ -160,6 +185,7 @@ export class SyncLab {
 
     this.state.groupId = replica.group_id;
     this.state.devices.one.replica = replica;
+    this.watchIfEnabled('one');
     await this.refreshAfterOperation();
 
     return replica;
@@ -173,6 +199,7 @@ export class SyncLab {
 
     this.state.groupId = groupId;
     this.state.devices.two.replica = replica;
+    this.watchIfEnabled('two');
     await this.refreshAfterOperation();
 
     return replica;
@@ -190,9 +217,108 @@ export class SyncLab {
     }
   }
 
-  toggleServer(): void {
-    this.state.server.online = !this.state.server.online;
+  /** Realtime can be disabled to show that a reconnect still catches up. */
+  toggleRealtime(key: LabDeviceKey): void {
+    const device = this.state.devices[key];
+
+    device.realtime = !device.realtime;
+
+    if (device.realtime) {
+      this.watchIfEnabled(key);
+    } else if (this.state.groupId) {
+      this.runtimes.get(key)?.client.unwatchGroup(this.state.groupId);
+      device.realtimeStatus = 'off';
+    }
+
     this.changed();
+  }
+
+  /**
+   * While the server is down, online devices behave as if they were offline:
+   * changes queue locally. When it returns, each online device delivers its
+   * outbox as a real client would on regaining connectivity.
+   */
+  async toggleServer(): Promise<void> {
+    const server = this.state.server;
+
+    server.online = !server.online;
+
+    if (!server.online) {
+      for (const socket of this.sockets) socket.drop('server_offline');
+      this.changed();
+
+      return;
+    }
+
+    // Reconnect now instead of waiting out each device's backoff.
+    for (const [key, runtime] of this.runtimes) {
+      runtime.client.setOnline(this.state.devices[key].online);
+    }
+
+    this.changed();
+    await Promise.all(
+      labDeviceKeys.map(async (key) => {
+        const device = this.state.devices[key];
+
+        if (!device.online || !this.hasVisibleReplica(device)) return;
+
+        try {
+          await this.syncDevice(key);
+        } catch {
+          // The traffic log already shows the failure; the outbox stays queued.
+        }
+      }),
+    );
+    await this.refreshServer();
+  }
+
+  /**
+   * Development only: erases the identity directory and the named groups
+   * (plus the current one) on the server, then starts over with two fresh
+   * devices. Returns the group ids the server erased.
+   */
+  async reset(groupIds: string[] = []): Promise<string[]> {
+    if (!this.state.server.online) throw new TypeError('server_offline');
+
+    const known = this.state.groupId ? [this.state.groupId, ...groupIds] : groupIds;
+
+    const response = await this.fetch(`${this.baseUrl}/debug/reset`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ group_ids: [...new Set(known)] }),
+    });
+
+    if (!response.ok) throw new Error(`reset_failed_${response.status}`);
+
+    const { cleared_group_ids: cleared } = resetResponseSchema.parse(
+      await response.json(),
+    );
+
+    this.dispose();
+    this.runtimes.clear();
+    this.sockets.clear();
+    this.state.groupId = null;
+    this.state.devices.one = newDevice('Device 1');
+    this.state.devices.two = newDevice('Device 2');
+    this.state.server.revision = null;
+    this.state.server.snapshot = null;
+    this.state.server.subscribers = [];
+    this.state.server.incoming = [];
+    await this.refreshServer();
+    this.changed();
+
+    return cleared;
+  }
+
+  /** Closes every realtime subscription so the lab can be discarded. */
+  dispose(): void {
+    const groupId = this.state.groupId;
+
+    if (!groupId) return;
+
+    for (const runtime of this.runtimes.values()) {
+      runtime.client.unwatchGroup(groupId);
+    }
   }
 
   async syncDevice(key: LabDeviceKey): Promise<ClientReplicaState | null> {
@@ -209,8 +335,10 @@ export class SyncLab {
     return replica;
   }
 
-  renameGroup(key: LabDeviceKey, name: string) {
-    return this.mutate(key, (client, groupId) => client.renameGroup(groupId, name));
+  renameGroup(key: LabDeviceKey, name: string, expectedName?: string) {
+    return this.mutate(key, (client, groupId) =>
+      client.renameGroup(groupId, name, expectedName),
+    );
   }
 
   addMember(key: LabDeviceKey, displayName: string) {
@@ -219,9 +347,14 @@ export class SyncLab {
     );
   }
 
-  renameMember(key: LabDeviceKey, memberId: string, displayName: string) {
+  renameMember(
+    key: LabDeviceKey,
+    memberId: string,
+    displayName: string,
+    expectedDisplayName?: string,
+  ) {
     return this.mutate(key, (client, groupId) =>
-      client.renameMember(groupId, memberId, displayName),
+      client.renameMember(groupId, memberId, displayName, expectedDisplayName),
     );
   }
 
@@ -257,6 +390,7 @@ export class SyncLab {
     });
 
     device.replica = replica;
+    this.watchIfEnabled(key);
     await this.refreshAfterOperation();
 
     return replica;
@@ -299,6 +433,8 @@ export class SyncLab {
 
         return this.fetch(input, init);
       },
+      webSocket: (url, protocols, handlers) =>
+        this.openSocket(device, url, protocols, handlers),
       observer: (event) => this.onTransportEvent(key, event),
     });
 
@@ -306,6 +442,11 @@ export class SyncLab {
       api,
       device_secret: secret,
       storage: new MemoryClientStorage(),
+      realtime_reconnect_delay_ms: (attempt) => Math.min(250 * 2 ** attempt, 4000),
+      on_background_sync: (replica) => {
+        device.replica = replica;
+        void this.refreshAfterOperation();
+      },
     });
 
     client.setOnline(device.online);
@@ -315,6 +456,71 @@ export class SyncLab {
     this.runtimes.set(key, created);
 
     return created;
+  }
+
+  /**
+   * Applies the simulated device and server outages to realtime connections,
+   * reporting an outage the way a dropped network connection would.
+   */
+  private openSocket(
+    device: LabDevice,
+    url: string,
+    protocols: string[],
+    handlers: RealtimeSocketHandlers,
+  ): RealtimeSocket {
+    let finished = false;
+    let socket: RealtimeSocket | null = null;
+
+    const finish = (code: number, reason: string) => {
+      if (finished) return;
+
+      finished = true;
+      this.sockets.delete(tracked);
+      handlers.close(code, reason);
+    };
+
+    const tracked: LabSocket = {
+      drop: (reason) => {
+        socket?.close(1000, reason);
+        finish(1006, reason);
+      },
+    };
+
+    if (!device.online || !this.state.server.online) {
+      const reason = device.online ? 'server_offline' : 'device_offline';
+
+      queueMicrotask(() => finish(1006, reason));
+
+      return { close: () => finish(1000, 'unsubscribed') };
+    }
+
+    this.sockets.add(tracked);
+
+    socket = this.webSocket(url, protocols, {
+      open: () => {
+        if (!finished) handlers.open();
+      },
+      message: (data) => {
+        if (!finished) handlers.message(data);
+      },
+      close: finish,
+    });
+
+    return {
+      close: (code, reason) => {
+        socket?.close(code, reason);
+        finish(code ?? 1000, reason ?? 'unsubscribed');
+      },
+    };
+  }
+
+  private watchIfEnabled(key: LabDeviceKey): void {
+    const groupId = this.state.groupId;
+    const device = this.state.devices[key];
+
+    if (!groupId || !device.realtime || !this.hasVisibleReplica(device)) return;
+
+    this.runtime(key).client.watchGroup(groupId);
   }
 
   private async mutate(
@@ -375,6 +581,7 @@ export class SyncLab {
 
     this.state.server.revision = inspection?.revision ?? null;
     this.state.server.snapshot = inspection?.snapshot ?? null;
+    this.state.server.subscribers = inspection?.subscribers ?? [];
   }
 
   private async inspect<T>(path: string, schema: z.ZodType<T>): Promise<T | null> {
@@ -406,6 +613,9 @@ export class SyncLab {
         break;
       case 'network_error':
         this.onNetworkError(key, event);
+        break;
+      case 'realtime':
+        this.onRealtimeEvent(key, event);
         break;
     }
   }
@@ -445,6 +655,36 @@ export class SyncLab {
     completeRequest(device.requests, event, result);
     completeRequest(this.state.server.incoming, event, result, device.label);
     this.recordCommandResponse(device, event);
+    this.changed();
+  }
+
+  private onRealtimeEvent(key: LabDeviceKey, event: ClientRealtimeEvent): void {
+    const device = this.state.devices[key];
+    let detail: string;
+
+    switch (event.phase) {
+      case 'connecting':
+        device.realtimeStatus = 'connecting';
+        detail = 'Connecting';
+        break;
+      case 'open':
+        device.realtimeStatus = 'open';
+        detail = 'Subscribed to announcements';
+        break;
+      case 'message':
+        detail = describeAnnouncement(event.data);
+        break;
+      case 'closed':
+        device.realtimeStatus = 'disconnected';
+        detail = `Closed ${event.code}${event.reason ? ` · ${event.reason}` : ''}`;
+        break;
+    }
+
+    pushLimited(device.realtimeEvents, {
+      at: this.timestamp(),
+      phase: event.phase,
+      detail,
+    });
     this.changed();
   }
 
@@ -600,15 +840,23 @@ const identityDirectoryInspectionSchema = z.object({
   ),
 }) satisfies z.ZodType<IdentityDirectoryInspection>;
 
+const resetResponseSchema = z.object({
+  cleared_group_ids: z.array(z.string()),
+});
+
 const groupInspectionSchema = z.object({
   revision: z.number().int().positive(),
   snapshot: groupSnapshotSchema,
+  subscribers: z.array(z.string()),
 });
 
 function newDevice(label: string): LabDevice {
   return {
     label,
     online: true,
+    realtime: true,
+    realtimeStatus: 'off',
+    realtimeEvents: [],
     session: null,
     replica: null,
     commands: [],
@@ -618,7 +866,7 @@ function newDevice(label: string): LabDevice {
 
 function completeRequest(
   requests: LabRequest[],
-  event: ClientTransportEvent,
+  event: ClientResponseEvent | ClientNetworkErrorEvent,
   result: LabRequestResult,
   source?: string,
 ): void {
@@ -631,6 +879,18 @@ function completeRequest(
   );
 
   if (entry) entry.result = result;
+}
+
+function describeAnnouncement(data: string): string {
+  try {
+    const parsed = revisionAnnouncementSchema.safeParse(JSON.parse(data));
+
+    if (parsed.success) return `Revision ${parsed.data.revision} announced`;
+  } catch {
+    // Unreadable messages are shown verbatim below.
+  }
+
+  return `Unrecognized message ${data}`;
 }
 
 function pushLimited<T>(values: T[], value: T): void {

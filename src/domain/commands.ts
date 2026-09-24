@@ -99,6 +99,7 @@ export const commandReasons = {
   memberArchived: 'member_archived',
   memberChanged: 'member_changed',
   memberIdExists: 'member_id_exists',
+  memberMerged: 'member_merged',
   memberNameTaken: 'member_name_taken',
   memberNotFound: 'member_not_found',
 } as const;
@@ -142,6 +143,8 @@ export type CommandTransition = {
   target: CommandTarget;
   serverState: CommandServerState | null;
   audit: AuditChange | null;
+  /** A merged creation's member id, to be resolved to the existing member. */
+  memberAlias?: MemberAlias;
 };
 
 export type JoinTransition =
@@ -175,11 +178,7 @@ type PreferredMemberResult =
 
 type MemberCreationDecision =
   | { kind: 'apply'; member: LedgerMember }
-  | {
-      kind: 'supersede';
-      reason: 'member_name_taken';
-      current: LedgerMember;
-    }
+  | { kind: 'merge'; current: LedgerMember }
   | {
       kind: 'reject';
       reason: 'member_id_exists';
@@ -312,6 +311,45 @@ export function applyGroupCommand(
   }
 }
 
+/**
+ * A member id a client generated for a creation that merged into an existing
+ * member. Commands that name the alias act on that member instead.
+ */
+export type MemberAlias = {
+  alias_id: string;
+  member_id: string;
+};
+
+/** Rewrites a command's member reference through recorded aliases. */
+export function resolveMemberAliases(
+  command: GroupCommand,
+  aliases: ReadonlyMap<string, string>,
+): GroupCommand {
+  switch (command.type) {
+    case 'member.create':
+      return withResolvedMember(command, aliases);
+    case 'member.rename':
+      return withResolvedMember(command, aliases);
+    case 'member.archive':
+      return withResolvedMember(command, aliases);
+    case 'preference.set':
+      return withResolvedMember(command, aliases);
+    case 'group.rename':
+    case 'group.leave':
+      return command;
+  }
+}
+
+function withResolvedMember<
+  TCommand extends { payload: { member_id: string } },
+>(command: TCommand, aliases: ReadonlyMap<string, string>): TCommand {
+  const memberId = aliases.get(command.payload.member_id);
+
+  return memberId
+    ? { ...command, payload: { ...command.payload, member_id: memberId } }
+    : command;
+}
+
 export function commandTarget(
   snapshot: GroupSnapshot,
   identityId: string,
@@ -392,9 +430,24 @@ function applyMemberCreate(
     };
   }
 
+  if (decision.kind === 'merge') {
+    return {
+      snapshot,
+      status: 'no_effect',
+      reason: 'member_merged',
+      target,
+      serverState: { kind: 'member', member: decision.current },
+      audit: null,
+      memberAlias: {
+        alias_id: command.payload.member_id,
+        member_id: decision.current.id,
+      },
+    };
+  }
+
   return {
     snapshot,
-    status: decision.kind === 'supersede' ? 'superseded' : 'rejected',
+    status: 'rejected',
     reason: decision.reason,
     target,
     serverState: { kind: 'member', member: decision.current },
@@ -602,13 +655,9 @@ function decideMemberCreation(
       memberNameKey(member.display_name) === requestedNameKey,
   );
 
-  if (memberWithName) {
-    return {
-      kind: 'supersede',
-      reason: 'member_name_taken',
-      current: memberWithName,
-    };
-  }
+  // Active names are unique, so the same name means the same person: the
+  // intent is already satisfied by the member another device added.
+  if (memberWithName) return { kind: 'merge', current: memberWithName };
 
   return {
     kind: 'apply',

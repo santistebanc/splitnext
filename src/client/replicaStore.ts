@@ -2,7 +2,12 @@ import type {
   JoinGroupRequest,
   PreferredMemberChoice,
 } from '../domain/access';
-import { applyGroupCommand, type GroupCommand } from '../domain/commands';
+import {
+  applyGroupCommand,
+  resolveMemberAliases,
+  type CommandOutcome,
+  type GroupCommand,
+} from '../domain/commands';
 import type { CreatedGroup, CreateGroupRequest } from '../domain/groups';
 import type { IdentitySession } from '../domain/identities';
 import type {
@@ -265,9 +270,16 @@ export class ClientReplicaStore {
         });
       }
 
-      replica.outbox = replica.outbox.filter(
-        (pending) => !acknowledged.has(pending.command.command_id),
-      );
+      const aliases = mergedMemberAliases(response.outcomes, sentById);
+
+      // Commands queued during this synchronization were never sent, so they
+      // can safely name the member a merged creation resolved to.
+      replica.outbox = replica.outbox
+        .filter((pending) => !acknowledged.has(pending.command.command_id))
+        .map((pending) => ({
+          ...pending,
+          command: resolveMemberAliases(pending.command, aliases),
+        }));
 
       if (response.revision >= replica.revision) {
         replica.revision = response.revision;
@@ -359,6 +371,27 @@ function stateFrom(
     hidden: access?.hidden_at !== null && access?.hidden_at !== undefined,
     last_synced_at: replica.last_synced_at,
   };
+}
+
+function mergedMemberAliases(
+  outcomes: readonly CommandOutcome[],
+  sentById: ReadonlyMap<string, GroupCommand>,
+): Map<string, string> {
+  const aliases = new Map<string, string>();
+
+  for (const outcome of outcomes) {
+    const command = sentById.get(outcome.command_id);
+
+    if (
+      outcome.reason === 'member_merged' &&
+      outcome.server_state?.kind === 'member' &&
+      command?.type === 'member.create'
+    ) {
+      aliases.set(command.payload.member_id, outcome.server_state.member.id);
+    }
+  }
+
+  return aliases;
 }
 
 function project(

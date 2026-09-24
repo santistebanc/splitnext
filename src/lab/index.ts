@@ -5,6 +5,8 @@ export {
   type LabCommand,
   type LabDevice,
   type LabDeviceKey,
+  type LabRealtimeEvent,
+  type LabRealtimeStatus,
   type LabRequest,
   type LabRequestResult,
   type LabServer,

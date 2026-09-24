@@ -1,6 +1,7 @@
 import { z } from '@hono/zod-openapi';
 import { createMiddleware } from 'hono/factory';
 import type { IdentitySession } from '../domain/identities';
+import { credentialFromProtocols } from '../domain/realtime';
 import { IdentityDirectory } from '../identityDirectory';
 
 export const deviceAuthorizationHeadersSchema = z.object({
@@ -23,7 +24,7 @@ export const authenticateDevice = createMiddleware<
   AuthenticatedRequestEnvironment
 >(async (context, next) => {
   const parsed = deviceAuthorizationHeadersSchema.safeParse({
-    authorization: context.req.header('authorization'),
+    authorization: presentedCredential(context.req.raw.headers),
   });
 
   if (!parsed.success) {
@@ -41,3 +42,14 @@ export const authenticateDevice = createMiddleware<
   context.set('identitySession', session);
   await next();
 });
+
+/** WebSocket upgrades carry the credential as a subprotocol; see realtime. */
+function presentedCredential(headers: Headers): string | undefined {
+  const authorization = headers.get('authorization');
+
+  if (authorization !== null) return authorization;
+
+  if (headers.get('upgrade')?.toLowerCase() !== 'websocket') return undefined;
+
+  return credentialFromProtocols(headers.get('sec-websocket-protocol'));
+}
