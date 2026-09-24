@@ -1,86 +1,204 @@
-import type { GroupCommand } from '../domain/commands';
-import type { JoinGroupRequest } from '../domain/access';
-import type { CreateGroupRequest } from '../domain/groups';
-import type { IdentitySession } from '../domain/identities';
-import type { CommandOutcome, GroupSnapshot } from '../domain/sync';
+import { z } from 'zod';
+import { joinGroupRequestSchema } from '../domain/access';
+import {
+  commandOutcomeSchema,
+  groupCommandSchema,
+} from '../domain/commands';
+import { createGroupRequestSchema } from '../domain/groups';
+import { identifierSchema } from '../domain/ids';
+import { identitySessionSchema } from '../domain/identities';
+import { groupSnapshotSchema } from '../domain/sync';
 
-export type PendingCommand = {
-  command: GroupCommand;
-  queued_at: string;
+const pendingCommandSchema = z.object({
+  command: groupCommandSchema,
+  queued_at: z.iso.datetime(),
+});
+
+const clientNoticeSchema = z.object({
+  command: groupCommandSchema,
+  outcome: commandOutcomeSchema,
+  recorded_at: z.iso.datetime(),
+});
+
+const clientGroupReplicaSchema = z.object({
+  group_id: identifierSchema,
+  revision: z.number().int().positive(),
+  snapshot: groupSnapshotSchema,
+  outbox: z.array(pendingCommandSchema),
+  notices: z.array(clientNoticeSchema),
+  last_synced_at: z.iso.datetime().nullable(),
+});
+
+const pendingJoinSchema = z.object({
+  group_id: identifierSchema,
+  request: joinGroupRequestSchema,
+});
+
+const pendingGroupCreationSchema = z.object({
+  request: createGroupRequestSchema,
+});
+
+export const clientStorageDocumentSchema = z.object({
+  schema_version: z.literal(1),
+  session: identitySessionSchema.nullable(),
+  groups: z.array(clientGroupReplicaSchema),
+  pending_group_creations: z.array(pendingGroupCreationSchema),
+  pending_joins: z.array(pendingJoinSchema),
+});
+
+export type PendingCommand = z.output<typeof pendingCommandSchema>;
+
+export type ClientNotice = z.output<typeof clientNoticeSchema>;
+
+export type ClientGroupReplica = z.output<typeof clientGroupReplicaSchema>;
+
+export type PendingJoin = z.output<typeof pendingJoinSchema>;
+
+export type PendingGroupCreation = z.output<typeof pendingGroupCreationSchema>;
+
+export type ClientStorageDocument = z.output<
+  typeof clientStorageDocumentSchema
+>;
+
+export type ClientStorageUpdate<T> = {
+  serialized: string;
+  result: T;
 };
 
-export type ClientNotice = {
-  command: GroupCommand;
-  outcome: CommandOutcome;
-  recorded_at: string;
-};
-
-export type ClientGroupReplica = {
-  group_id: string;
-  revision: number;
-  snapshot: GroupSnapshot;
-  outbox: PendingCommand[];
-  notices: ClientNotice[];
-  last_synced_at: string | null;
-};
-
-export type PendingJoin = {
-  group_id: string;
-  request: JoinGroupRequest;
-};
-
-export type PendingGroupCreation = {
-  request: CreateGroupRequest;
-};
-
-export type ClientStorageDocument = {
-  schema_version: 1;
-  session: IdentitySession | null;
-  groups: ClientGroupReplica[];
-  pending_group_creations: PendingGroupCreation[];
-  pending_joins: PendingJoin[];
-};
-
+/** Stores one opaque client document and serializes every update to it. */
 export interface ClientStorageAdapter {
-  load(): Promise<ClientStorageDocument | null>;
-  save(document: ClientStorageDocument): Promise<void>;
+  read(): Promise<string | null>;
+  update<T>(
+    change: (current: string | null) => ClientStorageUpdate<T>,
+  ): Promise<T>;
+}
+
+export class ClientStorageError extends Error {
+  constructor(
+    readonly code: 'corrupt_document' | 'unsupported_schema_version',
+  ) {
+    super(code);
+    this.name = 'ClientStorageError';
+  }
 }
 
 export class MemoryClientStorage implements ClientStorageAdapter {
-  private document: ClientStorageDocument | null = null;
+  private tail: Promise<void> = Promise.resolve();
 
-  async load(): Promise<ClientStorageDocument | null> {
-    return clone(this.document);
+  constructor(private serialized: string | null = null) {}
+
+  read(): Promise<string | null> {
+    return this.exclusive(() => this.serialized);
   }
 
-  async save(document: ClientStorageDocument): Promise<void> {
-    this.document = clone(document);
+  update<T>(
+    change: (current: string | null) => ClientStorageUpdate<T>,
+  ): Promise<T> {
+    return this.exclusive(() => {
+      const updated = change(this.serialized);
+
+      this.serialized = updated.serialized;
+
+      return updated.result;
+    });
+  }
+
+  private async exclusive<T>(operation: () => T): Promise<T> {
+    const previous = this.tail;
+    let release: () => void = () => undefined;
+
+    this.tail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    await previous;
+
+    try {
+      return operation();
+    } finally {
+      release();
+    }
   }
 }
 
-export type StringStorage = {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
+export type IndexedDbClientStorageOptions = {
+  database_name: string;
+  document_key: string;
 };
 
-export class JsonClientStorage implements ClientStorageAdapter {
-  constructor(
-    private readonly storage: StringStorage,
-    private readonly key: string,
-  ) {}
+/** Atomic browser adapter intended for the future PWA, not the test lab. */
+export class IndexedDbClientStorage implements ClientStorageAdapter {
+  private readonly database: Promise<IDBDatabase>;
+  private readonly documentKey: string;
 
-  async load(): Promise<ClientStorageDocument | null> {
-    const value = this.storage.getItem(this.key);
-
-    if (!value) return null;
-
-    // SAFETY: Only save() writes this namespaced value. Runtime contract
-    // validation can be added to a production adapter without changing callers.
-    return JSON.parse(value) as ClientStorageDocument;
+  constructor(options: IndexedDbClientStorageOptions) {
+    this.documentKey = options.document_key;
+    this.database = openDatabase(options.database_name);
   }
 
-  async save(document: ClientStorageDocument): Promise<void> {
-    this.storage.setItem(this.key, JSON.stringify(document));
+  async read(): Promise<string | null> {
+    const database = await this.database;
+
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction(documentStore, 'readonly');
+      const request = transaction.objectStore(documentStore).get(this.documentKey);
+
+      request.onsuccess = () => {
+        const value = z.string().optional().safeParse(request.result);
+
+        if (value.success) {
+          resolve(value.data ?? null);
+        } else {
+          reject(new ClientStorageError('corrupt_document'));
+        }
+      };
+
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async update<T>(
+    change: (current: string | null) => ClientStorageUpdate<T>,
+  ): Promise<T> {
+    const database = await this.database;
+
+    return new Promise<T>((resolve, reject) => {
+      const transaction = database.transaction(documentStore, 'readwrite');
+      const store = transaction.objectStore(documentStore);
+      const request = store.get(this.documentKey);
+      let operationError: Error | null = null;
+      let result: T;
+      let hasResult = false;
+
+      request.onsuccess = () => {
+        try {
+          const current = z.string().optional().parse(request.result) ?? null;
+          const updated = change(current);
+
+          result = updated.result;
+          hasResult = true;
+          store.put(updated.serialized, this.documentKey);
+        } catch (cause) {
+          operationError = cause instanceof Error
+            ? cause
+            : new ClientStorageError('corrupt_document');
+          transaction.abort();
+        }
+      };
+
+      transaction.oncomplete = () => {
+        if (!hasResult) {
+          reject(new ClientStorageError('corrupt_document'));
+
+          return;
+        }
+
+        resolve(result);
+      };
+
+      transaction.onerror = () => reject(operationError ?? transaction.error);
+      transaction.onabort = () => reject(operationError ?? transaction.error);
+    });
   }
 }
 
@@ -94,6 +212,52 @@ export function emptyClientDocument(): ClientStorageDocument {
   };
 }
 
-function clone<T>(value: T): T {
-  return structuredClone(value);
+export function parseClientDocument(
+  serialized: string | null,
+): ClientStorageDocument {
+  if (serialized === null) return emptyClientDocument();
+
+  let parsed: z.output<typeof z.json>;
+
+  try {
+    parsed = z.json().parse(JSON.parse(serialized));
+  } catch {
+    throw new ClientStorageError('corrupt_document');
+  }
+
+  const document = clientStorageDocumentSchema.safeParse(parsed);
+
+  if (document.success) return document.data;
+
+  const version = z.object({ schema_version: z.number() }).safeParse(parsed);
+
+  throw new ClientStorageError(
+    version.success && version.data.schema_version !== 1
+      ? 'unsupported_schema_version'
+      : 'corrupt_document',
+  );
+}
+
+export function serializeClientDocument(
+  document: ClientStorageDocument,
+): string {
+  return JSON.stringify(clientStorageDocumentSchema.parse(document));
+}
+
+const documentStore = 'client_documents';
+
+function openDatabase(name: string): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, 1);
+
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(documentStore)) {
+        request.result.createObjectStore(documentStore);
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error('indexeddb_upgrade_blocked'));
+  });
 }

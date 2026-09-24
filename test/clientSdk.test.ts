@@ -3,8 +3,7 @@ import {
   SplitnextClient,
   SplitnextProtocolError,
   SplitnextRequestError,
-  type ClientRequestEvent,
-  type ClientResponseEvent,
+  type ClientTransportEvent,
 } from '../src/client';
 import { createIdentifier } from '../src/domain/ids';
 
@@ -62,9 +61,11 @@ describe('Splitnext client SDK', () => {
 
   it('creates an anonymous identity without sending an authorization header', async () => {
     let authorization: string | null = 'not-called';
+    const events: ClientTransportEvent[] = [];
 
     const client = new SplitnextClient({
       baseUrl: 'https://splitnext.test',
+      observer: (event) => events.push(event),
       fetch: async (_input, init) => {
         authorization = new Headers(init?.headers).get('authorization');
 
@@ -84,18 +85,19 @@ describe('Splitnext client SDK', () => {
     await client.createAnonymousIdentity(deviceSecret);
 
     expect(authorization).toBeNull();
+    expect(JSON.stringify(events)).not.toContain(deviceSecret);
+    expect(events[0]).toMatchObject({
+      kind: 'request',
+      body: { device_secret: '[redacted]' },
+    });
   });
 
-  it('reports transport activity without exposing observer failures to callers', async () => {
-    const requests: ClientRequestEvent[] = [];
-    const responses: ClientResponseEvent[] = [];
+  it('reports one correlated transport event stream', async () => {
+    const events: ClientTransportEvent[] = [];
 
     const client = new SplitnextClient({
       baseUrl: 'https://splitnext.test',
-      observer: {
-        onRequest: (event) => requests.push(event),
-        onResponse: (event) => responses.push(event),
-      },
+      observer: (event) => events.push(event),
       fetch: async () => Response.json({ error: 'member_name_taken' }, {
         status: 409,
       }),
@@ -117,27 +119,26 @@ describe('Splitnext client SDK', () => {
         code: 'member_name_taken',
       }),
     );
-    expect(requests).toMatchObject([
+    expect(events).toMatchObject([
       {
+        kind: 'request',
         method: 'POST',
         path: '/groups/group/join',
       },
-    ]);
-    expect(responses).toMatchObject([
       {
+        kind: 'response',
         status: 409,
         response: { error: 'member_name_taken' },
       },
     ]);
+    expect(events[0]?.request_id).toBe(events[1]?.request_id);
   });
 
   it('keeps diagnostics from changing a successful request', async () => {
     const client = new SplitnextClient({
       baseUrl: 'https://splitnext.test',
-      observer: {
-        onRequest: () => {
-          throw new Error('broken diagnostics');
-        },
+      observer: () => {
+        throw new Error('broken diagnostics');
       },
       fetch: async () => Response.json({
         ok: true,
@@ -151,6 +152,41 @@ describe('Splitnext client SDK', () => {
       service: 'splitnext-api',
       revision: 'local',
     });
+  });
+
+  it('correlates identical requests completed out of order', async () => {
+    const events: ClientTransportEvent[] = [];
+    const releases: Array<() => void> = [];
+
+    const client = new SplitnextClient({
+      baseUrl: 'https://splitnext.test',
+      observer: (event) => events.push(event),
+      fetch: () => new Promise<Response>((resolve) => {
+        releases.push(() => resolve(Response.json({
+          ok: true,
+          service: 'splitnext-api',
+          revision: 'local',
+        })));
+      }),
+    });
+
+    const first = client.health();
+    const second = client.health();
+
+    releases[1]?.();
+    await second;
+    releases[0]?.();
+    await first;
+
+    const requestIds = events.flatMap((event) =>
+      event.kind === 'request' ? [event.request_id] : [],
+    );
+
+    const responseIds = events.flatMap((event) =>
+      event.kind === 'response' ? [event.request_id] : [],
+    );
+
+    expect(responseIds).toEqual([requestIds[1], requestIds[0]]);
   });
 
   it('rejects a successful HTTP response that violates the shared contract', async () => {

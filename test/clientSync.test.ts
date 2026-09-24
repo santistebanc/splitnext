@@ -1,7 +1,7 @@
 import { exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  JsonClientStorage,
+  ClientStorageError,
   MemoryClientStorage,
   SplitnextClient,
   SplitnextSyncClient,
@@ -330,32 +330,63 @@ describe('stateful offline client SDK', () => {
     expect(recovered.projected_snapshot?.group.name).toBe('Retry group');
   });
 
-  it('can swap the in-memory adapter for a JSON key-value adapter', async () => {
-    const values = new Map<string, string>();
+  it('retains concurrent commands from two clients sharing storage', async () => {
+    const storage = new MemoryClientStorage();
+    const first = createSyncClient('U', storage);
+    const second = createSyncClient('U', storage);
 
-    const adapter = new JsonClientStorage(
-      {
-        getItem: (key) => values.get(key) ?? null,
-        setItem: (key, value) => values.set(key, value),
-      },
-      'device-one',
+    await first.initializeIdentity();
+
+    const created = await first.createGroup({
+      name: 'Shared replica',
+      currency_code: 'EUR',
+      creator_member_name: 'Santi',
+    });
+
+    first.setOnline(false);
+    second.setOnline(false);
+
+    await Promise.all([
+      first.addMember(created.group_id, 'Robin'),
+      second.addMember(created.group_id, 'Taylor'),
+    ]);
+
+    const replica = await first.inspect(created.group_id);
+
+    expect(replica.outbox).toHaveLength(2);
+    expect(
+      replica.projected_snapshot?.members.map((member) => member.display_name),
+    ).toEqual(['Santi', 'Robin', 'Taylor']);
+  });
+
+  it('rejects malformed and unsupported persisted documents', async () => {
+    const malformed = createSyncClient(
+      'V',
+      new MemoryClientStorage('{not-json'),
     );
 
-    const document = {
-      schema_version: 1 as const,
-      session: null,
-      groups: [],
-      pending_group_creations: [],
-      pending_joins: [],
-    };
+    const unsupported = createSyncClient(
+      'W',
+      new MemoryClientStorage(JSON.stringify({ schema_version: 2 })),
+    );
 
-    await adapter.save(document);
-
-    expect(await adapter.load()).toEqual(document);
+    await expect(malformed.initializeIdentity()).rejects.toEqual(
+      expect.objectContaining<Partial<ClientStorageError>>({
+        code: 'corrupt_document',
+      }),
+    );
+    await expect(unsupported.initializeIdentity()).rejects.toEqual(
+      expect.objectContaining<Partial<ClientStorageError>>({
+        code: 'unsupported_schema_version',
+      }),
+    );
   });
 });
 
-function createSyncClient(seed: string) {
+function createSyncClient(
+  seed: string,
+  storage = new MemoryClientStorage(),
+) {
   const api = new SplitnextClient({
     baseUrl: 'https://splitnext.test',
     fetch: (input, init) => exports.default.fetch(input, init),
@@ -364,6 +395,6 @@ function createSyncClient(seed: string) {
   return new SplitnextSyncClient({
     api,
     device_secret: seed.repeat(43),
-    storage: new MemoryClientStorage(),
+    storage,
   });
 }

@@ -1,7 +1,5 @@
 import type {
-  ClientNetworkErrorEvent,
-  ClientRequestEvent,
-  ClientResponseEvent,
+  ClientTransportEvent,
   JsonValue,
 } from '../client';
 import {
@@ -11,11 +9,7 @@ import {
   type ClientReplicaState,
 } from '../client';
 import { z } from 'zod';
-import {
-  commandOutcomeSchema,
-  groupCommandSchema,
-  type GroupCommand,
-} from '../domain/commands';
+import type { GroupCommand } from '../domain/commands';
 import type { CreateGroupRequest } from '../domain/groups';
 import type { IdentitySession } from '../domain/identities';
 import { groupSnapshotSchema, type GroupSnapshot } from '../domain/sync';
@@ -40,6 +34,7 @@ export type LabRequestResult =
     };
 
 export type LabRequest = {
+  request_id: string;
   at: string;
   method: string;
   path: string;
@@ -82,6 +77,15 @@ type DeviceRuntime = {
   secret: string;
   client: SplitnextSyncClient;
 };
+
+type ClientRequestEvent = Extract<ClientTransportEvent, { kind: 'request' }>;
+
+type ClientResponseEvent = Extract<ClientTransportEvent, { kind: 'response' }>;
+
+type ClientNetworkErrorEvent = Extract<
+  ClientTransportEvent,
+  { kind: 'network_error' }
+>;
 
 export type SyncLabOptions = {
   baseUrl: string;
@@ -295,11 +299,7 @@ export class SyncLab {
 
         return this.fetch(input, init);
       },
-      observer: {
-        onRequest: (event) => this.onRequest(key, event),
-        onResponse: (event) => this.onResponse(key, event),
-        onNetworkError: (event) => this.onNetworkError(key, event),
-      },
+      observer: (event) => this.onTransportEvent(key, event),
     });
 
     const client = new SplitnextSyncClient({
@@ -393,19 +393,37 @@ export class SyncLab {
     }
   }
 
+  private onTransportEvent(
+    key: LabDeviceKey,
+    event: ClientTransportEvent,
+  ): void {
+    switch (event.kind) {
+      case 'request':
+        this.onRequest(key, event);
+        break;
+      case 'response':
+        this.onResponse(key, event);
+        break;
+      case 'network_error':
+        this.onNetworkError(key, event);
+        break;
+    }
+  }
+
   private onRequest(key: LabDeviceKey, event: ClientRequestEvent): void {
     const device = this.state.devices[key];
 
     const entry: LabRequest = {
+      request_id: event.request_id,
       at: this.timestamp(),
       method: event.method,
       path: event.path,
-      body: redactBody(event.body),
+      body: event.body,
       result: null,
     };
 
     pushLimited(device.requests, entry);
-    this.markCommands(device, commandsFrom(event.body), 'syncing');
+    this.markCommands(device, event.commands, 'syncing');
 
     if (device.online && this.state.server.online) {
       pushLimited(this.state.server.incoming, { from: device.label, ...entry });
@@ -441,7 +459,7 @@ export class SyncLab {
     });
     this.markCommands(
       device,
-      commandsFrom(event.body),
+      event.commands,
       'queued',
       'Network unavailable; still queued',
     );
@@ -481,7 +499,7 @@ export class SyncLab {
     device: LabDevice,
     event: ClientResponseEvent,
   ): void {
-    const outcomes = outcomesFrom(event.response);
+    const outcomes = event.outcomes;
 
     if (outcomes.length > 0) {
       for (const outcome of outcomes) {
@@ -506,7 +524,7 @@ export class SyncLab {
     if (event.status >= 400) {
       this.markCommands(
         device,
-        commandsFrom(event.body),
+        event.commands,
         'queued',
         `Server returned ${event.status}; still queued`,
       );
@@ -587,16 +605,6 @@ const groupInspectionSchema = z.object({
   snapshot: groupSnapshotSchema,
 });
 
-const commandEnvelopeSchema = z.object({
-  commands: z.array(groupCommandSchema),
-});
-
-const outcomeEnvelopeSchema = z.object({
-  outcomes: z.array(commandOutcomeSchema),
-});
-
-const redactableBodySchema = z.record(z.string(), z.json());
-
 function newDevice(label: string): LabDevice {
   return {
     label,
@@ -608,33 +616,18 @@ function newDevice(label: string): LabDevice {
   };
 }
 
-function commandsFrom(body: JsonValue): GroupCommand[] {
-  const parsed = commandEnvelopeSchema.safeParse(body);
-
-  return parsed.success ? parsed.data.commands : [];
-}
-
-function outcomesFrom(body: JsonValue) {
-  const parsed = outcomeEnvelopeSchema.safeParse(body);
-
-  return parsed.success ? parsed.data.outcomes : [];
-}
-
 function completeRequest(
   requests: LabRequest[],
-  event: ClientRequestEvent,
+  event: ClientTransportEvent,
   result: LabRequestResult,
   source?: string,
 ): void {
-  const body = JSON.stringify(redactBody(event.body));
-
   const entry = requests.find(
     (candidate) =>
       !candidate.result &&
-      candidate.method === event.method &&
-      candidate.path === event.path &&
+      candidate.request_id === event.request_id &&
       (!source || candidate.from === source) &&
-      JSON.stringify(candidate.body) === body,
+      candidate.method === event.method,
   );
 
   if (entry) entry.result = result;
@@ -644,14 +637,6 @@ function pushLimited<T>(values: T[], value: T): void {
   values.unshift(value);
 
   if (values.length > 20) values.length = 20;
-}
-
-function redactBody(body: JsonValue): JsonValue {
-  const parsed = redactableBodySchema.safeParse(body);
-
-  return parsed.success && parsed.data.device_secret
-    ? { ...parsed.data, device_secret: '[redacted]' }
-    : body;
 }
 
 function generateDeviceSecret(): string {

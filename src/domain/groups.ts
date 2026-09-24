@@ -65,16 +65,6 @@ export type CreatedGroup = z.output<typeof createdGroupSchema>;
 
 export type InitialGroupState = {
   view: CreatedGroup;
-  audit: {
-    sequence: number;
-    revision: number;
-    action: 'group.created';
-    actor_identity_id: string;
-    actor_number: number;
-    actor_member_name: string;
-    occurred_at: string;
-    target_id: string;
-  };
 };
 
 export function initializeGroup(command: InitializeGroupCommand): InitialGroupState {
@@ -107,16 +97,6 @@ export function initializeGroup(command: InitializeGroupCommand): InitialGroupSt
         granted_at: command.created_at,
         hidden_at: null,
       },
-    },
-    audit: {
-      sequence: 1,
-      revision,
-      action: 'group.created',
-      actor_identity_id: command.creator_identity_id,
-      actor_number: actorNumber,
-      actor_member_name: member.display_name,
-      occurred_at: command.created_at,
-      target_id: command.group_id,
     },
   };
 }

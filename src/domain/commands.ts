@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { AuditChange } from './audit';
 import type { JoinGroupCommand, PreferredMemberChoice } from './access';
 import {
   groupAccessGrantSchema,
@@ -140,11 +141,7 @@ export type CommandTransition = {
   reason: CommandReason | null;
   target: CommandTarget;
   serverState: CommandServerState | null;
-  audit: {
-    action: string;
-    before: unknown;
-    after: unknown;
-  } | null;
+  audit: AuditChange | null;
 };
 
 export type JoinTransition =
@@ -271,16 +268,25 @@ export function applyGroupJoin(
     },
     access,
     nextActorNumber: previousAccess ? nextActorNumber : nextActorNumber + 1,
-    audit: changed
-      ? {
-          action: previousAccess ? 'group.rejoined' : 'group.joined',
-          before: previousAccess ?? null,
-          after: {
-            access,
-            created_member: preferred.created ? preferred.member : null,
+    audit: !changed
+      ? null
+      : previousAccess
+        ? {
+            action: 'group.rejoined',
+            before: previousAccess,
+            after: {
+              access,
+              created_member: preferred.created ? preferred.member : null,
+            },
+          }
+        : {
+            action: 'group.joined',
+            before: null,
+            after: {
+              access,
+              created_member: preferred.created ? preferred.member : null,
+            },
           },
-        }
-      : null,
   };
 }
 

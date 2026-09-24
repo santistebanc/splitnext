@@ -5,9 +5,10 @@ import {
 } from '../domain/identities';
 import { IdentityDirectory } from '../identityDirectory';
 import {
+  authenticateDevice,
+  type AuthenticatedRequestEnvironment,
   deviceAuthorizationHeadersSchema,
-  readDeviceSecret,
-} from './deviceAuthorization';
+} from './authenticatedRequest';
 import { errorResponse } from './responses';
 
 const createAnonymousIdentityRoute = createRoute({
@@ -60,7 +61,7 @@ const currentIdentityRoute = createRoute({
   },
 });
 
-export const identityRoutes = new OpenAPIHono<{ Bindings: Env }>({
+const identityApp = new OpenAPIHono<AuthenticatedRequestEnvironment>({
   defaultHook: (result, context) => {
     if (result.success) return;
 
@@ -68,7 +69,11 @@ export const identityRoutes = new OpenAPIHono<{ Bindings: Env }>({
       ? context.json({ error: 'unauthorized' }, 401)
       : context.json({ error: 'invalid_request' }, 400);
   },
-})
+});
+
+identityApp.use('/identity', authenticateDevice);
+
+export const identityRoutes = identityApp
   .openapi(createAnonymousIdentityRoute, async (context) => {
     const { device_secret } = context.req.valid('json');
     const directory = new IdentityDirectory(context.env.INDEX);
@@ -77,14 +82,5 @@ export const identityRoutes = new OpenAPIHono<{ Bindings: Env }>({
     return context.json(session, 201);
   })
   .openapi(currentIdentityRoute, async (context) => {
-    const { authorization } = context.req.valid('header');
-    const directory = new IdentityDirectory(context.env.INDEX);
-
-    const session = await directory.authenticateDevice(
-      readDeviceSecret(authorization),
-    );
-
-    return session
-      ? context.json(session, 200)
-      : context.json({ error: 'unauthorized' }, 401);
+    return context.json(context.get('identitySession'), 200);
   });
