@@ -1,881 +1,1167 @@
 import {
+  ClientOfflineError,
+  MemoryClientStorage,
   SplitnextClient,
   SplitnextRequestError,
+  SplitnextSyncClient,
 } from '/sdk/splitnext-client.js';
 
 const elements = {
-  healthStatus: document.querySelector('#health-status'),
-  readyStatus: document.querySelector('#ready-status'),
-  identityAStatus: document.querySelector('#identity-a-status'),
-  identityBStatus: document.querySelector('#identity-b-status'),
-  createIdentities: document.querySelector('#create-identities'),
-  createGroupForm: document.querySelector('#create-group-form'),
-  groupFields: document.querySelector('#group-fields'),
-  groupResult: document.querySelector('#group-result'),
-  joinDeviceForm: document.querySelector('#join-device-form'),
-  syncControls: document.querySelector('#sync-controls'),
+  health: document.querySelector('#health-status'),
+  ready: document.querySelector('#ready-status'),
+  initialize: document.querySelector('#initialize-devices'),
+  createForm: document.querySelector('#create-group-form'),
+  joinForm: document.querySelector('#join-group-form'),
+  joinGroupId: document.querySelector('#join-group-id'),
+  setupSummary: document.querySelector('#setup-summary'),
+  serverToggle: document.querySelector('#toggle-server'),
   serverRevision: document.querySelector('#server-revision'),
-  serverState: document.querySelector('#server-state'),
+  serverIdentityList: document.querySelector('#server-identity-list'),
+  serverGroupSummary: document.querySelector('#server-group-summary'),
+  serverMemberList: document.querySelector('#server-member-list'),
   serverIncoming: document.querySelector('#server-incoming'),
-  activityList: document.querySelector('#activity-list'),
-  clearActivity: document.querySelector('#clear-activity'),
+  serverState: document.querySelector('#server-state'),
+  refreshServer: document.querySelector('#refresh-server'),
+  clearServerTraffic: document.querySelector('#clear-server-traffic'),
   toast: document.querySelector('#toast'),
 };
 
 const deviceViews = Object.fromEntries(
-  [...document.querySelectorAll('[data-replica]')].map((root) => [
-    root.dataset.replica,
+  [...document.querySelectorAll('[data-device]')].map((root) => [
+    root.dataset.device,
     {
       root,
-      identityId: root.querySelector('[data-role="identity-id"]'),
-      connectionStatus: root.querySelector('[data-role="connection-status"]'),
-      toggleConnection: root.querySelector('[data-action="toggle-connection"]'),
-      loadSnapshot: root.querySelector('[data-action="load-snapshot"]'),
-      syncCurrent: root.querySelector('[data-action="sync-current"]'),
-      memberForm: root.querySelector('[data-role="member-form"]'),
-      renameForm: root.querySelector('[data-role="rename-form"]'),
-      archiveForm: root.querySelector('[data-role="archive-form"]'),
-      retryCommand: root.querySelector('[data-action="retry-command"]'),
-      pendingCount: root.querySelector('[data-role="pending-count"]'),
-      pendingCommands: root.querySelector('[data-role="pending-commands"]'),
-      syncMeta: root.querySelector('[data-role="sync-meta"]'),
-      localState: root.querySelector('[data-role="local-state"]'),
-      outgoingData: root.querySelector('[data-role="outgoing-data"]'),
-      incomingData: root.querySelector('[data-role="incoming-data"]'),
+      toggle: root.querySelector('[data-action="toggle-device"]'),
+      identity: root.querySelector('[data-role="identity"]'),
+      revision: root.querySelector('[data-role="revision"]'),
+      groupSummary: root.querySelector('[data-action-form="rename-group"]'),
+      memberList: root.querySelector('[data-role="member-list"]'),
+      actions: root.querySelector('[data-role="actions"]'),
+      sync: root.querySelector('[data-action="sync"]'),
+      leave: root.querySelector('[data-action="leave"]'),
+      rejoin: root.querySelector('[data-action="rejoin"]'),
+      renameGroupForm: root.querySelector('[data-action-form="rename-group"]'),
+      addMemberForm: root.querySelector('[data-action-form="add-member"]'),
+      commands: root.querySelector('[data-role="commands"]'),
+      requests: root.querySelector('[data-role="requests"]'),
+      clearTraffic: root.querySelector('[data-action="clear-traffic"]'),
+      rawState: root.querySelector('[data-role="raw-state"]'),
     },
   ]),
 );
 
-function emptyDevice() {
+function newDevice(label) {
   return {
-    api: null,
-    deviceApi: null,
+    label,
+    online: true,
     secret: null,
     session: null,
-    hasAccess: false,
-    knownRevision: null,
-    isOffline: false,
-    isSyncing: false,
-    pendingCommands: [],
-    snapshot: null,
-    lastCommand: null,
-    outgoing: [],
-    incoming: [],
+    api: null,
+    client: null,
+    replica: null,
+    commands: [],
+    requests: [],
   };
 }
 
 const state = {
-  devices: { a: emptyDevice(), b: emptyDevice() },
-  pendingGroupInput: null,
-  pendingJoin: null,
-  createdGroup: null,
-  server: { revision: null, snapshot: null, incoming: [] },
-  activity: [],
+  groupId: null,
+  devices: {
+    one: newDevice('Device 1'),
+    two: newDevice('Device 2'),
+  },
+  server: {
+    online: true,
+    identityDirectory: null,
+    revision: null,
+    snapshot: null,
+    incoming: [],
+  },
 };
 
 const systemApi = new SplitnextClient({ baseUrl: window.location.origin });
 
-function createDeviceApi(deviceId) {
-  const device = state.devices[deviceId];
+await Promise.all([checkDependencies(), refreshIdentityDirectory()]);
 
-  return new SplitnextClient({
-    baseUrl: window.location.origin,
-    observer: {
-      onRequest(event) {
-        const transportEntry = {
-          method: event.method,
-          path: redactPath(event.path),
-          body: redactBody(event.body),
-        };
+bindEvents();
 
-        pushLog(device.outgoing, transportEntry);
-        pushLog(state.server.incoming, {
-          from: `Device ${deviceId.toUpperCase()}`,
-          ...transportEntry,
-        });
-        renderTransport();
-      },
-      onResponse(event) {
-        pushLog(device.incoming, {
-          status: event.status,
-          body: event.response,
-        });
-        recordActivity(
-          event.method,
-          redactPath(event.path),
-          event.status,
-          event.duration_ms,
-        );
-        observeServerResponse(event.response);
-        renderTransport();
-      },
-      onNetworkError(event) {
-        pushLog(device.incoming, { status: 0, error: 'network_error' });
-        recordActivity(
-          event.method,
-          redactPath(event.path),
-          0,
-          event.duration_ms,
-          'network_error',
-        );
-        renderTransport();
-      },
-    },
-  });
-}
+renderAll();
 
-async function refreshDependencies() {
+async function checkDependencies() {
   const [health, ready] = await Promise.allSettled([
     systemApi.health(),
     systemApi.readiness(),
   ]);
 
-  setStatus(elements.healthStatus, health.status === 'fulfilled', 'Worker');
-  setStatus(
-    elements.readyStatus,
-    ready.status === 'fulfilled' && ready.value.ok,
-    'Storage',
-  );
+  renderDependency(elements.health, health.status === 'fulfilled', 'Worker');
+  renderDependency(elements.ready, ready.status === 'fulfilled', 'Storage');
 }
 
-function setStatus(element, available, label) {
+function renderDependency(element, available, label) {
   element.textContent = `${label} ${available ? 'ready' : 'unavailable'}`;
-  element.className = available ? 'ok' : 'error';
+  element.className = `status ${available ? 'ok' : 'error'}`;
 }
 
-async function createIdentities() {
-  setBusy(elements.createIdentities, true);
+function bindEvents() {
+  elements.initialize.addEventListener('click', initializeDevices);
+  elements.createForm.addEventListener('submit', createGroup);
+  elements.joinForm.addEventListener('submit', joinGroup);
+  elements.serverToggle.addEventListener('click', toggleServer);
+  elements.refreshServer.addEventListener('click', refreshServer);
+  elements.clearServerTraffic.addEventListener('click', () => {
+    state.server.incoming = [];
+    renderServer();
+  });
+
+  for (const [key, view] of Object.entries(deviceViews)) {
+    view.toggle.addEventListener('click', () => toggleDevice(key));
+    view.sync.addEventListener('click', () => synchronizeDevice(key));
+    view.leave.addEventListener('click', () => leaveGroup(key));
+    view.rejoin.addEventListener('click', () => rejoinGroup(key));
+    view.clearTraffic.addEventListener('click', () => clearDeviceTraffic(key));
+    view.renameGroupForm.addEventListener('submit', (event) =>
+      renameGroup(event, key),
+    );
+    view.addMemberForm.addEventListener('submit', (event) =>
+      addMember(event, key),
+    );
+    view.memberList.addEventListener('submit', (event) =>
+      performMemberAction(event, key),
+    );
+  }
+}
+
+async function initializeDevices() {
+  setBusy(elements.initialize, true, 'Initializing…');
 
   try {
-    for (const deviceId of ['a', 'b']) {
-      const device = state.devices[deviceId];
+    await Promise.all(
+      Object.entries(state.devices).map(async ([key, device]) => {
+        if (!device.client) buildDevice(key);
 
-      device.secret ??= generateDeviceSecret();
-      device.api ??= createDeviceApi(deviceId);
-      device.session = await device.api.createAnonymousIdentity(device.secret);
-      device.deviceApi = device.api.forDevice(device.secret);
-    }
-
-    showToast('Both device identities are ready');
+        device.session = await device.client.initializeIdentity();
+      }),
+    );
+    await refreshIdentityDirectory();
+    showToast('Both independent device identities are ready');
   } catch (error) {
     showToast(describeError(error), true);
   } finally {
-    setBusy(elements.createIdentities, false);
+    setBusy(elements.initialize, false, 'Initialize both devices');
     renderAll();
   }
+}
+
+function buildDevice(key) {
+  const device = state.devices[key];
+
+  device.secret = generateDeviceSecret();
+  device.api = new SplitnextClient({
+    baseUrl: window.location.origin,
+    fetch: async (input, init) => {
+      if (!device.online) throw new TypeError('device_offline');
+
+      if (!state.server.online) throw new TypeError('server_offline');
+
+      return globalThis.fetch(input, init);
+    },
+    observer: {
+      onRequest(event) {
+        const entry = {
+          at: timestamp(),
+          method: event.method,
+          path: event.path,
+          body: redactBody(event.body),
+          result: null,
+        };
+
+        pushLog(device.requests, entry);
+        markCommands(device, event.body?.commands, 'syncing');
+
+        if (device.online && state.server.online) {
+          pushLog(state.server.incoming, { from: device.label, ...entry });
+        }
+
+        renderCommands(key);
+        renderTraffic(key);
+        renderServerTraffic();
+      },
+      onResponse(event) {
+        const result = {
+          kind: 'response',
+          status: event.status,
+          duration_ms: event.duration_ms,
+          body: event.response,
+        };
+
+        completeRequest(device.requests, event, result);
+        completeRequest(state.server.incoming, event, result, device.label);
+        recordCommandResponse(device, event);
+        observeServerResponse(event.response);
+        renderCommands(key);
+        renderTraffic(key);
+        renderServer();
+      },
+      onNetworkError(event) {
+        completeRequest(device.requests, event, {
+          kind: 'network_error',
+          status: 0,
+          duration_ms: event.duration_ms,
+          error: event.error.message,
+        });
+        markCommands(
+          device,
+          event.body?.commands,
+          'queued',
+          'Network unavailable; still queued',
+        );
+        renderCommands(key);
+        renderTraffic(key);
+      },
+    },
+  });
+  device.client = new SplitnextSyncClient({
+    api: device.api,
+    device_secret: device.secret,
+    storage: new MemoryClientStorage(),
+  });
+  device.client.setOnline(device.online);
 }
 
 async function createGroup(event) {
   event.preventDefault();
 
-  if (!state.devices.a.session) return;
+  const device = state.devices.one;
+
+  if (!device.client) return;
 
   const button = event.submitter;
-  const fields = new FormData(elements.createGroupForm);
+  const fields = new FormData(elements.createForm);
 
-  state.pendingGroupInput ??= {
-    group_id: crypto.randomUUID(),
-    name: readText(fields, 'name'),
-    currency_code: readText(fields, 'currency_code'),
-    creator_member_name: readText(fields, 'creator_member_name'),
-  };
-  setBusy(button, true);
+  setBusy(button, true, 'Creating…');
 
   try {
-    const created = await state.devices.a.deviceApi.createGroup(
-      state.pendingGroupInput,
-    );
-
-    state.createdGroup = created;
-    state.pendingGroupInput = null;
-    state.devices.a.hasAccess = true;
-    state.devices.a.knownRevision = created.group.revision;
-    state.devices.a.snapshot = snapshotFromCreatedGroup(created);
-    observeServerResponse({
-      revision: created.group.revision,
-      snapshot: state.devices.a.snapshot,
+    const replica = await device.client.createGroup({
+      name: readText(fields, 'name'),
+      currency_code: readText(fields, 'currency_code'),
+      creator_member_name: readText(fields, 'creator_member_name'),
     });
-    showToast('Device A created the group');
+
+    state.groupId = replica.group_id;
+    elements.joinGroupId.value = replica.group_id;
+    device.replica = replica;
+    await refreshReplicaStates();
+    showToast('Device 1 created the authoritative group');
   } catch (error) {
     showToast(describeError(error), true);
   } finally {
-    setBusy(button, false);
+    setBusy(button, false, 'Create group');
     renderAll();
   }
 }
 
-async function joinDeviceB(event) {
+async function joinGroup(event) {
   event.preventDefault();
 
-  if (!state.createdGroup || !state.devices.b.session) return;
+  const device = state.devices.two;
+
+  if (!device.client) return;
 
   const button = event.submitter;
-  const fields = new FormData(elements.joinDeviceForm);
-  const displayName = readText(fields, 'display_name');
+  const fields = new FormData(elements.joinForm);
+  const groupId = readText(fields, 'group_id');
 
-  if (findActiveMemberByName(state.server.snapshot, displayName)) {
-    showToast(`An active member named ${displayName} already exists`, true);
-
-    return;
-  }
-
-  setBusy(button, true);
+  setBusy(button, true, 'Joining…');
 
   try {
-    if (!state.pendingJoin) {
-      const link = await state.devices.a.deviceApi.rotateGroupLink(
-        state.createdGroup.group.id,
-      );
+    const replica = await device.client.joinGroup(groupId, {
+      kind: 'new',
+      display_name: readText(fields, 'display_name'),
+    });
 
-      state.devices.a.knownRevision = link.revision;
-      state.devices.a.snapshot = link.snapshot;
-      state.pendingJoin = {
-        token: link.invite.token,
-        memberId: crypto.randomUUID(),
-      };
-    }
-
-    const joined = await state.devices.b.deviceApi.redeemGroupLink(
-      state.createdGroup.group.id,
-      state.pendingJoin.token,
-      {
-        preferred_member: {
-          kind: 'new',
-          member_id: state.pendingJoin.memberId,
-          display_name: displayName,
-        },
-      },
-    );
-
-    state.devices.b.hasAccess = true;
-    state.devices.b.knownRevision = joined.revision;
-    state.devices.b.snapshot = joined.snapshot;
-    state.pendingJoin = null;
-    showToast('Device B joined with a separate identity');
+    state.groupId = groupId;
+    device.replica = replica;
+    await refreshReplicaStates();
+    showToast('Device 2 joined and received its own local replica');
   } catch (error) {
     showToast(describeError(error), true);
   } finally {
-    setBusy(button, false);
+    setBusy(button, false, 'Join group');
     renderAll();
   }
 }
 
-async function syncDevice(deviceId, knownRevision, button, commands, consumesQueue) {
-  const device = state.devices[deviceId];
+async function toggleDevice(key) {
+  const device = state.devices[key];
 
-  if (!state.createdGroup || !device.hasAccess) return false;
+  device.online = !device.online;
+  device.client?.setOnline(device.online);
+  renderDevice(key);
 
-  device.isSyncing = true;
-  setBusy(button, true);
-  renderDevice(deviceId);
+  if (!device.online) {
+    showToast(`${device.label} is offline. New changes stay in its outbox.`);
+
+    return;
+  }
+
+  showToast(`${device.label} is online and will reconcile now.`);
+
+  if (state.groupId && device.replica && !device.replica.hidden) {
+    await synchronizeDevice(key, false);
+  }
+}
+
+function toggleServer() {
+  state.server.online = !state.server.online;
+  renderServer();
+  showToast(
+    state.server.online
+      ? 'Server is available again. Bring devices online or sync manually.'
+      : 'Server outage simulated. Device requests will fail but outboxes remain safe.',
+  );
+}
+
+async function synchronizeDevice(key, announce = true) {
+  const device = state.devices[key];
+
+  if (!device.client || !state.groupId || !device.replica) return;
 
   try {
-    const response = await device.deviceApi.syncGroup(
-      state.createdGroup.group.id,
-      { known_revision: knownRevision, commands },
-    );
+    device.replica = await device.client.syncGroup(state.groupId);
 
-    device.knownRevision = response.revision;
-
-    if (response.state.kind === 'snapshot') {
-      device.snapshot = response.state.snapshot;
-    }
-
-    if (consumesQueue) {
-      const acknowledgedIds = new Set(
-        response.outcomes.map((outcome) => outcome.command_id),
-      );
-
-      device.pendingCommands = device.pendingCommands.filter(
-        (command) => !acknowledgedIds.has(command.command_id),
-      );
-    }
-
-    const unsuccessful = response.outcomes.filter(
-      (outcome) => outcome.status !== 'applied' && outcome.status !== 'no_effect',
-    );
-
-    if (unsuccessful.length > 0) {
-      const reasons = [...new Set(unsuccessful.map((outcome) => outcome.reason))]
-        .join(', ');
-
-      showToast(
-        `${unsuccessful.length} command${unsuccessful.length === 1 ? '' : 's'} not applied: ${reasons}`,
-        true,
-      );
-    } else {
-      showToast(
-        `Device ${deviceId.toUpperCase()} received ${response.state.kind}`,
-      );
-    }
-
-    return true;
+    if (announce) showToast(`${device.label} synchronized successfully`);
   } catch (error) {
     showToast(describeError(error), true);
-
-    return false;
   } finally {
-    device.isSyncing = false;
-    setBusy(button, false);
+    await refreshReplicaStates();
     renderAll();
   }
 }
 
-function flushDevice(deviceId, button, knownRevision) {
-  const commands = [...state.devices[deviceId].pendingCommands];
+async function renameGroup(event, key) {
+  event.preventDefault();
+  const fields = new FormData(event.currentTarget);
 
-  return syncDevice(deviceId, knownRevision, button, commands, true);
+  await runMutation(
+    key,
+    (client) => client.renameGroup(state.groupId, readText(fields, 'name')),
+    'Group rename recorded',
+  );
 }
 
-async function toggleConnection(deviceId, button) {
-  const device = state.devices[deviceId];
+async function addMember(event, key) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const fields = new FormData(form);
 
-  if (!device.isOffline) {
-    device.isOffline = true;
-    renderDevice(deviceId);
-    showToast(`Device ${deviceId.toUpperCase()} is offline`);
-
-    return;
-  }
-
-  device.isOffline = false;
-  renderDevice(deviceId);
-  await flushDevice(deviceId, button, device.knownRevision);
+  await runMutation(
+    key,
+    (client) => client.addMember(
+      state.groupId,
+      readText(fields, 'display_name'),
+    ),
+    'Member addition recorded',
+  );
+  form.reset();
 }
 
-async function createMemberCommand(deviceId, event) {
+async function performMemberAction(event, key) {
   event.preventDefault();
 
-  const device = state.devices[deviceId];
-  const fields = new FormData(deviceViews[deviceId].memberForm);
-  const displayName = readText(fields, 'display_name');
+  const form = event.target;
 
-  if (findActiveMemberByName(projectLocalSnapshot(device), displayName)) {
-    showToast(`An active member named ${displayName} already exists`, true);
+  if (!(form instanceof HTMLFormElement)) return;
 
-    return;
-  }
-
-  const command = {
-    command_id: crypto.randomUUID(),
-    type: 'member.create',
-    payload: {
-      member_id: crypto.randomUUID(),
-      display_name: displayName,
-    },
-  };
-
-  enqueueCommand(device, command);
-  renderDevice(deviceId);
-
-  if (device.isOffline) {
-    showToast(`Queued on Device ${deviceId.toUpperCase()}`);
-
-    return;
-  }
-
-  await flushDevice(deviceId, event.submitter, device.knownRevision);
-}
-
-async function renameMember(deviceId, event) {
-  event.preventDefault();
-
-  const device = state.devices[deviceId];
-  const fields = new FormData(deviceViews[deviceId].renameForm);
+  const fields = new FormData(form);
   const memberId = readText(fields, 'member_id');
-  const localSnapshot = projectLocalSnapshot(device);
+  const intent = event.submitter?.value;
+  let operation;
+  let message;
 
-  const member = localSnapshot?.members.find(
-    (candidate) => candidate.id === memberId,
+  if (intent === 'prefer') {
+    operation = (client) => client.selectPreferredMember(state.groupId, memberId);
+    message = 'Preferred “you” member updated';
+  } else if (intent === 'rename') {
+    const displayName = readText(fields, 'display_name');
+
+    if (!displayName) {
+      showToast('Enter a new member name before renaming', true);
+
+      return;
+    }
+
+    operation = (client) =>
+      client.renameMember(state.groupId, memberId, displayName);
+    message = 'Member rename recorded';
+  } else {
+    operation = (client) => client.removeMember(state.groupId, memberId);
+    message = 'Member removal recorded';
+  }
+
+  await runMutation(key, operation, message);
+}
+
+async function leaveGroup(key) {
+  await runMutation(
+    key,
+    (client) => client.leaveGroup(state.groupId),
+    'Group hidden and preferred member cleared',
+  );
+}
+
+async function rejoinGroup(key) {
+  const device = state.devices[key];
+
+  const member = device.replica?.confirmed_snapshot?.members.find(
+    (candidate) => candidate.status === 'active',
   );
 
-  if (!member) {
-    showToast('Load a snapshot and select a member first', true);
+  if (!device.client || !state.groupId || !member) {
+    showToast('An active member is required to rejoin', true);
 
     return;
   }
 
-  const displayName = readText(fields, 'display_name');
-
-  if (
-    findActiveMemberByName(localSnapshot, displayName, member.id)
-  ) {
-    showToast(`An active member named ${displayName} already exists`, true);
-
-    return;
-  }
-
-  const command = {
-    command_id: crypto.randomUUID(),
-    type: 'member.rename',
-    payload: {
+  try {
+    device.replica = await device.client.joinGroup(state.groupId, {
+      kind: 'existing',
       member_id: member.id,
-      expected_display_name: member.display_name,
-      display_name: displayName,
-    },
-  };
-
-  enqueueCommand(device, command);
-  renderDevice(deviceId);
-
-  if (device.isOffline) {
-    showToast(`Queued rename on Device ${deviceId.toUpperCase()}`);
-
-    return;
+    });
+    showToast(`${device.label} rejoined using ${member.display_name}`);
+  } catch (error) {
+    showToast(describeError(error), true);
+  } finally {
+    await refreshReplicaStates();
+    renderAll();
   }
-
-  await flushDevice(deviceId, event.submitter, device.knownRevision);
 }
 
-async function archiveMember(deviceId, event) {
-  event.preventDefault();
+async function runMutation(key, operation, successMessage) {
+  const device = state.devices[key];
 
-  const device = state.devices[deviceId];
-  const fields = new FormData(deviceViews[deviceId].archiveForm);
-  const memberId = readText(fields, 'member_id');
+  if (!device.client || !state.groupId) return;
 
-  const member = projectLocalSnapshot(device)?.members.find(
-    (candidate) => candidate.id === memberId && candidate.status === 'active',
-  );
-
-  if (!member) {
-    showToast('Load a snapshot and select an active member first', true);
-
-    return;
+  try {
+    device.replica = await operation(device.client);
+    showToast(
+      device.online
+        ? successMessage
+        : `${successMessage}; queued locally while offline`,
+    );
+  } catch (error) {
+    showToast(describeError(error), true);
+  } finally {
+    await refreshReplicaStates();
+    renderAll();
   }
-
-  const command = {
-    command_id: crypto.randomUUID(),
-    type: 'member.archive',
-    payload: { member_id: member.id },
-  };
-
-  enqueueCommand(device, command);
-  renderDevice(deviceId);
-
-  if (device.isOffline) {
-    showToast(`Queued archive on Device ${deviceId.toUpperCase()}`);
-
-    return;
-  }
-
-  await flushDevice(deviceId, event.submitter, device.knownRevision);
 }
 
-function enqueueCommand(device, command) {
-  device.lastCommand = command;
-  device.pendingCommands.push(command);
-}
+async function refreshServer() {
+  await refreshIdentityDirectory();
 
-async function retryCommand(deviceId, button) {
-  const device = state.devices[deviceId];
-
-  if (!device.lastCommand || device.isOffline) return;
-
-  const commandIsPending = device.pendingCommands.some(
-    (command) => command.command_id === device.lastCommand.command_id,
+  const candidate = Object.entries(state.devices).find(([, device]) =>
+    device.online && device.client && device.replica && !device.replica.hidden,
   );
 
-  if (commandIsPending) {
-    await flushDevice(deviceId, button, device.knownRevision);
+  if (!candidate) {
+    showToast('Identity directory refreshed');
 
     return;
   }
 
-  await syncDevice(
-    deviceId,
-    device.knownRevision,
-    button,
-    [device.lastCommand],
-    false,
+  await synchronizeDevice(candidate[0], false);
+}
+
+async function refreshIdentityDirectory() {
+  if (!state.server.online) return;
+
+  try {
+    const response = await fetch('/debug/identity-directory');
+
+    if (response.status === 404) {
+      state.server.identityDirectory = null;
+
+      return;
+    }
+
+    if (!response.ok) throw new Error(`identity_inspection_${response.status}`);
+
+    state.server.identityDirectory = await response.json();
+  } catch {
+    state.server.identityDirectory = null;
+  }
+}
+
+async function refreshReplicaStates() {
+  if (!state.groupId) return;
+
+  await Promise.all(
+    Object.values(state.devices).map(async (device) => {
+      if (!device.client) return;
+
+      device.replica = await device.client.inspect(state.groupId);
+      captureReplicaCommands(device);
+    }),
   );
+}
+
+function clearDeviceTraffic(key) {
+  state.devices[key].requests = [];
+  renderTraffic(key);
+}
+
+function observeServerResponse(body) {
+  if (!body) return;
+
+  if (body.state?.kind === 'snapshot') {
+    state.server.revision = body.revision;
+    state.server.snapshot = body.state.snapshot;
+
+    return;
+  }
+
+  if (body.snapshot && body.revision) {
+    state.server.revision = body.revision;
+    state.server.snapshot = body.snapshot;
+
+    return;
+  }
+
+  if (body.group?.revision && body.member && body.access) {
+    state.server.revision = body.group.revision;
+    state.server.snapshot = {
+      group: {
+        id: body.group.id,
+        name: body.group.name,
+        currency_code: body.group.currency_code,
+        created_at: body.group.created_at,
+      },
+      members: [body.member],
+      access_grants: [body.access],
+    };
+
+    return;
+  }
+
+  if (body.revision) state.server.revision = body.revision;
 }
 
 function renderAll() {
-  renderIdentities();
-  renderGroup();
-  renderDevice('a');
-  renderDevice('b');
+  renderSetup();
+  renderDevice('one');
+  renderDevice('two');
   renderServer();
 }
 
-function renderIdentities() {
-  renderIdentity(elements.identityAStatus, state.devices.a);
-  renderIdentity(elements.identityBStatus, state.devices.b);
-  elements.createIdentities.hidden = Boolean(
-    state.devices.a.session && state.devices.b.session,
+function renderSetup() {
+  const initialized = Object.values(state.devices).every(
+    (device) => device.session,
   );
-  elements.groupFields.disabled = !state.devices.a.session;
+
+  const createButton = elements.createForm.querySelector('button[type="submit"]');
+  const joinButton = elements.joinForm.querySelector('button[type="submit"]');
+
+  createButton.disabled = !initialized || !state.devices.one.online;
+  joinButton.disabled =
+    !initialized ||
+    !state.devices.two.online ||
+    !elements.joinGroupId.value ||
+    Boolean(
+      state.devices.two.replica?.confirmed_snapshot &&
+      !state.devices.two.replica.hidden,
+    );
+  elements.initialize.disabled = initialized;
+  elements.initialize.textContent = initialized
+    ? 'Devices initialized'
+    : 'Initialize both devices';
+
+  if (!initialized) {
+    elements.setupSummary.textContent =
+      'Initialize the two independent device identities to begin.';
+  } else if (!state.groupId) {
+    elements.setupSummary.textContent =
+      'Both devices are ready. Create a group from Device 1.';
+  } else {
+    const joined = Boolean(state.devices.two.replica?.confirmed_snapshot);
+
+    elements.setupSummary.textContent = joined
+      ? `Group ${String(state.groupId)} is present on both devices. Try taking one offline.`
+      : `Group ${String(state.groupId)} exists on Device 1 and the server. Device 2 can join now.`;
+  }
 }
 
-function renderIdentity(element, device) {
-  if (!device.session) {
-    element.textContent = 'Not initialized.';
+function renderDevice(key) {
+  const device = state.devices[key];
+  const view = deviceViews[key];
+  const replica = device.replica;
+  const snapshot = replica?.projected_snapshot;
 
-    return;
+  renderConnection(view.toggle, device.online);
+  view.identity.textContent = device.session
+    ? `Identity ${shortId(device.session.identity.id)} · Device ${shortId(device.session.device.id)}`
+    : 'Identity not initialized';
+  view.revision.textContent = replica?.revision ?? '—';
+
+  if (!snapshot) {
+    renderEmptyGroupEditor(view.groupSummary);
+    view.memberList.replaceChildren();
+  } else {
+    renderGroupSummary(view.groupSummary, snapshot.group);
+    renderMembers(view.memberList, snapshot, device.session?.identity.id, true);
   }
 
-  const { identity, device: identityDevice } = device.session;
+  renderCommands(key);
+  renderTraffic(key);
 
-  element.innerHTML = `<dl><div><dt>Identity</dt><dd>${escapeHtml(identity.id)}</dd></div><div><dt>Credential</dt><dd>${escapeHtml(identityDevice.id)}</dd></div></dl>`;
-}
+  const hasActiveGroup = Boolean(snapshot) && !replica?.hidden;
 
-function renderGroup() {
-  if (!state.createdGroup) {
-    elements.groupResult.textContent = state.devices.a.session
-      ? 'Device A can create the group.'
-      : 'Create both device identities first.';
-    elements.joinDeviceForm.hidden = true;
-    elements.syncControls.hidden = true;
-
-    return;
+  for (const control of view.actions.querySelectorAll('button, input, select')) {
+    control.disabled = !hasActiveGroup;
   }
 
-  const { group, member, access } = state.createdGroup;
-
-  elements.groupResult.innerHTML = `<dl><div><dt>Group</dt><dd>${escapeHtml(group.id)}</dd></div><div><dt>Created at</dt><dd>${escapeHtml(group.created_at)}</dd></div><div><dt>First member</dt><dd>${escapeHtml(member.display_name)}</dd></div><div><dt>Device A</dt><dd>${escapeHtml(access.actor_handle)}</dd></div></dl>`;
-  elements.joinDeviceForm.hidden = state.devices.b.hasAccess;
-  elements.syncControls.hidden = false;
-}
-
-function renderDevice(deviceId) {
-  const device = state.devices[deviceId];
-  const view = deviceViews[deviceId];
-
-  const revisionLabel = device.knownRevision === null
-    ? 'no revision'
-    : `revision ${device.knownRevision}`;
-
-  const disabled = !device.hasAccess || device.isSyncing;
-
-  view.identityId.textContent = device.session?.identity.id ?? 'No identity';
-  view.connectionStatus.textContent = device.hasAccess
-    ? `${device.isOffline ? 'Offline' : 'Online'} · ${revisionLabel}`
-    : 'Waiting for access';
-  view.connectionStatus.className = `connection-status${device.isOffline ? ' offline' : ''}`;
-  view.toggleConnection.textContent = device.isOffline
-    ? 'Go online & sync'
-    : 'Go offline';
-  view.toggleConnection.disabled = disabled;
-  view.loadSnapshot.disabled = disabled || device.isOffline;
-  view.syncCurrent.disabled = disabled || device.isOffline;
-
-  for (const control of view.memberForm.elements) control.disabled = disabled;
-
-  const localSnapshot = projectLocalSnapshot(device);
-
-  populateMemberOptions(view.renameForm, localSnapshot);
-  populateMemberOptions(view.archiveForm, localSnapshot);
-
-  for (const control of view.renameForm.elements) control.disabled = disabled;
-
-  for (const control of view.archiveForm.elements) control.disabled = disabled;
-
-  view.retryCommand.disabled =
-    disabled || device.isOffline || !device.lastCommand;
-  view.pendingCount.textContent = `${device.pendingCommands.length} queued`;
-  view.pendingCommands.innerHTML = device.pendingCommands.length === 0
-    ? '<p class="empty">The offline queue is empty.</p>'
-    : device.pendingCommands
-        .map(
-          (command) => `<div class="pending-command"><strong>${escapeHtml(describeCommand(command))}</strong><code>${escapeHtml(command.command_id.slice(0, 8))}</code></div>`,
-        )
-        .join('');
-  view.syncMeta.textContent = `${revisionLabel} · ${device.pendingCommands.length} pending`;
-  view.localState.textContent = JSON.stringify(
-    { revision: device.knownRevision, snapshot: localSnapshot },
+  view.leave.disabled = !hasActiveGroup || !device.online;
+  view.sync.disabled = !hasActiveGroup || !device.online;
+  view.rejoin.hidden = !replica?.hidden;
+  view.rejoin.disabled = !replica?.hidden || !device.online;
+  view.rawState.textContent = JSON.stringify(
+    replica ?? {
+      online: device.online,
+      session: device.session,
+      group_id: state.groupId,
+      message: 'No local group data',
+    },
     null,
     2,
   );
-  view.outgoingData.textContent = JSON.stringify(device.outgoing, null, 2);
-  view.incomingData.textContent = JSON.stringify(device.incoming, null, 2);
 }
 
-function renderServer() {
-  elements.serverRevision.textContent = state.server.revision === null
-    ? 'No state'
-    : `Revision ${String(state.server.revision)}`;
-  elements.serverState.textContent = JSON.stringify(state.server.snapshot ?? {}, null, 2);
-  elements.serverIncoming.textContent = JSON.stringify(state.server.incoming, null, 2);
-}
+function renderGroupSummary(element, group) {
+  const input = element.querySelector('input[name="name"]');
+  const existingDetail = element.querySelector('[data-role="group-detail"]');
 
-function renderTransport() {
-  renderDevice('a');
-  renderDevice('b');
-  renderServer();
-}
+  if (input && existingDetail) {
+    if (document.activeElement !== input) input.value = group.name;
 
-function projectLocalSnapshot(device) {
-  if (!device.snapshot) return null;
-
-  const snapshot = structuredClone(device.snapshot);
-
-  for (const command of device.pendingCommands) {
-    if (command.type === 'member.create') {
-      const idExists = snapshot.members.some(
-        (member) => member.id === command.payload.member_id,
-      );
-
-      const nameExists = findActiveMemberByName(
-        snapshot,
-        command.payload.display_name,
-      );
-
-      if (!idExists && !nameExists) {
-        snapshot.members.push({
-          id: command.payload.member_id,
-          display_name: command.payload.display_name,
-          status: 'active',
-          created_at: 'pending server timestamp',
-          updated_at: 'pending server timestamp',
-          _local_pending: true,
-        });
-      }
-
-      continue;
-    }
-
-    if (command.type === 'member.rename') {
-      const member = snapshot.members.find(
-        (candidate) => candidate.id === command.payload.member_id,
-      );
-
-      if (member?.display_name === command.payload.expected_display_name) {
-        member.display_name = command.payload.display_name;
-        member.updated_at = 'pending server timestamp';
-        member._local_pending = true;
-      }
-
-      continue;
-    }
-
-    const member = snapshot.members.find(
-      (candidate) => candidate.id === command.payload.member_id,
-    );
-
-    if (member?.status === 'active') {
-      member.status = 'archived';
-      member.updated_at = 'pending server timestamp';
-      member._local_pending = true;
-
-      for (const grant of snapshot.access_grants) {
-        if (grant.preferred_member_id === member.id) {
-          grant.preferred_member_id = null;
-          grant._local_pending = true;
-        }
-      }
-    }
-  }
-
-  return snapshot;
-}
-
-function findActiveMemberByName(snapshot, displayName, excludedId = null) {
-  const requestedNameKey = memberNameKey(displayName);
-
-  return snapshot?.members.find(
-    (member) =>
-      member.id !== excludedId &&
-      member.status === 'active' &&
-      memberNameKey(member.display_name) === requestedNameKey,
-  );
-}
-
-function memberNameKey(displayName) {
-  return displayName.trim().normalize('NFKC').toLowerCase();
-}
-
-function snapshotFromCreatedGroup(created) {
-  return {
-    group: {
-      id: created.group.id,
-      name: created.group.name,
-      currency_code: created.group.currency_code,
-      created_at: created.group.created_at,
-    },
-    members: [created.member],
-    access_grants: [created.access],
-  };
-}
-
-function populateMemberOptions(form, snapshot) {
-  const select = form.elements.namedItem('member_id');
-  const selectedId = select.value;
-
-  const members = snapshot?.members.filter(
-    (member) => member.status === 'active',
-  ) ?? [];
-
-  select.innerHTML = members.length === 0
-    ? '<option value="">Load a snapshot first</option>'
-    : members
-        .map(
-          (member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.display_name)}</option>`,
-        )
-        .join('');
-
-  if (members.some((member) => member.id === selectedId)) {
-    select.value = selectedId;
-  }
-}
-
-function describeCommand(command) {
-  switch (command.type) {
-    case 'member.create':
-      return `Create ${command.payload.display_name}`;
-    case 'member.rename':
-      return `Rename ${command.payload.expected_display_name} → ${command.payload.display_name}`;
-    case 'member.archive':
-      return `Archive ${command.payload.member_id.slice(0, 8)}`;
-  }
-}
-
-function observeServerResponse(payload) {
-  if (!payload) return;
-
-  if (payload.snapshot && Number.isInteger(payload.revision)) {
-    state.server.revision = payload.revision;
-    state.server.snapshot = payload.snapshot;
-  }
-
-  if (
-    payload.state?.kind === 'snapshot' &&
-    Number.isInteger(payload.revision)
-  ) {
-    state.server.revision = payload.revision;
-    state.server.snapshot = payload.state.snapshot;
-  }
-}
-
-function pushLog(log, entry) {
-  log.unshift({ at: new Date().toISOString(), ...entry });
-  log.splice(20);
-}
-
-function redactBody(body) {
-  if (!body) return null;
-
-  return 'device_secret' in body
-    ? { ...body, device_secret: '[generated credential]' }
-    : body;
-}
-
-function redactPath(path) {
-  return path.replace(
-    /^(\/join\/[0-9a-f-]+)\/[A-Za-z0-9_-]{43}$/,
-    '$1/[invite-token]',
-  );
-}
-
-function recordActivity(method, path, status, duration, error = null) {
-  state.activity.unshift({ method, path, status, duration: Math.round(duration), error });
-  state.activity = state.activity.slice(0, 30);
-  renderActivity();
-}
-
-function renderActivity() {
-  if (state.activity.length === 0) {
-    elements.activityList.innerHTML = '<p class="empty">Requests will appear here.</p>';
+    existingDetail.textContent = `${group.currency_code} · ${group.id}`;
 
     return;
   }
 
-  elements.activityList.innerHTML = state.activity
-    .map((entry) => `<div class="activity-entry"><strong>${entry.method}</strong><code>${escapeHtml(entry.path)}</code><span class="${entry.status >= 400 || entry.status === 0 ? 'error' : 'ok'}">${entry.status || 'ERR'} · ${entry.duration} ms${entry.error ? ` · ${escapeHtml(entry.error)}` : ''}</span></div>`)
-    .join('');
+  element.replaceChildren();
+  const title = document.createElement('strong');
+  const detail = document.createElement('p');
+
+  title.textContent = group.name;
+  detail.className = 'member-note';
+  detail.textContent = `${group.currency_code} · ${group.id}`;
+  element.append(title, detail);
+}
+
+function renderEmptyGroupEditor(element) {
+  const input = element.querySelector('input[name="name"]');
+  const detail = element.querySelector('[data-role="group-detail"]');
+
+  if (input && document.activeElement !== input) input.value = '';
+
+  if (detail) detail.textContent = 'No group';
+}
+
+function renderMembers(element, snapshot, identityId, editable = false) {
+  element.replaceChildren();
+
+  for (const member of snapshot.members.filter(({ status }) => status === 'active')) {
+    const preferredBy = snapshot.access_grants.filter(
+      (grant) => grant.preferred_member_id === member.id && !grant.hidden_at,
+    );
+
+    const isYou = preferredBy.some((grant) => grant.identity_id === identityId);
+    const row = document.createElement(editable ? 'form' : 'div');
+
+    row.className = `member-row${editable ? '' : ' server-member'}`;
+
+    if (!editable) {
+      const name = document.createElement('span');
+      const note = document.createElement('span');
+
+      name.className = 'member-name';
+      name.textContent = member.display_name;
+      note.className = 'member-note';
+      note.textContent = preferredBy.length
+        ? preferredBy.map(({ actor_handle }) => actor_handle).join(', ')
+        : 'Not preferred';
+      row.append(name, note);
+      element.append(row);
+
+      continue;
+    }
+
+    const memberId = document.createElement('input');
+    const name = document.createElement('input');
+    const save = document.createElement('button');
+    const prefer = document.createElement('button');
+    const remove = document.createElement('button');
+
+    memberId.type = 'hidden';
+    memberId.name = 'member_id';
+    memberId.value = member.id;
+    name.name = 'display_name';
+    name.value = member.display_name;
+    name.maxLength = 100;
+    name.required = true;
+    name.setAttribute('aria-label', `${member.display_name} name`);
+    save.type = 'submit';
+    save.name = 'intent';
+    save.value = 'rename';
+    save.textContent = 'Save';
+    prefer.type = 'submit';
+    prefer.name = 'intent';
+    prefer.value = 'prefer';
+    prefer.className = `you-button${isYou ? ' selected' : ''}`;
+    prefer.textContent = isYou ? 'You' : 'Set as you';
+    remove.type = 'submit';
+    remove.name = 'intent';
+    remove.value = 'remove';
+    remove.className = 'remove-button';
+    remove.textContent = 'Delete';
+    row.append(memberId, name, save, prefer, remove);
+    element.append(row);
+  }
+}
+
+function captureReplicaCommands(device) {
+  if (!device.replica) return;
+
+  for (const pending of device.replica.outbox) {
+    upsertCommand(device, pending.command, 'queued', pending.queued_at);
+  }
+
+  for (const notice of device.replica.notices) {
+    upsertCommand(
+      device,
+      notice.command,
+      notice.outcome.status,
+      notice.recorded_at,
+      notice.outcome.reason,
+    );
+  }
+}
+
+function markCommands(device, commands, status, detail = null) {
+  if (!Array.isArray(commands)) return;
+
+  for (const command of commands) {
+    upsertCommand(device, command, status, timestamp(), detail);
+  }
+}
+
+function recordCommandResponse(device, event) {
+  const outcomes = event.response?.outcomes;
+
+  if (Array.isArray(outcomes)) {
+    for (const outcome of outcomes) {
+      const existing = device.commands.find(
+        ({ command }) => command.command_id === outcome.command_id,
+      );
+
+      const command = existing?.command ?? {
+        command_id: outcome.command_id,
+        type: outcome.command_type,
+        payload: {},
+      };
+
+      upsertCommand(
+        device,
+        command,
+        outcome.status,
+        timestamp(),
+        outcome.reason,
+      );
+    }
+
+    return;
+  }
+
+  if (event.status >= 400) {
+    markCommands(
+      device,
+      event.body?.commands,
+      'queued',
+      `Server returned ${event.status}; still queued`,
+    );
+  }
+}
+
+function upsertCommand(device, command, status, updatedAt, detail = null) {
+  const existing = device.commands.find(
+    (entry) => entry.command.command_id === command.command_id,
+  );
+
+  if (existing) {
+    existing.command = command;
+    existing.status = status;
+    existing.updated_at = updatedAt;
+    existing.detail = detail;
+  } else {
+    device.commands.unshift({
+      command,
+      status,
+      updated_at: updatedAt,
+      detail,
+    });
+  }
+
+  if (device.commands.length > 20) device.commands.length = 20;
+}
+
+function renderCommands(key) {
+  const device = state.devices[key];
+  const element = deviceViews[key].commands;
+
+  element.replaceChildren();
+
+  if (device.commands.length === 0) {
+    element.innerHTML = '<span class="empty">No commands.</span>';
+
+    return;
+  }
+
+  for (const entry of device.commands) {
+    const card = document.createElement('div');
+    const summary = document.createElement('strong');
+    const status = document.createElement('span');
+    const detail = document.createElement('small');
+
+    card.className = `command-card ${entry.status}`;
+    summary.textContent = summarizeCommand(entry.command);
+    status.className = 'command-status';
+    status.textContent = entry.status.replace('_', ' ');
+    detail.textContent = `${shortId(entry.command.command_id)}${entry.detail ? ` · ${entry.detail}` : ''}`;
+    card.append(summary, status, detail);
+    element.append(card);
+  }
+}
+
+function renderTraffic(key) {
+  const device = state.devices[key];
+  const view = deviceViews[key];
+
+  renderRequestList(view.requests, device.requests);
+}
+
+function renderRequestList(element, entries, { showSource = false } = {}) {
+  element.replaceChildren();
+
+  if (entries.length === 0) {
+    element.innerHTML = '<span class="empty">No requests.</span>';
+
+    return;
+  }
+
+  for (const entry of entries) {
+    const item = document.createElement('details');
+    const summary = document.createElement('summary');
+    const method = document.createElement('span');
+    const endpoint = document.createElement('code');
+    const important = document.createElement('span');
+    const result = document.createElement('span');
+    const time = document.createElement('span');
+    const exchange = document.createElement('div');
+    const outcome = requestOutcome(entry);
+
+    item.className = `request-card ${outcome}`;
+    method.className = `method method-${entry.method.toLowerCase()}`;
+    endpoint.className = 'endpoint';
+    important.className = 'request-important';
+    result.className = 'request-result';
+    time.className = 'request-time';
+    exchange.className = 'exchange';
+    method.textContent = entry.method;
+    endpoint.textContent = entry.path;
+    important.textContent = showSource
+      ? `${entry.from} · ${summarizeRequest(entry)}`
+      : summarizeRequest(entry);
+    result.textContent = summarizeResult(entry.result);
+    time.textContent = entry.at;
+
+    summary.append(method, endpoint, important, result, time);
+    exchange.append(
+      renderExchangeBlock('Request body', entry.body),
+      renderExchangeBlock(
+        'Response',
+        entry.result?.kind === 'network_error'
+          ? { error: entry.result.error }
+          : entry.result?.body ?? 'Waiting for response…',
+      ),
+    );
+    item.append(summary, exchange);
+    element.append(item);
+  }
+}
+
+function renderExchangeBlock(label, value) {
+  const block = document.createElement('section');
+  const heading = document.createElement('strong');
+  const content = document.createElement('pre');
+
+  block.className = 'exchange-block';
+  heading.textContent = label;
+  content.textContent = formatJson(value);
+  block.append(heading, content);
+
+  return block;
+}
+
+function requestOutcome(entry) {
+  if (!entry.result) return 'pending';
+
+  if (entry.result.kind === 'network_error' || entry.result.status >= 400) {
+    return 'error';
+  }
+
+  return 'success';
+}
+
+function summarizeResult(result) {
+  if (!result) return 'Pending';
+
+  if (result.kind === 'network_error') {
+    return `Network error · ${result.duration_ms}ms`;
+  }
+
+  return `${result.status} · ${result.duration_ms}ms`;
+}
+
+function summarizeRequest(entry) {
+  const body = entry.body;
+
+  if (entry.path === '/identities/anonymous') return 'Create anonymous identity';
+
+  if (Array.isArray(body?.commands)) {
+    if (body.commands.length === 0) {
+      return `Check for changes after revision ${body.known_revision}`;
+    }
+
+    return body.commands.map(summarizeCommand).join(' · ');
+  }
+
+  if (body?.creator_member_name) {
+    return `${body.name} · ${body.currency_code} · creator ${body.creator_member_name}`;
+  }
+
+  if (body?.preferred_member) {
+    const preferred = body.preferred_member;
+
+    return preferred.kind === 'new'
+      ? `Join as new member ${preferred.display_name}`
+      : `Join as existing member ${shortId(preferred.member_id)}`;
+  }
+
+  if (body === null) return 'No request body';
+
+  return summarizeFields(body);
+}
+
+function summarizeCommand(command) {
+  const payload = command.payload ?? {};
+
+  switch (command.type) {
+    case 'group.rename':
+      return `Rename group to ${payload.name}`;
+    case 'member.create':
+      return `Add member ${payload.display_name}`;
+    case 'member.rename':
+      return `Rename member to ${payload.display_name}`;
+    case 'member.archive':
+      return `Delete member ${shortId(payload.member_id)}`;
+    case 'preference.set':
+      return `Set “you” to ${shortId(payload.member_id)}`;
+    case 'group.leave':
+      return 'Leave group';
+    default:
+      return command.type;
+  }
+}
+
+function summarizeFields(value) {
+  const serialized = JSON.stringify(value) ?? String(value);
+
+  return serialized.length > 100
+    ? `${serialized.slice(0, 97)}…`
+    : serialized;
+}
+
+function formatJson(value) {
+  return JSON.stringify(value, null, 2) ?? String(value);
+}
+
+function renderServer() {
+  const snapshot = state.server.snapshot;
+
+  renderConnection(elements.serverToggle, state.server.online);
+  elements.serverRevision.textContent = state.server.revision ?? '—';
+  elements.refreshServer.disabled = !state.server.online;
+
+  renderIdentityDirectory();
+
+  if (snapshot) {
+    renderGroupSummary(elements.serverGroupSummary, snapshot.group);
+    renderMembers(elements.serverMemberList, snapshot, null);
+  } else {
+    elements.serverGroupSummary.innerHTML = '<p class="empty">The latest server snapshot will appear after group creation.</p>';
+    elements.serverMemberList.replaceChildren();
+  }
+
+  elements.serverState.textContent = JSON.stringify(
+    {
+      online: state.server.online,
+      identity_directory: state.server.identityDirectory,
+      revision: state.server.revision,
+      snapshot: state.server.snapshot,
+    },
+    null,
+    2,
+  );
+  renderServerTraffic();
+}
+
+function renderIdentityDirectory() {
+  const directory = state.server.identityDirectory;
+
+  if (!directory) {
+    elements.serverIdentityList.innerHTML =
+      '<span class="empty">Inspection unavailable outside local development.</span>';
+
+    return;
+  }
+
+  if (directory.identities.length === 0) {
+    elements.serverIdentityList.innerHTML =
+      '<span class="empty">No identities.</span>';
+
+    return;
+  }
+
+  elements.serverIdentityList.replaceChildren(
+    ...directory.identities.map((identity) => {
+      const row = document.createElement('div');
+      row.className = 'directory-identity';
+
+      const heading = document.createElement('strong');
+      heading.textContent = `Identity ${identity.id}`;
+      row.append(heading);
+
+      for (const device of identity.devices) {
+        const deviceRow = document.createElement('span');
+        deviceRow.className = 'directory-device';
+        deviceRow.textContent = `Device ${device.id} · ${device.revoked_at ? 'revoked' : 'active'}`;
+        row.append(deviceRow);
+      }
+
+      return row;
+    }),
+  );
+}
+
+function renderServerTraffic() {
+  renderRequestList(elements.serverIncoming, state.server.incoming, {
+    showSource: true,
+  });
+}
+
+function renderConnection(button, online) {
+  button.className = `connection-toggle ${online ? 'online' : 'offline'}`;
+  button.textContent = online ? 'Online' : 'Offline';
+}
+
+function pushLog(log, entry) {
+  log.unshift(entry);
+
+  if (log.length > 20) log.length = 20;
+}
+
+function completeRequest(log, event, result, source) {
+  const body = JSON.stringify(redactBody(event.body));
+
+  const entry = log.find(
+    (candidate) =>
+      !candidate.result &&
+      candidate.method === event.method &&
+      candidate.path === event.path &&
+      (!source || candidate.from === source) &&
+      JSON.stringify(candidate.body) === body,
+  );
+
+  if (entry) entry.result = result;
+}
+
+function readText(formData, name) {
+  return String(formData.get(name) ?? '').trim();
+}
+
+function shortId(value) {
+  if (!value) return '—';
+
+  return `${value.slice(0, 8)}…${value.slice(-4)}`;
+}
+
+function timestamp() {
+  return new Date().toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function redactBody(body) {
+  if (body?.device_secret) {
+    return { ...body, device_secret: '[redacted]' };
+  }
+
+  return body;
 }
 
 function generateDeviceSecret() {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   const binary = String.fromCharCode(...bytes);
 
-  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+  return btoa(binary)
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replace(/=+$/, '');
 }
 
-function readText(fields, name) {
-  return fields.get(name)?.toString().trim() ?? '';
-}
-
-function setBusy(button, busy) {
+function setBusy(button, busy, label) {
   button.disabled = busy;
+  button.textContent = label;
+}
 
-  if (busy) {
-    button.dataset.label = button.textContent;
-    button.textContent = 'Working…';
+let toastTimer;
 
-    return;
-  }
-
-  button.textContent = button.dataset.label ?? button.textContent;
-  delete button.dataset.label;
+function showToast(message, error = false) {
+  clearTimeout(toastTimer);
+  elements.toast.textContent = message;
+  elements.toast.className = `toast visible ${error ? 'error' : ''}`;
+  toastTimer = setTimeout(() => {
+    elements.toast.className = 'toast';
+  }, 4200);
 }
 
 function describeError(error) {
-  if (error instanceof SplitnextRequestError) {
-    return `${error.status} · ${error.code}`;
+  if (error instanceof ClientOfflineError) {
+    return 'This action requires the device to be online.';
   }
 
-  return error instanceof Error ? error.message : 'unknown_error';
+  if (error instanceof SplitnextRequestError) {
+    return `Server rejected the request: ${error.code}`;
+  }
+
+  if (error instanceof Error) {
+    if (error.message === 'server_offline') return 'The simulated server is offline.';
+
+    if (error.message === 'device_offline') return 'This device is offline.';
+
+    return error.message;
+  }
+
+  return 'Unexpected error';
 }
-
-function showToast(message, isError = false) {
-  elements.toast.textContent = message;
-  elements.toast.className = `toast is-visible${isError ? ' is-error' : ''}`;
-  window.clearTimeout(showToast.timer);
-  showToast.timer = window.setTimeout(() => {
-    elements.toast.className = 'toast';
-  }, 3_400);
-}
-
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (character) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;',
-  })[character]);
-}
-
-elements.createIdentities.addEventListener('click', createIdentities);
-
-elements.createGroupForm.addEventListener('submit', createGroup);
-
-elements.joinDeviceForm.addEventListener('submit', joinDeviceB);
-
-for (const [deviceId, view] of Object.entries(deviceViews)) {
-  view.memberForm.addEventListener('submit', (event) => {
-    void createMemberCommand(deviceId, event);
-  });
-  view.renameForm.addEventListener('submit', (event) => {
-    void renameMember(deviceId, event);
-  });
-  view.archiveForm.addEventListener('submit', (event) => {
-    void archiveMember(deviceId, event);
-  });
-  view.retryCommand.addEventListener('click', (event) => {
-    void retryCommand(deviceId, event.currentTarget);
-  });
-  view.toggleConnection.addEventListener('click', (event) => {
-    void toggleConnection(deviceId, event.currentTarget);
-  });
-  view.loadSnapshot.addEventListener('click', (event) => {
-    void flushDevice(deviceId, event.currentTarget, null);
-  });
-  view.syncCurrent.addEventListener('click', (event) => {
-    void flushDevice(
-      deviceId,
-      event.currentTarget,
-      state.devices[deviceId].knownRevision,
-    );
-  });
-}
-
-elements.clearActivity.addEventListener('click', () => {
-  state.activity = [];
-  renderActivity();
-});
-
-renderAll();
-
-void refreshDependencies();

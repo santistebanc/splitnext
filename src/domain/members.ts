@@ -1,6 +1,5 @@
 import { z } from 'zod';
-
-const identifierSchema = z.uuid();
+import { identifierSchema } from './ids';
 
 export const memberNameSchema = z.string().trim().min(1).max(100);
 

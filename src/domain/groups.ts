@@ -1,8 +1,7 @@
 import { z } from 'zod';
+import { identifierSchema } from './ids';
 
-const identifierSchema = z.uuid();
-
-const nameSchema = z.string().trim().min(1).max(100);
+export const groupNameSchema = z.string().trim().min(1).max(100);
 
 const currencyCodeSchema = z
   .string()
@@ -33,10 +32,21 @@ export type GroupAccessGrant = z.output<typeof groupAccessGrantSchema>;
 
 export const createGroupRequestSchema = z.object({
   group_id: identifierSchema,
-  name: nameSchema,
+  name: groupNameSchema,
   currency_code: currencyCodeSchema,
-  creator_member_name: nameSchema,
+  creator_member_name: groupNameSchema,
 });
+
+export const renameGroupCommandSchema = z.object({
+  command_id: identifierSchema,
+  type: z.literal('group.rename'),
+  payload: z.object({
+    expected_name: groupNameSchema,
+    name: groupNameSchema,
+  }),
+});
+
+export type RenameGroupCommand = z.output<typeof renameGroupCommandSchema>;
 
 export type CreateGroupRequest = z.output<typeof createGroupRequestSchema>;
 

@@ -1,12 +1,13 @@
 import { z } from 'zod';
+import { identifierSchema } from './ids';
 
 export const identitySchema = z.object({
-  id: z.uuid(),
+  id: identifierSchema,
   created_at: z.iso.datetime(),
 });
 
 export const deviceSchema = z.object({
-  id: z.uuid(),
+  id: identifierSchema,
   created_at: z.iso.datetime(),
 });
 

@@ -18,5 +18,6 @@ an account or an access-control record. Members are active or archived.
 **Preferred member**: an access identity's nonexclusive choice of which ledger
 member the UI calls “you.” Multiple identities may choose the same member.
 
-**Group invite**: a temporary, reusable credential that issues a group access
-grant and lets the joining identity select an active member or create one.
+**Direct join**: the temporary MVP mechanism in which an authenticated identity
+that knows a group id receives a permanent grant while selecting an active
+member or creating one. Invitations will replace this before public use.

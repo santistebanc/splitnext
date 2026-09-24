@@ -1,16 +1,13 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { v7 as uuidv7 } from 'uuid';
+import type { Context } from 'hono';
+import { joinGroupRequestSchema } from '../domain/access';
 import {
   createdGroupSchema,
   createGroupRequestSchema,
-  groupAccessGrantSchema,
 } from '../domain/groups';
+import { createIdentifier, identifierSchema } from '../domain/ids';
 import {
-  inviteTokenSchema,
-  redeemGroupLinkRequestSchema,
-} from '../domain/invites';
-import {
-  groupSnapshotSchema,
+  groupSessionSchema,
   syncGroupRequestSchema,
   syncGroupResponseSchema,
 } from '../domain/sync';
@@ -20,6 +17,12 @@ import {
   readDeviceSecret,
 } from './deviceAuthorization';
 import { errorResponse } from './responses';
+
+const groupIdParameter = z.object({
+  groupId: identifierSchema.meta({
+    param: { name: 'groupId', in: 'path' },
+  }),
+});
 
 const createGroupRoute = createRoute({
   method: 'post',
@@ -31,24 +34,45 @@ const createGroupRoute = createRoute({
     headers: deviceAuthorizationHeadersSchema,
     body: {
       required: true,
-      content: {
-        'application/json': { schema: createGroupRequestSchema },
-      },
+      content: { 'application/json': { schema: createGroupRequestSchema } },
     },
   },
   responses: {
     201: {
-      description: 'The created group and its initial identity preferences.',
-      content: {
-        'application/json': {
-          schema: createdGroupSchema,
-        },
-      },
+      description: 'The created group and initial member selection.',
+      content: { 'application/json': { schema: createdGroupSchema } },
     },
     400: errorResponse('The request body is invalid.'),
     401: errorResponse('The device credential is unavailable or invalid.'),
     409: errorResponse('The group id has already been used.'),
     500: errorResponse('The group could not be created.'),
+  },
+});
+
+const joinGroupRoute = createRoute({
+  method: 'post',
+  path: '/groups/{groupId}/join',
+  tags: ['Groups'],
+  summary: 'Join a known group without an invitation',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: groupIdParameter,
+    headers: deviceAuthorizationHeadersSchema,
+    body: {
+      required: true,
+      content: { 'application/json': { schema: joinGroupRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Permanent access and the current group snapshot.',
+      content: { 'application/json': { schema: groupSessionSchema } },
+    },
+    400: errorResponse('The join request is invalid.'),
+    401: errorResponse('The device credential is unavailable or invalid.'),
+    404: errorResponse('The group does not exist.'),
+    409: errorResponse('The preferred member choice conflicts.'),
+    500: errorResponse('The group could not be joined.'),
   },
 });
 
@@ -59,104 +83,21 @@ const syncGroupRoute = createRoute({
   summary: 'Synchronize an authorized client with one group',
   security: [{ bearerAuth: [] }],
   request: {
-    params: z.object({
-      groupId: z.uuid().openapi({ param: { name: 'groupId', in: 'path' } }),
-    }),
+    params: groupIdParameter,
     headers: deviceAuthorizationHeadersSchema,
     body: {
       required: true,
-      content: {
-        'application/json': { schema: syncGroupRequestSchema },
-      },
+      content: { 'application/json': { schema: syncGroupRequestSchema } },
     },
   },
   responses: {
     200: {
-      description: 'The current snapshot or confirmation that it is unchanged.',
-      content: {
-        'application/json': { schema: syncGroupResponseSchema },
-      },
+      description: 'Command outcomes and the current snapshot when needed.',
+      content: { 'application/json': { schema: syncGroupResponseSchema } },
     },
     400: errorResponse('The sync request is invalid.'),
     401: errorResponse('The identity has no access to this group.'),
     500: errorResponse('The group could not be synchronized.'),
-  },
-});
-
-const rotateGroupLinkRoute = createRoute({
-  method: 'post',
-  path: '/groups/{groupId}/invite-link',
-  tags: ['Groups'],
-  summary: 'Rotate the current reusable group link',
-  security: [{ bearerAuth: [] }],
-  request: {
-    params: z.object({
-      groupId: z.uuid().openapi({ param: { name: 'groupId', in: 'path' } }),
-    }),
-    headers: deviceAuthorizationHeadersSchema,
-  },
-  responses: {
-    201: {
-      description: 'A new seven-day reusable group link.',
-      content: {
-        'application/json': {
-          schema: z.object({
-            revision: z.number().int().positive(),
-            snapshot: groupSnapshotSchema,
-            invite: z.object({
-              id: z.uuid(),
-              token: inviteTokenSchema,
-              join_url: z.string(),
-              created_at: z.iso.datetime(),
-              expires_at: z.iso.datetime(),
-            }),
-          }),
-        },
-      },
-    },
-    401: errorResponse('The identity has no access to this group.'),
-    500: errorResponse('The group link could not be rotated.'),
-  },
-});
-
-const redeemGroupLinkRoute = createRoute({
-  method: 'post',
-  path: '/join/{groupId}/{inviteToken}',
-  tags: ['Groups'],
-  summary: 'Redeem a group link for permanent group access',
-  security: [{ bearerAuth: [] }],
-  request: {
-    params: z.object({
-      groupId: z.uuid().openapi({ param: { name: 'groupId', in: 'path' } }),
-      inviteToken: inviteTokenSchema.openapi({
-        param: { name: 'inviteToken', in: 'path' },
-      }),
-    }),
-    headers: deviceAuthorizationHeadersSchema,
-    body: {
-      required: true,
-      content: {
-        'application/json': { schema: redeemGroupLinkRequestSchema },
-      },
-    },
-  },
-  responses: {
-    200: {
-      description: 'Permanent access and the initial group snapshot.',
-      content: {
-        'application/json': {
-          schema: z.object({
-            revision: z.number().int().positive(),
-            snapshot: groupSnapshotSchema,
-            access: groupAccessGrantSchema,
-          }),
-        },
-      },
-    },
-    400: errorResponse('The join request is invalid.'),
-    401: errorResponse('The group link is unavailable.'),
-    409: errorResponse('The preferred member choice conflicts.'),
-    500: errorResponse('The group link could not be redeemed.'),
   },
 });
 
@@ -171,24 +112,19 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
 })
   .openapi(createGroupRoute, async (context) => {
     const input = context.req.valid('json');
-    const { authorization } = context.req.valid('header');
-    const identities = new IdentityDirectory(context.env.INDEX);
-
-    const session = await identities.authenticateDevice(
-      readDeviceSecret(authorization),
-    );
+    const session = await authenticate(context);
 
     if (!session) return context.json({ error: 'unauthorized' }, 401);
 
-    const objectId = context.env.GROUPS.idFromName(input.group_id);
-    const group = context.env.GROUPS.get(objectId);
-    const createdAt = new Date().toISOString();
+    const group = context.env.GROUPS.get(
+      context.env.GROUPS.idFromName(input.group_id),
+    );
 
     const result = await group.createGroup({
       ...input,
       creator_identity_id: session.identity.id,
-      member_id: uuidv7(),
-      created_at: createdAt,
+      member_id: createIdentifier(),
+      created_at: new Date().toISOString(),
     });
 
     if (!result.ok) {
@@ -201,20 +137,55 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
 
     return context.json(result.created, 201);
   })
-  .openapi(syncGroupRoute, async (context) => {
+  .openapi(joinGroupRoute, async (context) => {
     const input = context.req.valid('json');
     const { groupId } = context.req.valid('param');
-    const { authorization } = context.req.valid('header');
-    const identities = new IdentityDirectory(context.env.INDEX);
-
-    const session = await identities.authenticateDevice(
-      readDeviceSecret(authorization),
-    );
+    const session = await authenticate(context);
 
     if (!session) return context.json({ error: 'unauthorized' }, 401);
 
-    const objectId = context.env.GROUPS.idFromName(groupId);
-    const group = context.env.GROUPS.get(objectId);
+    const group = context.env.GROUPS.get(
+      context.env.GROUPS.idFromName(groupId),
+    );
+
+    const result = await group.joinGroup({
+      ...input,
+      group_id: groupId,
+      identity_id: session.identity.id,
+      joined_at: new Date().toISOString(),
+    });
+
+    if (!result.ok) {
+      if (result.error === 'invalid_request') {
+        return context.json({ error: result.error }, 400);
+      }
+
+      if (result.error === 'group_not_found') {
+        return context.json({ error: result.error }, 404);
+      }
+
+      return context.json({ error: result.error }, 409);
+    }
+
+    return context.json(
+      {
+        revision: result.revision,
+        snapshot: result.snapshot,
+        access: result.access,
+      },
+      200,
+    );
+  })
+  .openapi(syncGroupRoute, async (context) => {
+    const input = context.req.valid('json');
+    const { groupId } = context.req.valid('param');
+    const session = await authenticate(context);
+
+    if (!session) return context.json({ error: 'unauthorized' }, 401);
+
+    const group = context.env.GROUPS.get(
+      context.env.GROUPS.idFromName(groupId),
+    );
 
     const result = await group.syncGroup({
       ...input,
@@ -229,113 +200,16 @@ export const groupRoutes = new OpenAPIHono<{ Bindings: Env }>({
     }
 
     return context.json(result.response, 200);
-  })
-  .openapi(rotateGroupLinkRoute, async (context) => {
-    const { groupId } = context.req.valid('param');
-    const { authorization } = context.req.valid('header');
-    const identities = new IdentityDirectory(context.env.INDEX);
-
-    const session = await identities.authenticateDevice(
-      readDeviceSecret(authorization),
-    );
-
-    if (!session) return context.json({ error: 'unauthorized' }, 401);
-
-    const token = generateSecret();
-    const createdAt = new Date();
-    const expiresAt = new Date(createdAt.getTime() + 7 * 24 * 60 * 60 * 1_000);
-
-    const group = context.env.GROUPS.get(
-      context.env.GROUPS.idFromName(groupId),
-    );
-
-    const result = await group.rotateGroupLink({
-      group_id: groupId,
-      identity_id: session.identity.id,
-      invite_id: uuidv7(),
-      token_hash: await hashSecret(token),
-      created_at: createdAt.toISOString(),
-      expires_at: expiresAt.toISOString(),
-    });
-
-    if (!result.ok) {
-      return context.json({ error: result.error }, 401);
-    }
-
-    return context.json(
-      {
-        revision: result.revision,
-        snapshot: result.snapshot,
-        invite: {
-          ...result.invite,
-          token,
-          join_url: `/join/${groupId}/${token}`,
-        },
-      },
-      201,
-    );
-  })
-  .openapi(redeemGroupLinkRoute, async (context) => {
-    const input = context.req.valid('json');
-    const { groupId, inviteToken } = context.req.valid('param');
-    const { authorization } = context.req.valid('header');
-    const identities = new IdentityDirectory(context.env.INDEX);
-
-    const session = await identities.authenticateDevice(
-      readDeviceSecret(authorization),
-    );
-
-    if (!session) return context.json({ error: 'unauthorized' }, 401);
-
-    const group = context.env.GROUPS.get(
-      context.env.GROUPS.idFromName(groupId),
-    );
-
-    const result = await group.redeemGroupLink({
-      ...input,
-      group_id: groupId,
-      identity_id: session.identity.id,
-      token_hash: await hashSecret(inviteToken),
-      joined_at: new Date().toISOString(),
-    });
-
-    if (!result.ok) {
-      if (result.error === 'invalid_request') {
-        return context.json({ error: result.error }, 400);
-      }
-
-      return result.error === 'invalid_invite'
-        ? context.json({ error: result.error }, 401)
-        : context.json({ error: result.error }, 409);
-    }
-
-    return context.json(
-      {
-        revision: result.revision,
-        snapshot: result.snapshot,
-        access: result.access,
-      },
-      200,
-    );
   });
 
-function generateSecret(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  const binary = String.fromCharCode(...bytes);
+async function authenticate(
+  context: Context<{ Bindings: Env }>,
+) {
+  const authorization = context.req.header('authorization');
 
-  return btoa(binary)
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replace(/=+$/, '');
-}
+  if (!authorization) return null;
 
-async function hashSecret(secret: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(secret),
-  );
+  const identities = new IdentityDirectory(context.env.INDEX);
 
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, '0'),
-  ).join('');
+  return identities.authenticateDevice(readDeviceSecret(authorization));
 }

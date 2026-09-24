@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  joinGroupRequestSchema,
+  type JoinGroupRequest,
+} from '../domain/access';
 import { errorSchema } from '../domain/errors';
 import {
   createGroupRequestSchema,
@@ -9,21 +13,16 @@ import {
   type IdentitySession,
 } from '../domain/identities';
 import {
-  redeemGroupLinkRequestSchema,
-  type RedeemGroupLinkRequest,
-} from '../domain/invites';
-import {
   syncGroupRequestSchema,
   type SyncGroupRequest,
 } from '../domain/sync';
 import {
   createdGroupSchema,
-  groupLinkSchema,
+  groupSessionSchema,
   healthResponseSchema,
   identitySessionSchema,
   jsonSchema,
   readinessResponseSchema,
-  redeemedGroupLinkSchema,
   syncGroupResponseSchema,
 } from './contracts';
 
@@ -31,9 +30,7 @@ type JsonValue = z.output<typeof jsonSchema>;
 
 type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
-export type GroupLink = z.output<typeof groupLinkSchema>;
-
-export type RedeemedGroupLink = z.output<typeof redeemedGroupLinkSchema>;
+export type JoinedGroup = z.output<typeof groupSessionSchema>;
 
 export type ClientRequestEvent = {
   method: string;
@@ -157,25 +154,16 @@ export class SplitnextDeviceClient {
     );
   }
 
-  rotateGroupLink(groupId: string) {
-    return this.request(
-      'POST',
-      `/groups/${encodeURIComponent(groupId)}/invite-link`,
-      groupLinkSchema,
-    );
-  }
-
-  redeemGroupLink(
+  joinGroup(
     groupId: string,
-    inviteToken: string,
-    input: RedeemGroupLinkRequest,
-  ): Promise<RedeemedGroupLink> {
-    const body = jsonSchema.parse(redeemGroupLinkRequestSchema.parse(input));
+    input: JoinGroupRequest,
+  ): Promise<JoinedGroup> {
+    const body = jsonSchema.parse(joinGroupRequestSchema.parse(input));
 
     return this.request(
       'POST',
-      `/join/${encodeURIComponent(groupId)}/${encodeURIComponent(inviteToken)}`,
-      redeemedGroupLinkSchema,
+      `/groups/${encodeURIComponent(groupId)}/join`,
+      groupSessionSchema,
       { body },
     );
   }
@@ -294,3 +282,18 @@ function notify(callback: () => void): void {
     // Diagnostics must never change request behavior.
   }
 }
+
+export {
+  JsonClientStorage,
+  MemoryClientStorage,
+  type ClientStorageAdapter,
+} from './storage';
+
+export {
+  ClientOfflineError,
+  SplitnextSyncClient,
+  type ClientReplicaState,
+  type ClientPreferredMemberChoice,
+  type SyncDeviceTransport,
+  type SyncTransport,
+} from './syncClient';

@@ -11,7 +11,10 @@ export default defineConfig({
     cloudflareTest({
       wrangler: { configPath: './wrangler.jsonc' },
       miniflare: {
-        bindings: { TEST_MIGRATIONS: migrations },
+        bindings: {
+          ENABLE_DEBUG_INSPECTION: 'true',
+          TEST_MIGRATIONS: migrations,
+        },
       },
     }),
   ],

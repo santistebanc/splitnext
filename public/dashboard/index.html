@@ -3,148 +3,155 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="A small console for exercising the current Splitnext API.">
-    <title>Splitnext control room</title>
+    <meta name="description" content="Splitnext API synchronization tester.">
+    <title>Splitnext tester</title>
     <link rel="stylesheet" href="/dashboard/styles.css">
     <script type="module" src="/dashboard/app.js"></script>
   </head>
   <body>
-    <header>
-      <a class="brand" href="/dashboard/"><span>S</span><strong>Splitnext</strong></a>
-      <nav><a href="/docs">API reference</a><a href="/openapi.json">OpenAPI</a></nav>
+    <header class="topbar">
+      <strong>Splitnext tester</strong>
+      <div class="topbar-status">
+        <span id="health-status" class="status neutral">Worker…</span>
+        <span id="ready-status" class="status neutral">Storage…</span>
+        <a href="/docs">API</a>
+      </div>
     </header>
+
     <main>
-      <section class="intro">
-        <p class="eyebrow">Developer control room</p>
-        <h1>Current API surface</h1>
-        <p>This console follows the implemented API slices: device identity, group creation, offline member commands, and revision-based snapshot synchronization.</p>
-        <div class="dependencies" aria-label="Dependency status">
-          <span id="health-status">Worker checking</span>
-          <span id="ready-status">Storage checking</span>
+      <section class="setup">
+        <div class="setup-toolbar">
+          <button id="initialize-devices" type="button">Initialize devices</button>
+          <span id="setup-summary">Initialize the devices to begin.</span>
+        </div>
+        <div class="setup-grid">
+          <form id="create-group-form">
+            <strong>Device 1 · Create</strong>
+            <input name="name" aria-label="Group name" maxlength="100" required value="Berlin flat">
+            <input name="creator_member_name" aria-label="Creator member name" maxlength="100" required value="Santi">
+            <input class="currency" name="currency_code" aria-label="Currency code" minlength="3" maxlength="3" required value="EUR">
+            <button type="submit" disabled>Create</button>
+          </form>
+
+          <form id="join-group-form">
+            <strong>Device 2 · Join</strong>
+            <input name="display_name" aria-label="New preferred member name" maxlength="100" required value="Robin">
+            <input id="join-group-id" name="group_id" aria-label="Group ID" required placeholder="Group ID">
+            <button type="submit" disabled>Join</button>
+          </form>
         </div>
       </section>
 
-      <section class="card" aria-labelledby="identity-title">
-        <div class="card-heading">
-          <div><p class="eyebrow">Device authentication</p><h2 id="identity-title">Two independent devices</h2></div>
-          <code>POST /identities/anonymous</code>
-        </div>
-        <div class="device-identity-grid">
-          <div><p class="eyebrow">Device A</p><div id="identity-a-status" class="identity-status">Not initialized.</div></div>
-          <div><p class="eyebrow">Device B</p><div id="identity-b-status" class="identity-status">Not initialized.</div></div>
-        </div>
-        <div class="actions">
-          <button id="create-identities" type="button">Create both identities</button>
-        </div>
-        <p class="note">Each simulated device receives a different identity and in-memory credential. Neither credential is displayed or persisted.</p>
-      </section>
+      <section class="replica-grid">
+        <section class="replica-zone device-zone" data-device="one" aria-labelledby="device-one-title">
+          <header class="zone-header">
+            <h2 id="device-one-title">Device 1</h2>
+            <span class="revision">Revision <strong data-role="revision">—</strong></span>
+            <div class="header-actions">
+              <button class="connection-toggle online" data-action="toggle-device" type="button">Online</button>
+              <button class="secondary" data-action="sync" type="button">Sync</button>
+              <button class="danger-text" data-action="leave" type="button">Leave</button>
+              <button data-action="rejoin" type="button" hidden>Rejoin</button>
+            </div>
+          </header>
+          <div class="identity-line" data-role="identity">Not initialized</div>
 
-      <section class="card" aria-labelledby="group-title">
-        <div class="card-heading">
-          <div><p class="eyebrow">Authenticated setup</p><h2 id="group-title">Create a group</h2></div>
-          <code>POST /groups</code>
-        </div>
-        <form id="create-group-form">
-          <fieldset id="group-fields" disabled>
-            <label>Group name<input name="name" required maxlength="100" value="Berlin flat"></label>
-            <label>Currency code<input name="currency_code" required minlength="3" maxlength="3" value="EUR"></label>
-            <label>Your ledger name<input name="creator_member_name" required maxlength="100" value="Santi"></label>
-            <button type="submit">Create group</button>
-          </fieldset>
-        </form>
-        <div id="group-result" class="group-result">Create an anonymous identity first.</div>
-        <p class="note">The browser generates the group ID before sending the request, so a network retry targets the same group.</p>
-        <form id="join-device-form" hidden>
-          <fieldset>
-            <label>Device B member name<input name="display_name" required maxlength="100" value="Robin"></label>
-            <button type="submit">Create link and join Device B</button>
-          </fieldset>
-          <p class="note">Device A rotates the reusable group link; Device B redeems it and receives its own permanent access grant.</p>
-        </form>
-        <div id="sync-controls" class="sync-controls" hidden>
-          <div class="sync-heading"><div><p class="eyebrow">Offline reconciliation seam</p><h3>Synchronize group</h3></div><code>POST /groups/{groupId}/sync</code></div>
-          <p class="note replica-note">Each device owns its local snapshot and outbox. The server panel observes requests and the latest authoritative snapshot without sharing client state.</p>
-          <div class="simulation-grid">
-            <section class="replica" data-replica="a">
-              <div class="replica-heading">
-                <div><p class="eyebrow">Device A</p><h4>Creator</h4><code data-role="identity-id">No identity</code></div>
-                <span class="connection-status" data-role="connection-status">Online</span>
-              </div>
-              <div class="actions">
-                <button class="secondary" data-action="toggle-connection" type="button">Go offline</button>
-                <button class="secondary" data-action="load-snapshot" type="button">Load snapshot</button>
-                <button class="secondary" data-action="sync-current" type="button">Sync known revision</button>
-              </div>
-              <form class="command-form" data-role="member-form">
-                <label>New member name<input name="display_name" required maxlength="100" value="Alex"></label>
-                <button type="submit">Create or queue</button>
-                <button class="secondary" data-action="retry-command" type="button" disabled>Retry last</button>
-              </form>
-              <form class="command-form rename-form" data-role="rename-form">
-                <label>Member<select name="member_id" required><option value="">Load a snapshot first</option></select></label>
-                <label>Rename to<input name="display_name" required maxlength="100" value="Thomas"></label>
-                <button type="submit">Rename or queue</button>
-              </form>
-              <form class="command-form archive-form" data-role="archive-form">
-                <label>Active member<select name="member_id" required><option value="">Load a snapshot first</option></select></label>
-                <button class="danger" type="submit">Archive or queue</button>
-              </form>
-              <div class="pending-heading"><strong>Pending commands</strong><span data-role="pending-count">0 queued</span></div>
-              <div class="pending-commands" data-role="pending-commands"><p class="empty">The offline queue is empty.</p></div>
-              <p class="note" data-role="sync-meta">Known revision 1 · no sync response yet.</p>
-              <p class="data-label">Current local state</p><pre data-role="local-state">{}</pre>
-              <p class="data-label">Outgoing data</p><pre data-role="outgoing-data">[]</pre>
-              <p class="data-label">Incoming data</p><pre data-role="incoming-data">[]</pre>
-            </section>
-            <section class="replica" data-replica="b">
-              <div class="replica-heading">
-                <div><p class="eyebrow">Device B</p><h4>Joined participant</h4><code data-role="identity-id">No identity</code></div>
-                <span class="connection-status" data-role="connection-status">Online</span>
-              </div>
-              <div class="actions">
-                <button class="secondary" data-action="toggle-connection" type="button">Go offline</button>
-                <button class="secondary" data-action="load-snapshot" type="button">Load snapshot</button>
-                <button class="secondary" data-action="sync-current" type="button">Sync known revision</button>
-              </div>
-              <form class="command-form" data-role="member-form">
-                <label>New member name<input name="display_name" required maxlength="100" value="Robin"></label>
-                <button type="submit">Create or queue</button>
-                <button class="secondary" data-action="retry-command" type="button" disabled>Retry last</button>
-              </form>
-              <form class="command-form rename-form" data-role="rename-form">
-                <label>Member<select name="member_id" required><option value="">Load a snapshot first</option></select></label>
-                <label>Rename to<input name="display_name" required maxlength="100" value="Robin"></label>
-                <button type="submit">Rename or queue</button>
-              </form>
-              <form class="command-form archive-form" data-role="archive-form">
-                <label>Active member<select name="member_id" required><option value="">Load a snapshot first</option></select></label>
-                <button class="danger" type="submit">Archive or queue</button>
-              </form>
-              <div class="pending-heading"><strong>Pending commands</strong><span data-role="pending-count">0 queued</span></div>
-              <div class="pending-commands" data-role="pending-commands"><p class="empty">The offline queue is empty.</p></div>
-              <p class="note" data-role="sync-meta">No server revision loaded yet.</p>
-              <p class="data-label">Current local state</p><pre data-role="local-state">{}</pre>
-              <p class="data-label">Outgoing data</p><pre data-role="outgoing-data">[]</pre>
-              <p class="data-label">Incoming data</p><pre data-role="incoming-data">[]</pre>
-            </section>
-            <section class="replica server-panel">
-              <div class="replica-heading">
-                <div><p class="eyebrow">Durable Object</p><h4>Server</h4></div>
-                <span id="server-revision" class="connection-status">No state</span>
-              </div>
-              <p class="note">This is the latest authoritative snapshot observed in a server response.</p>
-              <p class="data-label">Current server state</p><pre id="server-state">{}</pre>
-              <p class="data-label">Incoming data from devices</p><pre id="server-incoming">[]</pre>
-            </section>
+          <div data-role="actions">
+            <form class="group-editor" data-action-form="rename-group">
+              <input name="name" aria-label="Group name" maxlength="100" required placeholder="Group name">
+              <button type="submit">Save</button>
+              <small data-role="group-detail"></small>
+            </form>
+
+            <div class="member-list" data-role="member-list"></div>
+            <form class="add-member" data-action-form="add-member">
+              <input name="display_name" aria-label="New member name" maxlength="100" required placeholder="Add member">
+              <button type="submit">Add</button>
+            </form>
+
           </div>
-        </div>
-      </section>
 
-      <section class="card" aria-labelledby="activity-title">
-        <div class="card-heading"><div><p class="eyebrow">HTTP traffic</p><h2 id="activity-title">Activity</h2></div><button id="clear-activity" class="text-button" type="button">Clear</button></div>
-        <div id="activity-list" class="activity-list"><p class="empty">Requests will appear here.</p></div>
+          <section class="command-section">
+            <div class="section-bar"><strong>Commands</strong></div>
+            <div class="command-list" data-role="commands"><span class="empty">No commands.</span></div>
+          </section>
+
+          <section class="traffic-section">
+            <div class="section-bar"><strong>Requests</strong><button class="text-button" data-action="clear-traffic" type="button">Clear</button></div>
+            <div class="request-log" data-role="requests"><span class="empty">No requests.</span></div>
+          </section>
+
+          <details><summary>Local data</summary><pre data-role="raw-state">{}</pre></details>
+        </section>
+
+        <section class="replica-zone server-zone" aria-labelledby="server-title">
+          <header class="zone-header">
+            <h2 id="server-title">Server</h2>
+            <span class="revision">Revision <strong id="server-revision">—</strong></span>
+            <div class="header-actions">
+              <button id="toggle-server" class="connection-toggle online" type="button">Online</button>
+              <button id="refresh-server" class="secondary" type="button">Refresh</button>
+            </div>
+          </header>
+          <div class="identity-line">D1 · Identity directory</div>
+          <div id="server-identity-list" class="identity-directory"><span class="empty">Loading identities…</span></div>
+
+          <div class="identity-line">Durable Object · Current group</div>
+
+          <div class="server-group" id="server-group-summary"><span class="empty">No group.</span></div>
+          <div class="member-list" id="server-member-list"></div>
+
+          <section class="traffic-section">
+            <div class="section-bar"><strong>Incoming requests</strong><button id="clear-server-traffic" class="text-button" type="button">Clear</button></div>
+            <div id="server-incoming" class="request-log"><span class="empty">No requests.</span></div>
+          </section>
+
+          <details><summary>Server data</summary><pre id="server-state">{}</pre></details>
+        </section>
+
+        <section class="replica-zone device-zone" data-device="two" aria-labelledby="device-two-title">
+          <header class="zone-header">
+            <h2 id="device-two-title">Device 2</h2>
+            <span class="revision">Revision <strong data-role="revision">—</strong></span>
+            <div class="header-actions">
+              <button class="connection-toggle online" data-action="toggle-device" type="button">Online</button>
+              <button class="secondary" data-action="sync" type="button">Sync</button>
+              <button class="danger-text" data-action="leave" type="button">Leave</button>
+              <button data-action="rejoin" type="button" hidden>Rejoin</button>
+            </div>
+          </header>
+          <div class="identity-line" data-role="identity">Not initialized</div>
+
+          <div data-role="actions">
+            <form class="group-editor" data-action-form="rename-group">
+              <input name="name" aria-label="Group name" maxlength="100" required placeholder="Group name">
+              <button type="submit">Save</button>
+              <small data-role="group-detail"></small>
+            </form>
+
+            <div class="member-list" data-role="member-list"></div>
+            <form class="add-member" data-action-form="add-member">
+              <input name="display_name" aria-label="New member name" maxlength="100" required placeholder="Add member">
+              <button type="submit">Add</button>
+            </form>
+
+          </div>
+
+          <section class="command-section">
+            <div class="section-bar"><strong>Commands</strong></div>
+            <div class="command-list" data-role="commands"><span class="empty">No commands.</span></div>
+          </section>
+
+          <section class="traffic-section">
+            <div class="section-bar"><strong>Requests</strong><button class="text-button" data-action="clear-traffic" type="button">Clear</button></div>
+            <div class="request-log" data-role="requests"><span class="empty">No requests.</span></div>
+          </section>
+
+          <details><summary>Local data</summary><pre data-role="raw-state">{}</pre></details>
+        </section>
       </section>
     </main>
+
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </body>
 </html>

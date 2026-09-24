@@ -53,21 +53,11 @@ unless the user changes them, and update this file when a decision changes.
 - A client stores rejected or superseded command notices locally. Dismissal is a
   local UI choice; applying again creates a fresh command id.
 
-## Invites
+## Current MVP scope
 
-- Invites are temporary credentials; redemption issues a permanent group access
-  grant. Expiring an invite does not revoke grants already issued from it.
-- Use reusable **group links** as the only invite type for now. Do not implement
-  individual member links unless the user explicitly revisits this decision.
-- Expose at most one current reusable group link. Rotating it revokes the old
-  link and creates a new one; old records remain only for audit history.
-- A group link lets the joining identity select an active member or create one
-  as its initial preferred member. Selection is nonexclusive.
-- Join URLs include group id and secret: `/join/{groupId}/{inviteToken}`. Persist
-  only the token hash in the relevant group's Durable Object.
-- Default expiry is seven days. Never reactivate an expired or revoked link;
-  inviting again creates a fresh token.
-- "Disable link" sets `revoked_at` instead of deleting the record.
-- Group links remain usable until expiry, or revocation.
-- Redemption atomically validates the invite, selects or creates the preferred
-  member, issues the access grant, and records use.
+- Invitations and expenses are deliberately deferred. For this MVP, an
+  authenticated identity that knows a group id may join it directly.
+- Joining atomically grants permanent access and selects an active member or
+  creates a new preferred member. Selection remains nonexclusive.
+- Leaving clears that identity's preferred member, hides the group, and stops
+  its client from syncing. Joining the group again unhides it.

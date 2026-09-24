@@ -1,11 +1,12 @@
 import { exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { createIdentifier, identifierSchema } from '../src/domain/ids';
 import { applyTestMigrations } from './harness';
 
 const createdGroupSchema = z.object({
-  group: z.object({ id: z.uuid(), revision: z.number() }),
-  member: z.object({ id: z.uuid(), display_name: z.string() }),
+  group: z.object({ id: identifierSchema, revision: z.number() }),
+  member: z.object({ id: identifierSchema, display_name: z.string() }),
 });
 
 beforeAll(async () => {
@@ -74,10 +75,10 @@ describe('member.archive sync command', () => {
   it('makes an archived name available to a later command in the batch', async () => {
     const fixture = await createGroupFixture('k');
     const archive = archiveCommand(fixture.created.member.id);
-    const replacementId = crypto.randomUUID();
+    const replacementId = createIdentifier();
 
     const create = {
-      command_id: crypto.randomUUID(),
+      command_id: createIdentifier(),
       type: 'member.create',
       payload: { member_id: replacementId, display_name: 'sAnTi' },
     };
@@ -103,7 +104,7 @@ describe('member.archive sync command', () => {
 
   it('rejects an archive when the member does not exist', async () => {
     const fixture = await createGroupFixture('l');
-    const command = archiveCommand(crypto.randomUUID());
+    const command = archiveCommand(createIdentifier());
     const response = await sync(fixture, 1, [command]);
 
     expect(await response.json()).toMatchObject({
@@ -137,7 +138,7 @@ describe('member.archive sync command', () => {
 
 function archiveCommand(memberId: string) {
   return {
-    command_id: crypto.randomUUID(),
+    command_id: createIdentifier(),
     type: 'member.archive',
     payload: { member_id: memberId },
   };
@@ -158,7 +159,7 @@ async function createGroupFixture(seed: string) {
       method: 'POST',
       headers: requestHeaders(deviceSecret),
       body: JSON.stringify({
-        group_id: crypto.randomUUID(),
+        group_id: createIdentifier(),
         name: 'Berlin flat',
         currency_code: 'EUR',
         creator_member_name: 'Santi',

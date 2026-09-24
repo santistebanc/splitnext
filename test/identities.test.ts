@@ -1,5 +1,7 @@
-import { exports } from 'cloudflare:workers';
+import { env, exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
+import app from '../src/app';
+import { identitySessionSchema } from '../src/domain/identities';
 import { applyTestMigrations, fetchOpenApiDocument } from './harness';
 
 beforeAll(async () => {
@@ -50,6 +52,61 @@ describe('anonymous identities API', () => {
 
     expect(current.status).toBe(200);
     expect(await current.json()).toEqual(await created.json());
+  });
+
+  it('exposes identity and device metadata to the local tester without credentials', async () => {
+    const deviceSecret = 'c'.repeat(43);
+
+    const created = await exports.default.fetch(
+      'https://splitnext.test/identities/anonymous',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ device_secret: deviceSecret }),
+      },
+    );
+
+    const session = identitySessionSchema.parse(await created.json());
+
+    const response = await exports.default.fetch(
+      'https://splitnext.test/debug/identity-directory',
+    );
+
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      identities: expect.arrayContaining([
+        {
+          id: session.identity.id,
+          created_at: session.identity.created_at,
+          devices: [
+            {
+              id: session.device.id,
+              created_at: session.device.created_at,
+              revoked_at: null,
+            },
+          ],
+        },
+      ]),
+    });
+    expect(JSON.stringify(body)).not.toContain(deviceSecret);
+    expect(JSON.stringify(body)).not.toContain('credential_hash');
+  });
+
+  it('does not expose identity inspection when the development flag is disabled', async () => {
+    const disabledEnv: Env = {
+      ...env,
+      ENABLE_DEBUG_INSPECTION: 'false',
+    };
+
+    const response = await app.fetch(
+      new Request('https://splitnext.test/debug/identity-directory'),
+      disabledEnv,
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'not_found' });
   });
 
   it('rejects malformed identity creation input', async () => {
