@@ -6,7 +6,7 @@ import {
   SplitnextClient,
   SplitnextSyncClient,
 } from '../src/client';
-import { applyTestMigrations } from './harness';
+import { applyTestMigrations, joinThroughInvite } from './harness';
 
 beforeAll(async () => {
   await applyTestMigrations();
@@ -143,7 +143,7 @@ describe('stateful offline client SDK', () => {
       creator_member_name: 'Santi',
     });
 
-    await other.joinGroup(created.group_id, {
+    await joinThroughInvite(editor, other, created.group_id, {
       kind: 'new',
       display_name: 'Robin',
     });
@@ -178,7 +178,7 @@ describe('stateful offline client SDK', () => {
       creator_member_name: 'Santi',
     });
 
-    await second.joinGroup(created.group_id, {
+    await joinThroughInvite(first, second, created.group_id, {
       kind: 'new',
       display_name: 'Robin',
     });

@@ -9,13 +9,9 @@ were made.
 ## Status and scope
 
 The current MVP establishes identities, groups, ledger members, offline
-synchronization, and realtime revision announcements. Invitations, expenses,
+synchronization, realtime revision announcements, and invite links. Expenses,
 settlements, account sign-in, audit browsing, and group recovery are accepted
 future behavior unless this document says otherwise.
-
-The MVP temporarily permits an authenticated identity that knows a group
-identifier to join directly. This is for development and must be replaced by
-group invitations before public use.
 
 ## Product principles
 
@@ -59,6 +55,10 @@ group invitations before public use.
   that identity, and stops its synchronization and realtime notifications.
   It does not revoke access or alter any ledger member.
 - Rejoining unhides the group and selects or creates a preferred member.
+- Any identity can create groups and join others' groups. Each identity has a
+  list of the groups it can access that distinguishes joined groups from ones
+  it left, which it can reopen and rejoin. The list may briefly show an old
+  group name until that group next synchronizes.
 - A group access grant is permanent and cannot be revoked by participants.
   If a malicious identity obtains access, the recovery path is to create a new
   group from a chosen trustworthy point in the old group's history.
@@ -194,21 +194,29 @@ group invitations before public use.
   mechanism when permanent access has been abused.
 - Audit events are not the client synchronization protocol.
 
-## Invitations (deferred)
+## Invitations
 
-- Public use replaces direct join with one reusable group invitation link.
-  Individual or single-use member invitations are not part of the planned first
-  version.
+- An identity joins a group for the first time only through the group's
+  reusable invite link. Individual or single-use member invitations are not
+  part of the first version. Identities that left rejoin without a link,
+  because their access is permanent.
 - At most one group link is current. Rotating it revokes the previous link and
   creates a new one while retaining old records for audit.
-- A group link has an expiry, defaults to seven days, and can be revoked before
-  expiry. An expired or revoked link is never reactivated; inviting again
+- A group link has an expiry chosen by its creator between one hour and 30
+  days, defaulting to seven days, and can be revoked before expiry. An expired or revoked link is never reactivated; inviting again
   creates a new token.
 - Redeeming a valid link atomically issues a permanent group access grant and
   lets the identity select an active member or create its preferred member.
 - Revoking or expiring a link never revokes access already issued through it.
-- Join URLs contain the group identifier and plaintext token, while persistence
-  contains only the token hash.
+- Join URLs have the form `/join/{groupId}#{token}`. The token follows `#` so
+  browsers never send it to a server; persistence contains only its hash.
+- The creating device generates the token and keeps the plaintext locally, so
+  only that device can show or copy the link again. Every participant sees
+  that a link exists, who created it, and when it expires. Sharing from another
+  device means creating a new link, which revokes the previous one.
+- Before joining, a link holder can preview the group name and its active
+  members to choose who they are or join as someone new.
+- Any participant can create, replace, or revoke the link; there are no roles.
 
 ## Expenses and money (deferred)
 
@@ -234,7 +242,7 @@ group invitations before public use.
 - End-to-end encryption is not planned. Server-side group state is readable by
   the service.
 - Attachments and receipt files are outside the planned scope.
-- Knowing a group identifier is not authorization after invitations replace
-  the direct-join MVP.
+- Knowing a group identifier is not authorization; joining needs a current
+  invite link.
 - There is deliberately no participant-level access revocation or moderation
   role. The history-based group recovery path is the escape hatch for abuse.

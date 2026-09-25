@@ -11,6 +11,7 @@ import {
   type GroupCommand,
 } from '../domain/commands';
 import {
+  accessibleGroupsSchema,
   createGroupRequestSchema,
   type CreateGroupRequest,
 } from '../domain/groups';
@@ -18,6 +19,15 @@ import {
   deviceSecretSchema,
   type IdentitySession,
 } from '../domain/identities';
+import {
+  createInviteRequestSchema,
+  invitePreviewSchema,
+  inviteResultSchema,
+  previewInviteRequestSchema,
+  revokeInviteResultSchema,
+  type CreateInviteRequest,
+  type InvitePreview,
+} from '../domain/invites';
 import { realtimeProtocols } from '../domain/realtime';
 import {
   syncGroupRequestSchema,
@@ -165,6 +175,10 @@ export class SplitnextDeviceClient {
     return this.request('GET', '/identity', identitySessionSchema);
   }
 
+  listGroups() {
+    return this.request('GET', '/identity/groups', accessibleGroupsSchema);
+  }
+
   createGroup(input: CreateGroupRequest) {
     const body = jsonSchema.parse(createGroupRequestSchema.parse(input));
 
@@ -178,6 +192,37 @@ export class SplitnextDeviceClient {
       'POST',
       `/groups/${encodeURIComponent(groupId)}/sync`,
       syncGroupResponseSchema,
+      { body },
+    );
+  }
+
+  createInvite(groupId: string, input: CreateInviteRequest) {
+    const body = jsonSchema.parse(createInviteRequestSchema.parse(input));
+
+    return this.request(
+      'POST',
+      `/groups/${encodeURIComponent(groupId)}/invites`,
+      inviteResultSchema,
+      { body },
+    );
+  }
+
+  revokeInvite(groupId: string, inviteId: string) {
+    return this.request(
+      'POST',
+      `/groups/${encodeURIComponent(groupId)}/invites/${encodeURIComponent(inviteId)}/revoke`,
+      revokeInviteResultSchema,
+    );
+  }
+
+  /** The token travels in the body, never in a URL. */
+  previewInvite(groupId: string, token: string): Promise<InvitePreview> {
+    const body = jsonSchema.parse(previewInviteRequestSchema.parse({ token }));
+
+    return this.request(
+      'POST',
+      `/groups/${encodeURIComponent(groupId)}/invites/preview`,
+      invitePreviewSchema,
       { body },
     );
   }
@@ -408,6 +453,13 @@ export {
 } from './storage';
 
 export {
+  formatInviteLink,
+  parseInviteLink,
+  type GroupInvite,
+  type InvitePreview,
+} from '../domain/invites';
+
+export {
   browserWebSocket,
   type RealtimeSocket,
   type RealtimeSocketFactory,
@@ -419,6 +471,7 @@ export {
   SplitnextSyncClient,
   type ClientReplicaState,
   type ClientPreferredMemberChoice,
+  type ClientGroupSummary,
   type SyncDeviceTransport,
   type SyncTransport,
 } from './syncClient';

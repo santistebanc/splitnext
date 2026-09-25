@@ -21,13 +21,14 @@ _Avoid_: Membership, member access
 A stable, group-local label such as “User 6” assigned to an access identity.
 _Avoid_: Username, member name
 
-**Direct join**:
-The temporary MVP mechanism that grants access to an authenticated identity
-that knows a group identifier.
-
 **Group invite**:
-A temporary reusable credential that can issue a permanent group access grant.
+A group's current reusable link that issues permanent group access grants
+until it expires, is revoked, or is replaced.
 _Avoid_: Access grant, individual invite
+
+**Invite preview**:
+What a link holder sees before joining: the group and its active members.
+_Avoid_: Group snapshot
 
 ## Ledger
 

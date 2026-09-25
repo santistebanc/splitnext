@@ -4,9 +4,13 @@ import {
   commandOutcomeSchema,
   groupCommandSchema,
 } from '../domain/commands';
-import { createGroupRequestSchema } from '../domain/groups';
+import {
+  accessibleGroupSchema,
+  createGroupRequestSchema,
+} from '../domain/groups';
 import { identifierSchema } from '../domain/ids';
 import { identitySessionSchema } from '../domain/identities';
+import { inviteTokenSchema } from '../domain/invites';
 import { groupSnapshotSchema } from '../domain/sync';
 
 const pendingCommandSchema = z.object({
@@ -38,12 +42,28 @@ const pendingGroupCreationSchema = z.object({
   request: createGroupRequestSchema,
 });
 
+/**
+ * The plaintext of the last invite link this device created for a group. The
+ * server keeps only a hash, so this is the only place the link can be shown
+ * again. An unconfirmed entry is retried with the same token.
+ */
+const ownInviteSchema = z.object({
+  group_id: identifierSchema,
+  invite_id: identifierSchema,
+  token: inviteTokenSchema,
+  expires_in_hours: z.number().int().positive(),
+  confirmed: z.boolean(),
+});
+
 export const clientStorageDocumentSchema = z.object({
   schema_version: z.literal(1),
   session: identitySessionSchema.nullable(),
   groups: z.array(clientGroupReplicaSchema),
   pending_group_creations: z.array(pendingGroupCreationSchema),
   pending_joins: z.array(pendingJoinSchema),
+  own_invites: z.array(ownInviteSchema),
+  // The server's last list of accessible groups, kept for offline display.
+  group_directory: z.array(accessibleGroupSchema),
 });
 
 export type PendingCommand = z.output<typeof pendingCommandSchema>;
@@ -55,6 +75,8 @@ export type ClientGroupReplica = z.output<typeof clientGroupReplicaSchema>;
 export type PendingJoin = z.output<typeof pendingJoinSchema>;
 
 export type PendingGroupCreation = z.output<typeof pendingGroupCreationSchema>;
+
+export type OwnInvite = z.output<typeof ownInviteSchema>;
 
 export type ClientStorageDocument = z.output<
   typeof clientStorageDocumentSchema
@@ -209,6 +231,8 @@ export function emptyClientDocument(): ClientStorageDocument {
     groups: [],
     pending_group_creations: [],
     pending_joins: [],
+    own_invites: [],
+    group_directory: [],
   };
 }
 

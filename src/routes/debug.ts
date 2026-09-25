@@ -1,16 +1,10 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { z } from 'zod';
 import { identifierSchema } from '../domain/ids';
+import { GroupIndex } from '../groupIndex';
 import { IdentityDirectory } from '../identityDirectory';
 
-/**
- * Durable Objects cannot be enumerated, so a reset erases the groups its
- * caller names and forgets every identity, which leaves any other group
- * unreachable except by direct join.
- */
-const resetRequestSchema = z.object({
-  group_ids: z.array(identifierSchema).max(100),
-});
+const resetRequestSchema = z.object({}).strict();
 
 export const debugRoutes = new OpenAPIHono<{ Bindings: Env }>()
   .get('/debug/identity-directory', async (context) => {
@@ -21,6 +15,34 @@ export const debugRoutes = new OpenAPIHono<{ Bindings: Env }>()
     const directory = new IdentityDirectory(context.env.INDEX);
 
     return context.json(await directory.inspect(), 200);
+  })
+  .get('/debug/groups', async (context) => {
+    if (!debugEnabled(context.env)) {
+      return context.json({ error: 'not_found' }, 404);
+    }
+
+    const groupIds = await new GroupIndex(context.env.INDEX).listAllGroupIds();
+
+    const groups = await Promise.all(
+      groupIds.map(async (groupId) => {
+        const group = context.env.GROUPS.get(
+          context.env.GROUPS.idFromName(groupId),
+        );
+
+        const inspection = await group.inspectGroup(groupId);
+
+        return inspection
+          ? {
+              group_id: groupId,
+              name: inspection.snapshot.group.name,
+              currency_code: inspection.snapshot.group.currency_code,
+              revision: inspection.revision,
+            }
+          : null;
+      }),
+    );
+
+    return context.json({ groups: groups.filter((group) => group !== null) }, 200);
   })
   .get('/debug/groups/:groupId', async (context) => {
     if (!debugEnabled(context.env)) {
@@ -52,7 +74,7 @@ export const debugRoutes = new OpenAPIHono<{ Bindings: Env }>()
 
     if (!parsed.success) return context.json({ error: 'invalid_request' }, 400);
 
-    const groupIds = [...new Set(parsed.data.group_ids)];
+    const groupIds = await new GroupIndex(context.env.INDEX).listAllGroupIds();
 
     await Promise.all(
       groupIds.map((groupId) =>
@@ -60,6 +82,7 @@ export const debugRoutes = new OpenAPIHono<{ Bindings: Env }>()
           .resetGroup(groupId),
       ),
     );
+    await new GroupIndex(context.env.INDEX).clear();
     await new IdentityDirectory(context.env.INDEX).clear();
 
     return context.json({ cleared_group_ids: groupIds }, 200);

@@ -22,6 +22,13 @@ import {
 } from './domain/groups';
 import { createIdentifier } from './domain/ids';
 import type {
+  CreateInviteCommand,
+  GroupInvite,
+  InviteFailure,
+  InvitePreview,
+  InviteRecord,
+} from './domain/invites';
+import type {
   GroupSnapshot,
   SyncGroupCommand,
   SyncGroupResponse,
@@ -30,6 +37,7 @@ import type {
   GroupPersistence,
   GroupRepository,
   StoredGroupState,
+  StoredInvite,
 } from './groupRepository';
 
 export type CreateStoredGroupResult =
@@ -55,8 +63,27 @@ export type JoinStoredGroupResult =
         | 'member_not_found'
         | 'member_archived'
         | 'member_name_taken'
-        | 'member_id_exists';
+        | 'member_id_exists'
+        | InviteFailure;
     };
+
+export type CreateStoredInviteResult =
+  | { ok: true; revision: number; invite: GroupInvite }
+  | {
+      ok: false;
+      error: 'group_not_found' | 'unauthorized' | 'idempotency_conflict';
+    };
+
+export type RevokeStoredInviteResult =
+  | { ok: true; revision: number; changed: boolean }
+  | {
+      ok: false;
+      error: 'group_not_found' | 'unauthorized' | 'invite_not_found';
+    };
+
+export type PreviewStoredInviteResult =
+  | { ok: true; preview: InvitePreview }
+  | { ok: false; error: 'group_not_found' | InviteFailure };
 
 export type SubscriptionAccessResult =
   | { ok: true; revision: number }
@@ -120,6 +147,17 @@ export class GroupStore {
           stored.request_json === requestJson
           ? { ok: true, ...stored.response }
           : { ok: false, error: 'idempotency_conflict' };
+      }
+
+      // Access is permanent, so an identity that left rejoins without a link.
+      if (!this.accessFor(state, command.identity_id)) {
+        const failure = inviteFailure(
+          persistence,
+          command.invite_token_hash,
+          command.joined_at,
+        );
+
+        if (failure) return { ok: false, error: failure };
       }
 
       const transition = applyGroupJoin(
@@ -211,6 +249,153 @@ export class GroupStore {
     });
   }
 
+  /**
+   * Creates the group's current invite link, revoking any previous one.
+   * Repeating a creation with the same id and token returns the same link.
+   */
+  createInvite(command: CreateInviteCommand): CreateStoredInviteResult {
+    return this.repository.transaction((persistence) => {
+      const state = persistence.loadState();
+
+      if (!state) return { ok: false, error: 'group_not_found' };
+
+      const actor = this.accessFor(state, command.identity_id);
+
+      if (!actor || actor.hidden_at) return { ok: false, error: 'unauthorized' };
+
+      const existing =
+        persistence.findInvite(command.invite_id) ??
+        persistence.findInviteByTokenHash(command.token_hash);
+
+      if (existing) {
+        return existing.id === command.invite_id &&
+          existing.token_hash === command.token_hash &&
+          existing.created_by_identity_id === command.identity_id
+          ? { ok: true, revision: state.revision, invite: inviteView(existing) }
+          : { ok: false, error: 'idempotency_conflict' };
+      }
+
+      const previous = state.snapshot.invite;
+
+      const created: StoredInvite = {
+        id: command.invite_id,
+        token_hash: command.token_hash,
+        created_by_identity_id: command.identity_id,
+        created_at: command.created_at,
+        expires_at: command.expires_at,
+        revoked_at: null,
+      };
+
+      if (previous) persistence.revokeInvite(previous.id, command.created_at);
+
+      persistence.recordInvite(created);
+
+      const invite = inviteView(created);
+
+      this.commitTransition(
+        persistence,
+        state,
+        { ...state.snapshot, invite },
+        {
+          action: 'invite.created',
+          before: previous ? { ...previous, revoked_at: command.created_at } : null,
+          after: { ...invite, revoked_at: null },
+        },
+        actor,
+        this.memberNameFor(state, actor),
+        { kind: 'invite', id: invite.id },
+        null,
+        command.created_at,
+      );
+      persistence.saveState(state);
+
+      return { ok: true, revision: state.revision, invite };
+    });
+  }
+
+  /** Revoking stops new joins through the link; granted access remains. */
+  revokeInvite(
+    identityId: string,
+    inviteId: string,
+    revokedAt: string,
+  ): RevokeStoredInviteResult {
+    return this.repository.transaction((persistence) => {
+      const state = persistence.loadState();
+
+      if (!state) return { ok: false, error: 'group_not_found' };
+
+      const actor = this.accessFor(state, identityId);
+
+      if (!actor || actor.hidden_at) return { ok: false, error: 'unauthorized' };
+
+      const current = state.snapshot.invite;
+
+      if (current?.id !== inviteId) {
+        return persistence.findInvite(inviteId)
+          ? { ok: true, revision: state.revision, changed: false }
+          : { ok: false, error: 'invite_not_found' };
+      }
+
+      const before: InviteRecord = { ...current, revoked_at: null };
+
+      persistence.revokeInvite(inviteId, revokedAt);
+      this.commitTransition(
+        persistence,
+        state,
+        { ...state.snapshot, invite: null },
+        {
+          action: 'invite.revoked',
+          before,
+          after: { ...before, revoked_at: revokedAt },
+        },
+        actor,
+        this.memberNameFor(state, actor),
+        { kind: 'invite', id: inviteId },
+        null,
+        revokedAt,
+      );
+      persistence.saveState(state);
+
+      return { ok: true, revision: state.revision, changed: true };
+    });
+  }
+
+  /** Lets a link holder see the group and choose who they are before joining. */
+  previewInvite(tokenHash: string, at: string): PreviewStoredInviteResult {
+    return this.repository.transaction((persistence) => {
+      const state = persistence.loadState();
+
+      if (!state) return { ok: false, error: 'group_not_found' };
+
+      const failure = inviteFailure(persistence, tokenHash, at);
+
+      if (failure) return { ok: false, error: failure };
+
+      const invite = persistence.findInviteByTokenHash(tokenHash);
+
+      if (!invite) return { ok: false, error: 'invite_invalid' };
+
+      const { group, members } = state.snapshot;
+
+      return {
+        ok: true,
+        preview: {
+          group: {
+            id: group.id,
+            name: group.name,
+            currency_code: group.currency_code,
+          },
+          members: members.flatMap((member) =>
+            member.status === 'active'
+              ? [{ id: member.id, display_name: member.display_name }]
+              : [],
+          ),
+          expires_at: invite.expires_at,
+        },
+      };
+    });
+  }
+
   /** Only identities that can currently see the group receive announcements. */
   subscriptionAccess(identityId: string): SubscriptionAccessResult {
     return this.repository.transaction((persistence) => {
@@ -272,6 +457,7 @@ export class GroupStore {
         },
         members: [member],
         access_grants: [access],
+        invite: null,
       },
     };
   }
@@ -434,4 +620,31 @@ export class GroupStore {
       )?.display_name ?? null
     );
   }
+}
+
+function inviteFailure(
+  persistence: GroupPersistence,
+  tokenHash: string | null,
+  at: string,
+): InviteFailure | null {
+  if (!tokenHash) return 'invite_required';
+
+  const invite = persistence.findInviteByTokenHash(tokenHash);
+
+  if (!invite) return 'invite_invalid';
+
+  if (invite.revoked_at) return 'invite_revoked';
+
+  return Date.parse(invite.expires_at) <= Date.parse(at)
+    ? 'invite_expired'
+    : null;
+}
+
+function inviteView(invite: StoredInvite): GroupInvite {
+  return {
+    id: invite.id,
+    created_by_identity_id: invite.created_by_identity_id,
+    created_at: invite.created_at,
+    expires_at: invite.expires_at,
+  };
 }

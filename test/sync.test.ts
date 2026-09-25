@@ -56,6 +56,7 @@ describe('group sync API', () => {
           },
           members: [fixture.created.member],
           access_grants: [fixture.created.access],
+          invite: null,
         },
       },
     });

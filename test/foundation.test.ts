@@ -76,8 +76,9 @@ describe('Cloudflare foundation', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/html');
     expect(html).toContain('Splitnext tester');
-    expect(html).toContain('Device 1');
-    expect(html).toContain('Device 2');
+    expect(html).toContain('Add device');
+    expect(html).toContain('id="device-template"');
+    expect(html).toContain('+ New');
     expect(html).toContain('Server');
     expect(html).toContain('Revision');
     expect(html).toContain('Add member');

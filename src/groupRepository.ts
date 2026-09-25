@@ -7,6 +7,7 @@ import {
 } from './domain/audit';
 import type { CommandOutcome, MemberAlias } from './domain/commands';
 import type { CreatedGroup } from './domain/groups';
+import type { InviteRecord } from './domain/invites';
 import type { GroupSnapshot } from './domain/sync';
 
 export type StoredGroupCreation = {
@@ -45,6 +46,9 @@ export type StoredJoinOutcome = {
   };
 };
 
+/** An invite as persisted: its hash, never its token. */
+export type StoredInvite = InviteRecord & { token_hash: string };
+
 export interface GroupPersistence extends AuditEventStore {
   loadState(): StoredGroupState | null;
   saveState(state: StoredGroupState): void;
@@ -54,6 +58,10 @@ export interface GroupPersistence extends AuditEventStore {
   recordJoinOutcome(outcome: StoredJoinOutcome): void;
   memberAliases(): Map<string, string>;
   recordMemberAlias(alias: MemberAlias): void;
+  findInvite(inviteId: string): StoredInvite | null;
+  findInviteByTokenHash(tokenHash: string): StoredInvite | null;
+  recordInvite(invite: StoredInvite): void;
+  revokeInvite(inviteId: string, revokedAt: string): void;
 }
 
 export interface GroupRepository {
@@ -127,6 +135,15 @@ export class DurableObjectGroupRepository implements GroupRepository {
        CREATE TABLE IF NOT EXISTS group_member_aliases (
          alias_id TEXT PRIMARY KEY,
          member_id TEXT NOT NULL
+       );
+
+       CREATE TABLE IF NOT EXISTS group_invites (
+         id TEXT PRIMARY KEY,
+         token_hash TEXT NOT NULL UNIQUE,
+         created_by_identity_id TEXT NOT NULL,
+         created_at TEXT NOT NULL,
+         expires_at TEXT NOT NULL,
+         revoked_at TEXT
        );`,
     );
   }
@@ -272,6 +289,60 @@ class SQLiteGroupPersistence implements GroupPersistence {
     );
   }
 
+  findInvite(inviteId: string): StoredInvite | null {
+    return this.selectInvite('id', inviteId);
+  }
+
+  findInviteByTokenHash(tokenHash: string): StoredInvite | null {
+    return this.selectInvite('token_hash', tokenHash);
+  }
+
+  recordInvite(invite: StoredInvite): void {
+    this.sql.exec(
+      `INSERT INTO group_invites (
+         id,
+         token_hash,
+         created_by_identity_id,
+         created_at,
+         expires_at,
+         revoked_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      invite.id,
+      invite.token_hash,
+      invite.created_by_identity_id,
+      invite.created_at,
+      invite.expires_at,
+      invite.revoked_at,
+    );
+  }
+
+  revokeInvite(inviteId: string, revokedAt: string): void {
+    this.sql.exec(
+      `UPDATE group_invites SET revoked_at = ?
+       WHERE id = ? AND revoked_at IS NULL`,
+      revokedAt,
+      inviteId,
+    );
+  }
+
+  private selectInvite(
+    column: 'id' | 'token_hash',
+    value: string,
+  ): StoredInvite | null {
+    return (
+      this.sql
+        .exec<StoredInvite>(
+          `SELECT id, token_hash, created_by_identity_id, created_at,
+                  expires_at, revoked_at
+           FROM group_invites
+           WHERE ${column} = ?`,
+          value,
+        )
+        .toArray()[0] ?? null
+    );
+  }
+
   appendAudit(event: NewAuditEvent): AuditEvent {
     const validated = newAuditEventSchema.parse(event);
 
@@ -318,6 +389,7 @@ type MemoryGroupData = {
   commandOutcomes: StoredCommandOutcome[];
   joinOutcomes: StoredJoinOutcome[];
   memberAliases: MemberAlias[];
+  invites: StoredInvite[];
 };
 
 export type GroupRepositoryInspection = {
@@ -326,6 +398,7 @@ export type GroupRepositoryInspection = {
   command_outcomes: StoredCommandOutcome[];
   join_outcomes: StoredJoinOutcome[];
   member_aliases: MemberAlias[];
+  invites: StoredInvite[];
 };
 
 export class MemoryGroupRepository implements GroupRepository {
@@ -339,6 +412,7 @@ export class MemoryGroupRepository implements GroupRepository {
           commandOutcomes: clone(initial.command_outcomes),
           joinOutcomes: clone(initial.join_outcomes),
           memberAliases: clone(initial.member_aliases),
+          invites: clone(initial.invites),
         }
       : emptyMemoryData();
   }
@@ -359,6 +433,7 @@ export class MemoryGroupRepository implements GroupRepository {
       command_outcomes: clone(this.data.commandOutcomes),
       join_outcomes: clone(this.data.joinOutcomes),
       member_aliases: clone(this.data.memberAliases),
+      invites: clone(this.data.invites),
     };
   }
 }
@@ -416,6 +491,28 @@ class MemoryGroupPersistence implements GroupPersistence {
     this.data.memberAliases.push(clone(alias));
   }
 
+  findInvite(inviteId: string): StoredInvite | null {
+    return clone(this.data.invites.find(({ id }) => id === inviteId)) ?? null;
+  }
+
+  findInviteByTokenHash(tokenHash: string): StoredInvite | null {
+    return (
+      clone(
+        this.data.invites.find((invite) => invite.token_hash === tokenHash),
+      ) ?? null
+    );
+  }
+
+  recordInvite(invite: StoredInvite): void {
+    this.data.invites.push(clone(invite));
+  }
+
+  revokeInvite(inviteId: string, revokedAt: string): void {
+    const invite = this.data.invites.find(({ id }) => id === inviteId);
+
+    if (invite && invite.revoked_at === null) invite.revoked_at = revokedAt;
+  }
+
   appendAudit(event: NewAuditEvent): AuditEvent {
     const stored = auditEventSchema.parse({
       sequence: this.data.auditEvents.length + 1,
@@ -443,6 +540,7 @@ function emptyMemoryData(): MemoryGroupData {
     commandOutcomes: [],
     joinOutcomes: [],
     memberAliases: [],
+    invites: [],
   };
 }
 

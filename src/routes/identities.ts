@@ -3,6 +3,8 @@ import {
   deviceSecretSchema,
   identitySessionSchema,
 } from '../domain/identities';
+import { accessibleGroupsSchema } from '../domain/groups';
+import { GroupIndex } from '../groupIndex';
 import { IdentityDirectory } from '../identityDirectory';
 import {
   authenticateDevice,
@@ -61,6 +63,26 @@ const currentIdentityRoute = createRoute({
   },
 });
 
+const accessibleGroupsRoute = createRoute({
+  method: 'get',
+  path: '/identity/groups',
+  tags: ['Identities'],
+  summary: 'List the groups the identity can access, including ones it left',
+  description:
+    'A derived index refreshed whenever the identity creates, joins, or ' +
+    'synchronizes a group, so a name changed by someone else appears after ' +
+    'the identity next synchronizes that group.',
+  security: [{ bearerAuth: [] }],
+  request: { headers: deviceAuthorizationHeadersSchema },
+  responses: {
+    200: {
+      description: 'Active groups first, then groups the identity has left.',
+      content: { 'application/json': { schema: accessibleGroupsSchema } },
+    },
+    401: errorResponse('The device credential is unavailable or invalid.'),
+  },
+});
+
 const identityApp = new OpenAPIHono<AuthenticatedRequestEnvironment>({
   defaultHook: (result, context) => {
     if (result.success) return;
@@ -73,6 +95,8 @@ const identityApp = new OpenAPIHono<AuthenticatedRequestEnvironment>({
 
 identityApp.use('/identity', authenticateDevice);
 
+identityApp.use('/identity/*', authenticateDevice);
+
 export const identityRoutes = identityApp
   .openapi(createAnonymousIdentityRoute, async (context) => {
     const { device_secret } = context.req.valid('json');
@@ -83,4 +107,10 @@ export const identityRoutes = identityApp
   })
   .openapi(currentIdentityRoute, async (context) => {
     return context.json(context.get('identitySession'), 200);
+  })
+  .openapi(accessibleGroupsRoute, async (context) => {
+    const session = context.get('identitySession');
+    const groups = await new GroupIndex(context.env.INDEX).list(session.identity.id);
+
+    return context.json({ groups }, 200);
   });

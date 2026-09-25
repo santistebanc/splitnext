@@ -8,10 +8,15 @@ import type {
 } from '../client';
 import {
   browserWebSocket,
+  formatInviteLink,
   MemoryClientStorage,
+  parseInviteLink,
   SplitnextClient,
   SplitnextSyncClient,
+  type ClientGroupSummary,
+  type ClientPreferredMemberChoice,
   type ClientReplicaState,
+  type InvitePreview,
 } from '../client';
 import { z } from 'zod';
 import type { GroupCommand } from '../domain/commands';
@@ -21,7 +26,8 @@ import { revisionAnnouncementSchema } from '../domain/realtime';
 import { groupSnapshotSchema, type GroupSnapshot } from '../domain/sync';
 import type { IdentityDirectoryInspection } from '../identityDirectory';
 
-export type LabDeviceKey = 'one' | 'two';
+/** A generated key; devices are added and removed at will. */
+export type LabDeviceKey = string;
 
 type LabFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -71,6 +77,10 @@ export type LabDevice = {
   realtimeStatus: LabRealtimeStatus;
   realtimeEvents: LabRealtimeEvent[];
   session: IdentitySession | null;
+  /** Every group this device's identity can access, active ones first. */
+  groups: ClientGroupSummary[];
+  selectedGroupId: string | null;
+  /** The local replica of the selected group. */
   replica: ClientReplicaState | null;
   commands: LabCommand[];
   requests: LabRequest[];
@@ -79,14 +89,24 @@ export type LabDevice = {
 export type LabServer = {
   online: boolean;
   identityDirectory: IdentityDirectoryInspection | null;
+  groups: LabServerGroup[];
   revision: number | null;
   snapshot: GroupSnapshot | null;
   subscribers: string[];
   incoming: LabRequest[];
 };
 
+export type LabServerGroup = {
+  group_id: string;
+  name: string;
+  currency_code: string;
+  revision: number;
+};
+
 export type SyncLabState = {
-  groupId: string | null;
+  /** The group the server panel inspects: the one most recently selected. */
+  inspectedGroupId: string | null;
+  /** Devices in the order they were added. */
   devices: Record<LabDeviceKey, LabDevice>;
   server: LabServer;
 };
@@ -122,14 +142,12 @@ export type SyncLabOptions = {
  */
 export class SyncLab {
   readonly state: SyncLabState = {
-    groupId: null,
-    devices: {
-      one: newDevice('Device 1'),
-      two: newDevice('Device 2'),
-    },
+    inspectedGroupId: null,
+    devices: {},
     server: {
       online: true,
       identityDirectory: null,
+      groups: [],
       revision: null,
       snapshot: null,
       subscribers: [],
@@ -146,6 +164,7 @@ export class SyncLab {
   private readonly runtimes = new Map<LabDeviceKey, DeviceRuntime>();
   private readonly sockets = new Set<LabSocket>();
   private readonly systemApi: SplitnextClient;
+  private devicesAdded = 0;
 
   constructor(options: SyncLabOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
@@ -167,66 +186,151 @@ export class SyncLab {
     ]);
   }
 
-  async initializeDevices(): Promise<void> {
-    await Promise.all(
-      labDeviceKeys.map(async (key) => {
-        const runtime = this.runtime(key);
-        this.state.devices[key].session = await runtime.client.initializeIdentity();
-      }),
-    );
-    await this.refreshServer();
+  /**
+   * Adds a freshly installed device. Like an app's first launch, it generates
+   * a device secret and registers an anonymous identity right away.
+   */
+  async addDevice(): Promise<LabDeviceKey> {
+    this.devicesAdded += 1;
+
+    const key = `device-${this.devicesAdded}`;
+
+    this.state.devices[key] = newDevice(`Device ${this.devicesAdded}`);
+    this.changed();
+
+    try {
+      this.device(key).session = await this.runtime(key).client.initializeIdentity();
+      await this.refreshGroupList(key);
+    } finally {
+      await this.refreshServer();
+      this.changed();
+    }
+
+    return key;
+  }
+
+  /**
+   * Discards a device and everything stored on it, as if it were wiped or
+   * lost. Its identity and group access remain on the server.
+   */
+  removeDevice(key: LabDeviceKey): void {
+    const runtime = this.runtimes.get(key);
+
+    this.unwatchAll(key);
+    runtime?.client.setOnline(false);
+    this.runtimes.delete(key);
+    delete this.state.devices[key];
     this.changed();
   }
 
   async createGroup(
+    key: LabDeviceKey,
     input: Omit<CreateGroupRequest, 'group_id'>,
   ): Promise<ClientReplicaState> {
-    const replica = await this.runtime('one').client.createGroup(input);
+    const replica = await this.runtime(key).client.createGroup(input);
 
-    this.state.groupId = replica.group_id;
-    this.state.devices.one.replica = replica;
-    this.watchIfEnabled('one');
-    await this.refreshAfterOperation();
+    await this.openGroup(key, replica);
 
     return replica;
   }
 
-  async joinGroup(groupId: string, displayName: string): Promise<ClientReplicaState> {
-    const replica = await this.runtime('two').client.joinGroup(groupId, {
-      kind: 'new',
-      display_name: displayName,
-    });
+  /** Makes a group the device's selected one, fetching it if not stored. */
+  async selectGroup(key: LabDeviceKey, groupId: string): Promise<ClientReplicaState> {
+    const device = this.device(key);
+    const client = this.runtime(key).client;
+    const known = device.groups.find((group) => group.group_id === groupId);
 
-    this.state.groupId = groupId;
-    this.state.devices.two.replica = replica;
-    this.watchIfEnabled('two');
-    await this.refreshAfterOperation();
+    // A group the identity left no longer synchronizes, so opening it fetches
+    // current members for choosing who to be when rejoining.
+    const refresh = known?.status === 'left' && device.online;
+
+    const replica =
+      known?.stored_locally === false
+        ? await client.syncGroup(groupId)
+        : refresh
+          ? await client.refreshGroup(groupId)
+          : await client.inspect(groupId);
+
+    await this.openGroup(key, replica);
 
     return replica;
+  }
+
+  /** Asks the server for the device identity's groups. */
+  async refreshGroupList(key: LabDeviceKey): Promise<ClientGroupSummary[]> {
+    const groups = await this.runtime(key).client.listGroups();
+
+    this.device(key).groups = groups;
+    this.watchIfEnabled(key);
+    this.changed();
+
+    return groups;
+  }
+
+  /** Shows what a link holder would see before joining. */
+  previewInvite(key: LabDeviceKey, link: string): Promise<InvitePreview> {
+    const invite = requireInviteLink(link);
+
+    return this.runtime(key).client.previewInvite(invite.group_id, invite.token);
+  }
+
+  async joinWithInvite(
+    key: LabDeviceKey,
+    link: string,
+    preferredMember: ClientPreferredMemberChoice,
+  ): Promise<ClientReplicaState> {
+    const invite = requireInviteLink(link);
+
+    const replica = await this.runtime(key).client.joinGroup(
+      invite.group_id,
+      preferredMember,
+      invite.token,
+    );
+
+    await this.openGroup(key, replica);
+
+    return replica;
+  }
+
+  createInvite(key: LabDeviceKey, expiresInHours?: number) {
+    return this.mutate(key, (client, groupId) =>
+      client.createInvite(groupId, expiresInHours),
+    );
+  }
+
+  revokeInvite(key: LabDeviceKey) {
+    return this.mutate(key, (client, groupId) => client.revokeInvite(groupId));
+  }
+
+  /** The shareable link, when this device created the group's current one. */
+  inviteLink(key: LabDeviceKey): string | null {
+    const replica = this.device(key).replica;
+
+    return replica?.own_invite
+      ? formatInviteLink(this.baseUrl, replica.group_id, replica.own_invite.token)
+      : null;
   }
 
   async toggleDevice(key: LabDeviceKey): Promise<void> {
-    const device = this.state.devices[key];
+    const device = this.device(key);
 
     device.online = !device.online;
     this.runtimes.get(key)?.client.setOnline(device.online);
     this.changed();
 
-    if (device.online && this.hasVisibleReplica(device)) {
-      await this.syncDevice(key);
-    }
+    if (device.online) await this.deliverOutboxes(key);
   }
 
   /** Realtime can be disabled to show that a reconnect still catches up. */
   toggleRealtime(key: LabDeviceKey): void {
-    const device = this.state.devices[key];
+    const device = this.device(key);
 
     device.realtime = !device.realtime;
 
     if (device.realtime) {
       this.watchIfEnabled(key);
-    } else if (this.state.groupId) {
-      this.runtimes.get(key)?.client.unwatchGroup(this.state.groupId);
+    } else {
+      this.unwatchAll(key);
       device.realtimeStatus = 'off';
     }
 
@@ -252,40 +356,26 @@ export class SyncLab {
 
     // Reconnect now instead of waiting out each device's backoff.
     for (const [key, runtime] of this.runtimes) {
-      runtime.client.setOnline(this.state.devices[key].online);
+      runtime.client.setOnline(this.device(key).online);
     }
 
     this.changed();
     await Promise.all(
-      labDeviceKeys.map(async (key) => {
-        const device = this.state.devices[key];
-
-        if (!device.online || !this.hasVisibleReplica(device)) return;
-
-        try {
-          await this.syncDevice(key);
-        } catch {
-          // The traffic log already shows the failure; the outbox stays queued.
-        }
-      }),
+      this.deviceKeys().flatMap((key) =>
+        this.device(key).online ? [this.deliverOutboxes(key)] : [],
+      ),
     );
     await this.refreshServer();
   }
 
-  /**
-   * Development only: erases the identity directory and the named groups
-   * (plus the current one) on the server, then starts over with two fresh
-   * devices. Returns the group ids the server erased.
-   */
-  async reset(groupIds: string[] = []): Promise<string[]> {
+  /** Development only: erases all indexed groups and identities. */
+  async reset(): Promise<string[]> {
     if (!this.state.server.online) throw new TypeError('server_offline');
-
-    const known = this.state.groupId ? [this.state.groupId, ...groupIds] : groupIds;
 
     const response = await this.fetch(`${this.baseUrl}/debug/reset`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ group_ids: [...new Set(known)] }),
+      body: JSON.stringify({}),
     });
 
     if (!response.ok) throw new Error(`reset_failed_${response.status}`);
@@ -294,12 +384,12 @@ export class SyncLab {
       await response.json(),
     );
 
-    this.dispose();
-    this.runtimes.clear();
+    for (const key of this.deviceKeys()) this.removeDevice(key);
+
     this.sockets.clear();
-    this.state.groupId = null;
-    this.state.devices.one = newDevice('Device 1');
-    this.state.devices.two = newDevice('Device 2');
+    this.devicesAdded = 0;
+    this.state.inspectedGroupId = null;
+    this.state.server.groups = [];
     this.state.server.revision = null;
     this.state.server.snapshot = null;
     this.state.server.subscribers = [];
@@ -312,24 +402,19 @@ export class SyncLab {
 
   /** Closes every realtime subscription so the lab can be discarded. */
   dispose(): void {
-    const groupId = this.state.groupId;
-
-    if (!groupId) return;
-
-    for (const runtime of this.runtimes.values()) {
-      runtime.client.unwatchGroup(groupId);
-    }
+    for (const key of this.deviceKeys()) this.unwatchAll(key);
   }
 
+  /** Synchronizes the device's selected group. */
   async syncDevice(key: LabDeviceKey): Promise<ClientReplicaState | null> {
-    const groupId = this.state.groupId;
+    const device = this.device(key);
     const runtime = this.runtimes.get(key);
 
-    if (!groupId || !runtime || !this.state.devices[key].replica) return null;
+    if (!device.selectedGroupId || !runtime) return null;
 
-    const replica = await runtime.client.syncGroup(groupId);
+    const replica = await runtime.client.syncGroup(device.selectedGroupId);
 
-    this.state.devices[key].replica = replica;
+    device.replica = replica;
     await this.refreshAfterOperation();
 
     return replica;
@@ -374,40 +459,44 @@ export class SyncLab {
     return this.mutate(key, (client, groupId) => client.leaveGroup(groupId));
   }
 
-  async rejoinGroup(key: LabDeviceKey): Promise<ClientReplicaState> {
-    const groupId = this.requireGroupId();
-    const device = this.state.devices[key];
-
-    const member = device.replica?.confirmed_snapshot?.members.find(
-      (candidate) => candidate.status === 'active',
+  /** Rejoins the selected group as an existing member or a new one. */
+  async rejoinGroup(
+    key: LabDeviceKey,
+    preferredMember: ClientPreferredMemberChoice,
+  ): Promise<ClientReplicaState> {
+    const replica = await this.runtime(key).client.joinGroup(
+      this.requireSelectedGroup(key),
+      preferredMember,
     );
 
-    if (!member) throw new Error('active_member_required');
-
-    const replica = await this.runtime(key).client.joinGroup(groupId, {
-      kind: 'existing',
-      member_id: member.id,
-    });
-
-    device.replica = replica;
-    this.watchIfEnabled(key);
-    await this.refreshAfterOperation();
+    await this.openGroup(key, replica);
 
     return replica;
+  }
+
+  /** Groups the server index knows about, including those no lab device uses. */
+  knownGroups(): LabServerGroup[] {
+    return this.state.server.groups;
+  }
+
+  /** Shows a group's authoritative state in the server panel. */
+  async inspectGroup(groupId: string): Promise<void> {
+    this.state.inspectedGroupId = groupId;
+    this.changed();
+    await this.refreshGroupInspection();
+    this.changed();
   }
 
   async refreshServer(): Promise<void> {
     if (!this.state.server.online) return;
 
-    await Promise.all([
-      this.refreshIdentityDirectory(),
-      this.refreshGroupInspection(),
-    ]);
+    await Promise.all([this.refreshIdentityDirectory(), this.refreshServerGroups()]);
+    await this.refreshGroupInspection();
     this.changed();
   }
 
   clearDeviceTraffic(key: LabDeviceKey): void {
-    this.state.devices[key].requests = [];
+    this.device(key).requests = [];
     this.changed();
   }
 
@@ -421,7 +510,7 @@ export class SyncLab {
 
     if (existing) return existing;
 
-    const device = this.state.devices[key];
+    const device = this.device(key);
     const secret = this.createDeviceSecret();
 
     const api = new SplitnextClient({
@@ -443,8 +532,11 @@ export class SyncLab {
       device_secret: secret,
       storage: new MemoryClientStorage(),
       realtime_reconnect_delay_ms: (attempt) => Math.min(250 * 2 ** attempt, 4000),
+      // Every watched group refreshes in the background; the group list shows
+      // their names, and the selected one is also shown in full.
       on_background_sync: (replica) => {
-        device.replica = replica;
+        if (replica.group_id === device.selectedGroupId) device.replica = replica;
+
         void this.refreshAfterOperation();
       },
     });
@@ -514,13 +606,65 @@ export class SyncLab {
     };
   }
 
+  /** Selects a group on a device after it was opened, created, or joined. */
+  private async openGroup(
+    key: LabDeviceKey,
+    replica: ClientReplicaState,
+  ): Promise<void> {
+    const device = this.device(key);
+
+    device.selectedGroupId = replica.group_id;
+    device.replica = replica;
+    this.state.inspectedGroupId = replica.group_id;
+    await this.refreshAfterOperation();
+    this.watchIfEnabled(key);
+  }
+
+  /** Watches every active group stored on the device while Live is on. */
   private watchIfEnabled(key: LabDeviceKey): void {
-    const groupId = this.state.groupId;
-    const device = this.state.devices[key];
+    const device = this.device(key);
 
-    if (!groupId || !device.realtime || !this.hasVisibleReplica(device)) return;
+    if (!device.realtime) return;
 
-    this.runtime(key).client.watchGroup(groupId);
+    const client = this.runtime(key).client;
+
+    for (const group of device.groups) {
+      if (group.status === 'active' && group.stored_locally) {
+        client.watchGroup(group.group_id);
+      }
+    }
+  }
+
+  private unwatchAll(key: LabDeviceKey): void {
+    const client = this.runtimes.get(key)?.client;
+
+    for (const group of this.device(key).groups) {
+      client?.unwatchGroup(group.group_id);
+    }
+  }
+
+  /** Sends queued changes for every group, as a client would on reconnecting. */
+  private async deliverOutboxes(key: LabDeviceKey): Promise<void> {
+    const device = this.device(key);
+    const client = this.runtimes.get(key)?.client;
+
+    if (!client) return;
+
+    const pending = device.groups.filter(
+      (group) =>
+        group.pending_commands > 0 || group.group_id === device.selectedGroupId,
+    );
+
+    await Promise.all(
+      pending.map(async (group) => {
+        try {
+          await client.syncGroup(group.group_id);
+        } catch {
+          // The traffic log already shows the failure; the outbox stays queued.
+        }
+      }),
+    );
+    await this.refreshAfterOperation();
   }
 
   private async mutate(
@@ -530,34 +674,40 @@ export class SyncLab {
       groupId: string,
     ) => Promise<ClientReplicaState>,
   ): Promise<ClientReplicaState> {
-    const replica = await operation(this.runtime(key).client, this.requireGroupId());
+    const replica = await operation(
+      this.runtime(key).client,
+      this.requireSelectedGroup(key),
+    );
 
-    this.state.devices[key].replica = replica;
+    this.device(key).replica = replica;
     await this.refreshAfterOperation();
 
     return replica;
   }
 
   private async refreshAfterOperation(): Promise<void> {
-    await Promise.all([this.refreshReplicas(), this.refreshGroupInspection()]);
+    await this.refreshReplicas();
+    await this.refreshServerGroups();
+    await this.refreshGroupInspection();
     this.changed();
   }
 
+  /** Re-reads each device's local data; never touches the network. */
   private async refreshReplicas(): Promise<void> {
-    const groupId = this.state.groupId;
-
-    if (!groupId) return;
-
     await Promise.all(
-      labDeviceKeys.map(async (key) => {
+      this.deviceKeys().map(async (key) => {
         const runtime = this.runtimes.get(key);
 
         if (!runtime) return;
 
-        const device = this.state.devices[key];
+        const device = this.device(key);
 
-        device.replica = await runtime.client.inspect(groupId);
-        this.captureReplicaCommands(device);
+        device.groups = await runtime.client.knownGroups();
+
+        if (device.selectedGroupId) {
+          device.replica = await runtime.client.inspect(device.selectedGroupId);
+          this.captureReplicaCommands(device);
+        }
       }),
     );
   }
@@ -569,8 +719,25 @@ export class SyncLab {
     );
   }
 
+  private async refreshServerGroups(): Promise<void> {
+    const result = await this.inspect('/debug/groups', serverGroupListSchema);
+
+    if (!result) return;
+
+    this.state.server.groups = result.groups;
+
+    if (
+      !this.state.inspectedGroupId ||
+      !result.groups.some(
+        (group) => group.group_id === this.state.inspectedGroupId,
+      )
+    ) {
+      this.state.inspectedGroupId = result.groups[0]?.group_id ?? null;
+    }
+  }
+
   private async refreshGroupInspection(): Promise<void> {
-    const groupId = this.state.groupId;
+    const groupId = this.state.inspectedGroupId;
 
     if (!groupId || !this.state.server.online) return;
 
@@ -621,7 +788,7 @@ export class SyncLab {
   }
 
   private onRequest(key: LabDeviceKey, event: ClientRequestEvent): void {
-    const device = this.state.devices[key];
+    const device = this.device(key);
 
     const entry: LabRequest = {
       request_id: event.request_id,
@@ -643,7 +810,7 @@ export class SyncLab {
   }
 
   private onResponse(key: LabDeviceKey, event: ClientResponseEvent): void {
-    const device = this.state.devices[key];
+    const device = this.device(key);
 
     const result: LabRequestResult = {
       kind: 'response',
@@ -659,7 +826,7 @@ export class SyncLab {
   }
 
   private onRealtimeEvent(key: LabDeviceKey, event: ClientRealtimeEvent): void {
-    const device = this.state.devices[key];
+    const device = this.device(key);
     let detail: string;
 
     switch (event.phase) {
@@ -689,7 +856,7 @@ export class SyncLab {
   }
 
   private onNetworkError(key: LabDeviceKey, event: ClientNetworkErrorEvent): void {
-    const device = this.state.devices[key];
+    const device = this.device(key);
 
     completeRequest(device.requests, event, {
       kind: 'network_error',
@@ -799,14 +966,24 @@ export class SyncLab {
     if (device.commands.length > 20) device.commands.length = 20;
   }
 
-  private hasVisibleReplica(device: LabDevice): boolean {
-    return Boolean(device.replica && !device.replica.hidden);
+  private deviceKeys(): LabDeviceKey[] {
+    return Object.keys(this.state.devices);
   }
 
-  private requireGroupId(): string {
-    if (!this.state.groupId) throw new Error('group_not_selected');
+  private device(key: LabDeviceKey): LabDevice {
+    const device = this.state.devices[key];
 
-    return this.state.groupId;
+    if (!device) throw new Error('device_not_found');
+
+    return device;
+  }
+
+  private requireSelectedGroup(key: LabDeviceKey): string {
+    const groupId = this.device(key).selectedGroupId;
+
+    if (!groupId) throw new Error('group_not_selected');
+
+    return groupId;
   }
 
   private timestamp(): string {
@@ -821,8 +998,6 @@ export class SyncLab {
     this.onChange(this.state);
   }
 }
-
-const labDeviceKeys: LabDeviceKey[] = ['one', 'two'];
 
 const identityDirectoryInspectionSchema = z.object({
   identities: z.array(
@@ -844,6 +1019,17 @@ const resetResponseSchema = z.object({
   cleared_group_ids: z.array(z.string()),
 });
 
+const serverGroupListSchema = z.object({
+  groups: z.array(
+    z.object({
+      group_id: z.string(),
+      name: z.string(),
+      currency_code: z.string(),
+      revision: z.number().int().positive(),
+    }),
+  ),
+});
+
 const groupInspectionSchema = z.object({
   revision: z.number().int().positive(),
   snapshot: groupSnapshotSchema,
@@ -858,6 +1044,8 @@ function newDevice(label: string): LabDevice {
     realtimeStatus: 'off',
     realtimeEvents: [],
     session: null,
+    groups: [],
+    selectedGroupId: null,
     replica: null,
     commands: [],
     requests: [],
@@ -907,4 +1095,12 @@ function generateDeviceSecret(): string {
     .replaceAll('+', '-')
     .replaceAll('/', '_')
     .replace(/=+$/, '');
+}
+
+function requireInviteLink(link: string): { group_id: string; token: string } {
+  const invite = parseInviteLink(link);
+
+  if (!invite) throw new Error('invalid_invite_link');
+
+  return invite;
 }

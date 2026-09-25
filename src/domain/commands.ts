@@ -112,6 +112,7 @@ export const commandTargetSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('group'), id: identifierSchema }),
   z.object({ kind: z.literal('member'), id: identifierSchema }),
   z.object({ kind: z.literal('access'), id: identifierSchema }),
+  z.object({ kind: z.literal('invite'), id: identifierSchema }),
 ]);
 
 export type CommandTarget = z.output<typeof commandTargetSchema>;

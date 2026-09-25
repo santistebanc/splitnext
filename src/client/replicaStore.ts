@@ -8,7 +8,11 @@ import {
   type CommandOutcome,
   type GroupCommand,
 } from '../domain/commands';
-import type { CreatedGroup, CreateGroupRequest } from '../domain/groups';
+import type {
+  AccessibleGroup,
+  CreatedGroup,
+  CreateGroupRequest,
+} from '../domain/groups';
 import type { IdentitySession } from '../domain/identities';
 import type {
   GroupSession,
@@ -20,6 +24,7 @@ import {
   type ClientGroupReplica,
   type ClientStorageAdapter,
   type ClientStorageDocument,
+  type OwnInvite,
   parseClientDocument,
   type PendingCommand,
   serializeClientDocument,
@@ -36,6 +41,19 @@ export type ClientReplicaState = {
   notices: ClientGroupReplica['notices'];
   hidden: boolean;
   last_synced_at: string | null;
+  /** The current invite link, when this device created it and knows its token. */
+  own_invite: { invite_id: string; token: string } | null;
+};
+
+/** One entry in a device's list of groups. */
+export type ClientGroupSummary = {
+  group_id: string;
+  name: string;
+  currency_code: string;
+  status: 'active' | 'left';
+  /** Whether this device holds a copy; others are fetched when opened. */
+  stored_locally: boolean;
+  pending_commands: number;
 };
 
 export type PreparedSync = {
@@ -109,6 +127,7 @@ export class ClientReplicaStore {
         },
         members: [created.member],
         access_grants: [created.access],
+        invite: null,
       };
 
       upsertReplica(document, {
@@ -130,6 +149,7 @@ export class ClientReplicaStore {
     groupId: string,
     preferredMember: PreferredMemberChoice | { kind: 'new'; display_name: string },
     createId: () => string,
+    inviteToken?: string,
   ): Promise<JoinGroupRequest> {
     return this.change((document) => {
       requireIdentity(document);
@@ -148,10 +168,12 @@ export class ClientReplicaStore {
               member_id: createId(),
             };
 
-      const request = {
+      const request: JoinGroupRequest = {
         join_id: createId(),
         preferred_member: preferred,
       };
+
+      if (inviteToken) request.invite_token = inviteToken;
 
       document.pending_joins.push({ group_id: groupId, request });
 
@@ -185,6 +207,122 @@ export class ClientReplicaStore {
     });
   }
 
+  retainGroupDirectory(groups: AccessibleGroup[]): Promise<void> {
+    return this.change((document) => {
+      document.group_directory = groups;
+    });
+  }
+
+  /**
+   * Every group this identity can access that the device knows of: local
+   * copies, whose projected state is freshest, plus groups only the server's
+   * last list mentioned.
+   */
+  groupSummaries(): Promise<ClientGroupSummary[]> {
+    return this.read((document) => {
+      const session = document.session;
+
+      const local = session
+        ? document.groups.map((replica): ClientGroupSummary => {
+            const projection = project(replica, session.identity.id);
+            const access = accessFor(projection, session.identity.id);
+
+            return {
+              group_id: replica.group_id,
+              name: projection.group.name,
+              currency_code: projection.group.currency_code,
+              status: access?.hidden_at ? 'left' : 'active',
+              stored_locally: true,
+              pending_commands: replica.outbox.length,
+            };
+          })
+        : [];
+
+      const localIds = new Set(local.map(({ group_id }) => group_id));
+
+      const remoteOnly = document.group_directory
+        .filter(({ group_id }) => !localIds.has(group_id))
+        .map((group): ClientGroupSummary => ({
+          group_id: group.group_id,
+          name: group.name,
+          currency_code: group.currency_code,
+          status: group.status,
+          stored_locally: false,
+          pending_commands: 0,
+        }));
+
+      return [...local, ...remoteOnly].sort(
+        (left, right) =>
+          Number(left.status === 'left') - Number(right.status === 'left') ||
+          left.name.localeCompare(right.name),
+      );
+    });
+  }
+
+  /** Reuses an unconfirmed invite with the same lifetime so retries are safe. */
+  prepareInvite(
+    groupId: string,
+    expiresInHours: number,
+    createId: () => string,
+    createToken: () => string,
+  ): Promise<OwnInvite> {
+    return this.change((document) => {
+      requireReplica(document, groupId);
+
+      const existing = document.own_invites.find(
+        (candidate) => candidate.group_id === groupId,
+      );
+
+      if (
+        existing &&
+        !existing.confirmed &&
+        existing.expires_in_hours === expiresInHours
+      ) {
+        return existing;
+      }
+
+      const invite: OwnInvite = {
+        group_id: groupId,
+        invite_id: createId(),
+        token: createToken(),
+        expires_in_hours: expiresInHours,
+        confirmed: false,
+      };
+
+      document.own_invites = [
+        ...document.own_invites.filter(
+          (candidate) => candidate.group_id !== groupId,
+        ),
+        invite,
+      ];
+
+      return invite;
+    });
+  }
+
+  settleInvite(
+    groupId: string,
+    inviteId: string,
+    accepted: boolean,
+  ): Promise<void> {
+    return this.change((document) => {
+      const invite = document.own_invites.find(
+        (candidate) =>
+          candidate.group_id === groupId && candidate.invite_id === inviteId,
+      );
+
+      if (!invite) return;
+
+      if (accepted) {
+        invite.confirmed = true;
+      } else {
+        document.own_invites = document.own_invites.filter(
+          (candidate) => candidate !== invite,
+        );
+      }
+    });
+  }
+
   queueCommand(
     groupId: string,
     createCommand: (
@@ -204,13 +342,30 @@ export class ClientReplicaStore {
     });
   }
 
-  prepareSync(groupId: string): Promise<PreparedSync | null> {
+  /**
+   * A group the identity can access but this device has never stored, such as
+   * one listed by the server, is fetched as a complete snapshot.
+   */
+  prepareSync(
+    groupId: string,
+    includeLeft = false,
+  ): Promise<PreparedSync | null> {
     return this.read((document) => {
       const session = requireIdentity(document);
-      const replica = requireReplica(document, groupId);
+
+      const replica = document.groups.find(
+        (candidate) => candidate.group_id === groupId,
+      );
+
+      if (!replica) {
+        return { request: { known_revision: null, commands: [] }, commands: [] };
+      }
+
       const access = accessFor(replica.snapshot, session.identity.id);
 
-      if (access?.hidden_at && replica.outbox.length === 0) return null;
+      if (!includeLeft && access?.hidden_at && replica.outbox.length === 0) {
+        return null;
+      }
 
       const commands = structuredClone(replica.outbox);
 
@@ -230,7 +385,24 @@ export class ClientReplicaStore {
     response: SyncGroupResponse,
   ): Promise<void> {
     return this.change((document) => {
-      const replica = requireReplica(document, groupId);
+      const replica = document.groups.find(
+        (candidate) => candidate.group_id === groupId,
+      );
+
+      if (!replica) {
+        if (response.state.kind === 'snapshot') {
+          upsertReplica(document, {
+            group_id: groupId,
+            revision: response.revision,
+            snapshot: response.state.snapshot,
+            outbox: [],
+            notices: [],
+            last_synced_at: this.now(),
+          });
+        }
+
+        return;
+      }
 
       const acknowledged = new Set(
         response.outcomes.map((outcome) => outcome.command_id),
@@ -353,6 +525,7 @@ function stateFrom(
       notices: [],
       hidden: false,
       last_synced_at: null,
+      own_invite: null,
     };
   }
 
@@ -370,6 +543,7 @@ function stateFrom(
     notices: structuredClone(replica.notices),
     hidden: access?.hidden_at !== null && access?.hidden_at !== undefined,
     last_synced_at: replica.last_synced_at,
+    own_invite: ownInviteFor(document, projection),
   };
 }
 
@@ -466,4 +640,20 @@ function sameCreationInput(
     left.currency_code === right.currency_code &&
     left.creator_member_name === right.creator_member_name
   );
+}
+
+function ownInviteFor(
+  document: ClientStorageDocument,
+  snapshot: GroupSnapshot,
+): ClientReplicaState['own_invite'] {
+  const current = snapshot.invite;
+
+  const invite = document.own_invites.find(
+    (candidate) =>
+      candidate.confirmed &&
+      candidate.group_id === snapshot.group.id &&
+      candidate.invite_id === current?.id,
+  );
+
+  return invite ? { invite_id: invite.invite_id, token: invite.token } : null;
 }
