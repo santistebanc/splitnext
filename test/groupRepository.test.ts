@@ -162,6 +162,7 @@ describe('in-memory group repository adapter', () => {
       command_outcomes: [],
       join_outcomes: [],
       member_aliases: [],
+      invites: [],
     });
   });
 });

@@ -7,7 +7,11 @@ import {
   type ClientReplicaState,
 } from '../src/client';
 import { createIdentifier } from '../src/domain/ids';
-import { applyTestMigrations, randomDeviceSecret } from './harness';
+import {
+  applyTestMigrations,
+  joinThroughInvite,
+  randomDeviceSecret,
+} from './harness';
 
 beforeAll(async () => {
   await applyTestMigrations();
@@ -176,7 +180,7 @@ async function createSharedGroup(
     creator_member_name: 'Santi',
   });
 
-  await online.client.joinGroup(created.group_id, {
+  await joinThroughInvite(offline.client, online.client, created.group_id, {
     kind: 'new',
     display_name: 'Robin',
   });

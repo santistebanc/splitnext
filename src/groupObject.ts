@@ -10,6 +10,10 @@ import {
 } from './domain/groups';
 import { identifierSchema } from './domain/ids';
 import {
+  createInviteCommandSchema,
+  type CreateInviteCommand,
+} from './domain/invites';
+import {
   realtimeGroupHiddenCode,
   realtimeProtocol,
   type RevisionAnnouncement,
@@ -125,6 +129,45 @@ export class GroupObject extends DurableObject<Env> {
     if (result.ok) this.announce(result.revision);
 
     return result;
+  }
+
+  createInvite(command: CreateInviteCommand) {
+    const parsed = createInviteCommandSchema.safeParse(command);
+
+    if (!parsed.success || this.ctx.id.name !== parsed.data.group_id) {
+      return { ok: false as const, error: 'invalid_request' as const };
+    }
+
+    const result = this.store.createInvite(parsed.data);
+
+    // A retried creation repeats its announcement, which subscribers tolerate.
+    if (result.ok) this.announce(result.revision);
+
+    return result;
+  }
+
+  revokeInvite(groupId: string, identityId: string, inviteId: string) {
+    if (this.ctx.id.name !== groupId) {
+      return { ok: false as const, error: 'invalid_request' as const };
+    }
+
+    const result = this.store.revokeInvite(
+      identityId,
+      inviteId,
+      new Date().toISOString(),
+    );
+
+    if (result.ok && result.changed) this.announce(result.revision);
+
+    return result;
+  }
+
+  previewInvite(groupId: string, tokenHash: string) {
+    if (this.ctx.id.name !== groupId) {
+      return { ok: false as const, error: 'invalid_request' as const };
+    }
+
+    return this.store.previewInvite(tokenHash, new Date().toISOString());
   }
 
   inspectGroup(groupId: string) {

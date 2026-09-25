@@ -1,7 +1,11 @@
 import { env, exports } from 'cloudflare:workers';
 import { applyD1Migrations, type D1Migration } from 'cloudflare:test';
 import { expect } from 'vitest';
-import type { RealtimeSocketFactory } from '../src/client';
+import type {
+  ClientPreferredMemberChoice,
+  RealtimeSocketFactory,
+  SplitnextSyncClient,
+} from '../src/client';
 
 declare global {
   namespace Cloudflare {
@@ -63,6 +67,16 @@ export async function fetchOpenApiDocument(): Promise<OpenApiDocument> {
   return (await response.json()) as OpenApiDocument;
 }
 
+const pendingUpgrades = new Set<Promise<void>>();
+
+/**
+ * Waits for upgrades still in flight, so a subscription opened at the end of
+ * a test cannot outlive the test environment.
+ */
+export async function settleWorkerSockets(): Promise<void> {
+  while (pendingUpgrades.size > 0) await Promise.allSettled(pendingUpgrades);
+}
+
 /**
  * Opens realtime connections through the Worker in-process, since tests have
  * no network listener for a browser WebSocket to reach.
@@ -75,7 +89,7 @@ export const workerWebSocket: RealtimeSocketFactory = (
   let socket: WebSocket | null = null;
   let closedByClient = false;
 
-  void (async () => {
+  const connecting = (async () => {
     const response = await exports.default.fetch(url.replace(/^ws/, 'http'), {
       headers: {
         upgrade: 'websocket',
@@ -107,6 +121,9 @@ export const workerWebSocket: RealtimeSocketFactory = (
     }
   })().catch(() => handlers.close(1006, 'network_error'));
 
+  pendingUpgrades.add(connecting);
+  void connecting.finally(() => pendingUpgrades.delete(connecting));
+
   return {
     close: (code, reason) => {
       closedByClient = true;
@@ -122,4 +139,18 @@ export function randomDeviceSecret(): string {
     .replaceAll('+', '-')
     .replaceAll('/', '_')
     .replace(/=+$/, '');
+}
+
+/** Joins the way a new participant must: through a freshly created link. */
+export async function joinThroughInvite(
+  creator: SplitnextSyncClient,
+  joiner: SplitnextSyncClient,
+  groupId: string,
+  preferredMember: ClientPreferredMemberChoice,
+) {
+  const token = (await creator.createInvite(groupId)).own_invite?.token;
+
+  if (!token) throw new Error('invite_token_missing');
+
+  return joiner.joinGroup(groupId, preferredMember, token);
 }

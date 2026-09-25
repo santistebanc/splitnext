@@ -1,7 +1,18 @@
 import type { JoinGroupRequest } from '../domain/access';
 import type { GroupCommand } from '../domain/commands';
-import type { CreatedGroup, CreateGroupRequest } from '../domain/groups';
+import type {
+  AccessibleGroup,
+  CreatedGroup,
+  CreateGroupRequest,
+} from '../domain/groups';
 import { createIdentifier } from '../domain/ids';
+import {
+  createInviteToken,
+  defaultInviteLifetimeHours,
+  type CreateInviteRequest,
+  type GroupInvite,
+  type InvitePreview,
+} from '../domain/invites';
 import type { IdentitySession } from '../domain/identities';
 import type {
   GroupSession,
@@ -12,6 +23,7 @@ import type {
 import {
   ClientReplicaStore,
   type ClientReplicaState,
+  type ClientGroupSummary,
 } from './replicaStore';
 import {
   defaultReconnectDelayMs,
@@ -26,6 +38,13 @@ export type SyncDeviceTransport = {
   joinGroup(groupId: string, input: JoinGroupRequest): Promise<GroupSession>;
   syncGroup(groupId: string, input: SyncGroupRequest): Promise<SyncGroupResponse>;
   openRealtime(groupId: string, handlers: RealtimeSocketHandlers): RealtimeSocket;
+  createInvite(
+    groupId: string,
+    input: CreateInviteRequest,
+  ): Promise<{ revision: number; invite: GroupInvite }>;
+  revokeInvite(groupId: string, inviteId: string): Promise<{ revision: number }>;
+  previewInvite(groupId: string, token: string): Promise<InvitePreview>;
+  listGroups(): Promise<{ groups: AccessibleGroup[] }>;
 };
 
 export type SyncTransport = {
@@ -143,9 +162,14 @@ export class SplitnextSyncClient {
     return this.replicas.state(created.group.id, this.online);
   }
 
+  /**
+   * Joining for the first time needs the token from the group's invite link;
+   * rejoining after leaving does not, because access is permanent.
+   */
   async joinGroup(
     groupId: string,
     preferredMember: ClientPreferredMemberChoice,
+    inviteToken?: string,
   ): Promise<ClientReplicaState> {
     this.requireOnline();
 
@@ -153,6 +177,7 @@ export class SplitnextSyncClient {
       groupId,
       preferredMember,
       this.createId,
+      inviteToken,
     );
 
     try {
@@ -168,6 +193,89 @@ export class SplitnextSyncClient {
 
       throw error;
     }
+  }
+
+  /**
+   * Creates the group's invite link, revoking any previous one. This device
+   * generates and keeps the token; the returned state's `own_invite` holds it
+   * for as long as the link is current.
+   */
+  async createInvite(
+    groupId: string,
+    expiresInHours: number = defaultInviteLifetimeHours,
+  ): Promise<ClientReplicaState> {
+    this.requireOnline();
+
+    const invite = await this.replicas.prepareInvite(
+      groupId,
+      expiresInHours,
+      this.createId,
+      createInviteToken,
+    );
+
+    try {
+      await this.deviceApi.createInvite(groupId, {
+        invite_id: invite.invite_id,
+        token: invite.token,
+        expires_in_hours: invite.expires_in_hours,
+      });
+    } catch (error) {
+      if (error instanceof Error && isServerRejection(error)) {
+        await this.replicas.settleInvite(groupId, invite.invite_id, false);
+      }
+
+      throw error;
+    }
+
+    await this.replicas.settleInvite(groupId, invite.invite_id, true);
+
+    return this.syncGroup(groupId);
+  }
+
+  /** Stops new joins through the current link; granted access remains. */
+  async revokeInvite(groupId: string): Promise<ClientReplicaState> {
+    this.requireOnline();
+
+    const state = await this.replicas.state(groupId, this.online);
+    const invite = state.confirmed_snapshot?.invite;
+
+    if (!invite) return state;
+
+    await this.deviceApi.revokeInvite(groupId, invite.id);
+
+    return this.syncGroup(groupId);
+  }
+
+  /**
+   * Lists every group this identity can access, active ones first. Online, it
+   * refreshes the server's list; offline, or if that fails, it uses the last
+   * list and this device's own copies. Opening a group that has no local copy
+   * is a `syncGroup` call, which fetches one.
+   */
+  async listGroups(): Promise<ClientGroupSummary[]> {
+    if (this.online) {
+      try {
+        const { groups } = await this.deviceApi.listGroups();
+
+        await this.replicas.retainGroupDirectory(groups);
+      } catch (error) {
+        if (!(error instanceof Error) || !isTransportFailure(error)) throw error;
+      }
+    }
+
+    return this.replicas.groupSummaries();
+  }
+
+  /** The same list as `listGroups`, from local data only. */
+  knownGroups(): Promise<ClientGroupSummary[]> {
+    return this.replicas.groupSummaries();
+  }
+
+  /** Shows a link holder the group and its members before they join. */
+  previewInvite(groupId: string, token: string): Promise<InvitePreview> {
+    this.requireOnline();
+
+    return this.deviceApi.previewInvite(groupId, token);
   }
 
   /**
@@ -260,6 +368,17 @@ export class SplitnextSyncClient {
   }
 
   /**
+   * Fetches the current snapshot even for a group this identity left, which
+   * ordinary synchronization skips; for example, to choose a member before
+   * rejoining.
+   */
+  async refreshGroup(groupId: string): Promise<ClientReplicaState> {
+    this.requireOnline();
+
+    return this.serialize(groupId, () => this.synchronize(groupId, true));
+  }
+
+  /**
    * Subscribes to revision announcements for a group while online. The
    * subscription ends when the group becomes hidden.
    */
@@ -312,8 +431,11 @@ export class SplitnextSyncClient {
     }
   }
 
-  private async synchronize(groupId: string): Promise<ClientReplicaState> {
-    const prepared = await this.replicas.prepareSync(groupId);
+  private async synchronize(
+    groupId: string,
+    includeLeft = false,
+  ): Promise<ClientReplicaState> {
+    const prepared = await this.replicas.prepareSync(groupId, includeLeft);
 
     if (prepared) {
       const response = await this.deviceApi.syncGroup(
@@ -392,4 +514,4 @@ function isTransportFailure(error: Error): boolean {
   );
 }
 
-export type { ClientReplicaState } from './replicaStore';
+export type { ClientGroupSummary, ClientReplicaState } from './replicaStore';

@@ -25,18 +25,30 @@ body {
   background: var(--paper);
 }
 
+/* Components set their own display, which would otherwise override `hidden`. */
+[hidden] {
+  display: none !important;
+}
+
 button,
-input {
+input,
+select {
   min-width: 0;
   border: 1px solid var(--line);
   padding: 0.4rem 0.5rem;
   font: inherit;
 }
 
-input {
+input,
+select {
   width: 100%;
   color: var(--ink);
   background: var(--white);
+  font-size: 0.8rem;
+}
+
+select {
+  padding: 0.35rem 0.4rem;
 }
 
 input:focus {
@@ -51,6 +63,7 @@ button {
   font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 button:disabled {
@@ -138,35 +151,9 @@ main {
   font-size: 0.75rem;
 }
 
-.setup-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-}
-
-.setup-grid form {
-  display: grid;
-  grid-template-columns: auto minmax(7rem, 1fr) minmax(7rem, 1fr) 4rem auto;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.4rem;
-}
-
-.setup-grid form + form {
-  border-left: 1px solid var(--line);
-}
-
-.setup-grid strong {
-  font-size: 0.76rem;
-  white-space: nowrap;
-}
-
-#join-group-form {
-  grid-template-columns: auto minmax(7rem, 0.7fr) minmax(10rem, 1.3fr) auto;
-}
-
 .replica-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   gap: 0.5rem;
   align-items: start;
 }
@@ -184,15 +171,28 @@ main {
 }
 
 .zone-header {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.35rem 0.5rem;
+}
+
+.zone-header h2,
+.revision {
+  white-space: nowrap;
 }
 
 .header-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.25rem;
+  margin-left: auto;
+}
+
+/* Devices put their actions on their own row under the title. */
+.device-zone .header-actions {
+  flex-basis: 100%;
+  margin-left: 0;
 }
 
 .header-actions button {
@@ -635,20 +635,14 @@ pre {
 }
 
 @media (max-width: 1150px) {
-  .setup-grid,
   .replica-grid {
     grid-template-columns: 1fr;
-  }
-
-  .setup-grid form + form {
-    border-top: 1px solid var(--line);
-    border-left: 0;
   }
 }
 
 @media (max-width: 620px) {
-  .setup-grid form,
-  #join-group-form {
+  .create-group,
+  .join-group {
     grid-template-columns: 1fr;
   }
 
@@ -782,4 +776,197 @@ pre {
   flex: 1;
   min-width: 0;
   font-weight: 700;
+}
+
+.join-preview {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.join-preview.error {
+  color: var(--red);
+}
+
+.invite-section {
+  margin-top: 0.5rem;
+  padding: 0.4rem;
+  border: 1px solid var(--line);
+}
+
+.invite-link-row,
+.invite-controls {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.invite-controls {
+  grid-template-columns: 1fr auto auto;
+}
+
+.invite-link-row input {
+  font: 0.64rem/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.create-group,
+.join-group {
+  display: grid;
+  grid-template-columns: minmax(6rem, 1fr) minmax(5rem, 1fr) 3.5rem auto;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+}
+
+.join-group {
+  grid-template-columns: minmax(8rem, 1.5fr) minmax(6rem, 1fr) auto;
+}
+
+.join-group [data-role="join-name"] {
+  grid-column: 1 / 3;
+}
+
+.rejoin-group {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) minmax(6rem, 1fr) auto;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem;
+  border: 1px solid var(--blue);
+  background: var(--blue-soft);
+}
+
+.rejoin-group strong {
+  grid-column: 1 / -1;
+  font-size: 0.75rem;
+}
+
+.remove-device {
+  margin-left: auto;
+  border-color: transparent;
+  color: var(--muted);
+  background: transparent;
+}
+
+.remove-device:hover {
+  color: var(--red);
+}
+
+.group-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0.1rem;
+  margin: 0.4rem 0 0.5rem;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.tab-strip {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.group-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.5rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.group-tab:hover:not(:disabled) {
+  color: var(--ink);
+  background: #f2f4f3;
+}
+
+.group-tab.selected {
+  border-bottom-color: var(--blue);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.group-tab.left {
+  font-style: italic;
+}
+
+.group-tab .tab-note {
+  color: var(--muted);
+  font-size: 0.6rem;
+  font-weight: 400;
+}
+
+.group-tab .group-status {
+  padding: 0 0.3rem;
+  color: var(--white);
+  background: var(--muted);
+  font-size: 0.58rem;
+}
+
+.refresh-groups {
+  margin-left: auto;
+  align-self: center;
+  padding: 0 0.3rem;
+  font-size: 0.9rem;
+}
+
+.group-forms {
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem;
+  border: 1px solid var(--line);
+}
+
+.group-forms > strong {
+  font-size: 0.75rem;
+}
+
+.group-pane-empty {
+  padding: 0.6rem 0.4rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+/* Symbols live in one hidden sprite; `display: none` would hide them in some browsers. */
+.icon-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.icon {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  line-height: 0;
+}
+
+.edit-button .icon {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.refresh-groups {
+  border-color: transparent;
+  color: var(--blue);
+  background: transparent;
 }

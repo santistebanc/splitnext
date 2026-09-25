@@ -1,5 +1,5 @@
 import { exports } from 'cloudflare:workers';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   MemoryClientStorage,
   SplitnextClient,
@@ -16,13 +16,17 @@ import {
 } from '../src/domain/realtime';
 import {
   applyTestMigrations,
+  joinThroughInvite,
   randomDeviceSecret,
+  settleWorkerSockets,
   workerWebSocket,
 } from './harness';
 
 beforeAll(async () => {
   await applyTestMigrations();
 });
+
+afterEach(() => settleWorkerSockets());
 
 describe('realtime revision announcements', () => {
   it('announces the current revision on connect and after applied changes only', async () => {
@@ -33,12 +37,12 @@ describe('realtime revision announcements', () => {
     expect(subscription.response.headers.get('sec-websocket-protocol')).toBe(
       'splitnext.v1',
     );
-    await expect.poll(() => subscription.revisions).toEqual([2]);
+    await expect.poll(() => subscription.revisions).toEqual([3]);
 
     await joiner.client.syncGroup(groupId);
     await joiner.client.addMember(groupId, 'Taylor');
 
-    await expect.poll(() => subscription.revisions).toEqual([2, 3]);
+    await expect.poll(() => subscription.revisions).toEqual([3, 4]);
     subscription.close();
   });
 
@@ -79,7 +83,7 @@ describe('realtime revision announcements', () => {
     const { groupId, joiner } = await createSharedGroup();
     const subscription = await subscribe(groupId, joiner.secret);
 
-    await expect.poll(() => subscription.revisions).toEqual([2]);
+    await expect.poll(() => subscription.revisions).toEqual([3]);
     await joiner.client.leaveGroup(groupId);
 
     await expect.poll(() => subscription.closeCodes).toEqual([4403]);
@@ -103,7 +107,7 @@ describe('realtime client synchronization', () => {
     await expect
       .poll(async () => groupName(await creator.client.inspect(groupId)))
       .toBe('Announced name');
-    expect(backgroundSyncs.at(-1)?.revision).toBe(3);
+    expect(backgroundSyncs.at(-1)?.revision).toBe(4);
     creator.client.unwatchGroup(groupId);
   });
 
@@ -134,6 +138,10 @@ describe('realtime client synchronization', () => {
           return {
             createGroup: (input) => device.createGroup(input),
             joinGroup: (id, input) => device.joinGroup(id, input),
+            createInvite: (id, input) => device.createInvite(id, input),
+            revokeInvite: (id, inviteId) => device.revokeInvite(id, inviteId),
+            previewInvite: (id, token) => device.previewInvite(id, token),
+            listGroups: () => device.listGroups(),
             syncGroup: (id, input) => {
               syncRequests += 1;
 
@@ -156,13 +164,16 @@ describe('realtime client synchronization', () => {
 
     if (!socket) throw new Error('subscription_not_opened');
 
+    // Setup synchronizes too (creating the invite); count only the burst.
+    syncRequests = 0;
+
     for (let index = 0; index < 5; index += 1) {
-      socket.message(JSON.stringify({ type: 'revision', revision: 3 }));
+      socket.message(JSON.stringify({ type: 'revision', revision: 4 }));
     }
 
     await expect
       .poll(async () => (await creator.client.inspect(groupId)).revision)
-      .toBe(3);
+      .toBe(4);
     expect(syncRequests).toBe(1);
   });
 
@@ -258,7 +269,7 @@ async function createSharedGroup(options: SharedGroupOptions = {}) {
     creator_member_name: 'Santi',
   });
 
-  await joiner.client.joinGroup(created.group_id, {
+  await joinThroughInvite(creator.client, joiner.client, created.group_id, {
     kind: 'new',
     display_name: 'Robin',
   });

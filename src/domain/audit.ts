@@ -6,6 +6,7 @@ import {
   groupDetailsSchema,
 } from './groups';
 import { identifierSchema } from './ids';
+import { inviteRecordSchema } from './invites';
 import { ledgerMemberSchema } from './members';
 
 const joinedStateSchema = z.object({
@@ -63,6 +64,17 @@ export const auditChangeSchema = z.discriminatedUnion('action', [
     action: z.literal('group.left'),
     before: groupAccessGrantSchema,
     after: groupAccessGrantSchema,
+  }),
+  z.object({
+    action: z.literal('invite.created'),
+    // Creating a link revokes the previous one, which is recorded here.
+    before: inviteRecordSchema.nullable(),
+    after: inviteRecordSchema,
+  }),
+  z.object({
+    action: z.literal('invite.revoked'),
+    before: inviteRecordSchema,
+    after: inviteRecordSchema,
   }),
 ]);
 

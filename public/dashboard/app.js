@@ -7,14 +7,12 @@ import {
 const elements = {
   health: document.querySelector('#health-status'),
   ready: document.querySelector('#ready-status'),
-  initialize: document.querySelector('#initialize-devices'),
-  createForm: document.querySelector('#create-group-form'),
-  joinForm: document.querySelector('#join-group-form'),
-  joinGroupId: document.querySelector('#join-group-id'),
+  addDevice: document.querySelector('#add-device'),
   setupSummary: document.querySelector('#setup-summary'),
   serverToggle: document.querySelector('#toggle-server'),
   serverRevision: document.querySelector('#server-revision'),
   serverIdentityList: document.querySelector('#server-identity-list'),
+  serverGroupTabs: document.querySelector('#server-group-tabs'),
   serverGroupSummary: document.querySelector('#server-group-summary'),
   serverMemberList: document.querySelector('#server-member-list'),
   serverSubscribers: document.querySelector('#server-subscribers'),
@@ -26,30 +24,18 @@ const elements = {
   toast: document.querySelector('#toast'),
 };
 
-const deviceViews = Object.fromEntries(
-  [...document.querySelectorAll('[data-device]')].map((root) => [
-    root.dataset.device,
-    {
-      root,
-      toggle: root.querySelector('[data-action="toggle-device"]'),
-      realtimeToggle: root.querySelector('[data-action="toggle-realtime"]'),
-      realtimeEvents: root.querySelector('[data-role="realtime-events"]'),
-      identity: root.querySelector('[data-role="identity"]'),
-      revision: root.querySelector('[data-role="revision"]'),
-      groupEditor: root.querySelector('[data-role="group-editor"]'),
-      memberList: root.querySelector('[data-role="member-list"]'),
-      actions: root.querySelector('[data-role="actions"]'),
-      sync: root.querySelector('[data-action="sync"]'),
-      leave: root.querySelector('[data-action="leave"]'),
-      rejoin: root.querySelector('[data-action="rejoin"]'),
-      addMemberForm: root.querySelector('[data-action-form="add-member"]'),
-      commands: root.querySelector('[data-role="commands"]'),
-      requests: root.querySelector('[data-role="requests"]'),
-      clearTraffic: root.querySelector('[data-action="clear-traffic"]'),
-      rawState: root.querySelector('[data-role="raw-state"]'),
-    },
-  ]),
-);
+const deviceTemplate = document.querySelector('#device-template');
+
+const replicaGrid = document.querySelector('#replica-grid');
+
+/** Panels for the lab's devices, created and removed to match its state. */
+const deviceViews = {};
+
+/** Devices showing their "+ New" tab instead of a group. */
+const newGroupTabs = {};
+
+// Each device is a different person, so its forms default to its own name.
+const defaultNames = ['Santi', 'Robin', 'Taylor', 'Alex', 'Sam', 'Jordan'];
 
 const lab = new SyncLab({
   baseUrl: window.location.origin,
@@ -77,92 +63,358 @@ function renderDependency(element, available, label) {
 }
 
 function bindEvents() {
-  elements.initialize.addEventListener('click', initializeDevices);
-  elements.createForm.addEventListener('submit', createGroup);
-  elements.joinForm.addEventListener('submit', joinGroup);
+  elements.addDevice.addEventListener('click', addDevice);
   elements.serverToggle.addEventListener('click', toggleServer);
   elements.refreshServer.addEventListener('click', refreshServer);
   elements.resetServer.addEventListener('click', resetServer);
+  elements.serverGroupTabs.addEventListener('click', inspectServerGroup);
   elements.clearServerTraffic.addEventListener('click', () => {
     lab.clearServerTraffic();
   });
+}
 
-  for (const [key, view] of Object.entries(deviceViews)) {
-    view.toggle.addEventListener('click', () => toggleDevice(key));
-    view.realtimeToggle.addEventListener('click', () => toggleRealtime(key));
-    view.sync.addEventListener('click', () => synchronizeDevice(key));
-    view.leave.addEventListener('click', () => leaveGroup(key));
-    view.rejoin.addEventListener('click', () => rejoinGroup(key));
-    view.clearTraffic.addEventListener('click', () => clearDeviceTraffic(key));
-    view.actions.addEventListener('click', (event) => beginRename(event, key));
-    view.addMemberForm.addEventListener('submit', (event) =>
-      addMember(event, key),
-    );
-    view.memberList.addEventListener('submit', (event) =>
-      performMemberAction(event, key),
-    );
+/** Builds a device's panel from the template and wires its controls. */
+function createDeviceView(key) {
+  const root = deviceTemplate.content.firstElementChild.cloneNode(true);
+  const query = (selector) => root.querySelector(selector);
+  const device = state.devices[key];
+  const number = Number(device.label.replace(/\D/g, '')) || 1;
+  const defaultName = defaultNames[(number - 1) % defaultNames.length];
+
+  const view = {
+    root,
+    label: query('[data-role="label"]'),
+    toggle: query('[data-action="toggle-device"]'),
+    realtimeToggle: query('[data-action="toggle-realtime"]'),
+    realtimeEvents: query('[data-role="realtime-events"]'),
+    identity: query('[data-role="identity"]'),
+    revision: query('[data-role="revision"]'),
+    remove: query('[data-action="remove-device"]'),
+    groupList: query('[data-role="group-list"]'),
+    newGroupTab: query('[data-action="new-group-tab"]'),
+    groupForms: query('[data-role="group-forms"]'),
+    groupPane: query('[data-role="group-pane"]'),
+    refreshGroups: query('[data-action="refresh-groups"]'),
+    createForm: query('[data-action-form="create-group"]'),
+    joinForm: query('[data-action-form="join-group"]'),
+    joinLink: query('[data-role="join-link"]'),
+    joinMember: query('[data-role="join-member"]'),
+    joinName: query('[data-role="join-name"]'),
+    joinPreview: query('[data-role="join-preview"]'),
+    groupEditor: query('[data-role="group-editor"]'),
+    memberList: query('[data-role="member-list"]'),
+    actions: query('[data-role="actions"]'),
+    sync: query('[data-action="sync"]'),
+    leave: query('[data-action="leave"]'),
+    rejoinForm: query('[data-action-form="rejoin"]'),
+    rejoinMember: query('[data-role="rejoin-member"]'),
+    rejoinName: query('[data-role="rejoin-name"]'),
+    addMemberForm: query('[data-action-form="add-member"]'),
+    inviteStatus: query('[data-role="invite-status"]'),
+    inviteLink: query('[data-role="invite-link"]'),
+    inviteExpiry: query('[data-role="invite-expiry"]'),
+    copyInvite: query('[data-action="copy-invite"]'),
+    createInvite: query('[data-action="create-invite"]'),
+    revokeInvite: query('[data-action="revoke-invite"]'),
+    commands: query('[data-role="commands"]'),
+    requests: query('[data-role="requests"]'),
+    clearTraffic: query('[data-action="clear-traffic"]'),
+    rawState: query('[data-role="raw-state"]'),
+  };
+
+  root.dataset.device = key;
+  view.label.textContent = device.label;
+  view.label.id = `${key}-title`;
+  root.setAttribute('aria-labelledby', view.label.id);
+  view.createForm.elements.creator_member_name.value = defaultName;
+  view.joinName.value = defaultName;
+  view.rejoinName.value = defaultName;
+
+  view.toggle.addEventListener('click', () => toggleDevice(key));
+  view.realtimeToggle.addEventListener('click', () => toggleRealtime(key));
+  view.remove.addEventListener('click', () => removeDevice(key));
+  view.sync.addEventListener('click', () => synchronizeDevice(key));
+  view.leave.addEventListener('click', () => leaveGroup(key));
+  view.rejoinForm.addEventListener('submit', (event) => rejoinGroup(event, key));
+  view.rejoinMember.addEventListener('change', () => renderRejoin(key));
+  view.clearTraffic.addEventListener('click', () => clearDeviceTraffic(key));
+  view.actions.addEventListener('click', (event) => beginRename(event, key));
+  view.groupList.addEventListener('click', (event) => selectGroup(event, key));
+  view.newGroupTab.addEventListener('click', () => openNewGroupTab(key));
+  view.refreshGroups.addEventListener('click', () => refreshGroups(key));
+  view.createForm.addEventListener('submit', (event) => createGroup(event, key));
+  view.joinForm.addEventListener('submit', (event) => joinGroup(event, key));
+  view.joinLink.addEventListener('input', () => previewJoin(key));
+  view.joinMember.addEventListener('change', () => renderJoinChoice(key));
+  view.createInvite.addEventListener('click', () => createInvite(key));
+  view.revokeInvite.addEventListener('click', () => revokeInvite(key));
+  view.copyInvite.addEventListener('click', () => copyInvite(key));
+  view.addMemberForm.addEventListener('submit', (event) => addMember(event, key));
+  view.memberList.addEventListener('submit', (event) =>
+    performMemberAction(event, key),
+  );
+
+  replicaGrid.append(root);
+  deviceViews[key] = view;
+}
+
+/** Adds and removes panels so they match the lab's devices. */
+function syncDeviceViews() {
+  for (const key of Object.keys(deviceViews)) {
+    if (!state.devices[key]) {
+      deviceViews[key].root.remove();
+      delete deviceViews[key];
+      delete newGroupTabs[key];
+      delete previewSequences[key];
+    }
+  }
+
+  for (const key of Object.keys(state.devices)) {
+    if (!deviceViews[key]) createDeviceView(key);
   }
 }
 
-async function initializeDevices() {
-  setBusy(elements.initialize, true, 'Initializing…');
+async function addDevice() {
+  setBusy(elements.addDevice, true, 'Adding…');
 
   try {
-    await lab.initializeDevices();
-    showToast('Both independent device identities are ready');
+    const key = await lab.addDevice();
+
+    showToast(`${state.devices[key].label} is installed and registered its own identity`);
   } catch (error) {
     showToast(describeError(error), true);
   } finally {
-    setBusy(elements.initialize, false, 'Initialize both devices');
+    setBusy(elements.addDevice, false, 'Add device');
     renderAll();
   }
 }
 
-async function createGroup(event) {
+function removeDevice(key) {
+  const label = state.devices[key]?.label ?? 'This device';
+
+  const confirmed = window.confirm(
+    `Remove ${label}? Its local data, including changes not yet synchronized, is discarded. Its identity keeps its group access on the server.`,
+  );
+
+  if (!confirmed) return;
+
+  lab.removeDevice(key);
+  showToast(`${label} removed`);
+}
+
+async function createGroup(event, key) {
   event.preventDefault();
 
   const button = event.submitter;
-  const fields = new FormData(elements.createForm);
+  const fields = new FormData(deviceViews[key].createForm);
 
   setBusy(button, true, 'Creating…');
 
   try {
-    const replica = await lab.createGroup({
+    await lab.createGroup(key, {
       name: readText(fields, 'name'),
       currency_code: readText(fields, 'currency_code'),
       creator_member_name: readText(fields, 'creator_member_name'),
     });
 
-    elements.joinGroupId.value = replica.group_id;
-    rememberGroup(replica.group_id);
-    showToast('Device 1 created the authoritative group');
+    newGroupTabs[key] = false;
+    showToast(
+      `${state.devices[key].label} created the group. Create an invite link to let others join.`,
+    );
   } catch (error) {
     showToast(describeError(error), true);
   } finally {
-    setBusy(button, false, 'Create group');
+    setBusy(button, false, 'Create');
     renderAll();
   }
 }
 
-async function joinGroup(event) {
+async function selectGroup(event, key) {
+  const tab =
+    event.target instanceof Element ? event.target.closest('[data-group-id]') : null;
+
+  if (!tab) return;
+
+  newGroupTabs[key] = false;
+
+  try {
+    await lab.selectGroup(key, tab.dataset.groupId);
+  } catch (error) {
+    showToast(describeError(error), true);
+  } finally {
+    renderAll();
+  }
+}
+
+function openNewGroupTab(key) {
+  newGroupTabs[key] = true;
+  renderAll();
+}
+
+async function refreshGroups(key) {
+  try {
+    await lab.refreshGroupList(key);
+    showToast(`${state.devices[key].label} refreshed its group list from the server`);
+  } catch (error) {
+    showToast(describeError(error), true);
+  } finally {
+    renderAll();
+  }
+}
+
+// Only each device's latest preview may fill its form, however fast the link changes.
+const previewSequences = {};
+
+/** Shows the group behind a pasted link so the device can choose who it is. */
+async function previewJoin(key) {
+  const view = deviceViews[key];
+  const sequence = (previewSequences[key] ?? 0) + 1;
+
+  previewSequences[key] = sequence;
+
+
+  const link = view.joinLink.value.trim();
+
+  resetJoinChoice(key, link ? 'Checking link…' : 'Who are you?');
+
+  if (!link || !state.devices[key].session) {
+    renderJoinChoice(key);
+
+    return;
+  }
+
+  try {
+    const preview = await lab.previewInvite(key, link);
+
+    if (sequence !== previewSequences[key]) return;
+
+    view.joinMember.replaceChildren(
+      new Option('I’m new to this group', 'new'),
+      ...preview.members.map((member) => new Option(member.display_name, member.id)),
+    );
+    view.joinMember.disabled = false;
+    view.joinPreview.className = 'join-preview';
+    view.joinPreview.textContent =
+      `${preview.group.name} · ${preview.group.currency_code} · link ` +
+      `${describeExpiry(preview.expires_at)}. Choose who you are, or join as someone new.`;
+  } catch (error) {
+    if (sequence !== previewSequences[key]) return;
+
+    view.joinPreview.className = 'join-preview error';
+    view.joinPreview.textContent = describeError(error);
+  } finally {
+    if (sequence === previewSequences[key]) renderJoinChoice(key);
+  }
+}
+
+function resetJoinChoice(key, message) {
+  const view = deviceViews[key];
+
+  view.joinMember.replaceChildren(new Option(message, ''));
+  view.joinMember.disabled = true;
+  view.joinPreview.className = 'join-preview';
+  view.joinPreview.textContent = '';
+}
+
+function renderJoinChoice(key) {
+  const view = deviceViews[key];
+  const device = state.devices[key];
+
+  view.joinName.hidden = view.joinMember.value !== 'new';
+  view.joinForm.querySelector('button[type="submit"]').disabled =
+    !device.session || !device.online || !view.joinMember.value;
+}
+
+async function joinGroup(event, key) {
   event.preventDefault();
 
+  const view = deviceViews[key];
   const button = event.submitter;
-  const fields = new FormData(elements.joinForm);
-  const groupId = readText(fields, 'group_id');
+  const choice = view.joinMember.value;
+
+  const preferredMember =
+    choice === 'new'
+      ? { kind: 'new', display_name: view.joinName.value.trim() }
+      : { kind: 'existing', member_id: choice };
+
+  if (preferredMember.kind === 'new' && !preferredMember.display_name) {
+    showToast('Enter a name to join as someone new', true);
+
+    return;
+  }
 
   setBusy(button, true, 'Joining…');
 
   try {
-    await lab.joinGroup(groupId, readText(fields, 'display_name'));
-    rememberGroup(groupId);
-    showToast('Device 2 joined and received its own local replica');
+    await lab.joinWithInvite(
+      key,
+      view.joinLink.value.trim(),
+      preferredMember,
+    );
+
+    newGroupTabs[key] = false;
+    view.joinLink.value = '';
+    resetJoinChoice(key, 'Who are you?');
+    showToast(`${state.devices[key].label} joined through the invite link`);
   } catch (error) {
     showToast(describeError(error), true);
   } finally {
-    setBusy(button, false, 'Join group');
+    setBusy(button, false, 'Join');
     renderAll();
   }
+}
+
+async function createInvite(key) {
+  const view = deviceViews[key];
+  const replacing = Boolean(currentInvite(key));
+
+  await runMutation(
+    key,
+    () => lab.createInvite(key, Number(view.inviteExpiry.value)),
+    replacing
+      ? 'New invite link created; the previous one no longer works'
+      : 'Invite link created',
+  );
+}
+
+async function revokeInvite(key) {
+  await runMutation(
+    key,
+    () => lab.revokeInvite(key),
+    'Invite link revoked; people who already joined keep their access',
+  );
+}
+
+async function copyInvite(key) {
+  const link = lab.inviteLink(key);
+
+  if (!link) return;
+
+  try {
+    await navigator.clipboard.writeText(link);
+    showToast('Invite link copied');
+  } catch {
+    deviceViews[key].inviteLink.select();
+    showToast('Press Ctrl+C to copy the selected link', true);
+  }
+}
+
+function currentInvite(key) {
+  return state.devices[key].replica?.projected_snapshot?.invite ?? null;
+}
+
+function describeExpiry(expiresAt) {
+  const remaining = Date.parse(expiresAt) - Date.now();
+
+  if (remaining <= 0) return 'expired';
+
+  const hours = remaining / 3_600_000;
+
+  if (hours < 1) return `expires in ${Math.max(1, Math.round(hours * 60))} min`;
+
+  if (hours < 48) return `expires in ${Math.round(hours)} h`;
+
+  return `expires in ${Math.round(hours / 24)} days`;
 }
 
 async function toggleDevice(key) {
@@ -398,9 +650,25 @@ async function leaveGroup(key) {
   );
 }
 
-async function rejoinGroup(key) {
+async function rejoinGroup(event, key) {
+  event.preventDefault();
+
+  const view = deviceViews[key];
+  const choice = view.rejoinMember.value;
+
+  const preferredMember =
+    choice === 'new'
+      ? { kind: 'new', display_name: view.rejoinName.value.trim() }
+      : { kind: 'existing', member_id: choice };
+
+  if (preferredMember.kind === 'new' && !preferredMember.display_name) {
+    showToast('Enter a name to rejoin as someone new', true);
+
+    return;
+  }
+
   try {
-    const replica = await lab.rejoinGroup(key);
+    const replica = await lab.rejoinGroup(key, preferredMember);
 
     const member = replica.projected_snapshot.members.find(
       ({ id }) => id === replica.projected_snapshot.access_grants.find(
@@ -408,7 +676,7 @@ async function rejoinGroup(key) {
       )?.preferred_member_id,
     );
 
-    showToast(`${state.devices[key].label} rejoined using ${member?.display_name ?? 'an active member'}`);
+    showToast(`${state.devices[key].label} rejoined as ${member?.display_name ?? 'a member'}`);
   } catch (error) {
     showToast(describeError(error), true);
   } finally {
@@ -419,7 +687,7 @@ async function rejoinGroup(key) {
 async function runMutation(key, operation, successMessage) {
   const device = state.devices[key];
 
-  if (!device.session || !state.groupId) return;
+  if (!device.session || !device.selectedGroupId) return;
 
   try {
     const replica = await operation();
@@ -449,7 +717,7 @@ async function refreshServer() {
 
 async function resetServer() {
   const confirmed = window.confirm(
-    'Erase every identity and every group this dashboard has created or joined, then start over with two new devices?',
+    'Erase every identity and every group registered on this local server, then start over with fresh devices?',
   );
 
   if (!confirmed) return;
@@ -457,10 +725,13 @@ async function resetServer() {
   setBusy(elements.resetServer, true, 'Resetting…');
 
   try {
-    const cleared = await lab.reset(rememberedGroups());
+    const cleared = await lab.reset();
 
-    localStorage.removeItem(rememberedGroupsKey);
-    elements.joinGroupId.value = '';
+    for (const key of Object.keys(deviceViews)) {
+      deviceViews[key].joinLink.value = '';
+      resetJoinChoice(key, 'Who are you?');
+    }
+
     showToast(
       `Server data erased (${cleared.length} group${cleared.length === 1 ? '' : 's'}). Initialize the devices to start again.`,
     );
@@ -472,75 +743,41 @@ async function resetServer() {
   }
 }
 
-// Durable Objects cannot be listed, so the dashboard remembers which groups it
-// has touched across reloads in order to erase them on reset.
-const rememberedGroupsKey = 'splitnext-lab-groups';
-
-function rememberedGroups() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(rememberedGroupsKey) ?? '[]');
-
-    // Anything unexpected would make the server reject the whole reset.
-    return Array.isArray(stored)
-      ? stored.filter((id) => /^[A-Za-z0-9_-]{22}$/.test(id))
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-function rememberGroup(groupId) {
-  const groups = new Set(rememberedGroups());
-
-  groups.add(groupId);
-  localStorage.setItem(rememberedGroupsKey, JSON.stringify([...groups].slice(-100)));
-}
-
 function clearDeviceTraffic(key) {
   lab.clearDeviceTraffic(key);
 }
 
 function renderAll() {
+  syncDeviceViews();
   renderSetup();
-  renderDevice('one');
-  renderDevice('two');
+
+  for (const key of Object.keys(deviceViews)) renderDevice(key);
+
   renderServer();
 }
 
 function renderSetup() {
-  const initialized = Object.values(state.devices).every(
-    (device) => device.session,
-  );
+  const devices = Object.values(state.devices);
 
-  const createButton = elements.createForm.querySelector('button[type="submit"]');
-  const joinButton = elements.joinForm.querySelector('button[type="submit"]');
+  const devicesWithGroups = devices.filter(
+    (device) => device.groups.length > 0,
+  ).length;
 
-  createButton.disabled = !initialized || !state.devices.one.online;
-  joinButton.disabled =
-    !initialized ||
-    !state.devices.two.online ||
-    !elements.joinGroupId.value ||
-    Boolean(
-      state.devices.two.replica?.confirmed_snapshot &&
-      !state.devices.two.replica.hidden,
-    );
-  elements.initialize.disabled = initialized;
-  elements.initialize.textContent = initialized
-    ? 'Devices initialized'
-    : 'Initialize both devices';
-
-  if (!initialized) {
+  if (devices.length === 0) {
     elements.setupSummary.textContent =
-      'Initialize the two independent device identities to begin.';
-  } else if (!state.groupId) {
+      'Add a device to begin. Each one registers its own identity, like a fresh install.';
+  } else if (devices.length === 1) {
     elements.setupSummary.textContent =
-      'Both devices are ready. Create a group from Device 1.';
+      'Create a group, then add another device to invite into it.';
+  } else if (devicesWithGroups === 0) {
+    elements.setupSummary.textContent =
+      'Each device can create a group or join one with an invite link. Start by creating one.';
+  } else if (devicesWithGroups === 1) {
+    elements.setupSummary.textContent =
+      'Create an invite link in the group, then join it from the other device.';
   } else {
-    const joined = Boolean(state.devices.two.replica?.confirmed_snapshot);
-
-    elements.setupSummary.textContent = joined
-      ? `Group ${String(state.groupId)} is present on both devices. Try taking one offline.`
-      : `Group ${String(state.groupId)} exists on Device 1 and the server. Device 2 can join now.`;
+    elements.setupSummary.textContent =
+      'Pick a group in each device’s list. Try taking a device offline, leaving, or rotating a link.';
   }
 }
 
@@ -558,6 +795,11 @@ function renderDevice(key) {
     : 'Identity not initialized';
   view.revision.textContent = replica?.revision ?? '—';
 
+  renderGroupList(key);
+  renderJoinChoice(key);
+  view.createForm.querySelector('button[type="submit"]').disabled =
+    !device.session || !device.online;
+  view.refreshGroups.disabled = !device.session || !device.online;
   renderGroupEditor(view.groupEditor, snapshot?.group ?? null);
 
   if (!snapshot) {
@@ -575,20 +817,119 @@ function renderDevice(key) {
     control.disabled = !hasActiveGroup;
   }
 
+  renderInvite(key, hasActiveGroup);
   view.leave.disabled = !hasActiveGroup || !device.online;
   view.sync.disabled = !hasActiveGroup || !device.online;
-  view.rejoin.hidden = !replica?.hidden;
-  view.rejoin.disabled = !replica?.hidden || !device.online;
+  renderRejoin(key);
   view.rawState.textContent = JSON.stringify(
     replica ?? {
       online: device.online,
       session: device.session,
-      group_id: state.groupId,
+      group_id: device.selectedGroupId,
       message: 'No local group data',
     },
     null,
     2,
   );
+}
+
+/**
+ * Shown for a group the identity left. Choices come from the device's copy,
+ * which opening the group refreshes, and keep the current selection when the
+ * member list re-renders.
+ */
+function renderRejoin(key) {
+  const device = state.devices[key];
+  const view = deviceViews[key];
+  const replica = device.replica;
+  const left = Boolean(replica?.hidden);
+
+  view.rejoinForm.hidden = !left;
+
+  if (!left) return;
+
+  const members = (replica.projected_snapshot?.members ?? []).filter(
+    (member) => member.status === 'active',
+  );
+
+  const options = [
+    ...members.map((member) => [member.id, member.display_name]),
+    ['new', 'I’m new to this group'],
+  ];
+
+  const signature = JSON.stringify(options);
+
+  if (view.rejoinMember.dataset.options !== signature) {
+    const previous = view.rejoinMember.value;
+
+    view.rejoinMember.replaceChildren(
+      ...options.map(([value, label]) => new Option(label, value)),
+    );
+    view.rejoinMember.dataset.options = signature;
+
+    if (options.some(([value]) => value === previous)) {
+      view.rejoinMember.value = previous;
+    }
+  }
+
+  view.rejoinName.hidden = view.rejoinMember.value !== 'new';
+  view.rejoinForm.querySelector('button[type="submit"]').disabled = !device.online;
+}
+
+/**
+ * One tab per group, active ones first, plus a "+ New" tab for creating or
+ * joining. A device with no groups yet shows the new-group forms.
+ */
+function renderGroupList(key) {
+  const device = state.devices[key];
+  const view = deviceViews[key];
+  const showForms = Boolean(newGroupTabs[key]) || device.groups.length === 0;
+
+  view.groupList.replaceChildren(
+    ...device.groups.map((group) => {
+      const tab = document.createElement('button');
+      const name = document.createElement('span');
+      const selected = !showForms && group.group_id === device.selectedGroupId;
+
+      const notes = [
+        group.stored_locally ? null : 'not on this device',
+        group.pending_commands ? `${group.pending_commands} queued` : null,
+      ].filter(Boolean);
+
+      tab.type = 'button';
+      tab.role = 'tab';
+      tab.className = `group-tab ${group.status}${selected ? ' selected' : ''}`;
+      tab.dataset.groupId = group.group_id;
+      tab.title = `${group.name} · ${group.currency_code} · ${group.group_id}`;
+      tab.setAttribute('aria-selected', String(selected));
+      name.textContent = group.name;
+      tab.append(name);
+
+      if (group.status === 'left') {
+        const status = document.createElement('span');
+
+        status.className = 'group-status';
+        status.textContent = 'Left';
+        tab.append(status);
+      }
+
+      if (notes.length > 0) {
+        const note = document.createElement('span');
+
+        note.className = 'tab-note';
+        note.textContent = notes.join(' · ');
+        tab.append(note);
+      }
+
+      return tab;
+    }),
+  );
+
+  view.newGroupTab.className = `group-tab new-tab${showForms ? ' selected' : ''}`;
+  view.newGroupTab.setAttribute('aria-selected', String(showForms));
+  view.newGroupTab.disabled = !device.session;
+  view.groupForms.hidden = !showForms || !device.session;
+  view.groupPane.hidden = showForms;
 }
 
 // The label keeps updating while a rename is open; only its field is left alone.
@@ -678,7 +1019,7 @@ function createMemberRow(memberId) {
   edit.type = 'button';
   edit.className = 'edit-button';
   edit.dataset.action = 'edit-name';
-  edit.textContent = '✎';
+  setIconButton(edit, 'edit', 'Rename');
   line.append(name, edit);
   prefer.type = 'submit';
   prefer.name = 'intent';
@@ -686,8 +1027,7 @@ function createMemberRow(memberId) {
   remove.type = 'submit';
   remove.name = 'intent';
   remove.value = 'remove';
-  remove.className = 'remove-button';
-  remove.textContent = 'Delete';
+  remove.className = 'icon-button remove-button';
   users.dataset.role = 'member-users';
   row.append(line, prefer, remove, users);
 
@@ -704,10 +1044,52 @@ function updateMemberRow(row, member, preferredBy, identityId) {
   name.textContent = member.display_name;
   edit.title = `Rename ${member.display_name}`;
   edit.setAttribute('aria-label', `Rename ${member.display_name}`);
-  prefer.className = `you-button${isYou ? ' selected' : ''}`;
-  prefer.textContent = isYou ? 'You' : 'Set as you';
+  prefer.className = `icon-button you-button${isYou ? ' selected' : ''}`;
+  setIconButton(
+    prefer,
+    'user',
+    isYou ? `${member.display_name} is you` : `Set ${member.display_name} as you`,
+  );
+  setIconButton(row.querySelector('button[value="remove"]'), 'trash', `Remove ${member.display_name}`);
   users.className = `member-users${preferredBy.length > 1 ? ' shared' : ''}`;
   users.textContent = describeUsers(preferredBy, identityId);
+}
+
+/**
+ * Every participant sees that a link exists; only the device that created it
+ * knows the token and can show or copy the link.
+ */
+function renderInvite(key, hasActiveGroup) {
+  const device = state.devices[key];
+  const view = deviceViews[key];
+  const snapshot = device.replica?.projected_snapshot;
+  const invite = snapshot?.invite ?? null;
+  const link = lab.inviteLink(key);
+  const canManage = hasActiveGroup && device.online;
+
+  if (!invite) {
+    view.inviteStatus.textContent = 'No link';
+  } else {
+    const creator = snapshot.access_grants.find(
+      (grant) => grant.identity_id === invite.created_by_identity_id,
+    );
+
+    const byThisDevice = invite.created_by_identity_id === device.session?.identity.id;
+
+    view.inviteStatus.textContent =
+      `By ${creator?.actor_handle ?? 'someone'}${byThisDevice ? ' (you)' : ''} · ` +
+      describeExpiry(invite.expires_at);
+  }
+
+  view.inviteLink.value = link ?? '';
+  view.inviteLink.placeholder = invite
+    ? 'Created on another device; create a new link to share it from here'
+    : 'Create a link to invite someone';
+  view.copyInvite.disabled = !link;
+  view.createInvite.disabled = !canManage;
+  view.createInvite.textContent = invite ? 'New link' : 'Create link';
+  view.revokeInvite.disabled = !canManage || !invite;
+  view.inviteExpiry.disabled = !canManage;
 }
 
 // Several identities may use the same member, so list every actor handle.
@@ -920,12 +1302,14 @@ function renderServer() {
 
   renderIdentityDirectory();
   renderSubscribers();
+  renderServerGroupTabs();
 
   if (snapshot) {
     renderGroupSummary(elements.serverGroupSummary, snapshot.group);
     renderMembers(elements.serverMemberList, snapshot, null);
   } else {
-    elements.serverGroupSummary.innerHTML = '<p class="empty">The latest server snapshot will appear after group creation.</p>';
+    elements.serverGroupSummary.innerHTML =
+      '<p class="empty">Select a group tab to inspect its server state.</p>';
     elements.serverMemberList.replaceChildren();
   }
 
@@ -933,6 +1317,7 @@ function renderServer() {
     {
       online: state.server.online,
       identity_directory: state.server.identityDirectory,
+      groups: state.server.groups,
       revision: state.server.revision,
       snapshot: state.server.snapshot,
     },
@@ -940,6 +1325,47 @@ function renderServer() {
     2,
   );
   renderServerTraffic();
+}
+
+/** One tab per indexed group. Selecting a tab reads its authoritative state. */
+function renderServerGroupTabs() {
+  const groups = lab.knownGroups();
+
+  if (groups.length === 0) {
+    elements.serverGroupTabs.innerHTML = '<span class="empty">No groups yet.</span>';
+
+    return;
+  }
+
+  elements.serverGroupTabs.replaceChildren(
+    ...groups.map((group) => {
+      const tab = document.createElement('button');
+      const selected = group.group_id === state.inspectedGroupId;
+
+      tab.type = 'button';
+      tab.role = 'tab';
+      tab.className = `group-tab${selected ? ' selected' : ''}`;
+      tab.dataset.groupId = group.group_id;
+      tab.title = group.group_id;
+      tab.textContent = `${group.name} · ${group.group_id.slice(0, 6)}`;
+      tab.setAttribute('aria-selected', String(selected));
+
+      return tab;
+    }),
+  );
+}
+
+async function inspectServerGroup(event) {
+  const tab =
+    event.target instanceof Element ? event.target.closest('[data-group-id]') : null;
+
+  if (!tab) return;
+
+  try {
+    await lab.inspectGroup(tab.dataset.groupId);
+  } catch (error) {
+    showToast(describeError(error), true);
+  }
 }
 
 function renderIdentityDirectory() {
@@ -990,14 +1416,16 @@ function renderRealtimeToggle(button, device) {
   const status = device.realtime ? device.realtimeStatus : 'off';
 
   const labels = {
-    off: device.realtime ? 'Live idle' : 'Live off',
-    connecting: 'Live …',
-    open: 'Live',
-    disconnected: 'Live retrying',
+    off: device.realtime
+      ? 'Live updates on, no joined groups to watch'
+      : 'Live updates off. Click to turn on',
+    connecting: 'Live updates connecting…',
+    open: 'Live updates on. Click to turn off',
+    disconnected: 'Live updates disconnected, retrying',
   };
 
-  button.className = `realtime-toggle ${status}`;
-  button.textContent = labels[status];
+  button.className = `icon-button realtime-toggle ${status}`;
+  setIconButton(button, 'live', labels[status]);
   button.setAttribute('aria-pressed', String(device.realtime));
 }
 
@@ -1050,8 +1478,31 @@ function renderSubscribers() {
 }
 
 function renderConnection(button, online) {
-  button.className = `connection-toggle ${online ? 'online' : 'offline'}`;
-  button.textContent = online ? 'Online' : 'Offline';
+  button.className = `icon-button connection-toggle ${online ? 'online' : 'offline'}`;
+  setIconButton(
+    button,
+    online ? 'online' : 'offline',
+    online ? 'Online. Click to go offline' : 'Offline. Click to go online',
+  );
+}
+
+/** Icon-only buttons keep their text as a tooltip and an accessible name. */
+function setIconButton(button, iconName, label) {
+  const current = button.querySelector('use')?.getAttribute('href');
+
+  if (current !== `#icon-${iconName}`) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+
+    svg.setAttribute('class', 'icon');
+    svg.setAttribute('aria-hidden', 'true');
+    use.setAttribute('href', `#icon-${iconName}`);
+    svg.append(use);
+    button.replaceChildren(svg);
+  }
+
+  button.title = label;
+  button.setAttribute('aria-label', label);
 }
 
 function readText(formData, name) {
@@ -1080,13 +1531,20 @@ function showToast(message, error = false) {
   }, 4200);
 }
 
+const inviteErrors = {
+  invite_required: 'Joining for the first time needs an invite link.',
+  invite_invalid: 'This invite link is not valid for the group.',
+  invite_expired: 'This invite link has expired. Ask for a new one.',
+  invite_revoked: 'This invite link was revoked or replaced. Ask for a new one.',
+};
+
 function describeError(error) {
   if (error instanceof ClientOfflineError) {
     return 'This action requires the device to be online.';
   }
 
   if (error instanceof SplitnextRequestError) {
-    return `Server rejected the request: ${error.code}`;
+    return inviteErrors[error.code] ?? `Server rejected the request: ${error.code}`;
   }
 
   if (error instanceof Error) {
@@ -1094,9 +1552,12 @@ function describeError(error) {
 
     if (error.message === 'device_offline') return 'This device is offline.';
 
+    if (error.message === 'invalid_invite_link') {
+      return 'That is not an invite link. It should look like …/join/{group}#{token}.';
+    }
+
     return error.message;
   }
 
   return 'Unexpected error';
 }
-

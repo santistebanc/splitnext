@@ -16,6 +16,8 @@ export const groupDetailsSchema = z.object({
   created_at: z.iso.datetime(),
 });
 
+export type GroupDetails = z.output<typeof groupDetailsSchema>;
+
 export const groupProjectionSchema = groupDetailsSchema.extend({
   revision: z.number().int().positive(),
 });
@@ -100,3 +102,19 @@ export function initializeGroup(command: InitializeGroupCommand): InitialGroupSt
     },
   };
 }
+
+/** One entry in the list of groups an identity can access. */
+export const accessibleGroupSchema = z.object({
+  group_id: identifierSchema,
+  name: z.string(),
+  currency_code: z.string(),
+  status: z.enum(['active', 'left']),
+  granted_at: z.iso.datetime(),
+  left_at: z.iso.datetime().nullable(),
+});
+
+export type AccessibleGroup = z.output<typeof accessibleGroupSchema>;
+
+export const accessibleGroupsSchema = z.object({
+  groups: z.array(accessibleGroupSchema),
+});
