@@ -162,26 +162,6 @@ export class GroupObject extends DurableObject<Env> {
     return result;
   }
 
-  mergeIdentity(
-    groupId: string,
-    sourceIdentityId: string,
-    targetIdentityId: string,
-  ) {
-    if (this.ctx.id.name !== groupId) {
-      return { ok: false as const, error: 'invalid_request' as const };
-    }
-
-    const result = this.store.mergeIdentity(
-      sourceIdentityId,
-      targetIdentityId,
-      new Date().toISOString(),
-    );
-
-    if (result.ok && result.changed) this.announce(result.revision);
-
-    return result;
-  }
-
   previewInvite(groupId: string, tokenHash: string) {
     if (this.ctx.id.name !== groupId) {
       return { ok: false as const, error: 'invalid_request' as const };

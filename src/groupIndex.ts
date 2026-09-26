@@ -17,14 +17,6 @@ type GroupAccessRow = {
 
 type GroupIdRow = { group_id: string };
 
-type GroupAccessIndexRow = {
-  group_id: string;
-  group_name: string;
-  currency_code: string;
-  granted_at: string;
-  hidden_at: string | null;
-};
-
 /**
  * The D1 index of groups each identity can access. It is derived from group
  * snapshots rather than authoritative: refreshing from any snapshot the
@@ -107,84 +99,9 @@ export class GroupIndex {
     return results.map((row) => row.group_id);
   }
 
-  /** Prepares the index part of an identity merge for an atomic D1 batch. */
-  async prepareIdentityMerge(
-    sourceIdentityId: string,
-    targetIdentityId: string,
-  ): Promise<D1PreparedStatement[]> {
-    if (sourceIdentityId === targetIdentityId) return [];
-
-    const [source, target] = await Promise.all([
-      this.readAccessRows(sourceIdentityId),
-      this.readAccessRows(targetIdentityId),
-    ]);
-
-    const targetByGroup = new Map(target.map((row) => [row.group_id, row]));
-
-    const updates = source.map((guest) => {
-      const account = targetByGroup.get(guest.group_id);
-
-      const hiddenAt =
-        guest.hidden_at === null || account?.hidden_at === null
-          ? null
-          : [guest.hidden_at, account?.hidden_at ?? null]
-              .filter((value): value is string => value !== null)
-              .sort()
-              .at(-1) ?? null;
-
-      return {
-        ...guest,
-        granted_at:
-          account && account.granted_at < guest.granted_at
-            ? account.granted_at
-            : guest.granted_at,
-        hidden_at: hiddenAt,
-      };
-    });
-
-    return [
-      ...updates.map((row) =>
-        this.database
-          .prepare(
-            `INSERT INTO identity_group_access (
-               identity_id, group_id, group_name, currency_code, granted_at, hidden_at
-             ) VALUES (?, ?, ?, ?, ?, ?)
-             ON CONFLICT (identity_id, group_id) DO UPDATE SET
-               group_name = excluded.group_name,
-               currency_code = excluded.currency_code,
-               granted_at = excluded.granted_at,
-               hidden_at = excluded.hidden_at`,
-          )
-          .bind(
-            targetIdentityId,
-            row.group_id,
-            row.group_name,
-            row.currency_code,
-            row.granted_at,
-            row.hidden_at,
-          ),
-      ),
-      this.database
-        .prepare('DELETE FROM identity_group_access WHERE identity_id = ?')
-        .bind(sourceIdentityId),
-    ];
-  }
-
   /** Development only: forgets the whole index. */
   async clear(): Promise<void> {
     await this.database.prepare('DELETE FROM identity_group_access').run();
   }
 
-  private async readAccessRows(identityId: string): Promise<GroupAccessIndexRow[]> {
-    const { results } = await this.database
-      .prepare(
-        `SELECT group_id, group_name, currency_code, granted_at, hidden_at
-         FROM identity_group_access
-         WHERE identity_id = ?`,
-      )
-      .bind(identityId)
-      .all<GroupAccessIndexRow>();
-
-    return results;
-  }
 }

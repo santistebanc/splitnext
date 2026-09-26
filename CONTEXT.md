@@ -6,11 +6,12 @@ people represented in the ledger, synchronization, and history distinct.
 ## Access
 
 **Access identity**:
-The enduring actor behind one or more authenticated devices.
+The server-side actor created for one installation, used for authorization and
+group history.
 _Avoid_: Member, device, account
 
 **Device credential**:
-A secret held by one device that authenticates an access identity.
+A secret held by an installation that authenticates its access identity.
 _Avoid_: Access grant, member token
 
 **Group access grant**:

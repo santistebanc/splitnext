@@ -131,7 +131,7 @@ export class SplitnextSyncClient {
       if (!this.online) return existing;
 
       try {
-        return await this.adoptIdentitySession(await this.deviceApi.currentIdentity());
+        return await this.replicas.retainSession(await this.deviceApi.currentIdentity());
       } catch {
         // A stored identity remains usable while the server is temporarily unavailable.
         return existing;
@@ -143,11 +143,6 @@ export class SplitnextSyncClient {
     const session = await this.api.createAnonymousIdentity(this.deviceSecret);
 
     return this.replicas.retainSession(session);
-  }
-
-  /** Stores a session established by an external authentication provider. */
-  adoptIdentitySession(session: IdentitySession): Promise<IdentitySession> {
-    return this.replicas.replaceSessionIdentity(session);
   }
 
   async createGroup(

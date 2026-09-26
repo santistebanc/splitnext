@@ -7,7 +7,8 @@ realtime revision announcements; expenses are intentionally deferred.
 
 ## What works
 
-- Anonymous device identities backed by D1.
+- Anonymous per-installation identities and device credentials backed by D1;
+  there is no sign-in or account linking.
 - Retry-safe group creation with a client-generated group id.
 - Joining through a reusable invite link with a preview of the group, then
   choosing an existing member or joining as someone new.
@@ -17,8 +18,9 @@ realtime revision announcements; expenses are intentionally deferred.
 - Nonexclusive preferred-member selection (the member the UI calls “you”).
 - Leaving and rejoining a group without revoking its permanent access grant.
 - A per-identity list of accessible groups, marking the ones it left, backed
-  by a derived D1 index and cached by the SDK for offline use. A device that
-  lost its storage can list its groups and fetch any of them again.
+  by a derived D1 index and cached by the SDK for offline use. The server index
+  can restore the list when an installation still has its device credential
+  but has lost its local group cache.
 - Ordered, idempotent outboxes and full revisioned server snapshots.
 - Rejected or superseded command notices stored by the client.
 - Realtime revision announcements over hibernatable WebSockets, with automatic
@@ -40,13 +42,10 @@ before starting Wrangler.
 
 Open `http://localhost:8787/dashboard/`. The test lab lets you:
 
-1. Add devices. Each immediately creates a guest identity. Sign in optionally
-   with a mock account name to simulate carrying that identity to another
-   device. If that account already has its own identity, the guest's group
-   access is merged into it; duplicate access in a group collapses to one
-   participant using the latest preferred member. Earlier audit events and
-   actor handles remain unchanged. This debug-only flow is not real
-   authentication: there is no password, verified email, or identity provider.
+1. Add devices. Each immediately creates its own anonymous identity. To use the
+   same group on another device, copy a current invite link to that device and
+   join with it. The second device has a separate identity and actor history,
+   even if it selects the same ledger member.
 2. Create groups from any device, create an invite link in a group, and join
    from another device by pasting the link and choosing who it is. Each device
    shows its groups as tabs, marking the ones it left, plus a "+ New" tab.

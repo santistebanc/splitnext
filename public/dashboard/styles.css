@@ -152,25 +152,6 @@ main {
   font-size: 0.75rem;
 }
 
-.auth-panel {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.3rem;
-  margin: 0.35rem 0;
-}
-
-.auth-panel form {
-  display: flex;
-  flex: 1 1 18rem;
-  gap: 0.25rem;
-}
-
-.auth-panel input {
-  flex: 1;
-  min-width: 8rem;
-}
-
 .replica-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));

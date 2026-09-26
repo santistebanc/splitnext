@@ -87,18 +87,6 @@ export class ClientReplicaStore {
     });
   }
 
-  replaceSessionIdentity(session: IdentitySession): Promise<IdentitySession> {
-    return this.change((document) => {
-      if (document.session && document.session.device.id !== session.device.id) {
-        throw new TypeError('identity_device_conflict');
-      }
-
-      document.session = session;
-
-      return session;
-    });
-  }
-
   prepareGroupCreation(
     input: Omit<CreateGroupRequest, 'group_id'> & { group_id?: string },
     createId: () => string,

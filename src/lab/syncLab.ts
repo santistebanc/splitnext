@@ -22,8 +22,7 @@ import {
 import { z } from 'zod';
 import type { GroupCommand } from '../domain/commands';
 import type { CreateGroupRequest } from '../domain/groups';
-import { createIdentifier } from '../domain/ids';
-import { identitySessionSchema, type IdentitySession } from '../domain/identities';
+import type { IdentitySession } from '../domain/identities';
 import { revisionAnnouncementSchema } from '../domain/realtime';
 import { groupSnapshotSchema, type GroupSnapshot } from '../domain/sync';
 import type { IdentityDirectoryInspection } from '../identityDirectory';
@@ -36,7 +35,6 @@ export type PersistedLabDevice = {
   label: string;
   secret: string;
   registered: boolean;
-  mock_account_name: string | null;
   online: boolean;
   selected_group_id: string | null;
 };
@@ -47,7 +45,6 @@ export const persistedLabDevicesSchema = z.array(z.object({
   secret: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
   online: z.boolean(),
   registered: z.boolean(),
-  mock_account_name: z.string().nullable(),
   selected_group_id: z.string().nullable(),
 }));
 
@@ -99,7 +96,6 @@ export type LabDevice = {
   realtimeStatus: LabRealtimeStatus;
   realtimeEvents: LabRealtimeEvent[];
   session: IdentitySession | null;
-  mockAccountName: string | null;
   /** Every group this device's identity can access, active ones first. */
   groups: ClientGroupSummary[];
   selectedGroupId: string | null;
@@ -264,7 +260,7 @@ export class SyncLab {
     ]);
   }
 
-  /** Installs a fresh device. The caller may initialize its guest identity after installation. */
+  /** Installs a fresh device. The caller may initialize its identity after installation. */
   installDevice(): LabDeviceKey {
     this.devicesAdded += 1;
 
@@ -298,91 +294,12 @@ export class SyncLab {
     if (device.session) throw new TypeError('device_already_registered');
 
     device.session = await this.runtime(key).client.initializeIdentity();
-    await this.finishDeviceSignIn(key);
+    await this.finishDeviceInitialization(key);
 
     return device.session;
   }
 
-  async signInWithMockAccount(
-    key: LabDeviceKey,
-    accountName: string,
-  ): Promise<IdentitySession> {
-    const device = this.device(key);
-    const normalizedAccount = accountName.trim().toLocaleLowerCase('en-US');
-
-    if (!device.online || !this.state.server.online) {
-      throw new TypeError('device_or_server_offline');
-    }
-
-    if (!normalizedAccount) throw new TypeError('account_name_required');
-
-    const { secret } = this.runtime(key);
-    const path = '/debug/auth/mock/sign-in';
-
-    const exchange = {
-      request_id: createIdentifier(),
-      method: 'POST',
-      path,
-      body: { account_name: normalizedAccount, device_secret: secret },
-      commands: [],
-    };
-
-    const startedAt = performance.now();
-
-    this.onRequest(key, { ...exchange, kind: 'request' });
-
-    let response: Response;
-
-    try {
-      response = await this.fetch(`${this.baseUrl}${path}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(exchange.body),
-      });
-    } catch (cause) {
-      this.onNetworkError(key, {
-        ...exchange,
-        kind: 'network_error',
-        error: cause instanceof Error ? cause : new Error(String(cause)),
-        duration_ms: performance.now() - startedAt,
-      });
-
-      throw cause;
-    }
-
-    const responseBody: JsonValue = z.json().parse(
-      await response.json().catch(() => null),
-    );
-
-    this.onResponse(key, {
-      ...exchange,
-      kind: 'response',
-      status: response.status,
-      response: responseBody,
-      outcomes: [],
-      duration_ms: performance.now() - startedAt,
-    });
-
-    if (!response.ok) {
-      const errorBody = z.object({ error: z.string() }).safeParse(responseBody);
-
-      throw new TypeError(
-        errorBody.success
-          ? errorBody.data.error
-          : `mock_sign_in_failed_${response.status}`,
-      );
-    }
-
-    const session = identitySessionSchema.parse(responseBody);
-
-    device.session = await this.runtime(key).client.adoptIdentitySession(session);
-    device.mockAccountName = normalizedAccount;
-    await this.finishDeviceSignIn(key);
-
-    return device.session;
-  }
-
-  private async finishDeviceSignIn(key: LabDeviceKey): Promise<void> {
+  private async finishDeviceInitialization(key: LabDeviceKey): Promise<void> {
     const device = this.device(key);
     const runtime = this.runtime(key);
 
@@ -427,7 +344,6 @@ export class SyncLab {
       const device = this.device(savedDevice.key);
       device.online = savedDevice.online;
       runtime.client.setOnline(device.online);
-      device.mockAccountName = savedDevice.mock_account_name;
 
       if (device.online && this.state.server.online) {
         try {
@@ -482,7 +398,6 @@ export class SyncLab {
             secret: runtime.secret,
             online: device.online,
             registered: device.session !== null,
-            mock_account_name: device.mockAccountName,
             selected_group_id: device.selectedGroupId,
           }]
         : [];
@@ -587,7 +502,7 @@ export class SyncLab {
     if (device.online && this.state.server.online) {
       try {
         device.session = await this.runtime(key).client.initializeIdentity();
-        await this.finishDeviceSignIn(key);
+        await this.finishDeviceInitialization(key);
       } catch {
         // Continue with cached identity and local state when reconnect is partial.
         await this.deliverOutboxes(key);
@@ -646,7 +561,7 @@ export class SyncLab {
           (async () => {
             try {
               device.session = await this.runtime(key).client.initializeIdentity();
-              await this.finishDeviceSignIn(key);
+              await this.finishDeviceInitialization(key);
             } catch {
               // Keep this device available if registration is temporarily unavailable.
             }
@@ -1302,8 +1217,6 @@ const identityDirectoryInspectionSchema = z.object({
     z.object({
       id: z.string(),
       created_at: z.string(),
-      mock_account: z.string().nullable(),
-      merged_into: z.string().optional(),
       devices: z.array(
         z.object({
           id: z.string(),
@@ -1344,7 +1257,6 @@ function newDevice(label: string): LabDevice {
     realtimeStatus: 'off',
     realtimeEvents: [],
     session: null,
-    mockAccountName: null,
     groups: [],
     selectedGroupId: null,
     replica: null,
