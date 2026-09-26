@@ -89,6 +89,10 @@ export type SubscriptionAccessResult =
   | { ok: true; revision: number }
   | { ok: false; error: 'group_not_found' | 'unauthorized' | 'group_hidden' };
 
+export type MergeIdentityResult =
+  | { ok: true; revision: number; changed: boolean; access: GroupAccessGrant | null }
+  | { ok: false; error: 'group_not_found' };
+
 export type GroupInspection = {
   revision: number;
   snapshot: GroupSnapshot;
@@ -133,9 +137,12 @@ export class GroupStore {
 
       if (!state) return { ok: false, error: 'group_not_found' };
 
+      const identityId = persistence.resolveIdentity(command.identity_id);
+      const resolvedCommand = { ...command, identity_id: identityId };
+
       const requestJson = JSON.stringify({
         group_id: command.group_id,
-        identity_id: command.identity_id,
+        identity_id: identityId,
         join_id: command.join_id,
         preferred_member: command.preferred_member,
       });
@@ -143,14 +150,14 @@ export class GroupStore {
       const stored = persistence.findJoinOutcome(command.join_id);
 
       if (stored) {
-        return stored.identity_id === command.identity_id &&
+        return persistence.resolveIdentity(stored.identity_id) === identityId &&
           stored.request_json === requestJson
           ? { ok: true, ...stored.response }
           : { ok: false, error: 'idempotency_conflict' };
       }
 
       // Access is permanent, so an identity that left rejoins without a link.
-      if (!this.accessFor(state, command.identity_id)) {
+      if (!this.accessFor(state, identityId)) {
         const failure = inviteFailure(
           persistence,
           command.invite_token_hash,
@@ -163,7 +170,7 @@ export class GroupStore {
       const transition = applyGroupJoin(
         state.snapshot,
         state.next_actor_number,
-        command,
+        resolvedCommand,
       );
 
       if (!transition.ok) return transition;
@@ -183,7 +190,7 @@ export class GroupStore {
           transition.audit,
           transition.access,
           actorMemberName,
-          { kind: 'access', id: command.identity_id },
+          { kind: 'access', id: identityId },
           null,
           command.joined_at,
         );
@@ -210,10 +217,17 @@ export class GroupStore {
   sync(command: SyncGroupCommand, appliedAt: string): SyncStoredGroupResult {
     return this.repository.transaction((persistence) => {
       const state = persistence.loadState();
+      const identityId = persistence.resolveIdentity(command.identity_id);
 
-      if (!state || !this.accessFor(state, command.identity_id)) {
+      if (!state) {
         return { ok: false, error: 'unauthorized' };
       }
+
+      const access =
+        this.accessFor(state, identityId) ??
+        this.reconcileMergedAccess(persistence, state, identityId, appliedAt);
+
+      if (!access) return { ok: false, error: 'unauthorized' };
 
       const revisionBefore = state.revision;
 
@@ -221,7 +235,7 @@ export class GroupStore {
         this.processCommand(
           persistence,
           state,
-          command.identity_id,
+          identityId,
           groupCommand,
           appliedAt,
         ),
@@ -259,7 +273,8 @@ export class GroupStore {
 
       if (!state) return { ok: false, error: 'group_not_found' };
 
-      const actor = this.accessFor(state, command.identity_id);
+      const identityId = persistence.resolveIdentity(command.identity_id);
+      const actor = this.accessFor(state, identityId);
 
       if (!actor || actor.hidden_at) return { ok: false, error: 'unauthorized' };
 
@@ -270,7 +285,7 @@ export class GroupStore {
       if (existing) {
         return existing.id === command.invite_id &&
           existing.token_hash === command.token_hash &&
-          existing.created_by_identity_id === command.identity_id
+          existing.created_by_identity_id === identityId
           ? { ok: true, revision: state.revision, invite: inviteView(existing) }
           : { ok: false, error: 'idempotency_conflict' };
       }
@@ -280,7 +295,7 @@ export class GroupStore {
       const created: StoredInvite = {
         id: command.invite_id,
         token_hash: command.token_hash,
-        created_by_identity_id: command.identity_id,
+        created_by_identity_id: identityId,
         created_at: command.created_at,
         expires_at: command.expires_at,
         revoked_at: null,
@@ -324,7 +339,8 @@ export class GroupStore {
 
       if (!state) return { ok: false, error: 'group_not_found' };
 
-      const actor = this.accessFor(state, identityId);
+      const resolvedIdentityId = persistence.resolveIdentity(identityId);
+      const actor = this.accessFor(state, resolvedIdentityId);
 
       if (!actor || actor.hidden_at) return { ok: false, error: 'unauthorized' };
 
@@ -403,13 +419,102 @@ export class GroupStore {
 
       if (!state) return { ok: false, error: 'group_not_found' };
 
-      const access = this.accessFor(state, identityId);
+      const access = this.accessFor(
+        state,
+        persistence.resolveIdentity(identityId),
+      );
 
       if (!access) return { ok: false, error: 'unauthorized' };
 
       if (access.hidden_at) return { ok: false, error: 'group_hidden' };
 
       return { ok: true, revision: state.revision };
+    });
+  }
+
+  /** Consolidates one guest access grant into an existing account identity. */
+  mergeIdentity(
+    sourceIdentityId: string,
+    targetIdentityId: string,
+    mergedAt: string,
+  ): MergeIdentityResult {
+    return this.repository.transaction((persistence) => {
+      const state = persistence.loadState();
+
+      if (!state) return { ok: false, error: 'group_not_found' };
+
+      const requestedSource = sourceIdentityId;
+      const source = persistence.resolveIdentity(sourceIdentityId);
+      const target = persistence.resolveIdentity(targetIdentityId);
+
+      const sourceAccess =
+        state.snapshot.access_grants.find(
+          (grant) => grant.identity_id === requestedSource,
+        ) ??
+        (source !== requestedSource
+          ? state.snapshot.access_grants.find(
+              (grant) => grant.identity_id === source,
+            )
+          : undefined);
+
+      const targetAccess = state.snapshot.access_grants.find(
+        (grant) => grant.identity_id === target,
+      ) ?? null;
+
+      if (!sourceAccess || sourceAccess.identity_id === target) {
+        return {
+          ok: true,
+          revision: state.revision,
+          changed: false,
+          access: targetAccess,
+        };
+      }
+
+      const access = mergeAccessGrants(
+        sourceAccess,
+        targetAccess,
+        target,
+        this.latestPreference(persistence, sourceAccess.identity_id, target),
+      );
+
+      const actorName = this.memberNameFor(state, sourceAccess);
+
+      state.snapshot = {
+        ...state.snapshot,
+        access_grants: [
+          ...state.snapshot.access_grants.filter(
+            (grant) =>
+              grant.identity_id !== requestedSource &&
+              grant.identity_id !== source &&
+              grant.identity_id !== target,
+          ),
+          access,
+        ],
+      };
+      persistence.recordIdentityMerge(requestedSource, target);
+      this.commitTransition(
+        persistence,
+        state,
+        state.snapshot,
+        {
+          action: 'identity.merged',
+          before: { guest: sourceAccess, account: targetAccess },
+          after: access,
+        },
+        sourceAccess,
+        actorName,
+        { kind: 'access', id: target },
+        null,
+        mergedAt,
+      );
+      persistence.saveState(state);
+
+      return {
+        ok: true,
+        revision: state.revision,
+        changed: true,
+        access,
+      };
     });
   }
 
@@ -597,6 +702,133 @@ export class GroupStore {
     return new AuditHistory(persistence, this.createId);
   }
 
+  private latestPreference(
+    persistence: GroupPersistence,
+    sourceIdentityId: string,
+    targetIdentityId: string,
+  ): string | null {
+    const events = persistence.readAudit();
+
+    const latestFor = (identityId: string) => {
+      let latest: { sequence: number; memberId: string | null } | null = null;
+
+      for (const event of events) {
+        const change = event.change;
+        let memberId: string | null | undefined;
+
+        switch (change.action) {
+          case 'group.created':
+            if (change.after.access.identity_id === identityId) {
+              memberId = change.after.access.preferred_member_id;
+            }
+
+            break;
+          case 'group.joined':
+          case 'group.rejoined':
+            if (change.after.access.identity_id === identityId) {
+              memberId = change.after.access.preferred_member_id;
+            }
+
+            break;
+          case 'group.left':
+          case 'preference.changed':
+            if (change.after.identity_id === identityId) {
+              memberId = change.after.preferred_member_id;
+            }
+
+            break;
+          case 'identity.merged':
+            if (change.after.identity_id === identityId) {
+              memberId = change.after.preferred_member_id;
+            }
+
+            break;
+          case 'member.archived':
+            if (change.before.preferred_by.includes(identityId)) {
+              memberId = null;
+            }
+
+            break;
+          default:
+            break;
+        }
+
+        if (memberId !== undefined) {
+          latest = { sequence: event.sequence, memberId };
+        }
+      }
+
+      return latest;
+    };
+
+    const source = latestFor(sourceIdentityId);
+    const target = latestFor(targetIdentityId);
+
+    if (source && target) {
+      return source.sequence > target.sequence
+        ? source.memberId
+        : target.memberId;
+    }
+
+    if (target) return target.memberId;
+
+    if (source) return source.memberId;
+
+    return null;
+  }
+
+  /** Repairs a grant left under a source id by an interrupted/older merge. */
+  private reconcileMergedAccess(
+    persistence: GroupPersistence,
+    state: StoredGroupState,
+    targetIdentityId: string,
+    mergedAt: string,
+  ): GroupAccessGrant | null {
+    const sourceAccess = state.snapshot.access_grants.find(
+      (grant) =>
+        grant.identity_id !== targetIdentityId &&
+        persistence.resolveIdentity(grant.identity_id) === targetIdentityId,
+    );
+
+    if (!sourceAccess) return null;
+
+    const access = mergeAccessGrants(
+      sourceAccess,
+      null,
+      targetIdentityId,
+      this.latestPreference(persistence, sourceAccess.identity_id, targetIdentityId),
+    );
+
+    state.snapshot = {
+      ...state.snapshot,
+      access_grants: state.snapshot.access_grants
+        .filter((grant) => grant.identity_id !== sourceAccess.identity_id)
+        .concat(access),
+    };
+
+    const actorName = this.memberNameFor(state, access);
+
+    persistence.recordIdentityMerge(sourceAccess.identity_id, targetIdentityId);
+    this.commitTransition(
+      persistence,
+      state,
+      state.snapshot,
+      {
+        action: 'identity.merged',
+        before: { guest: sourceAccess, account: null },
+        after: access,
+      },
+      access,
+      actorName,
+      { kind: 'access', id: targetIdentityId },
+      null,
+      mergedAt,
+    );
+    persistence.saveState(state);
+
+    return access;
+  }
+
   private accessFor(
     state: StoredGroupState,
     identityId: string,
@@ -620,6 +852,32 @@ export class GroupStore {
       )?.display_name ?? null
     );
   }
+}
+
+function mergeAccessGrants(
+  guest: GroupAccessGrant,
+  account: GroupAccessGrant | null,
+  targetIdentityId: string,
+  preferredMemberId: string | null,
+): GroupAccessGrant {
+  const hiddenAt =
+    guest.hidden_at === null || account?.hidden_at === null
+      ? null
+      : [guest.hidden_at, account?.hidden_at ?? null]
+          .filter((value): value is string => value !== null)
+          .sort()
+          .at(-1) ?? null;
+
+  return {
+    identity_id: targetIdentityId,
+    actor_handle: account?.actor_handle ?? guest.actor_handle,
+    preferred_member_id: preferredMemberId,
+    granted_at:
+      account && account.granted_at < guest.granted_at
+        ? account.granted_at
+        : guest.granted_at,
+    hidden_at: hiddenAt,
+  };
 }
 
 function inviteFailure(

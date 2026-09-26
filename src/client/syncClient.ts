@@ -34,6 +34,7 @@ import {
 import type { ClientStorageAdapter } from './storage';
 
 export type SyncDeviceTransport = {
+  currentIdentity(): Promise<IdentitySession>;
   createGroup(input: CreateGroupRequest): Promise<CreatedGroup>;
   joinGroup(groupId: string, input: JoinGroupRequest): Promise<GroupSession>;
   syncGroup(groupId: string, input: SyncGroupRequest): Promise<SyncGroupResponse>;
@@ -126,13 +127,27 @@ export class SplitnextSyncClient {
   async initializeIdentity(): Promise<IdentitySession> {
     const existing = await this.replicas.session();
 
-    if (existing) return existing;
+    if (existing) {
+      if (!this.online) return existing;
+
+      try {
+        return await this.adoptIdentitySession(await this.deviceApi.currentIdentity());
+      } catch {
+        // A stored identity remains usable while the server is temporarily unavailable.
+        return existing;
+      }
+    }
 
     this.requireOnline();
 
     const session = await this.api.createAnonymousIdentity(this.deviceSecret);
 
     return this.replicas.retainSession(session);
+  }
+
+  /** Stores a session established by an external authentication provider. */
+  adoptIdentitySession(session: IdentitySession): Promise<IdentitySession> {
+    return this.replicas.replaceSessionIdentity(session);
   }
 
   async createGroup(

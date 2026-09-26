@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npm run frontend:build && wrangler dev --port 8787 --var ENABLE_DEBUG_INSPECTION:true",
+    "dev": "npm run db:migrate:local && npm run frontend:build && wrangler dev --port 8787 --var ENABLE_DEBUG_INSPECTION:true",
     "deploy": "npm run frontend:build && wrangler deploy",
     "types": "wrangler types",
     "types:check": "wrangler types --check",

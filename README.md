@@ -32,14 +32,21 @@ realtime revision announcements; expenses are intentionally deferred.
 
 ```bash
 npm install
-npm run db:migrate:local
 npm run dev
 ```
 
+The development command applies pending migrations to the local D1 database
+before starting Wrangler.
+
 Open `http://localhost:8787/dashboard/`. The test lab lets you:
 
-1. Add devices. Each one registers its own anonymous identity, like a fresh
-   install; removing one discards its local data but not its server access.
+1. Add devices. Each immediately creates a guest identity. Sign in optionally
+   with a mock account name to simulate carrying that identity to another
+   device. If that account already has its own identity, the guest's group
+   access is merged into it; duplicate access in a group collapses to one
+   participant using the latest preferred member. Earlier audit events and
+   actor handles remain unchanged. This debug-only flow is not real
+   authentication: there is no password, verified email, or identity provider.
 2. Create groups from any device, create an invite link in a group, and join
    from another device by pasting the link and choosing who it is. Each device
    shows its groups as tabs, marking the ones it left, plus a "+ New" tab.
@@ -48,12 +55,16 @@ Open `http://localhost:8787/dashboard/`. The test lab lets you:
 5. Watch changes reach the other device through realtime announcements, or
    turn a device's Live toggle off to see it fall behind and catch up.
 6. Watch request traffic, realtime activity, command outcomes, snapshots, and
-   replica convergence.
+   replica convergence. Tester devices and their local replicas survive a page
+   refresh in browser local storage; **Clear devices** removes them without
+   deleting server data.
 
 The server panel's **Reset data** button erases the D1 identity directory and
-every group in the D1 identity-group index, then removes every device. The
-server panel lists all indexed groups in tabs, including groups no current
-device uses. It reads current names and state from each group's Durable Object.
+every group in the D1 identity-group index. Device panels and their local
+replicas remain, but the now-erased device credentials can no longer
+authenticate. Clear devices separately to remove tester-local state. The server
+panel lists all indexed groups in tabs, including groups no current device
+uses. It reads current names and state from each group's Durable Object.
 These inspection and reset routes return 404 unless `ENABLE_DEBUG_INSPECTION`
 is enabled.
 
@@ -163,9 +174,10 @@ await client.syncGroup(group.group_id);
 client.watchGroup(group.group_id);
 ```
 
-`MemoryClientStorage` is useful for tests and keeps the dashboard ephemeral.
-`IndexedDbClientStorage` is the atomic browser adapter prepared for a future
-PWA. React Native can provide a SQLite adapter at the same opaque storage seam.
+`MemoryClientStorage` is useful for tests. `IndexedDbClientStorage` is the atomic
+browser adapter prepared for a future PWA. React Native can provide a SQLite
+adapter at the same opaque storage seam. The dashboard's localStorage adapter is
+only for preserving tester devices and replicas between page reloads.
 
 Realtime connections go through the same kind of seam: `browserWebSocket` is
 the default `RealtimeSocketFactory`, and tests or other platforms can supply

@@ -73,9 +73,29 @@ export class ClientReplicaStore {
 
   retainSession(session: IdentitySession): Promise<IdentitySession> {
     return this.change((document) => {
+      if (
+        document.session &&
+        (document.session.identity.id !== session.identity.id ||
+          document.session.device.id !== session.device.id)
+      ) {
+        throw new TypeError('identity_session_conflict');
+      }
+
       document.session ??= session;
 
       return document.session;
+    });
+  }
+
+  replaceSessionIdentity(session: IdentitySession): Promise<IdentitySession> {
+    return this.change((document) => {
+      if (document.session && document.session.device.id !== session.device.id) {
+        throw new TypeError('identity_device_conflict');
+      }
+
+      document.session = session;
+
+      return session;
     });
   }
 

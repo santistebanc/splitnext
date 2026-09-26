@@ -29,11 +29,18 @@ future behavior unless this document says otherwise.
 
 ## Identities and devices
 
-- The first release creates anonymous access identities. A device authenticates
-  an identity with its own secret credential.
-- The model must later allow an account to represent the same access identity
-  on multiple devices. Signing in must not create a different actor in a
-  group's history.
+- A fresh installation automatically starts with an anonymous access identity;
+  sign-in is optional and is mainly used to access the same groups from another
+  device.
+- Signing in links the existing access identity to an account, preserving its
+  groups and its attribution in group history. Other signed-in devices use that
+  same access identity rather than creating a new actor in each group's
+  history.
+- When a guest identity signs into an account already used elsewhere, merge
+  that guest identity's group access into the account identity. If both
+  identities already participate in one group, keep one current participant
+  and use the most recently selected preferred member. Never rewrite earlier
+  audit events or their actor handles.
 - An identity may revoke its own device credentials. Group participants cannot
   revoke another identity's device or group access.
 - Each group assigns an identity a stable actor handle in join order, such as

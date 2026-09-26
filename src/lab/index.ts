@@ -2,9 +2,12 @@ export { ClientOfflineError, SplitnextRequestError } from '../client';
 
 export {
   SyncLab,
+  LocalStorageLabClientStorage,
+  persistedLabDevicesSchema,
   type LabCommand,
   type LabDevice,
   type LabDeviceKey,
+  type PersistedLabDevice,
   type LabRealtimeEvent,
   type LabRealtimeStatus,
   type LabRequest,

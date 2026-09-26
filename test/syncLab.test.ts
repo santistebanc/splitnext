@@ -1,5 +1,7 @@
 import { exports } from 'cloudflare:workers';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import { MemoryClientStorage } from '../src/client';
 import { SyncLab } from '../src/lab/syncLab';
 import {
   applyTestMigrations,
@@ -14,6 +16,281 @@ beforeAll(async () => {
 afterEach(() => settleWorkerSockets());
 
 describe('synchronization lab', () => {
+  it('creates a guest identity once a newly opened offline device reconnects', async () => {
+    const lab = new SyncLab({
+      baseUrl: 'https://splitnext.test',
+      fetch: (input, init) => exports.default.fetch(input, init),
+      webSocket: workerWebSocket,
+    });
+
+    await lab.toggleServer();
+    const device = await lab.addDevice();
+
+    expect(deviceOf(lab, device).session).toBeNull();
+
+    await lab.toggleServer();
+
+    expect(deviceOf(lab, device).session).not.toBeNull();
+    expect(deviceOf(lab, device).requests.map(({ path }) => path)).toContain(
+      '/identities/anonymous',
+    );
+
+    await lab.reset();
+    lab.dispose();
+  });
+
+  it('links the guest device and brings its groups to the account identity', async () => {
+    const lab = new SyncLab({
+      baseUrl: 'https://splitnext.test',
+      fetch: (input, init) => exports.default.fetch(input, init),
+      webSocket: workerWebSocket,
+    });
+
+
+    const first = await lab.addDevice();
+
+    const group = await lab.createGroup(first, {
+      name: 'Shared identity group',
+      currency_code: 'EUR',
+      creator_member_name: 'Santi',
+    });
+
+    const second = await lab.addDevice();
+
+    const guestOnlyGroup = await lab.createGroup(second, {
+      name: 'Guest-only group',
+      currency_code: 'EUR',
+      creator_member_name: 'Robin',
+    });
+
+    const guestIdentityId = deviceOf(lab, second).session?.identity.id;
+
+    const firstSession = deviceOf(lab, first).session;
+    const accountName = `same-person-${crypto.randomUUID()}@example.test`;
+    const linkedSession = await lab.signInWithMockAccount(first, accountName);
+
+    expect(linkedSession.identity.id).toBe(firstSession?.identity.id);
+
+    await lab.signInWithMockAccount(second, accountName);
+    const secondSession = deviceOf(lab, second).session;
+
+    expect(secondSession?.identity.id).toBe(firstSession?.identity.id);
+    expect(guestIdentityId).not.toBe(firstSession?.identity.id);
+    expect(secondSession?.device.id).not.toBe(firstSession?.device.id);
+    expect(deviceOf(lab, second).requests.map(({ path }) => path)).toContain(
+      '/debug/auth/mock/sign-in',
+    );
+    expect(deviceOf(lab, second).requests.map(({ path }) => path)).toContain(
+      '/identities/anonymous',
+    );
+    expect(lab.state.server.incoming.map(({ path }) => path)).toContain(
+      '/debug/auth/mock/sign-in',
+    );
+    expect(deviceOf(lab, second).groups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ group_id: group.group_id, status: 'active' }),
+        expect.objectContaining({ group_id: guestOnlyGroup.group_id, status: 'active' }),
+      ]),
+    );
+
+    const mergedGroupResponse = await exports.default.fetch(
+      `https://splitnext.test/debug/groups/${guestOnlyGroup.group_id}`,
+    );
+
+    const mergedGroupState = z
+      .object({
+        snapshot: z.object({
+          access_grants: z.array(z.object({ identity_id: z.string() })),
+        }),
+      })
+      .parse(await mergedGroupResponse.json());
+
+    expect(deviceOf(lab, second).session?.identity.id).toBe(firstSession?.identity.id);
+    expect(mergedGroupState.snapshot.access_grants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ identity_id: firstSession?.identity.id }),
+      ]),
+    );
+    expect(mergedGroupState.snapshot.access_grants).toHaveLength(1);
+
+    await lab.selectGroup(second, guestOnlyGroup.group_id);
+    await expect(lab.addMember(second, 'After merge')).resolves.toMatchObject({
+      projected_snapshot: {
+        members: expect.arrayContaining([
+          expect.objectContaining({ display_name: 'After merge' }),
+        ]),
+      },
+    });
+
+    const restored = await lab.selectGroup(second, group.group_id);
+
+    expect(restored.projected_snapshot?.group.name).toBe('Shared identity group');
+    expect(lab.state.server.identityDirectory?.identities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: firstSession?.identity.id,
+          devices: expect.arrayContaining([
+            expect.objectContaining({ id: firstSession?.device.id }),
+            expect.objectContaining({ id: secondSession?.device.id }),
+          ]),
+        }),
+      ]),
+    );
+
+    await lab.reset();
+    lab.dispose();
+  });
+
+  it('merges duplicate group access and uses the latest preferred member', async () => {
+    const lab = new SyncLab({
+      baseUrl: 'https://splitnext.test',
+      fetch: (input, init) => exports.default.fetch(input, init),
+      webSocket: workerWebSocket,
+    });
+
+    const first = await lab.addDevice();
+    const second = await lab.addDevice();
+    const accountName = `conflict-${crypto.randomUUID()}@example.test`;
+    const accountSession = deviceOf(lab, first).session;
+
+    const group = await lab.createGroup(first, {
+      name: 'One participant after merge',
+      currency_code: 'EUR',
+      creator_member_name: 'Account member',
+    });
+
+    await lab.signInWithMockAccount(first, accountName);
+
+    await lab.createInvite(first);
+    const inviteLink = lab.inviteLink(first);
+
+    if (!inviteLink) throw new Error('invite_missing');
+
+    await lab.joinWithInvite(second, inviteLink, {
+      kind: 'new',
+      display_name: 'Guest member',
+    });
+
+    const guestMemberId = deviceOf(lab, second).replica?.projected_snapshot?.members
+      .find(({ display_name }) => display_name === 'Guest member')?.id;
+
+    const guestIdentityId = deviceOf(lab, second).session?.identity.id;
+
+    const auditBefore = await exports.default.fetch(
+      `https://splitnext.test/debug/groups/${group.group_id}`,
+    );
+
+    const debugGroupSchema = z.object({
+      revision: z.number(),
+      snapshot: z.object({
+        access_grants: z.array(
+          z.object({ identity_id: z.string(), preferred_member_id: z.string().nullable() }),
+        ),
+      }),
+    });
+
+    const auditBeforeBody = debugGroupSchema.parse(await auditBefore.json());
+
+    expect(accountSession?.identity.id).not.toBe(guestIdentityId);
+    expect(guestMemberId).toBeTruthy();
+
+    await lab.signInWithMockAccount(second, accountName);
+
+    const serverGroup = await exports.default.fetch(
+      `https://splitnext.test/debug/groups/${group.group_id}`,
+    );
+
+    const serverState = debugGroupSchema.parse(await serverGroup.json());
+
+    const accountAccess = serverState.snapshot.access_grants.filter(
+      ({ identity_id }) => identity_id === accountSession?.identity.id,
+    );
+
+    expect(accountAccess).toHaveLength(1);
+    expect(accountAccess[0]?.preferred_member_id).toBe(guestMemberId);
+    expect(serverState.snapshot.access_grants).toHaveLength(1);
+    expect(serverState.revision).toBeGreaterThan(auditBeforeBody.revision);
+
+    const directory = await exports.default.fetch(
+      'https://splitnext.test/debug/identity-directory',
+    );
+
+    const identities = z
+      .object({
+        identities: z.array(
+          z.object({ id: z.string(), merged_into: z.string().optional() }),
+        ),
+      })
+      .parse(await directory.json());
+
+    expect(identities.identities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: guestIdentityId,
+          merged_into: accountSession?.identity.id,
+        }),
+      ]),
+    );
+
+    await lab.reset();
+    lab.dispose();
+  });
+
+  it('restores device credentials and pending local work after a tester reload', async () => {
+    const stores = new Map<string, MemoryClientStorage>();
+
+    const options = {
+      baseUrl: 'https://splitnext.test',
+      fetch: (input: string, init?: RequestInit) => exports.default.fetch(input, init),
+      webSocket: workerWebSocket,
+      clearDeviceStorage: (key: string) => stores.delete(key),
+      storageForDevice: (key: string) => {
+        let storage = stores.get(key);
+
+        if (!storage) {
+          storage = new MemoryClientStorage();
+          stores.set(key, storage);
+        }
+
+        return storage;
+      },
+    };
+
+    const firstLab = new SyncLab(options);
+    const deviceKey = await firstLab.addDevice();
+
+    const group = await firstLab.createGroup(deviceKey, {
+      name: 'Survives refresh',
+      currency_code: 'EUR',
+      creator_member_name: 'Santi',
+    });
+
+    await firstLab.toggleDevice(deviceKey);
+    await firstLab.renameGroup(deviceKey, 'Pending while offline');
+
+    const savedDevices = firstLab.persistedDevices();
+    firstLab.dispose();
+
+    const restoredLab = new SyncLab(options);
+    await restoredLab.restoreDevices(savedDevices);
+
+    expect(restoredLab.state.devices[deviceKey]?.session?.identity.id).toBe(
+      firstLab.state.devices[deviceKey]?.session?.identity.id,
+    );
+    expect(restoredLab.state.devices[deviceKey]?.replica?.outbox).toHaveLength(1);
+    expect(
+      restoredLab.state.devices[deviceKey]?.replica?.projected_snapshot?.group.name,
+    ).toBe('Pending while offline');
+    expect(restoredLab.state.devices[deviceKey]?.selectedGroupId).toBe(
+      group.group_id,
+    );
+
+    await restoredLab.reset();
+    restoredLab.clearDevices();
+    expect(stores.has(deviceKey)).toBe(false);
+    restoredLab.dispose();
+  });
+
   it('adds registered devices and removes them without touching the server', async () => {
     const lab = new SyncLab({
       baseUrl: 'https://splitnext.test',
@@ -241,7 +518,11 @@ describe('synchronization lab', () => {
     expect(cleared).toContain(created.group_id);
     expect(cleared).toContain(unusedDeviceGroup.group_id);
     expect(lab.state.inspectedGroupId).toBeNull();
-    expect(lab.state.devices).toEqual({});
+    expect(Object.keys(lab.state.devices)).toHaveLength(2);
+    expect(deviceOf(lab, one).session).not.toBeNull();
+    expect(deviceOf(lab, one).replica?.projected_snapshot?.group.name).toBe(
+      'Doomed',
+    );
     expect(lab.state.server.groups).toEqual([]);
     expect(lab.state.server.identityDirectory).toEqual({ identities: [] });
 
@@ -256,6 +537,9 @@ describe('synchronization lab', () => {
     );
 
     expect(forgottenDeviceGroup.status).toBe(404);
+
+    lab.clearDevices();
+    expect(lab.state.devices).toEqual({});
 
     await lab.addDevice();
     await lab.addDevice();

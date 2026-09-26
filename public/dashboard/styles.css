@@ -140,6 +140,7 @@ main {
 
 .setup-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.6rem;
   padding: 0.4rem;
@@ -149,6 +150,25 @@ main {
 .setup-toolbar span {
   color: var(--muted);
   font-size: 0.75rem;
+}
+
+.auth-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0.35rem 0;
+}
+
+.auth-panel form {
+  display: flex;
+  flex: 1 1 18rem;
+  gap: 0.25rem;
+}
+
+.auth-panel input {
+  flex: 1;
+  min-width: 8rem;
 }
 
 .replica-grid {
@@ -228,6 +248,11 @@ h2 {
 }
 
 .identity-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   margin: 0.4rem 0;
   padding: 0.3rem 0.4rem;
   color: var(--muted);
