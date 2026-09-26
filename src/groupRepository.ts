@@ -62,8 +62,6 @@ export interface GroupPersistence extends AuditEventStore {
   findInviteByTokenHash(tokenHash: string): StoredInvite | null;
   recordInvite(invite: StoredInvite): void;
   revokeInvite(inviteId: string, revokedAt: string): void;
-  resolveIdentity(identityId: string): string;
-  recordIdentityMerge(sourceIdentityId: string, targetIdentityId: string): void;
 }
 
 export interface GroupRepository {
@@ -146,11 +144,6 @@ export class DurableObjectGroupRepository implements GroupRepository {
          created_at TEXT NOT NULL,
          expires_at TEXT NOT NULL,
          revoked_at TEXT
-       );
-
-       CREATE TABLE IF NOT EXISTS group_identity_merges (
-         source_identity_id TEXT PRIMARY KEY,
-         target_identity_id TEXT NOT NULL
        );`,
     );
   }
@@ -389,40 +382,6 @@ class SQLiteGroupPersistence implements GroupPersistence {
       );
   }
 
-  resolveIdentity(identityId: string): string {
-    let resolved = identityId;
-    const visited = new Set<string>();
-
-    while (!visited.has(resolved)) {
-      visited.add(resolved);
-
-      const row = this.sql
-        .exec<{ target_identity_id: string }>(
-          `SELECT target_identity_id
-           FROM group_identity_merges
-           WHERE source_identity_id = ?`,
-          resolved,
-        )
-        .toArray()[0];
-
-      if (!row) return resolved;
-
-      resolved = row.target_identity_id;
-    }
-
-    throw new Error('identity_merge_cycle');
-  }
-
-  recordIdentityMerge(sourceIdentityId: string, targetIdentityId: string): void {
-    this.sql.exec(
-      `INSERT INTO group_identity_merges (source_identity_id, target_identity_id)
-       VALUES (?, ?)
-       ON CONFLICT (source_identity_id) DO UPDATE SET
-         target_identity_id = excluded.target_identity_id`,
-      sourceIdentityId,
-      targetIdentityId,
-    );
-  }
 }
 
 type MemoryGroupData = {
@@ -432,7 +391,6 @@ type MemoryGroupData = {
   joinOutcomes: StoredJoinOutcome[];
   memberAliases: MemberAlias[];
   invites: StoredInvite[];
-  identityMerges: Array<{ source: string; target: string }>;
 };
 
 export type GroupRepositoryInspection = {
@@ -442,7 +400,6 @@ export type GroupRepositoryInspection = {
   join_outcomes: StoredJoinOutcome[];
   member_aliases: MemberAlias[];
   invites: StoredInvite[];
-  identity_merges?: Array<{ source: string; target: string }>;
 };
 
 export class MemoryGroupRepository implements GroupRepository {
@@ -457,7 +414,6 @@ export class MemoryGroupRepository implements GroupRepository {
           joinOutcomes: clone(initial.join_outcomes),
           memberAliases: clone(initial.member_aliases),
           invites: clone(initial.invites),
-          identityMerges: clone(initial.identity_merges ?? []),
         }
       : emptyMemoryData();
   }
@@ -479,7 +435,6 @@ export class MemoryGroupRepository implements GroupRepository {
       join_outcomes: clone(this.data.joinOutcomes),
       member_aliases: clone(this.data.memberAliases),
       invites: clone(this.data.invites),
-      identity_merges: clone(this.data.identityMerges),
     };
   }
 }
@@ -537,31 +492,6 @@ class MemoryGroupPersistence implements GroupPersistence {
     this.data.memberAliases.push(clone(alias));
   }
 
-  resolveIdentity(identityId: string): string {
-    let resolved = identityId;
-    const visited = new Set<string>();
-
-    while (!visited.has(resolved)) {
-      visited.add(resolved);
-      const merge = this.data.identityMerges.find(({ source }) => source === resolved);
-
-      if (!merge) return resolved;
-
-      resolved = merge.target;
-    }
-
-    throw new Error('identity_merge_cycle');
-  }
-
-  recordIdentityMerge(sourceIdentityId: string, targetIdentityId: string): void {
-    const existing = this.data.identityMerges.find(
-      ({ source }) => source === sourceIdentityId,
-    );
-
-    if (existing) existing.target = targetIdentityId;
-    else this.data.identityMerges.push({ source: sourceIdentityId, target: targetIdentityId });
-  }
-
   findInvite(inviteId: string): StoredInvite | null {
     return clone(this.data.invites.find(({ id }) => id === inviteId)) ?? null;
   }
@@ -612,7 +542,6 @@ function emptyMemoryData(): MemoryGroupData {
     joinOutcomes: [],
     memberAliases: [],
     invites: [],
-    identityMerges: [],
   };
 }
 

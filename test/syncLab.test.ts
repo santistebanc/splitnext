@@ -16,7 +16,7 @@ beforeAll(async () => {
 afterEach(() => settleWorkerSockets());
 
 describe('synchronization lab', () => {
-  it('creates a guest identity once a newly opened offline device reconnects', async () => {
+  it('creates an identity once a newly opened offline device reconnects', async () => {
     const lab = new SyncLab({
       baseUrl: 'https://splitnext.test',
       fetch: (input, init) => exports.default.fetch(input, init),
@@ -39,7 +39,7 @@ describe('synchronization lab', () => {
     lab.dispose();
   });
 
-  it('links the guest device and brings its groups to the account identity', async () => {
+  it('joins a group from another device with a separate identity', async () => {
     const lab = new SyncLab({
       baseUrl: 'https://splitnext.test',
       fetch: (input, init) => exports.default.fetch(input, init),
@@ -55,179 +55,46 @@ describe('synchronization lab', () => {
       creator_member_name: 'Santi',
     });
 
-    const second = await lab.addDevice();
-
-    const guestOnlyGroup = await lab.createGroup(second, {
-      name: 'Guest-only group',
-      currency_code: 'EUR',
-      creator_member_name: 'Robin',
-    });
-
-    const guestIdentityId = deviceOf(lab, second).session?.identity.id;
-
     const firstSession = deviceOf(lab, first).session;
-    const accountName = `same-person-${crypto.randomUUID()}@example.test`;
-    const linkedSession = await lab.signInWithMockAccount(first, accountName);
+    const memberId = group.projected_snapshot?.members[0]?.id;
 
-    expect(linkedSession.identity.id).toBe(firstSession?.identity.id);
-
-    await lab.signInWithMockAccount(second, accountName);
-    const secondSession = deviceOf(lab, second).session;
-
-    expect(secondSession?.identity.id).toBe(firstSession?.identity.id);
-    expect(guestIdentityId).not.toBe(firstSession?.identity.id);
-    expect(secondSession?.device.id).not.toBe(firstSession?.device.id);
-    expect(deviceOf(lab, second).requests.map(({ path }) => path)).toContain(
-      '/debug/auth/mock/sign-in',
-    );
-    expect(deviceOf(lab, second).requests.map(({ path }) => path)).toContain(
-      '/identities/anonymous',
-    );
-    expect(lab.state.server.incoming.map(({ path }) => path)).toContain(
-      '/debug/auth/mock/sign-in',
-    );
-    expect(deviceOf(lab, second).groups).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ group_id: group.group_id, status: 'active' }),
-        expect.objectContaining({ group_id: guestOnlyGroup.group_id, status: 'active' }),
-      ]),
-    );
-
-    const mergedGroupResponse = await exports.default.fetch(
-      `https://splitnext.test/debug/groups/${guestOnlyGroup.group_id}`,
-    );
-
-    const mergedGroupState = z
-      .object({
-        snapshot: z.object({
-          access_grants: z.array(z.object({ identity_id: z.string() })),
-        }),
-      })
-      .parse(await mergedGroupResponse.json());
-
-    expect(deviceOf(lab, second).session?.identity.id).toBe(firstSession?.identity.id);
-    expect(mergedGroupState.snapshot.access_grants).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ identity_id: firstSession?.identity.id }),
-      ]),
-    );
-    expect(mergedGroupState.snapshot.access_grants).toHaveLength(1);
-
-    await lab.selectGroup(second, guestOnlyGroup.group_id);
-    await expect(lab.addMember(second, 'After merge')).resolves.toMatchObject({
-      projected_snapshot: {
-        members: expect.arrayContaining([
-          expect.objectContaining({ display_name: 'After merge' }),
-        ]),
-      },
-    });
-
-    const restored = await lab.selectGroup(second, group.group_id);
-
-    expect(restored.projected_snapshot?.group.name).toBe('Shared identity group');
-    expect(lab.state.server.identityDirectory?.identities).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: firstSession?.identity.id,
-          devices: expect.arrayContaining([
-            expect.objectContaining({ id: firstSession?.device.id }),
-            expect.objectContaining({ id: secondSession?.device.id }),
-          ]),
-        }),
-      ]),
-    );
-
-    await lab.reset();
-    lab.dispose();
-  });
-
-  it('merges duplicate group access and uses the latest preferred member', async () => {
-    const lab = new SyncLab({
-      baseUrl: 'https://splitnext.test',
-      fetch: (input, init) => exports.default.fetch(input, init),
-      webSocket: workerWebSocket,
-    });
-
-    const first = await lab.addDevice();
-    const second = await lab.addDevice();
-    const accountName = `conflict-${crypto.randomUUID()}@example.test`;
-    const accountSession = deviceOf(lab, first).session;
-
-    const group = await lab.createGroup(first, {
-      name: 'One participant after merge',
-      currency_code: 'EUR',
-      creator_member_name: 'Account member',
-    });
-
-    await lab.signInWithMockAccount(first, accountName);
+    if (!memberId) throw new Error('creator_member_missing');
 
     await lab.createInvite(first);
     const inviteLink = lab.inviteLink(first);
 
     if (!inviteLink) throw new Error('invite_missing');
 
-    await lab.joinWithInvite(second, inviteLink, {
-      kind: 'new',
-      display_name: 'Guest member',
-    });
+    const second = await lab.addDevice();
+    const secondSession = deviceOf(lab, second).session;
 
-    const guestMemberId = deviceOf(lab, second).replica?.projected_snapshot?.members
-      .find(({ display_name }) => display_name === 'Guest member')?.id;
+    expect(secondSession?.identity.id).not.toBe(firstSession?.identity.id);
+    await lab.joinWithInvite(second, inviteLink, { kind: 'existing', member_id: memberId });
 
-    const guestIdentityId = deviceOf(lab, second).session?.identity.id;
-
-    const auditBefore = await exports.default.fetch(
+    const joinedGroupResponse = await exports.default.fetch(
       `https://splitnext.test/debug/groups/${group.group_id}`,
     );
 
-    const debugGroupSchema = z.object({
-      revision: z.number(),
-      snapshot: z.object({
-        access_grants: z.array(
-          z.object({ identity_id: z.string(), preferred_member_id: z.string().nullable() }),
-        ),
-      }),
-    });
-
-    const auditBeforeBody = debugGroupSchema.parse(await auditBefore.json());
-
-    expect(accountSession?.identity.id).not.toBe(guestIdentityId);
-    expect(guestMemberId).toBeTruthy();
-
-    await lab.signInWithMockAccount(second, accountName);
-
-    const serverGroup = await exports.default.fetch(
-      `https://splitnext.test/debug/groups/${group.group_id}`,
-    );
-
-    const serverState = debugGroupSchema.parse(await serverGroup.json());
-
-    const accountAccess = serverState.snapshot.access_grants.filter(
-      ({ identity_id }) => identity_id === accountSession?.identity.id,
-    );
-
-    expect(accountAccess).toHaveLength(1);
-    expect(accountAccess[0]?.preferred_member_id).toBe(guestMemberId);
-    expect(serverState.snapshot.access_grants).toHaveLength(1);
-    expect(serverState.revision).toBeGreaterThan(auditBeforeBody.revision);
-
-    const directory = await exports.default.fetch(
-      'https://splitnext.test/debug/identity-directory',
-    );
-
-    const identities = z
+    const joinedGroupState = z
       .object({
-        identities: z.array(
-          z.object({ id: z.string(), merged_into: z.string().optional() }),
-        ),
+        snapshot: z.object({
+          access_grants: z.array(z.object({ identity_id: z.string() })),
+        }),
       })
-      .parse(await directory.json());
+      .parse(await joinedGroupResponse.json());
 
-    expect(identities.identities).toEqual(
+    expect(joinedGroupState.snapshot.access_grants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ identity_id: firstSession?.identity.id }),
+        expect.objectContaining({ identity_id: secondSession?.identity.id }),
+      ]),
+    );
+    expect(joinedGroupState.snapshot.access_grants).toHaveLength(2);
+    expect(lab.state.server.identityDirectory?.identities).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: guestIdentityId,
-          merged_into: accountSession?.identity.id,
+          id: secondSession?.identity.id,
+          devices: [expect.objectContaining({ id: secondSession?.device.id })],
         }),
       ]),
     );

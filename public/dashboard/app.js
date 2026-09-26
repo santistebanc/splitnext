@@ -117,9 +117,6 @@ function createDeviceView(key) {
     realtimeToggle: query('[data-action="toggle-realtime"]'),
     realtimeEvents: query('[data-role="realtime-events"]'),
     identity: query('[data-role="identity"]'),
-    authPanel: query('[data-role="auth-panel"]'),
-    mockSignInForm: query('[data-action-form="mock-sign-in"]'),
-    mockAccount: query('[data-role="mock-account"]'),
     revision: query('[data-role="revision"]'),
     remove: query('[data-action="remove-device"]'),
     groupList: query('[data-role="group-list"]'),
@@ -165,7 +162,6 @@ function createDeviceView(key) {
   view.toggle.addEventListener('click', () => toggleDevice(key));
   view.realtimeToggle.addEventListener('click', () => toggleRealtime(key));
   view.remove.addEventListener('click', () => removeDevice(key));
-  view.mockSignInForm.addEventListener('submit', (event) => signInDevice(event, key));
   view.sync.addEventListener('click', () => synchronizeDevice(key));
   view.leave.addEventListener('click', () => leaveGroup(key));
   view.rejoinForm.addEventListener('submit', (event) => rejoinGroup(event, key));
@@ -213,40 +209,11 @@ async function addDevice() {
   try {
     const key = await lab.addDevice();
 
-    showToast(`${state.devices[key].label} is ready with a guest identity`);
+    showToast(`${state.devices[key].label} is ready with its identity`);
   } catch (error) {
     showToast(describeError(error), true);
   } finally {
     setBusy(elements.addDevice, false, 'Add device');
-    renderAll();
-  }
-}
-
-async function signInDevice(event, key) {
-  event.preventDefault();
-
-  const view = deviceViews[key];
-  const accountName = view.mockAccount.value.trim();
-  const button = event.submitter;
-
-  if (!accountName) {
-    showToast('Enter a test account name', true);
-
-    return;
-  }
-
-  setBusy(button, true, 'Signing in…');
-
-  try {
-    const session = await lab.signInWithMockAccount(key, accountName);
-
-    showToast(
-      `${state.devices[key].label} signed in as ${accountName} · Identity ${shortId(session.identity.id)}`,
-    );
-  } catch (error) {
-    showToast(describeError(error), true);
-  } finally {
-    setBusy(button, false, 'Link test account');
     renderAll();
   }
 }
@@ -840,7 +807,7 @@ function renderSetup() {
 
   if (devices.length === 0) {
     elements.setupSummary.textContent =
-      'Add a device, then sign in with a test account or create an anonymous identity.';
+      'Add a device to create its identity, then create a group or join one with an invite link.';
   } else if (devices.length === 1) {
     elements.setupSummary.textContent =
       'Create a group, then add another device to invite into it.';
@@ -866,14 +833,8 @@ function renderDevice(key) {
   renderRealtimeToggle(view.realtimeToggle, device);
   renderRealtimeEvents(view.realtimeEvents, device.realtimeEvents);
   view.identity.textContent = device.session
-    ? `Identity ${shortId(device.session.identity.id)} · Device ${shortId(device.session.device.id)}${device.mockAccountName ? ` · Test account ${device.mockAccountName}` : ' · Anonymous'}`
-    : 'Not signed in';
-
-  view.authPanel.hidden = Boolean(device.mockAccountName);
-
-  for (const control of view.authPanel.querySelectorAll('input, button')) {
-    control.disabled = !device.online || !state.server.online;
-  }
+    ? `Identity ${shortId(device.session.identity.id)} · Device ${shortId(device.session.device.id)}`
+    : 'Identity not initialized';
 
   view.revision.textContent = replica?.revision ?? '—';
 
@@ -1473,11 +1434,7 @@ function renderIdentityDirectory() {
       row.className = 'directory-identity';
 
       const heading = document.createElement('strong');
-      heading.textContent = identity.mock_account
-        ? `Identity ${identity.id} · Test account ${identity.mock_account}`
-        : `Identity ${identity.id}`;
-
-      if (identity.merged_into) heading.textContent += ` · merged into ${identity.merged_into}`;
+      heading.textContent = `Identity ${identity.id}`;
 
       row.append(heading);
 

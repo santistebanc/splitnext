@@ -1,6 +1,6 @@
 # Merge guest identity into an existing account identity
 
-Status: Accepted
+Status: Superseded by [ADR 0012](./0012-device-scoped-identities.md)
 
 ## Context
 

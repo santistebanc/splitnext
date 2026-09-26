@@ -10,8 +10,8 @@ were made.
 
 The current MVP establishes identities, groups, ledger members, offline
 synchronization, realtime revision announcements, and invite links. Expenses,
-settlements, account sign-in, audit browsing, and group recovery are accepted
-future behavior unless this document says otherwise.
+settlements, audit browsing, and group recovery are accepted future behavior
+unless this document says otherwise. Account sign-in is not planned.
 
 ## Product principles
 
@@ -29,18 +29,14 @@ future behavior unless this document says otherwise.
 
 ## Identities and devices
 
-- A fresh installation automatically starts with an anonymous access identity;
-  sign-in is optional and is mainly used to access the same groups from another
+- A fresh installation automatically creates an anonymous access identity and
+  device credential. An identity belongs to one installation; there is no
+  account sign-in or account linking.
+- A fresh installation on another device creates a separate identity. Joining
+  a group there grants access to that identity, so its actor handle and history
+  are separate even if it chooses the same ledger member as the first device.
+  The person needs a current invite link for each group they join on that
   device.
-- Signing in links the existing access identity to an account, preserving its
-  groups and its attribution in group history. Other signed-in devices use that
-  same access identity rather than creating a new actor in each group's
-  history.
-- When a guest identity signs into an account already used elsewhere, merge
-  that guest identity's group access into the account identity. If both
-  identities already participate in one group, keep one current participant
-  and use the most recently selected preferred member. Never rewrite earlier
-  audit events or their actor handles.
 - An identity may revoke its own device credentials. Group participants cannot
   revoke another identity's device or group access.
 - Each group assigns an identity a stable actor handle in join order, such as
