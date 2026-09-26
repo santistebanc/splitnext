@@ -81,6 +81,7 @@ describe('anonymous identities API', () => {
         {
           id: session.identity.id,
           created_at: session.identity.created_at,
+          mock_account: null,
           devices: [
             {
               id: session.device.id,
@@ -101,9 +102,22 @@ describe('anonymous identities API', () => {
       ENABLE_DEBUG_INSPECTION: 'false',
     };
 
-    const [identityResponse, groupResponse, resetResponse] = await Promise.all([
+    const [identityResponse, mockSignInResponse, groupResponse, resetResponse] = await Promise.all([
       app.fetch(
         new Request('https://splitnext.test/debug/identity-directory'),
+        disabledEnv,
+      ),
+      app.fetch(
+        new Request(
+          'https://splitnext.test/debug/auth/mock/sign-in',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              account_name: 'disabled@example.test',
+              device_secret: 'd'.repeat(43),
+            }),
+          },
+        ),
         disabledEnv,
       ),
       app.fetch(
@@ -123,9 +137,155 @@ describe('anonymous identities API', () => {
 
     expect(identityResponse.status).toBe(404);
     expect(await identityResponse.json()).toEqual({ error: 'not_found' });
+    expect(mockSignInResponse.status).toBe(404);
+    expect(await mockSignInResponse.json()).toEqual({ error: 'not_found' });
     expect(groupResponse.status).toBe(404);
     expect(await groupResponse.json()).toEqual({ error: 'not_found' });
     expect(resetResponse.status).toBe(404);
+  });
+
+  it('signs in multiple devices as one mock account with distinct credentials', async () => {
+    const accountName = `multi-device-${createIdentifier()}@example.test`;
+
+    const signIn = (deviceSecret: string) =>
+      exports.default.fetch('https://splitnext.test/debug/auth/mock/sign-in', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ account_name: accountName, device_secret: deviceSecret }),
+      });
+
+    const firstResponse = await signIn('m'.repeat(43));
+    const secondResponse = await signIn('n'.repeat(43));
+    const firstSession = identitySessionSchema.parse(await firstResponse.json());
+    const secondSession = identitySessionSchema.parse(await secondResponse.json());
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(200);
+    expect(secondSession.identity.id).toBe(firstSession.identity.id);
+    expect(secondSession.device.id).not.toBe(firstSession.device.id);
+
+    const inspected = await exports.default.fetch(
+      'https://splitnext.test/debug/identity-directory',
+    );
+
+    const directory = await inspected.json();
+
+    expect(directory).toEqual({
+      identities: expect.arrayContaining([
+        expect.objectContaining({
+          id: firstSession.identity.id,
+          mock_account: accountName.toLocaleLowerCase('en-US'),
+          devices: expect.arrayContaining([
+            expect.objectContaining({ id: firstSession.device.id }),
+            expect.objectContaining({ id: secondSession.device.id }),
+          ]),
+        }),
+      ]),
+    });
+  });
+
+  it('adopts an existing anonymous identity for a mock account', async () => {
+    const deviceSecret = 'p'.repeat(43);
+    const accountName = `adopt-${createIdentifier()}@example.test`;
+
+    const anonymousResponse = await exports.default.fetch(
+      'https://splitnext.test/identities/anonymous',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ device_secret: deviceSecret }),
+      },
+    );
+
+    const anonymousSession = identitySessionSchema.parse(
+      await anonymousResponse.json(),
+    );
+
+    const linkedResponse = await exports.default.fetch(
+      'https://splitnext.test/debug/auth/mock/sign-in',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ account_name: accountName, device_secret: deviceSecret }),
+      },
+    );
+
+    const linkedSession = identitySessionSchema.parse(await linkedResponse.json());
+
+    expect(linkedResponse.status).toBe(200);
+    expect(linkedSession).toEqual(anonymousSession);
+  });
+
+  it('merges an anonymous identity into an account already used on another device', async () => {
+    const accountName = `collision-${createIdentifier()}@example.test`;
+
+    const signIn = (deviceSecret: string) =>
+      exports.default.fetch('https://splitnext.test/debug/auth/mock/sign-in', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ account_name: accountName, device_secret: deviceSecret }),
+      });
+
+    const firstResponse = await signIn('q'.repeat(43));
+
+    const secondAnonymousResponse = await exports.default.fetch(
+      'https://splitnext.test/identities/anonymous',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ device_secret: 'r'.repeat(43) }),
+      },
+    );
+
+    const firstSession = identitySessionSchema.parse(await firstResponse.json());
+
+    const secondAnonymousSession = identitySessionSchema.parse(
+      await secondAnonymousResponse.json(),
+    );
+
+    const merged = await signIn('r'.repeat(43));
+    const mergedSession = identitySessionSchema.parse(await merged.json());
+
+    expect(merged.status).toBe(200);
+    expect(mergedSession.identity.id).toBe(firstSession.identity.id);
+    expect(mergedSession.device.id).toBe(secondAnonymousSession.device.id);
+    expect(firstSession.identity.id).not.toBe(secondAnonymousSession.identity.id);
+
+    const authenticated = await exports.default.fetch('https://splitnext.test/identity', {
+      headers: { authorization: `Bearer v1.${'r'.repeat(43)}` },
+    });
+
+    expect(await authenticated.json()).toEqual(mergedSession);
+  });
+
+  it('does not merge one established account into another account', async () => {
+    const accountA = `account-a-${createIdentifier()}@example.test`;
+    const accountB = `account-b-${createIdentifier()}@example.test`;
+    const secretA = 's'.repeat(43);
+    const secretB = 't'.repeat(43);
+
+    await exports.default.fetch('https://splitnext.test/debug/auth/mock/sign-in', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ account_name: accountA, device_secret: secretA }),
+    });
+    await exports.default.fetch('https://splitnext.test/debug/auth/mock/sign-in', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ account_name: accountB, device_secret: secretB }),
+    });
+
+    const switched = await exports.default.fetch(
+      'https://splitnext.test/debug/auth/mock/sign-in',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ account_name: accountA, device_secret: secretB }),
+      },
+    );
+
+    expect(switched.status).toBe(409);
+    expect(await switched.json()).toEqual({ error: 'account_identity_conflict' });
   });
 
   it('rejects malformed identity creation input', async () => {

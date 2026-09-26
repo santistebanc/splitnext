@@ -136,6 +136,7 @@ describe('realtime client synchronization', () => {
           const device = api.forDevice(secret);
 
           return {
+            currentIdentity: () => device.currentIdentity(),
             createGroup: (input) => device.createGroup(input),
             joinGroup: (id, input) => device.joinGroup(id, input),
             createInvite: (id, input) => device.createInvite(id, input),

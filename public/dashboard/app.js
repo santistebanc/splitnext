@@ -2,12 +2,15 @@ import {
   ClientOfflineError,
   SplitnextRequestError,
   SyncLab,
+  LocalStorageLabClientStorage,
+  persistedLabDevicesSchema,
 } from '/sdk/splitnext-lab.js';
 
 const elements = {
   health: document.querySelector('#health-status'),
   ready: document.querySelector('#ready-status'),
   addDevice: document.querySelector('#add-device'),
+  clearDevices: document.querySelector('#clear-devices'),
   setupSummary: document.querySelector('#setup-summary'),
   serverToggle: document.querySelector('#toggle-server'),
   serverRevision: document.querySelector('#server-revision'),
@@ -37,14 +40,27 @@ const newGroupTabs = {};
 // Each device is a different person, so its forms default to its own name.
 const defaultNames = ['Santi', 'Robin', 'Taylor', 'Alex', 'Sam', 'Jordan'];
 
+const savedDevices = readPersistedDevices();
+
 const lab = new SyncLab({
   baseUrl: window.location.origin,
   onChange: () => renderAll(),
+  onDevicesChanged: (devices) => {
+    localStorage.setItem('splitnext.tester.devices.v1', JSON.stringify(devices));
+  },
+  storageForDevice: (key) => new LocalStorageLabClientStorage(key),
+  clearDeviceStorage: (key) => new LocalStorageLabClientStorage(key).clear(),
 });
 
 const state = lab.state;
 
 await Promise.all([checkDependencies(), lab.refreshServer()]);
+
+await lab.restoreDevices(savedDevices);
+
+if (Object.keys(state.devices).length === 0) {
+  await lab.addDevice().catch(() => undefined);
+}
 
 bindEvents();
 
@@ -62,8 +78,21 @@ function renderDependency(element, available, label) {
   element.className = `status ${available ? 'ok' : 'error'}`;
 }
 
+function readPersistedDevices() {
+  try {
+    const parsed = persistedLabDevicesSchema.safeParse(
+      JSON.parse(localStorage.getItem('splitnext.tester.devices.v1') ?? '[]'),
+    );
+
+    return parsed.success ? parsed.data : [];
+  } catch {
+    return [];
+  }
+}
+
 function bindEvents() {
   elements.addDevice.addEventListener('click', addDevice);
+  elements.clearDevices.addEventListener('click', clearDevices);
   elements.serverToggle.addEventListener('click', toggleServer);
   elements.refreshServer.addEventListener('click', refreshServer);
   elements.resetServer.addEventListener('click', resetServer);
@@ -88,6 +117,9 @@ function createDeviceView(key) {
     realtimeToggle: query('[data-action="toggle-realtime"]'),
     realtimeEvents: query('[data-role="realtime-events"]'),
     identity: query('[data-role="identity"]'),
+    authPanel: query('[data-role="auth-panel"]'),
+    mockSignInForm: query('[data-action-form="mock-sign-in"]'),
+    mockAccount: query('[data-role="mock-account"]'),
     revision: query('[data-role="revision"]'),
     remove: query('[data-action="remove-device"]'),
     groupList: query('[data-role="group-list"]'),
@@ -133,6 +165,7 @@ function createDeviceView(key) {
   view.toggle.addEventListener('click', () => toggleDevice(key));
   view.realtimeToggle.addEventListener('click', () => toggleRealtime(key));
   view.remove.addEventListener('click', () => removeDevice(key));
+  view.mockSignInForm.addEventListener('submit', (event) => signInDevice(event, key));
   view.sync.addEventListener('click', () => synchronizeDevice(key));
   view.leave.addEventListener('click', () => leaveGroup(key));
   view.rejoinForm.addEventListener('submit', (event) => rejoinGroup(event, key));
@@ -180,13 +213,55 @@ async function addDevice() {
   try {
     const key = await lab.addDevice();
 
-    showToast(`${state.devices[key].label} is installed and registered its own identity`);
+    showToast(`${state.devices[key].label} is ready with a guest identity`);
   } catch (error) {
     showToast(describeError(error), true);
   } finally {
     setBusy(elements.addDevice, false, 'Add device');
     renderAll();
   }
+}
+
+async function signInDevice(event, key) {
+  event.preventDefault();
+
+  const view = deviceViews[key];
+  const accountName = view.mockAccount.value.trim();
+  const button = event.submitter;
+
+  if (!accountName) {
+    showToast('Enter a test account name', true);
+
+    return;
+  }
+
+  setBusy(button, true, 'Signing in…');
+
+  try {
+    const session = await lab.signInWithMockAccount(key, accountName);
+
+    showToast(
+      `${state.devices[key].label} signed in as ${accountName} · Identity ${shortId(session.identity.id)}`,
+    );
+  } catch (error) {
+    showToast(describeError(error), true);
+  } finally {
+    setBusy(button, false, 'Link test account');
+    renderAll();
+  }
+}
+
+function clearDevices() {
+  if (!Object.keys(state.devices).length) return;
+
+  const confirmed = window.confirm(
+    'Clear all simulated device credentials and local replicas? Server groups and identities will not be deleted.',
+  );
+
+  if (!confirmed) return;
+
+  lab.clearDevices();
+  showToast('All tester devices and their local data were cleared');
 }
 
 function removeDevice(key) {
@@ -717,7 +792,7 @@ async function refreshServer() {
 
 async function resetServer() {
   const confirmed = window.confirm(
-    'Erase every identity and every group registered on this local server, then start over with fresh devices?',
+    'Erase every identity and group registered on this local server? Simulated devices and their local data will remain, but their credentials will no longer be valid.',
   );
 
   if (!confirmed) return;
@@ -733,7 +808,7 @@ async function resetServer() {
     }
 
     showToast(
-      `Server data erased (${cleared.length} group${cleared.length === 1 ? '' : 's'}). Initialize the devices to start again.`,
+      `Server data erased (${cleared.length} group${cleared.length === 1 ? '' : 's'}). Device panels and local replicas were kept.`,
     );
   } catch (error) {
     showToast(describeError(error), true);
@@ -765,7 +840,7 @@ function renderSetup() {
 
   if (devices.length === 0) {
     elements.setupSummary.textContent =
-      'Add a device to begin. Each one registers its own identity, like a fresh install.';
+      'Add a device, then sign in with a test account or create an anonymous identity.';
   } else if (devices.length === 1) {
     elements.setupSummary.textContent =
       'Create a group, then add another device to invite into it.';
@@ -791,8 +866,15 @@ function renderDevice(key) {
   renderRealtimeToggle(view.realtimeToggle, device);
   renderRealtimeEvents(view.realtimeEvents, device.realtimeEvents);
   view.identity.textContent = device.session
-    ? `Identity ${shortId(device.session.identity.id)} · Device ${shortId(device.session.device.id)}`
-    : 'Identity not initialized';
+    ? `Identity ${shortId(device.session.identity.id)} · Device ${shortId(device.session.device.id)}${device.mockAccountName ? ` · Test account ${device.mockAccountName}` : ' · Anonymous'}`
+    : 'Not signed in';
+
+  view.authPanel.hidden = Boolean(device.mockAccountName);
+
+  for (const control of view.authPanel.querySelectorAll('input, button')) {
+    control.disabled = !device.online || !state.server.online;
+  }
+
   view.revision.textContent = replica?.revision ?? '—';
 
   renderGroupList(key);
@@ -1391,7 +1473,12 @@ function renderIdentityDirectory() {
       row.className = 'directory-identity';
 
       const heading = document.createElement('strong');
-      heading.textContent = `Identity ${identity.id}`;
+      heading.textContent = identity.mock_account
+        ? `Identity ${identity.id} · Test account ${identity.mock_account}`
+        : `Identity ${identity.id}`;
+
+      if (identity.merged_into) heading.textContent += ` · merged into ${identity.merged_into}`;
+
       row.append(heading);
 
       for (const device of identity.devices) {

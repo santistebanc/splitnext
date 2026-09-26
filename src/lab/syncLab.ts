@@ -16,18 +16,40 @@ import {
   type ClientGroupSummary,
   type ClientPreferredMemberChoice,
   type ClientReplicaState,
+  type ClientStorageAdapter,
   type InvitePreview,
 } from '../client';
 import { z } from 'zod';
 import type { GroupCommand } from '../domain/commands';
 import type { CreateGroupRequest } from '../domain/groups';
-import type { IdentitySession } from '../domain/identities';
+import { createIdentifier } from '../domain/ids';
+import { identitySessionSchema, type IdentitySession } from '../domain/identities';
 import { revisionAnnouncementSchema } from '../domain/realtime';
 import { groupSnapshotSchema, type GroupSnapshot } from '../domain/sync';
 import type { IdentityDirectoryInspection } from '../identityDirectory';
 
 /** A generated key; devices are added and removed at will. */
 export type LabDeviceKey = string;
+
+export type PersistedLabDevice = {
+  key: LabDeviceKey;
+  label: string;
+  secret: string;
+  registered: boolean;
+  mock_account_name: string | null;
+  online: boolean;
+  selected_group_id: string | null;
+};
+
+export const persistedLabDevicesSchema = z.array(z.object({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  secret: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  online: z.boolean(),
+  registered: z.boolean(),
+  mock_account_name: z.string().nullable(),
+  selected_group_id: z.string().nullable(),
+}));
 
 type LabFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -77,6 +99,7 @@ export type LabDevice = {
   realtimeStatus: LabRealtimeStatus;
   realtimeEvents: LabRealtimeEvent[];
   session: IdentitySession | null;
+  mockAccountName: string | null;
   /** Every group this device's identity can access, active ones first. */
   groups: ClientGroupSummary[];
   selectedGroupId: string | null;
@@ -116,6 +139,52 @@ type DeviceRuntime = {
   client: SplitnextSyncClient;
 };
 
+/** Browser-only persistence for tester replicas; production clients should use IndexedDB or SQLite. */
+export class LocalStorageLabClientStorage implements ClientStorageAdapter {
+  private tail: Promise<void> = Promise.resolve();
+
+  constructor(private readonly deviceKey: string) {}
+
+  read(): Promise<string | null> {
+    return this.exclusive(() => localStorage.getItem(this.storageKey()));
+  }
+
+  update<T>(
+    change: (current: string | null) => { serialized: string; result: T },
+  ): Promise<T> {
+    return this.exclusive(() => {
+      const updated = change(localStorage.getItem(this.storageKey()));
+      localStorage.setItem(this.storageKey(), updated.serialized);
+
+      return updated.result;
+    });
+  }
+
+  clear(): void {
+    localStorage.removeItem(this.storageKey());
+  }
+
+  private storageKey(): string {
+    return `splitnext.tester.replica.${this.deviceKey}`;
+  }
+
+  private async exclusive<T>(operation: () => T): Promise<T> {
+    const previous = this.tail;
+    let release: () => void = () => undefined;
+
+    this.tail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+
+    try {
+      return operation();
+    } finally {
+      release();
+    }
+  }
+}
+
 type LabSocket = { drop(reason: string): void };
 
 type ClientRequestEvent = Extract<ClientTransportEvent, { kind: 'request' }>;
@@ -132,6 +201,9 @@ export type SyncLabOptions = {
   fetch?: LabFetch;
   webSocket?: RealtimeSocketFactory;
   createDeviceSecret?: () => string;
+  storageForDevice?: (key: LabDeviceKey) => ClientStorageAdapter;
+  clearDeviceStorage?: (key: LabDeviceKey) => void;
+  onDevicesChanged?: (devices: PersistedLabDevice[]) => void;
   now?: () => Date;
   onChange?: (state: SyncLabState) => void;
 };
@@ -159,6 +231,9 @@ export class SyncLab {
   private readonly fetch: LabFetch;
   private readonly webSocket: RealtimeSocketFactory;
   private readonly createDeviceSecret: () => string;
+  private readonly storageForDevice: (key: LabDeviceKey) => ClientStorageAdapter;
+  private readonly clearDeviceStorage: (key: LabDeviceKey) => void;
+  private readonly onDevicesChanged: (devices: PersistedLabDevice[]) => void;
   private readonly now: () => Date;
   private readonly onChange: (state: SyncLabState) => void;
   private readonly runtimes = new Map<LabDeviceKey, DeviceRuntime>();
@@ -171,6 +246,9 @@ export class SyncLab {
     this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.webSocket = options.webSocket ?? browserWebSocket;
     this.createDeviceSecret = options.createDeviceSecret ?? generateDeviceSecret;
+    this.storageForDevice = options.storageForDevice ?? (() => new MemoryClientStorage());
+    this.clearDeviceStorage = options.clearDeviceStorage ?? (() => undefined);
+    this.onDevicesChanged = options.onDevicesChanged ?? (() => undefined);
     this.now = options.now ?? (() => new Date());
     this.onChange = options.onChange ?? (() => undefined);
     this.systemApi = new SplitnextClient({
@@ -186,27 +264,137 @@ export class SyncLab {
     ]);
   }
 
-  /**
-   * Adds a freshly installed device. Like an app's first launch, it generates
-   * a device secret and registers an anonymous identity right away.
-   */
-  async addDevice(): Promise<LabDeviceKey> {
+  /** Installs a fresh device. The caller may initialize its guest identity after installation. */
+  installDevice(): LabDeviceKey {
     this.devicesAdded += 1;
 
     const key = `device-${this.devicesAdded}`;
 
     this.state.devices[key] = newDevice(`Device ${this.devicesAdded}`);
+    this.runtime(key);
     this.changed();
 
-    try {
-      this.device(key).session = await this.runtime(key).client.initializeIdentity();
-      await this.refreshGroupList(key);
-    } finally {
-      await this.refreshServer();
-      this.changed();
+    return key;
+  }
+
+  /** Convenience for tests that need a fresh anonymous identity immediately. */
+  async addDevice(): Promise<LabDeviceKey> {
+    const key = this.installDevice();
+
+    if (this.device(key).online && this.state.server.online) {
+      await this.createAnonymousIdentity(key);
     }
 
     return key;
+  }
+
+  async createAnonymousIdentity(key: LabDeviceKey): Promise<IdentitySession> {
+    const device = this.device(key);
+
+    if (!device.online || !this.state.server.online) {
+      throw new TypeError('device_or_server_offline');
+    }
+
+    if (device.session) throw new TypeError('device_already_registered');
+
+    device.session = await this.runtime(key).client.initializeIdentity();
+    await this.finishDeviceSignIn(key);
+
+    return device.session;
+  }
+
+  async signInWithMockAccount(
+    key: LabDeviceKey,
+    accountName: string,
+  ): Promise<IdentitySession> {
+    const device = this.device(key);
+    const normalizedAccount = accountName.trim().toLocaleLowerCase('en-US');
+
+    if (!device.online || !this.state.server.online) {
+      throw new TypeError('device_or_server_offline');
+    }
+
+    if (!normalizedAccount) throw new TypeError('account_name_required');
+
+    const { secret } = this.runtime(key);
+    const path = '/debug/auth/mock/sign-in';
+
+    const exchange = {
+      request_id: createIdentifier(),
+      method: 'POST',
+      path,
+      body: { account_name: normalizedAccount, device_secret: secret },
+      commands: [],
+    };
+
+    const startedAt = performance.now();
+
+    this.onRequest(key, { ...exchange, kind: 'request' });
+
+    let response: Response;
+
+    try {
+      response = await this.fetch(`${this.baseUrl}${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(exchange.body),
+      });
+    } catch (cause) {
+      this.onNetworkError(key, {
+        ...exchange,
+        kind: 'network_error',
+        error: cause instanceof Error ? cause : new Error(String(cause)),
+        duration_ms: performance.now() - startedAt,
+      });
+
+      throw cause;
+    }
+
+    const responseBody: JsonValue = z.json().parse(
+      await response.json().catch(() => null),
+    );
+
+    this.onResponse(key, {
+      ...exchange,
+      kind: 'response',
+      status: response.status,
+      response: responseBody,
+      outcomes: [],
+      duration_ms: performance.now() - startedAt,
+    });
+
+    if (!response.ok) {
+      const errorBody = z.object({ error: z.string() }).safeParse(responseBody);
+
+      throw new TypeError(
+        errorBody.success
+          ? errorBody.data.error
+          : `mock_sign_in_failed_${response.status}`,
+      );
+    }
+
+    const session = identitySessionSchema.parse(responseBody);
+
+    device.session = await this.runtime(key).client.adoptIdentitySession(session);
+    device.mockAccountName = normalizedAccount;
+    await this.finishDeviceSignIn(key);
+
+    return device.session;
+  }
+
+  private async finishDeviceSignIn(key: LabDeviceKey): Promise<void> {
+    const device = this.device(key);
+    const runtime = this.runtime(key);
+
+    try {
+      await this.refreshGroupList(key);
+    } catch {
+      // Saved local replicas remain usable for inspection after server reset.
+      device.groups = await runtime.client.knownGroups();
+    }
+
+    await this.refreshServer();
+    this.changed();
   }
 
   /**
@@ -219,8 +407,86 @@ export class SyncLab {
     this.unwatchAll(key);
     runtime?.client.setOnline(false);
     this.runtimes.delete(key);
+    this.clearDeviceStorage(key);
     delete this.state.devices[key];
+    this.persistDevices();
     this.changed();
+  }
+
+  /** Restores tester devices, credentials, and local replicas after reload. */
+  async restoreDevices(saved: PersistedLabDevice[]): Promise<void> {
+    for (const savedDevice of saved) {
+      if (this.state.devices[savedDevice.key]) continue;
+
+      this.devicesAdded = Math.max(
+        this.devicesAdded,
+        Number(savedDevice.label.replace(/\D/g, '')) || 0,
+      );
+      this.state.devices[savedDevice.key] = newDevice(savedDevice.label);
+      const runtime = this.runtime(savedDevice.key, savedDevice.secret);
+      const device = this.device(savedDevice.key);
+      device.online = savedDevice.online;
+      runtime.client.setOnline(device.online);
+      device.mockAccountName = savedDevice.mock_account_name;
+
+      if (device.online && this.state.server.online) {
+        try {
+          device.session = await runtime.client.initializeIdentity();
+          device.groups = await runtime.client.knownGroups();
+        } catch {
+          // A device can still open with cached local data when the server is down.
+          device.groups = await runtime.client.knownGroups();
+        }
+      } else if (savedDevice.registered) {
+        try {
+          device.session = await runtime.client.initializeIdentity();
+        } catch {
+          // Preserve the cached session even when the device is offline.
+        }
+
+        device.groups = await runtime.client.knownGroups();
+      }
+
+      device.selectedGroupId = savedDevice.selected_group_id;
+
+      if (device.selectedGroupId) {
+        device.replica = await runtime.client.inspect(device.selectedGroupId);
+
+        if (!device.replica) device.selectedGroupId = null;
+      }
+    }
+
+    await this.refreshServer();
+    this.persistDevices();
+    this.changed();
+  }
+
+  /** Clears every simulated device and its local replica storage. */
+  clearDevices(): void {
+    for (const key of this.deviceKeys()) this.removeDevice(key);
+
+    this.devicesAdded = 0;
+    this.persistDevices();
+    this.changed();
+  }
+
+  persistedDevices(): PersistedLabDevice[] {
+    return this.deviceKeys().flatMap((key) => {
+      const device = this.device(key);
+      const runtime = this.runtimes.get(key);
+
+      return runtime
+        ? [{
+            key,
+            label: device.label,
+            secret: runtime.secret,
+            online: device.online,
+            registered: device.session !== null,
+            mock_account_name: device.mockAccountName,
+            selected_group_id: device.selectedGroupId,
+          }]
+        : [];
+    });
   }
 
   async createGroup(
@@ -318,7 +584,17 @@ export class SyncLab {
     this.runtimes.get(key)?.client.setOnline(device.online);
     this.changed();
 
-    if (device.online) await this.deliverOutboxes(key);
+    if (device.online && this.state.server.online) {
+      try {
+        device.session = await this.runtime(key).client.initializeIdentity();
+        await this.finishDeviceSignIn(key);
+      } catch {
+        // Continue with cached identity and local state when reconnect is partial.
+        await this.deliverOutboxes(key);
+      }
+    } else if (device.online) {
+      await this.deliverOutboxes(key);
+    }
   }
 
   /** Realtime can be disabled to show that a reconnect still catches up. */
@@ -361,6 +637,24 @@ export class SyncLab {
 
     this.changed();
     await Promise.all(
+      this.deviceKeys().flatMap((key) => {
+        const device = this.device(key);
+
+        if (!device.online) return [];
+
+        return [
+          (async () => {
+            try {
+              device.session = await this.runtime(key).client.initializeIdentity();
+              await this.finishDeviceSignIn(key);
+            } catch {
+              // Keep this device available if registration is temporarily unavailable.
+            }
+          })(),
+        ];
+      }),
+    );
+    await Promise.all(
       this.deviceKeys().flatMap((key) =>
         this.device(key).online ? [this.deliverOutboxes(key)] : [],
       ),
@@ -384,10 +678,9 @@ export class SyncLab {
       await response.json(),
     );
 
-    for (const key of this.deviceKeys()) this.removeDevice(key);
+    for (const socket of this.sockets) socket.drop('server_reset');
 
     this.sockets.clear();
-    this.devicesAdded = 0;
     this.state.inspectedGroupId = null;
     this.state.server.groups = [];
     this.state.server.revision = null;
@@ -505,13 +798,13 @@ export class SyncLab {
     this.changed();
   }
 
-  private runtime(key: LabDeviceKey): DeviceRuntime {
+  private runtime(key: LabDeviceKey, restoredSecret?: string): DeviceRuntime {
     const existing = this.runtimes.get(key);
 
     if (existing) return existing;
 
     const device = this.device(key);
-    const secret = this.createDeviceSecret();
+    const secret = restoredSecret ?? this.createDeviceSecret();
 
     const api = new SplitnextClient({
       baseUrl: this.baseUrl,
@@ -530,7 +823,7 @@ export class SyncLab {
     const client = new SplitnextSyncClient({
       api,
       device_secret: secret,
-      storage: new MemoryClientStorage(),
+      storage: this.storageForDevice(key),
       realtime_reconnect_delay_ms: (attempt) => Math.min(250 * 2 ** attempt, 4000),
       // Every watched group refreshes in the background; the group list shows
       // their names, and the selected one is also shown in full.
@@ -995,7 +1288,12 @@ export class SyncLab {
   }
 
   private changed(): void {
+    this.persistDevices();
     this.onChange(this.state);
+  }
+
+  private persistDevices(): void {
+    this.onDevicesChanged(this.persistedDevices());
   }
 }
 
@@ -1004,6 +1302,8 @@ const identityDirectoryInspectionSchema = z.object({
     z.object({
       id: z.string(),
       created_at: z.string(),
+      mock_account: z.string().nullable(),
+      merged_into: z.string().optional(),
       devices: z.array(
         z.object({
           id: z.string(),
@@ -1044,6 +1344,7 @@ function newDevice(label: string): LabDevice {
     realtimeStatus: 'off',
     realtimeEvents: [],
     session: null,
+    mockAccountName: null,
     groups: [],
     selectedGroupId: null,
     replica: null,

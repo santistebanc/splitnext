@@ -36,6 +36,7 @@
       <section class="setup">
         <div class="setup-toolbar">
           <button id="add-device" type="button">Add device</button>
+          <button id="clear-devices" class="text-button" type="button">Clear devices</button>
           <span id="setup-summary">Add a device to begin.</span>
         </div>
       </section>
@@ -87,7 +88,14 @@
               <button class="icon-button danger-text" data-action="leave" type="button" title="Leave this group" aria-label="Leave this group"><svg class="icon" aria-hidden="true"><use href="#icon-leave"></use></svg></button>
             </div>
           </header>
-          <div class="identity-line" data-role="identity">Not initialized</div>
+          <div class="identity-line" data-role="identity">Not signed in</div>
+
+          <section class="auth-panel" data-role="auth-panel">
+            <form data-action-form="mock-sign-in">
+              <input data-role="mock-account" aria-label="Test account name" placeholder="Test account or email" autocomplete="off" required>
+              <button type="submit" title="Simulated optional account sign-in; this guest's groups will merge into the account">Link test account</button>
+            </form>
+          </section>
 
           <nav class="group-tabs" aria-label="Groups">
             <div class="tab-strip" data-role="group-list" role="tablist"></div>

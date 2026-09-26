@@ -61,6 +61,14 @@ export const auditChangeSchema = z.discriminatedUnion('action', [
     after: groupAccessGrantSchema,
   }),
   z.object({
+    action: z.literal('identity.merged'),
+    before: z.object({
+      guest: groupAccessGrantSchema,
+      account: groupAccessGrantSchema.nullable(),
+    }),
+    after: groupAccessGrantSchema,
+  }),
+  z.object({
     action: z.literal('group.left'),
     before: groupAccessGrantSchema,
     after: groupAccessGrantSchema,
