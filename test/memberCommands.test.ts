@@ -2,9 +2,12 @@ import { exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createIdentifier, identifierSchema } from '../src/domain/ids';
+import { createInviteToken } from '../src/domain/invites';
 import { applyTestMigrations } from './harness';
 
-const identitySchema = z.object({ identity: z.object({ id: identifierSchema }) });
+const identitySchema = z.object({
+  identity: z.object({ id: identifierSchema }),
+});
 
 const createdGroupSchema = z.object({
   group: z.object({ id: identifierSchema, revision: z.number() }),
@@ -202,8 +205,8 @@ async function createGroupFixture(seed: string) {
       body: JSON.stringify({
         group_id: createIdentifier(),
         name: 'Berlin flat',
-        currency_code: 'EUR',
         creator_member_name: 'Santi',
+        invite: { invite_id: createIdentifier(), token: createInviteToken() },
       }),
     },
   );

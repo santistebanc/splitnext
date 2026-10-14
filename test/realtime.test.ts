@@ -12,7 +12,7 @@ import { RealtimeSubscriptions } from '../src/client/realtime';
 import { createIdentifier } from '../src/domain/ids';
 import {
   realtimeProtocols,
-  revisionAnnouncementSchema,
+  realtimeAnnouncementSchema,
 } from '../src/domain/realtime';
 import {
   applyTestMigrations,
@@ -29,6 +29,34 @@ beforeAll(async () => {
 afterEach(() => settleWorkerSockets());
 
 describe('realtime revision announcements', () => {
+  it('reports one presence per identity until its last tab disconnects without changing revisions', async () => {
+    const { groupId, creator, joiner } = await createSharedGroup();
+    const state = await creator.client.inspect(groupId);
+    const memberId = state.projected_snapshot?.members[0]?.id;
+
+    if (!memberId) throw new Error('creator_member_missing');
+    await joiner.client.selectPreferredMember(groupId, memberId);
+    const creatorId = state.session?.identity.id;
+
+    const joinerId = (await joiner.client.inspect(groupId)).session?.identity
+      .id;
+
+    if (!creatorId || !joinerId) throw new Error('identity_missing');
+
+    const first = await subscribe(groupId, creator.secret);
+    const second = await subscribe(groupId, creator.secret);
+    const other = await subscribe(groupId, joiner.secret);
+    const both = [creatorId, joinerId].sort();
+
+    await expect.poll(() => first.presences.at(-1)).toEqual(both);
+    second.close();
+    await expect.poll(() => other.presences.at(-1)).toEqual(both);
+    first.close();
+    await expect.poll(() => other.presences.at(-1)).toEqual([joinerId]);
+    expect(other.revisions).toEqual([4]);
+    expect((await creator.client.syncGroup(groupId)).revision).toBe(4);
+    other.close();
+  });
   it('announces the current revision on connect and after applied changes only', async () => {
     const { groupId, creator, joiner } = await createSharedGroup();
     const subscription = await subscribe(groupId, creator.secret);
@@ -87,9 +115,9 @@ describe('realtime revision announcements', () => {
     await joiner.client.leaveGroup(groupId);
 
     await expect.poll(() => subscription.closeCodes).toEqual([4403]);
-    expect((await upgrade(groupId, realtimeProtocols(joiner.secret))).status).toBe(
-      403,
-    );
+    expect(
+      (await upgrade(groupId, realtimeProtocols(joiner.secret))).status,
+    ).toBe(403);
   });
 });
 
@@ -131,7 +159,8 @@ describe('realtime client synchronization', () => {
 
     const { groupId, creator, joiner } = await createSharedGroup({
       creatorTransport: (api) => ({
-        createAnonymousIdentity: (secret) => api.createAnonymousIdentity(secret),
+        createAnonymousIdentity: (secret) =>
+          api.createAnonymousIdentity(secret),
         forDevice: (secret) => {
           const device = api.forDevice(secret);
 
@@ -139,8 +168,7 @@ describe('realtime client synchronization', () => {
             currentIdentity: () => device.currentIdentity(),
             createGroup: (input) => device.createGroup(input),
             joinGroup: (id, input) => device.joinGroup(id, input),
-            createInvite: (id, input) => device.createInvite(id, input),
-            revokeInvite: (id, inviteId) => device.revokeInvite(id, inviteId),
+            regenerateInvite: (id, input) => device.regenerateInvite(id, input),
             previewInvite: (id, token) => device.previewInvite(id, token),
             listGroups: () => device.listGroups(),
             syncGroup: (id, input) => {
@@ -189,6 +217,49 @@ describe('realtime client synchronization', () => {
 });
 
 describe('realtime subscriptions', () => {
+  it('clears presence on disconnect and ignores old connections and malformed messages', () => {
+    const connections: RealtimeSocketHandlers[] = [];
+    const changes: string[] = [];
+
+    const subscriptions = new RealtimeSubscriptions({
+      connect: (_groupId, handlers) => {
+        connections.push(handlers);
+
+        return { close: () => undefined };
+      },
+      onAnnouncement: () => undefined,
+      onPresenceChange: (groupId) => changes.push(groupId),
+      reconnectDelayMs: () => 60_000,
+    });
+
+    const id = createIdentifier();
+
+    const message = JSON.stringify({
+      type: 'presence',
+      identity_ids: [id, id],
+    });
+
+    subscriptions.watch('group');
+    expect(subscriptions.presence('group')).toBeNull();
+    connections[0]?.message(message);
+    connections[0]?.message(message);
+    connections[0]?.message('{invalid');
+    expect(subscriptions.presence('group')).toEqual([id]);
+    expect(changes).toEqual(['group']);
+    subscriptions.setOnline(false);
+    connections[0]?.message(message);
+    expect(subscriptions.presence('group')).toBeNull();
+    subscriptions.setOnline(true);
+    connections[0]?.message(message);
+    expect(subscriptions.presence('group')).toBeNull();
+    connections[1]?.message(
+      JSON.stringify({ type: 'presence', identity_ids: [] }),
+    );
+    expect(subscriptions.presence('group')).toEqual([]);
+    connections[1]?.close(1006, 'network_error');
+    expect(subscriptions.presence('group')).toBeNull();
+    subscriptions.unwatch('group');
+  });
   it('reconnects after a dropped connection but not after being hidden', async () => {
     const connections: RealtimeSocketHandlers[] = [];
 
@@ -266,7 +337,6 @@ async function createSharedGroup(options: SharedGroupOptions = {}) {
 
   const created = await creator.client.createGroup({
     name: 'Berlin flat',
-    currency_code: 'EUR',
     creator_member_name: 'Santi',
   });
 
@@ -332,19 +402,24 @@ async function subscribe(groupId: string, secret: string) {
 
   const revisions: number[] = [];
   const closeCodes: number[] = [];
+  const presences: string[][] = [];
 
   const subscription = {
     response,
     revisions,
     closeCodes,
+    presences,
     close: () => socket.close(1000, 'done'),
   };
 
   socket.accept();
   socket.addEventListener('message', (event) => {
-    revisions.push(
-      revisionAnnouncementSchema.parse(JSON.parse(String(event.data))).revision,
+    const announcement = realtimeAnnouncementSchema.parse(
+      JSON.parse(String(event.data)),
     );
+
+    if (announcement.type === 'revision') revisions.push(announcement.revision);
+    else presences.push(announcement.identity_ids);
   });
   socket.addEventListener('close', (event) => {
     closeCodes.push(event.code);

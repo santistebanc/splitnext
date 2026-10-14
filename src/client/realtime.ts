@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   realtimeGroupHiddenCode,
-  revisionAnnouncementSchema,
+  realtimeAnnouncementSchema,
 } from '../domain/realtime';
 
 export type RealtimeSocketHandlers = {
@@ -52,11 +52,16 @@ type Subscription = {
   socket: RealtimeSocket | null;
   retry: ReturnType<typeof setTimeout> | null;
   attempt: number;
+  presence: string[] | null;
 };
 
 export type RealtimeSubscriptionsOptions = {
-  connect: (groupId: string, handlers: RealtimeSocketHandlers) => RealtimeSocket;
+  connect: (
+    groupId: string,
+    handlers: RealtimeSocketHandlers,
+  ) => RealtimeSocket;
   onAnnouncement: (groupId: string, revision: number) => void;
+  onPresenceChange?: (groupId: string) => void;
   reconnectDelayMs: (attempt: number) => number;
 };
 
@@ -80,6 +85,7 @@ export class RealtimeSubscriptions {
       socket: null,
       retry: null,
       attempt: 0,
+      presence: null,
     };
 
     this.subscriptions.set(groupId, subscription);
@@ -93,11 +99,18 @@ export class RealtimeSubscriptions {
     if (!subscription) return;
 
     this.subscriptions.delete(groupId);
-    this.disconnect(subscription);
+    this.disconnect(groupId, subscription);
   }
 
   isWatching(groupId: string): boolean {
     return this.subscriptions.has(groupId);
+  }
+
+  /** Null means the live roster is unavailable, never that everyone is offline. */
+  presence(groupId: string): string[] | null {
+    const presence = this.subscriptions.get(groupId)?.presence;
+
+    return presence ? [...presence] : null;
   }
 
   /** Going online reconnects immediately rather than waiting out a backoff. */
@@ -106,7 +119,7 @@ export class RealtimeSubscriptions {
 
     for (const [groupId, subscription] of this.subscriptions) {
       if (!online) {
-        this.disconnect(subscription);
+        this.disconnect(groupId, subscription);
       } else if (!subscription.connection) {
         subscription.attempt = 0;
         this.clearRetry(subscription);
@@ -130,8 +143,14 @@ export class RealtimeSubscriptions {
 
         const announcement = parseAnnouncement(data);
 
-        if (announcement) {
+        if (announcement?.type === 'revision') {
           this.options.onAnnouncement(groupId, announcement.revision);
+        } else if (announcement?.type === 'presence') {
+          this.setPresence(
+            groupId,
+            subscription,
+            [...new Set(announcement.identity_ids)].sort(),
+          );
         }
       },
       close: (code) => {
@@ -139,6 +158,7 @@ export class RealtimeSubscriptions {
 
         subscription.connection = null;
         subscription.socket = null;
+        this.setPresence(groupId, subscription, null);
 
         if (code === realtimeGroupHiddenCode) {
           this.unwatch(groupId);
@@ -153,7 +173,8 @@ export class RealtimeSubscriptions {
   }
 
   private scheduleReconnect(groupId: string, subscription: Subscription): void {
-    if (!this.online || this.subscriptions.get(groupId) !== subscription) return;
+    if (!this.online || this.subscriptions.get(groupId) !== subscription)
+      return;
 
     const delay = this.options.reconnectDelayMs(subscription.attempt);
 
@@ -167,13 +188,26 @@ export class RealtimeSubscriptions {
     }, delay);
   }
 
-  private disconnect(subscription: Subscription): void {
+  private disconnect(groupId: string, subscription: Subscription): void {
     const socket = subscription.socket;
 
     subscription.connection = null;
     subscription.socket = null;
+    this.setPresence(groupId, subscription, null);
     this.clearRetry(subscription);
     socket?.close(1000, 'unsubscribed');
+  }
+
+  private setPresence(
+    groupId: string,
+    subscription: Subscription,
+    presence: string[] | null,
+  ): void {
+    if (JSON.stringify(subscription.presence) === JSON.stringify(presence))
+      return;
+
+    subscription.presence = presence;
+    this.options.onPresenceChange?.(groupId);
   }
 
   private clearRetry(subscription: Subscription): void {
@@ -189,7 +223,7 @@ export function defaultReconnectDelayMs(attempt: number): number {
 
 function parseAnnouncement(data: string) {
   try {
-    const parsed = revisionAnnouncementSchema.safeParse(JSON.parse(data));
+    const parsed = realtimeAnnouncementSchema.safeParse(JSON.parse(data));
 
     return parsed.success ? parsed.data : null;
   } catch {

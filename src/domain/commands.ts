@@ -156,25 +156,23 @@ export type JoinTransition =
       access: GroupAccessGrant;
       nextActorNumber: number;
       audit: CommandTransition['audit'];
+      memberAlias?: MemberAlias;
     }
   | {
       ok: false;
-      error:
-        | 'member_not_found'
-        | 'member_archived'
-        | 'member_name_taken'
-        | 'member_id_exists';
+      error: 'member_not_found' | 'member_archived' | 'member_id_exists';
     };
 
 type PreferredMemberResult =
-  | { ok: true; member: LedgerMember; created: boolean }
+  | {
+      ok: true;
+      member: LedgerMember;
+      created: boolean;
+      memberAlias?: MemberAlias;
+    }
   | {
       ok: false;
-      error:
-        | 'member_not_found'
-        | 'member_archived'
-        | 'member_name_taken'
-        | 'member_id_exists';
+      error: 'member_not_found' | 'member_archived' | 'member_id_exists';
     };
 
 type MemberCreationDecision =
@@ -258,7 +256,7 @@ export function applyGroupJoin(
       )
     : [...snapshot.access_grants, access];
 
-  return {
+  const transition: JoinTransition = {
     ok: true,
     changed,
     snapshot: {
@@ -288,6 +286,10 @@ export function applyGroupJoin(
             },
           },
   };
+
+  if (preferred.memberAlias) transition.memberAlias = preferred.memberAlias;
+
+  return transition;
 }
 
 export function applyGroupCommand(
@@ -306,7 +308,11 @@ export function applyGroupCommand(
     case 'member.archive':
       return applyMemberArchive(snapshot, command, appliedAt);
     case 'preference.set':
-      return applyPreferredMember(snapshot, identityId, command.payload.member_id);
+      return applyPreferredMember(
+        snapshot,
+        identityId,
+        command.payload.member_id,
+      );
     case 'group.leave':
       return applyGroupLeave(snapshot, identityId, appliedAt);
   }
@@ -570,7 +576,9 @@ function applyPreferredMember(
 
   if (!access) return rejected(snapshot, target, 'access_not_found');
 
-  const member = snapshot.members.find((candidate) => candidate.id === memberId);
+  const member = snapshot.members.find(
+    (candidate) => candidate.id === memberId,
+  );
 
   if (!member) return rejected(snapshot, target, 'member_not_found');
 
@@ -779,13 +787,19 @@ function resolvePreferredMember(
 
   const requestedNameKey = memberNameKey(choice.display_name);
 
-  const nameIsTaken = members.some(
+  const existing = members.find(
     (member) =>
       member.status === 'active' &&
       memberNameKey(member.display_name) === requestedNameKey,
   );
 
-  if (nameIsTaken) return { ok: false, error: 'member_name_taken' };
+  if (existing)
+    return {
+      ok: true,
+      member: existing,
+      created: false,
+      memberAlias: { alias_id: choice.member_id, member_id: existing.id },
+    };
 
   return {
     ok: true,

@@ -2,13 +2,14 @@ import { exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createIdentifier, identifierSchema } from '../src/domain/ids';
+import { createInviteToken, groupInviteSchema } from '../src/domain/invites';
 import { applyTestMigrations, fetchOpenApiDocument } from './harness';
 
 const createdGroupSchema = z.object({
-  group: z.object({
+  invite: groupInviteSchema,
+  group: z.strictObject({
     id: identifierSchema,
     name: z.string(),
-    currency_code: z.string(),
     created_at: z.iso.datetime(),
     revision: z.number().int(),
   }),
@@ -33,7 +34,7 @@ beforeAll(async () => {
 });
 
 describe('group creation API', () => {
-  it('atomically creates a group, initial member, and creator access', async () => {
+  it('atomically creates a group, initial member, creator access, and usable invite', async () => {
     const session = await createIdentity('c');
     const input = newGroupInput();
     const response = await createGroup(session.deviceSecret, input);
@@ -43,7 +44,6 @@ describe('group creation API', () => {
     expect(created.group).toMatchObject({
       id: input.group_id,
       name: input.name,
-      currency_code: 'EUR',
       revision: 1,
     });
     expect(created.member).toMatchObject({
@@ -57,6 +57,30 @@ describe('group creation API', () => {
       granted_at: created.group.created_at,
       hidden_at: null,
     });
+    expect(created.invite).toEqual({
+      id: input.invite.invite_id,
+      token: input.invite.token,
+      created_by_identity_id: session.identityId,
+      created_at: created.group.created_at,
+    });
+
+    const preview = await exports.default.fetch(
+      `https://splitnext.test/groups/${input.group_id}/invite/preview`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer v1.${session.deviceSecret}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ token: input.invite.token }),
+      },
+    );
+
+    expect(preview.status).toBe(200);
+    expect(await preview.json()).toMatchObject({
+      group: { id: input.group_id },
+      members: [{ display_name: 'Santi' }],
+    });
   });
 
   it('returns the original result when creation is retried', async () => {
@@ -69,6 +93,95 @@ describe('group creation API', () => {
     expect(first.status).toBe(201);
     expect(repeated.status).toBe(201);
     expect(await repeated.json()).toEqual(await first.json());
+  });
+
+  it('requires an initial invite and creates no partial group on invalid input', async () => {
+    const session = await createIdentity('j');
+    const input = newGroupInput();
+
+    for (const invite of [undefined, { ...input.invite, token: 'invalid' }]) {
+      const response = await exports.default.fetch(
+        'https://splitnext.test/groups',
+        {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer v1.${session.deviceSecret}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ ...input, invite }),
+        },
+      );
+
+      expect(response.status).toBe(400);
+    }
+
+    const state = await exports.default.fetch(
+      `https://splitnext.test/debug/groups/${input.group_id}`,
+    );
+
+    expect(state.status).toBe(404);
+  });
+
+  it('rejects a changed creation token and never restores the initial link after rotation', async () => {
+    const session = await createIdentity('k');
+    const input = newGroupInput();
+    const first = await createGroup(session.deviceSecret, input);
+    const original = await first.json();
+
+    const changed = await createGroup(session.deviceSecret, {
+      ...input,
+      invite: { ...input.invite, token: createInviteToken() },
+    });
+
+    expect(changed.status).toBe(409);
+
+    const replacement = {
+      invite_id: createIdentifier(),
+      token: createInviteToken(),
+    };
+
+    const headers = {
+      authorization: `Bearer v1.${session.deviceSecret}`,
+      'content-type': 'application/json',
+    };
+
+    const rotated = await exports.default.fetch(
+      `https://splitnext.test/groups/${input.group_id}/invite`,
+      {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(replacement),
+      },
+    );
+
+    expect(rotated.status).toBe(200);
+
+    const retry = await createGroup(session.deviceSecret, input);
+    expect(await retry.json()).toEqual(original);
+
+    for (const [token, status] of [
+      [input.invite.token, 403],
+      [replacement.token, 200],
+    ] as const) {
+      const preview = await exports.default.fetch(
+        `https://splitnext.test/groups/${input.group_id}/invite/preview`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ token }),
+        },
+      );
+
+      expect(preview.status).toBe(status);
+    }
+
+    const state = await exports.default.fetch(
+      `https://splitnext.test/debug/groups/${input.group_id}`,
+    );
+
+    const persisted = await state.text();
+    expect(persisted.includes(input.invite.token)).toBe(false);
+    expect(persisted.includes(replacement.token)).toBe(true);
   });
 
   it('exposes the authoritative snapshot to the local sync lab', async () => {
@@ -124,7 +237,7 @@ describe('group creation API', () => {
 
   it('rejects invalid creation input', async () => {
     const session = await createIdentity('h');
-    const input = { ...newGroupInput(), currency_code: 'EURO' };
+    const input = { ...newGroupInput(), name: '   ' };
     const response = await createGroup(session.deviceSecret, input);
 
     expect(response.status).toBe(400);
@@ -164,14 +277,14 @@ function newGroupInput() {
   return {
     group_id: createIdentifier(),
     name: 'Berlin flat',
-    currency_code: 'eur',
     creator_member_name: 'Santi',
+    invite: { invite_id: createIdentifier(), token: createInviteToken() },
   };
 }
 
 function createGroup(
   deviceSecret: string,
-  input: Record<string, string>,
+  input: ReturnType<typeof newGroupInput>,
 ) {
   return exports.default.fetch('https://splitnext.test/groups', {
     method: 'POST',

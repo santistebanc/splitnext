@@ -5,12 +5,11 @@ import type {
 } from './domain/groups';
 import type { GroupSnapshot } from './domain/sync';
 
-type IndexedGroup = Pick<GroupDetails, 'id' | 'name' | 'currency_code'>;
+type IndexedGroup = Pick<GroupDetails, 'id' | 'name'>;
 
 type GroupAccessRow = {
   group_id: string;
   group_name: string;
-  currency_code: string;
   granted_at: string;
   hidden_at: string | null;
 };
@@ -42,22 +41,19 @@ export class GroupIndex {
     await this.database
       .prepare(
         `INSERT INTO identity_group_access (
-           identity_id, group_id, group_name, currency_code, granted_at, hidden_at
+           identity_id, group_id, group_name, granted_at, hidden_at
          )
-         VALUES (?, ?, ?, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?)
          ON CONFLICT (identity_id, group_id) DO UPDATE SET
            group_name = excluded.group_name,
-           currency_code = excluded.currency_code,
            hidden_at = excluded.hidden_at
          WHERE group_name IS NOT excluded.group_name
-            OR currency_code IS NOT excluded.currency_code
             OR hidden_at IS NOT excluded.hidden_at`,
       )
       .bind(
         access.identity_id,
         group.id,
         group.name,
-        group.currency_code,
         access.granted_at,
         access.hidden_at,
       )
@@ -68,7 +64,7 @@ export class GroupIndex {
   async list(identityId: string): Promise<AccessibleGroup[]> {
     const { results } = await this.database
       .prepare(
-        `SELECT group_id, group_name, currency_code, granted_at, hidden_at
+        `SELECT group_id, group_name, granted_at, hidden_at
          FROM identity_group_access
          WHERE identity_id = ?
          ORDER BY hidden_at IS NOT NULL, group_name COLLATE NOCASE, group_id`,
@@ -79,7 +75,6 @@ export class GroupIndex {
     return results.map((row) => ({
       group_id: row.group_id,
       name: row.group_name,
-      currency_code: row.currency_code,
       status: row.hidden_at ? 'left' : 'active',
       granted_at: row.granted_at,
       left_at: row.hidden_at,

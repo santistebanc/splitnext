@@ -176,7 +176,6 @@ async function createSharedGroup(
 
   const created = await offline.client.createGroup({
     name: 'Berlin flat',
-    currency_code: 'EUR',
     creator_member_name: 'Santi',
   });
 

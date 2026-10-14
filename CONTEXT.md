@@ -22,9 +22,16 @@ _Avoid_: Membership, member access
 A stable, group-local label such as “User 6” assigned to an access identity.
 _Avoid_: Username, member name
 
+**Participant presence**:
+Whether an access identity is currently connected to a group, independent of
+its permanent access or preferred-member choice.
+_Avoid_: Membership, attendance, ownership
+
 **Group invite**:
-A group's current reusable link that issues permanent group access grants
-until it expires, is revoked, or is replaced.
+A group's single reusable link that issues permanent group access grants.
+Every participant can copy or share the same current link.
+It has no time limit; changing it replaces the token and invalidates the old
+link while leaving previously granted access intact.
 _Avoid_: Access grant, individual invite
 
 **Invite preview**:
@@ -51,6 +58,22 @@ _Avoid_: Claimed member, owned member
 **Archived member**:
 A ledger member no longer available for new activity but retained for history.
 _Avoid_: Deleted member
+
+## Money
+
+**Expense currency**:
+The currency in which an expense's original amount and allocations are recorded.
+A group may contain expenses in several currencies.
+_Avoid_: Group currency, global currency, display currency
+
+**Currency balance**:
+A ledger member's net amount owed or owing in one currency, after expenses and
+recorded settlements in that currency.
+_Avoid_: Converted balance, combined balance
+
+**Settlement**:
+A recorded repayment between ledger members in a specified currency.
+_Avoid_: Payment execution, currency conversion
 
 ## Synchronization and history
 
@@ -91,3 +114,16 @@ _Avoid_: Push update, realtime event
 An immutable historical record of an applied transition, including its actor,
 time, target, and before and after state.
 _Avoid_: Sync event
+
+## App interaction
+
+**App action**:
+A named thing a person can do in the app, such as adding a member or replacing
+the invite link, invoked the same way by any caller. An app action may submit a
+command, make a direct request, or only change what this installation shows.
+_Avoid_: Command (for this sense), handler, intent
+
+**Confirmation**:
+A person's explicit approval of an app action whose effects others notice or
+cannot easily undo, given before it runs.
+_Avoid_: Prompt, dialog

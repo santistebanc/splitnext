@@ -35,7 +35,6 @@ export const debugRoutes = new OpenAPIHono<{ Bindings: Env }>()
           ? {
               group_id: groupId,
               name: inspection.snapshot.group.name,
-              currency_code: inspection.snapshot.group.currency_code,
               revision: inspection.revision,
             }
           : null;
@@ -88,6 +87,6 @@ export const debugRoutes = new OpenAPIHono<{ Bindings: Env }>()
     return context.json({ cleared_group_ids: groupIds }, 200);
   });
 
-function debugEnabled(env: Env): boolean {
+export function debugEnabled(env: Env): boolean {
   return String(env.ENABLE_DEBUG_INSPECTION) === 'true';
 }

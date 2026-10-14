@@ -5,8 +5,12 @@ import {
   MemoryClientStorage,
   SplitnextClient,
   SplitnextSyncClient,
+  type ClientTransportEvent,
 } from '../src/client';
+import { createGroupRequestSchema } from '../src/domain/groups';
+import { hashInviteToken } from '../src/domain/invites';
 import { applyTestMigrations, joinThroughInvite } from './harness';
+import { createdGroupSchema } from '../src/domain/groups';
 
 beforeAll(async () => {
   await applyTestMigrations();
@@ -20,7 +24,6 @@ describe('stateful offline client SDK', () => {
 
     const created = await client.createGroup({
       name: 'Berlin flat',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -43,6 +46,55 @@ describe('stateful offline client SDK', () => {
     expect(synchronized.confirmed_snapshot?.members).toHaveLength(2);
   });
 
+  it('preserves the creation invite when sync arrives before creation confirmation', async () => {
+    const api = new SplitnextClient({
+      baseUrl: 'https://splitnext.test',
+      fetch: async (input, init) => {
+        const response = await exports.default.fetch(input, init);
+
+        if (new URL(input).pathname === '/groups' && init?.method === 'POST') {
+          const created = createdGroupSchema.parse(
+            await response.clone().json(),
+          );
+
+          // Background discovery can synchronize a group while its creation
+          // response is still on the way to the creating installation.
+          await client.syncGroup(created.group.id);
+        }
+
+        return response;
+      },
+    });
+
+    const client = new SplitnextSyncClient({
+      api,
+      device_secret: 'b'.repeat(43),
+      storage: new MemoryClientStorage(),
+    });
+
+    await client.initializeIdentity();
+
+    const created = await client.createGroup({
+      name: 'Background discovery',
+      creator_member_name: 'Santi',
+    });
+
+    expect(created.projected_snapshot?.invite).not.toBeNull();
+    expect(created.projected_snapshot?.invite.id).toBe(
+      created.confirmed_snapshot?.invite?.id,
+    );
+
+    if (!created.projected_snapshot?.invite)
+      throw new Error('Expected the creation invite');
+
+    const preview = await client.previewInvite(
+      created.group_id,
+      created.projected_snapshot.invite.token,
+    );
+
+    expect(preview.group.name).toBe('Background discovery');
+  });
+
   it('retains simultaneous offline commands', async () => {
     const client = createSyncClient('S');
 
@@ -50,7 +102,6 @@ describe('stateful offline client SDK', () => {
 
     const created = await client.createGroup({
       name: 'Berlin flat',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -108,7 +159,6 @@ describe('stateful offline client SDK', () => {
 
     const created = await client.createGroup({
       name: 'Berlin flat',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -139,7 +189,6 @@ describe('stateful offline client SDK', () => {
 
     const created = await editor.createGroup({
       name: 'Berlin flat',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -153,11 +202,7 @@ describe('stateful offline client SDK', () => {
     await other.renameGroup(created.group_id, 'Their name');
     await editor.syncGroup(created.group_id);
 
-    const renamed = await editor.renameGroup(
-      created.group_id,
-      'My name',
-      seen,
-    );
+    const renamed = await editor.renameGroup(created.group_id, 'My name', seen);
 
     expect(renamed.projected_snapshot?.group.name).toBe('Their name');
     expect(renamed.notices).toMatchObject([
@@ -174,7 +219,6 @@ describe('stateful offline client SDK', () => {
 
     const created = await first.createGroup({
       name: 'Berlin flat',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -220,7 +264,6 @@ describe('stateful offline client SDK', () => {
 
     const created = await client.createGroup({
       name: 'Berlin flat',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -302,7 +345,6 @@ describe('stateful offline client SDK', () => {
 
     const created = await client.createGroup({
       name: 'Berlin flat',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -320,18 +362,37 @@ describe('stateful offline client SDK', () => {
     expect(retried.projected_snapshot?.members).toHaveLength(2);
   });
 
-  it('reuses the client-generated group id after a creation response is lost', async () => {
+  it('reuses the group id and usable initial link after a lost response and reload', async () => {
     let loseCreationResponse = false;
+
+    const requests: {
+      group_id: string;
+      invite_id: string;
+      token_hash: string;
+    }[] = [];
+
+    const diagnostics: ClientTransportEvent[] = [];
+    const storage = new MemoryClientStorage();
 
     const api = new SplitnextClient({
       baseUrl: 'https://splitnext.test',
+      observer: (event) => diagnostics.push(event),
       fetch: async (input, init) => {
+        if (new URL(input).pathname === '/groups' && init?.method === 'POST') {
+          const body = createGroupRequestSchema.parse(
+            JSON.parse(await new Request(input, init).text()),
+          );
+
+          requests.push({
+            group_id: body.group_id,
+            invite_id: body.invite.invite_id,
+            token_hash: await hashInviteToken(body.invite.token),
+          });
+        }
+
         const response = await exports.default.fetch(input, init);
 
-        if (
-          loseCreationResponse &&
-          new URL(input).pathname === '/groups'
-        ) {
+        if (loseCreationResponse && new URL(input).pathname === '/groups') {
           loseCreationResponse = false;
           throw new Error('simulated_creation_response_loss');
         }
@@ -343,12 +404,11 @@ describe('stateful offline client SDK', () => {
     const client = new SplitnextSyncClient({
       api,
       device_secret: 'Q'.repeat(43),
-      storage: new MemoryClientStorage(),
+      storage,
     });
 
     const input = {
       name: 'Retry group',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     };
 
@@ -359,10 +419,34 @@ describe('stateful offline client SDK', () => {
       'simulated_creation_response_loss',
     );
 
-    const recovered = await client.createGroup(input);
+    const reloaded = new SplitnextSyncClient({
+      api,
+      device_secret: 'Q'.repeat(43),
+      storage,
+    });
+
+    const recovered = await reloaded.createGroup(input);
 
     expect(recovered.revision).toBe(1);
     expect(recovered.projected_snapshot?.group.name).toBe('Retry group');
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toEqual(requests[0]);
+    expect(recovered.projected_snapshot?.invite).not.toBeNull();
+
+    if (!recovered.projected_snapshot?.invite)
+      throw new Error('initial_invite_missing');
+
+    const preview = await reloaded.previewInvite(
+      recovered.group_id,
+      recovered.projected_snapshot.invite.token,
+    );
+
+    expect(preview.members).toHaveLength(1);
+    expect(
+      JSON.stringify(diagnostics).includes(
+        recovered.projected_snapshot.invite.token,
+      ),
+    ).toBe(false);
   });
 
   it('retains concurrent commands from two clients sharing storage', async () => {
@@ -374,7 +458,6 @@ describe('stateful offline client SDK', () => {
 
     const created = await first.createGroup({
       name: 'Shared replica',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -402,7 +485,7 @@ describe('stateful offline client SDK', () => {
 
     const unsupported = createSyncClient(
       'W',
-      new MemoryClientStorage(JSON.stringify({ schema_version: 2 })),
+      new MemoryClientStorage(JSON.stringify({ schema_version: 999 })),
     );
 
     await expect(malformed.initializeIdentity()).rejects.toEqual(
@@ -418,10 +501,7 @@ describe('stateful offline client SDK', () => {
   });
 });
 
-function createSyncClient(
-  seed: string,
-  storage = new MemoryClientStorage(),
-) {
+function createSyncClient(seed: string, storage = new MemoryClientStorage()) {
   const api = new SplitnextClient({
     baseUrl: 'https://splitnext.test',
     fetch: (input, init) => exports.default.fetch(input, init),

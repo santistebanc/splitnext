@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "Splitnext",
+    "slug": "splitnext",
+    "scheme": "splitnext",
+    "userInterfaceStyle": "light",
+    "web": { "bundler": "metro", "output": "server" },
+    "plugins": [["expo-router", { "unstable_useServerRendering": true }]]
+  }
+}

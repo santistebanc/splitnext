@@ -37,8 +37,6 @@ routedApp.doc('/openapi.json', {
   },
 });
 
-routedApp.get('/', (context) => context.redirect('/dashboard/'));
-
 routedApp.get(
   '/docs',
   Scalar({

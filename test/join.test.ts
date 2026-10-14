@@ -3,16 +3,26 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { initializeGroup } from '../src/domain/groups';
 import { createIdentifier, identifierSchema } from '../src/domain/ids';
-import { createInviteToken, hashInviteToken } from '../src/domain/invites';
+import {
+  createInviteToken,
+  hashInviteToken,
+  inviteTokenSchema,
+} from '../src/domain/invites';
 import { MemoryGroupRepository } from '../src/groupRepository';
 import { GroupStore } from '../src/groupStore';
+import {
+  groupSessionSchema,
+  syncGroupResponseSchema,
+} from '../src/domain/sync';
 import {
   applyTestMigrations,
   fetchOpenApiDocument,
   randomDeviceSecret,
 } from './harness';
 
-const identitySchema = z.object({ identity: z.object({ id: identifierSchema }) });
+const identitySchema = z.object({
+  identity: z.object({ id: identifierSchema }),
+});
 
 const createdSchema = z.object({
   group: z.object({ id: identifierSchema }),
@@ -21,7 +31,12 @@ const createdSchema = z.object({
 
 const inviteSchema = z.object({
   revision: z.number(),
-  invite: z.object({ id: identifierSchema, expires_at: z.iso.datetime() }),
+  invite: z.strictObject({
+    id: identifierSchema,
+    created_by_identity_id: identifierSchema,
+    created_at: z.iso.datetime(),
+    token: inviteTokenSchema,
+  }),
 });
 
 beforeAll(async () => {
@@ -31,7 +46,7 @@ beforeAll(async () => {
 describe('joining through an invite link', () => {
   it('grants a second identity access with a new preferred member', async () => {
     const fixture = await createFixture();
-    const { token } = await createInvite(fixture);
+    const { token } = await regenerateInvite(fixture);
     const memberId = createIdentifier();
 
     const response = await join(fixture, {
@@ -55,10 +70,7 @@ describe('joining through an invite link', () => {
       },
       snapshot: {
         members: [{ display_name: 'Santi' }, { display_name: 'Robin' }],
-        access_grants: [
-          { actor_handle: 'User 1' },
-          { actor_handle: 'User 2' },
-        ],
+        access_grants: [{ actor_handle: 'User 1' }, { actor_handle: 'User 2' }],
       },
     });
   });
@@ -79,13 +91,13 @@ describe('joining through an invite link', () => {
     expect(await unknownInvite.json()).toEqual({ error: 'invite_invalid' });
   });
 
-  it('returns the original response when a join is retried after revocation', async () => {
+  it('returns the original response when a join is retried after regeneration', async () => {
     const fixture = await createFixture();
-    const invite = await createInvite(fixture);
+    const invite = await regenerateInvite(fixture);
     const request = { ...newMemberJoin('Robin'), invite_token: invite.token };
     const first = await join(fixture, request);
 
-    await revokeInvite(fixture, invite.id);
+    await regenerateInvite(fixture);
 
     const repeated = await join(fixture, request);
 
@@ -95,7 +107,7 @@ describe('joining through an invite link', () => {
 
   it('can select an existing member nonexclusively', async () => {
     const fixture = await createFixture();
-    const { token } = await createInvite(fixture);
+    const { token } = await regenerateInvite(fixture);
 
     const response = await join(fixture, {
       join_id: createIdentifier(),
@@ -119,17 +131,74 @@ describe('joining through an invite link', () => {
     });
   });
 
-  it('rejects a duplicate active member name', async () => {
+  it('joins an existing active member by name without duplicates and retains the submitted id as an alias', async () => {
     const fixture = await createFixture();
-    const { token } = await createInvite(fixture);
+    const { token } = await regenerateInvite(fixture);
 
-    const response = await join(fixture, {
+    const request = {
       ...newMemberJoin(' santi '),
       invite_token: token,
+    };
+
+    const response = await join(fixture, request);
+
+    expect(response.status).toBe(200);
+    const joined = groupSessionSchema.parse(await response.json());
+    expect(joined.snapshot.members).toHaveLength(1);
+    expect(joined.access.preferred_member_id).toBe(fixture.created.member.id);
+    expect(
+      joined.snapshot.access_grants.map((grant) => grant.preferred_member_id),
+    ).toEqual([fixture.created.member.id, fixture.created.member.id]);
+
+    const repeated = await join(fixture, request);
+    expect(repeated.status).toBe(200);
+    expect(groupSessionSchema.parse(await repeated.json()).revision).toBe(
+      joined.revision,
+    );
+
+    const sync = await exports.default.fetch(
+      `https://splitnext.test/groups/${fixture.groupId}/sync`,
+      {
+        method: 'POST',
+        headers: requestHeaders(fixture.joiner.deviceSecret),
+        body: JSON.stringify({
+          known_revision: joined.revision,
+          commands: [
+            {
+              command_id: createIdentifier(),
+              type: 'member.rename',
+              payload: {
+                member_id: request.preferred_member.member_id,
+                expected_display_name: 'Santi',
+                display_name: 'Santiago',
+              },
+            },
+          ],
+        }),
+      },
+    );
+
+    expect(sync.status).toBe(200);
+    const synchronized = syncGroupResponseSchema.parse(await sync.json());
+    expect(synchronized.outcomes[0]?.status).toBe('applied');
+
+    if (synchronized.state.kind !== 'snapshot')
+      throw new Error('Expected a snapshot');
+    expect(synchronized.state.snapshot.members).toMatchObject([
+      { id: fixture.created.member.id, display_name: 'Santiago' },
+    ]);
+
+    const reusedId = await join(fixture, {
+      ...request,
+      join_id: createIdentifier(),
+      preferred_member: {
+        ...request.preferred_member,
+        display_name: 'Someone else',
+      },
     });
 
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'member_name_taken' });
+    expect(reusedId.status).toBe(409);
+    expect(await reusedId.json()).toEqual({ error: 'member_id_exists' });
   });
 
   it('returns not found for an unknown group', async () => {
@@ -153,10 +222,13 @@ describe('joining through an invite link', () => {
 
   it('lets an identity that left rejoin without an invite', async () => {
     const fixture = await createFixture();
-    const invite = await createInvite(fixture);
+    const invite = await regenerateInvite(fixture);
 
-    await join(fixture, { ...newMemberJoin('Robin'), invite_token: invite.token });
-    await revokeInvite(fixture, invite.id);
+    await join(fixture, {
+      ...newMemberJoin('Robin'),
+      invite_token: invite.token,
+    });
+    await regenerateInvite(fixture);
     await sync(fixture.groupId, fixture.joiner.deviceSecret, [
       { command_id: createIdentifier(), type: 'group.leave', payload: {} },
     ]);
@@ -179,8 +251,21 @@ describe('joining through an invite link', () => {
 describe('group invite links', () => {
   it('replaces the previous link, which then stops working', async () => {
     const fixture = await createFixture();
-    const first = await createInvite(fixture);
-    const second = await createInvite(fixture);
+    const first = await regenerateInvite(fixture);
+    const second = await regenerateInvite(fixture);
+
+    // A delayed retry of the old creation must not reactivate its link or
+    // invalidate the newly generated one.
+    const retried = await putInvite(fixture, {
+      invite_id: first.id,
+      token: first.token,
+    });
+
+    expect(retried.status).toBe(200);
+    expect(await retried.json()).toMatchObject({
+      revision: second.revision,
+      invite: { id: second.id },
+    });
 
     const withFirst = await join(fixture, {
       ...newMemberJoin('Robin'),
@@ -194,7 +279,7 @@ describe('group invite links', () => {
 
     expect(second.revision).toBe(first.revision + 1);
     expect(withFirst.status).toBe(403);
-    expect(await withFirst.json()).toEqual({ error: 'invite_revoked' });
+    expect(await withFirst.json()).toEqual({ error: 'invite_replaced' });
     expect(withSecond.status).toBe(200);
     expect(await withSecond.json()).toMatchObject({
       snapshot: {
@@ -206,19 +291,21 @@ describe('group invite links', () => {
     });
   });
 
-  it('keeps access granted through a link after the link is revoked', async () => {
+  it('keeps access granted through a link after it is regenerated', async () => {
     const fixture = await createFixture();
-    const invite = await createInvite(fixture);
+    const invite = await regenerateInvite(fixture);
 
-    await join(fixture, { ...newMemberJoin('Robin'), invite_token: invite.token });
+    await join(fixture, {
+      ...newMemberJoin('Robin'),
+      invite_token: invite.token,
+    });
 
-    const revoked = await revokeInvite(fixture, invite.id);
+    const replacement = await regenerateInvite(fixture);
     const synced = await sync(fixture.groupId, fixture.joiner.deviceSecret, []);
 
-    expect(revoked.status).toBe(200);
     expect(synced.status).toBe(200);
     expect(await synced.json()).toMatchObject({
-      state: { snapshot: { invite: null } },
+      state: { snapshot: { invite: { id: replacement.id } } },
     });
   });
 
@@ -226,15 +313,15 @@ describe('group invite links', () => {
     const fixture = await createFixture();
     const inviteId = createIdentifier();
     const token = createInviteToken();
-    const first = await postInvite(fixture, { invite_id: inviteId, token });
-    const repeated = await postInvite(fixture, { invite_id: inviteId, token });
+    const first = await putInvite(fixture, { invite_id: inviteId, token });
+    const repeated = await putInvite(fixture, { invite_id: inviteId, token });
 
-    const conflicting = await postInvite(fixture, {
+    const conflicting = await putInvite(fixture, {
       invite_id: inviteId,
       token: createInviteToken(),
     });
 
-    expect(first.status).toBe(201);
+    expect(first.status).toBe(200);
     expect(await repeated.json()).toEqual(await first.json());
     expect(conflicting.status).toBe(409);
   });
@@ -243,9 +330,9 @@ describe('group invite links', () => {
     const fixture = await createFixture();
 
     const response = await exports.default.fetch(
-      `https://splitnext.test/groups/${fixture.groupId}/invites`,
+      `https://splitnext.test/groups/${fixture.groupId}/invite`,
       {
-        method: 'POST',
+        method: 'PUT',
         headers: requestHeaders(fixture.joiner.deviceSecret),
         body: JSON.stringify({
           invite_id: createIdentifier(),
@@ -257,81 +344,104 @@ describe('group invite links', () => {
     expect(response.status).toBe(401);
   });
 
-  it('bounds the lifetime a creator can choose', async () => {
-    const fixture = await createFixture();
-
-    const tooLong = await postInvite(fixture, {
-      invite_id: createIdentifier(),
-      token: createInviteToken(),
-      expires_in_hours: 24 * 31,
-    });
-
-    const chosen = inviteSchema.parse(
-      await (
-        await postInvite(fixture, {
-          invite_id: createIdentifier(),
-          token: createInviteToken(),
-          expires_in_hours: 1,
-        })
-      ).json(),
-    );
-
-    expect(tooLong.status).toBe(400);
-    expect(Date.parse(chosen.invite.expires_at) - Date.now()).toBeLessThanOrEqual(
-      3_600_000,
-    );
-  });
-
   it('previews the group and its active members for a link holder', async () => {
     const fixture = await createFixture();
-    const { token } = await createInvite(fixture);
+    const { token } = await regenerateInvite(fixture);
     const preview = await previewInvite(fixture, token);
     const unknown = await previewInvite(fixture, createInviteToken());
 
     expect(preview.status).toBe(200);
     expect(await preview.json()).toMatchObject({
-      group: { id: fixture.groupId, name: 'Berlin flat', currency_code: 'EUR' },
-      members: [{ id: fixture.created.member.id, display_name: 'Santi' }],
+      group: { id: fixture.groupId, name: 'Berlin flat' },
+      members: [
+        { id: fixture.created.member.id, display_name: 'Santi', in_use: true },
+      ],
     });
     expect(unknown.status).toBe(403);
     expect(await unknown.json()).toEqual({ error: 'invite_invalid' });
   });
 
-  it('never exposes the token in group state', async () => {
+  it('shares the token in authorized snapshots and omits it from previews', async () => {
     const fixture = await createFixture();
-    const { token } = await createInvite(fixture);
+    const { token } = await regenerateInvite(fixture);
 
     const inspection = await exports.default.fetch(
-      `https://splitnext.test/debug/groups/${fixture.groupId}`,
+      `https://splitnext.test/groups/${fixture.groupId}/sync`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer v1.${fixture.creator.deviceSecret}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ known_revision: 0, commands: [] }),
+      },
     );
 
     const serialized = JSON.stringify(await inspection.json());
 
-    expect(serialized).not.toContain(token);
+    expect(inspection.status).toBe(200);
+    expect(serialized).toContain(token);
     expect(serialized).not.toContain(await hashInviteToken(token));
+
+    const preview = await previewInvite(fixture, token);
+    expect(await preview.text()).not.toContain(token);
+  });
+
+  it('does not expose collection creation or standalone revocation', async () => {
+    const fixture = await createFixture();
+    const invite = await regenerateInvite(fixture);
+
+    for (const path of [
+      `/groups/${fixture.groupId}/invites`,
+      `/groups/${fixture.groupId}/invites/${invite.id}/revoke`,
+    ]) {
+      const response = await exports.default.fetch(
+        `https://splitnext.test${path}`,
+        {
+          method: 'POST',
+          headers: requestHeaders(fixture.creator.deviceSecret),
+          body: JSON.stringify({
+            invite_id: createIdentifier(),
+            token: createInviteToken(),
+          }),
+        },
+      );
+
+      expect(response.status).toBe(404);
+    }
+
+    // Neither discarded operation can remove or replace the current link.
+    expect((await previewInvite(fixture, invite.token)).status).toBe(200);
   });
 
   it('publishes invite routes and no direct joining', async () => {
     const document = await fetchOpenApiDocument();
 
-    expect(document.paths).toHaveProperty(['/groups/{groupId}/invites']);
-    expect(document.paths).toHaveProperty(['/groups/{groupId}/invites/preview']);
-    expect(document.paths).toHaveProperty([
+    expect(document.paths).toHaveProperty(['/groups/{groupId}/invite']);
+    expect(document.paths).toHaveProperty(['/groups/{groupId}/invite/preview']);
+    expect(document.paths).not.toHaveProperty(['/groups/{groupId}/invites']);
+    expect(document.paths).not.toHaveProperty([
       '/groups/{groupId}/invites/{inviteId}/revoke',
     ]);
-    expect(JSON.stringify(document.paths['/groups/{groupId}/join'])).not.toContain(
-      'without an invitation',
+    expect(document.paths['/groups/{groupId}/invite']).toHaveProperty('put');
+    expect(document.paths['/groups/{groupId}/invite']).not.toHaveProperty(
+      'post',
     );
+    expect(
+      JSON.stringify(document.paths['/groups/{groupId}/join']),
+    ).not.toContain('without an invitation');
+    expect(JSON.stringify(document.paths)).not.toContain('expires_at');
+    expect(JSON.stringify(document.paths)).not.toContain('expires_in_hours');
   });
 });
 
-describe('invite expiry', () => {
-  it('refuses previews and joins once the link has expired', async () => {
+describe('permanent invite links', () => {
+  it('allows joining years later until the link is regenerated', async () => {
     const store = new GroupStore(new MemoryGroupRepository());
     const groupId = createIdentifier();
     const creatorId = createIdentifier();
-    const joinerId = createIdentifier();
-    const tokenHash = await hashInviteToken(createInviteToken());
+    const token = createInviteToken();
+    const tokenHash = await hashInviteToken(token);
 
     store.create(
       initializeGroup({
@@ -339,24 +449,26 @@ describe('invite expiry', () => {
         creator_identity_id: creatorId,
         member_id: createIdentifier(),
         name: 'Berlin flat',
-        currency_code: 'EUR',
         creator_member_name: 'Santi',
+        invite_id: createIdentifier(),
+        invite_token_hash: 'initial-invite-hash',
+        invite_token: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
         created_at: '2026-09-24T10:00:00.000Z',
       }),
     );
-    store.createInvite({
+    store.regenerateInvite({
       group_id: groupId,
       identity_id: creatorId,
       invite_id: createIdentifier(),
       token_hash: tokenHash,
+      token,
       created_at: '2026-09-24T10:00:00.000Z',
-      expires_at: '2026-09-24T11:00:00.000Z',
     });
 
     const joinAt = (joinedAt: string) =>
       store.join({
         group_id: groupId,
-        identity_id: joinerId,
+        identity_id: createIdentifier(),
         join_id: createIdentifier(),
         joined_at: joinedAt,
         invite_token_hash: tokenHash,
@@ -367,15 +479,26 @@ describe('invite expiry', () => {
         },
       });
 
-    expect(store.previewInvite(tokenHash, '2026-09-24T11:00:00.000Z')).toEqual({
-      ok: false,
-      error: 'invite_expired',
+    expect(joinAt('2050-09-24T10:00:00.000Z')).toMatchObject({ ok: true });
+    expect(store.previewInvite(tokenHash)).toMatchObject({ ok: true });
+
+    store.regenerateInvite({
+      group_id: groupId,
+      identity_id: creatorId,
+      invite_id: createIdentifier(),
+      token_hash: await hashInviteToken(createInviteToken()),
+      token: createInviteToken(),
+      created_at: '2050-09-24T11:00:00.000Z',
     });
-    expect(joinAt('2026-09-24T11:00:00.000Z')).toEqual({
+
+    expect(store.previewInvite(tokenHash)).toEqual({
       ok: false,
-      error: 'invite_expired',
+      error: 'invite_replaced',
     });
-    expect(joinAt('2026-09-24T10:59:59.000Z')).toMatchObject({ ok: true });
+    expect(joinAt('2050-09-24T12:00:00.000Z')).toEqual({
+      ok: false,
+      error: 'invite_replaced',
+    });
   });
 });
 
@@ -397,16 +520,19 @@ async function createFixture() {
   const joiner = await createIdentity();
   const groupId = createIdentifier();
 
-  const response = await exports.default.fetch('https://splitnext.test/groups', {
-    method: 'POST',
-    headers: requestHeaders(creator.deviceSecret),
-    body: JSON.stringify({
-      group_id: groupId,
-      name: 'Berlin flat',
-      currency_code: 'EUR',
-      creator_member_name: 'Santi',
-    }),
-  });
+  const response = await exports.default.fetch(
+    'https://splitnext.test/groups',
+    {
+      method: 'POST',
+      headers: requestHeaders(creator.deviceSecret),
+      body: JSON.stringify({
+        group_id: groupId,
+        name: 'Berlin flat',
+        creator_member_name: 'Santi',
+        invite: { invite_id: createIdentifier(), token: createInviteToken() },
+      }),
+    },
+  );
 
   return {
     groupId,
@@ -433,45 +559,38 @@ async function createIdentity() {
   return { deviceSecret, identityId: identity.identity.id };
 }
 
-function postInvite(
+function putInvite(
   fixture: Fixture,
-  body: { invite_id: string; token: string; expires_in_hours?: number },
+  body: { invite_id: string; token: string },
 ) {
   return exports.default.fetch(
-    `https://splitnext.test/groups/${fixture.groupId}/invites`,
+    `https://splitnext.test/groups/${fixture.groupId}/invite`,
     {
-      method: 'POST',
+      method: 'PUT',
       headers: requestHeaders(fixture.creator.deviceSecret),
       body: JSON.stringify(body),
     },
   );
 }
 
-async function createInvite(fixture: Fixture) {
+async function regenerateInvite(fixture: Fixture) {
   const token = createInviteToken();
 
-  const response = await postInvite(fixture, {
+  const response = await putInvite(fixture, {
     invite_id: createIdentifier(),
     token,
   });
 
-  expect(response.status).toBe(201);
+  expect(response.status).toBe(200);
 
   const created = inviteSchema.parse(await response.json());
 
   return { token, id: created.invite.id, revision: created.revision };
 }
 
-function revokeInvite(fixture: Fixture, inviteId: string) {
-  return exports.default.fetch(
-    `https://splitnext.test/groups/${fixture.groupId}/invites/${inviteId}/revoke`,
-    { method: 'POST', headers: requestHeaders(fixture.creator.deviceSecret) },
-  );
-}
-
 function previewInvite(fixture: Fixture, token: string) {
   return exports.default.fetch(
-    `https://splitnext.test/groups/${fixture.groupId}/invites/preview`,
+    `https://splitnext.test/groups/${fixture.groupId}/invite/preview`,
     {
       method: 'POST',
       headers: requestHeaders(fixture.joiner.deviceSecret),

@@ -8,8 +8,7 @@ import type {
 import { createIdentifier } from '../domain/ids';
 import {
   createInviteToken,
-  defaultInviteLifetimeHours,
-  type CreateInviteRequest,
+  type InviteLinkInput,
   type GroupInvite,
   type InvitePreview,
 } from '../domain/invites';
@@ -22,6 +21,7 @@ import type {
 } from '../domain/sync';
 import {
   ClientReplicaStore,
+  type ClientGroupCreationInput,
   type ClientReplicaState,
   type ClientGroupSummary,
 } from './replicaStore';
@@ -37,13 +37,18 @@ export type SyncDeviceTransport = {
   currentIdentity(): Promise<IdentitySession>;
   createGroup(input: CreateGroupRequest): Promise<CreatedGroup>;
   joinGroup(groupId: string, input: JoinGroupRequest): Promise<GroupSession>;
-  syncGroup(groupId: string, input: SyncGroupRequest): Promise<SyncGroupResponse>;
-  openRealtime(groupId: string, handlers: RealtimeSocketHandlers): RealtimeSocket;
-  createInvite(
+  syncGroup(
     groupId: string,
-    input: CreateInviteRequest,
+    input: SyncGroupRequest,
+  ): Promise<SyncGroupResponse>;
+  openRealtime(
+    groupId: string,
+    handlers: RealtimeSocketHandlers,
+  ): RealtimeSocket;
+  regenerateInvite(
+    groupId: string,
+    input: InviteLinkInput,
   ): Promise<{ revision: number; invite: GroupInvite }>;
-  revokeInvite(groupId: string, inviteId: string): Promise<{ revision: number }>;
   previewInvite(groupId: string, token: string): Promise<InvitePreview>;
   listGroups(): Promise<{ groups: AccessibleGroup[] }>;
 };
@@ -75,6 +80,8 @@ export type SplitnextSyncClientOptions = {
   now?: () => string;
   /** Receives replicas refreshed by realtime announcements. */
   on_background_sync?: (state: ClientReplicaState) => void;
+  /** Presence changes are transient and never written to replica storage. */
+  on_presence_change?: (groupId: string) => void;
   realtime_reconnect_delay_ms?: (attempt: number) => number;
 };
 
@@ -110,6 +117,7 @@ export class SplitnextSyncClient {
         this.deviceApi.openRealtime(groupId, handlers),
       onAnnouncement: (groupId, revision) =>
         this.onAnnouncement(groupId, revision),
+      onPresenceChange: (groupId) => options.on_presence_change?.(groupId),
       reconnectDelayMs:
         options.realtime_reconnect_delay_ms ?? defaultReconnectDelayMs,
     });
@@ -125,13 +133,27 @@ export class SplitnextSyncClient {
   }
 
   async initializeIdentity(): Promise<IdentitySession> {
+    await this.replicas.upgradeStorage(this.online, async (groupId) => {
+      const response = await this.deviceApi.syncGroup(groupId, {
+        known_revision: 0,
+        commands: [],
+      });
+
+      if (response.state.kind !== 'snapshot')
+        throw new Error('upgrade_snapshot_missing');
+
+      return { revision: response.revision, snapshot: response.state.snapshot };
+    });
+
     const existing = await this.replicas.session();
 
     if (existing) {
       if (!this.online) return existing;
 
       try {
-        return await this.replicas.retainSession(await this.deviceApi.currentIdentity());
+        return await this.replicas.retainSession(
+          await this.deviceApi.currentIdentity(),
+        );
       } catch {
         // A stored identity remains usable while the server is temporarily unavailable.
         return existing;
@@ -146,7 +168,7 @@ export class SplitnextSyncClient {
   }
 
   async createGroup(
-    input: Omit<CreateGroupRequest, 'group_id'> & { group_id?: string },
+    input: ClientGroupCreationInput,
   ): Promise<ClientReplicaState> {
     this.requireOnline();
 
@@ -206,52 +228,32 @@ export class SplitnextSyncClient {
   }
 
   /**
-   * Creates the group's invite link, revoking any previous one. This device
-   * generates and keeps the token; the returned state's `own_invite` holds it
-   * for as long as the link is current.
+   * Replaces the group's shared invite link. Every participant receives the
+   * new token in its next authenticated group snapshot.
    */
-  async createInvite(
-    groupId: string,
-    expiresInHours: number = defaultInviteLifetimeHours,
-  ): Promise<ClientReplicaState> {
+  async regenerateInvite(groupId: string): Promise<ClientReplicaState> {
     this.requireOnline();
 
     const invite = await this.replicas.prepareInvite(
       groupId,
-      expiresInHours,
       this.createId,
       createInviteToken,
     );
 
     try {
-      await this.deviceApi.createInvite(groupId, {
+      await this.deviceApi.regenerateInvite(groupId, {
         invite_id: invite.invite_id,
         token: invite.token,
-        expires_in_hours: invite.expires_in_hours,
       });
     } catch (error) {
       if (error instanceof Error && isServerRejection(error)) {
-        await this.replicas.settleInvite(groupId, invite.invite_id, false);
+        await this.replicas.settleInvite(groupId, invite.invite_id);
       }
 
       throw error;
     }
 
-    await this.replicas.settleInvite(groupId, invite.invite_id, true);
-
-    return this.syncGroup(groupId);
-  }
-
-  /** Stops new joins through the current link; granted access remains. */
-  async revokeInvite(groupId: string): Promise<ClientReplicaState> {
-    this.requireOnline();
-
-    const state = await this.replicas.state(groupId, this.online);
-    const invite = state.confirmed_snapshot?.invite;
-
-    if (!invite) return state;
-
-    await this.deviceApi.revokeInvite(groupId, invite.id);
+    await this.replicas.settleInvite(groupId, invite.invite_id);
 
     return this.syncGroup(groupId);
   }
@@ -269,7 +271,8 @@ export class SplitnextSyncClient {
 
         await this.replicas.retainGroupDirectory(groups);
       } catch (error) {
-        if (!(error instanceof Error) || !isTransportFailure(error)) throw error;
+        if (!(error instanceof Error) || !isTransportFailure(error))
+          throw error;
       }
     }
 
@@ -404,6 +407,10 @@ export class SplitnextSyncClient {
     return this.realtime.isWatching(groupId);
   }
 
+  presence(groupId: string): string[] | null {
+    return this.realtime.presence(groupId);
+  }
+
   inspect(groupId: string): Promise<ClientReplicaState> {
     return this.replicas.state(groupId, this.online);
   }
@@ -519,9 +526,11 @@ function isServerRejection(error: Error): boolean {
 
 /** The request never produced a server answer, as opposed to a rejection. */
 function isTransportFailure(error: Error): boolean {
-  return (
-    !isServerRejection(error) && error.name !== 'SplitnextProtocolError'
-  );
+  return !isServerRejection(error) && error.name !== 'SplitnextProtocolError';
 }
 
-export type { ClientGroupSummary, ClientReplicaState } from './replicaStore';
+export type {
+  ClientGroupCreationInput,
+  ClientGroupSummary,
+  ClientReplicaState,
+} from './replicaStore';

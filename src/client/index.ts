@@ -15,24 +15,17 @@ import {
   createGroupRequestSchema,
   type CreateGroupRequest,
 } from '../domain/groups';
+import { deviceSecretSchema, type IdentitySession } from '../domain/identities';
 import {
-  deviceSecretSchema,
-  type IdentitySession,
-} from '../domain/identities';
-import {
-  createInviteRequestSchema,
+  inviteLinkInputSchema,
   invitePreviewSchema,
   inviteResultSchema,
   previewInviteRequestSchema,
-  revokeInviteResultSchema,
-  type CreateInviteRequest,
+  type InviteLinkInput,
   type InvitePreview,
 } from '../domain/invites';
 import { realtimeProtocols } from '../domain/realtime';
-import {
-  syncGroupRequestSchema,
-  type SyncGroupRequest,
-} from '../domain/sync';
+import { syncGroupRequestSchema, type SyncGroupRequest } from '../domain/sync';
 import {
   createdGroupSchema,
   groupSessionSchema,
@@ -196,22 +189,14 @@ export class SplitnextDeviceClient {
     );
   }
 
-  createInvite(groupId: string, input: CreateInviteRequest) {
-    const body = jsonSchema.parse(createInviteRequestSchema.parse(input));
+  regenerateInvite(groupId: string, input: InviteLinkInput) {
+    const body = jsonSchema.parse(inviteLinkInputSchema.parse(input));
 
     return this.request(
-      'POST',
-      `/groups/${encodeURIComponent(groupId)}/invites`,
+      'PUT',
+      `/groups/${encodeURIComponent(groupId)}/invite`,
       inviteResultSchema,
       { body },
-    );
-  }
-
-  revokeInvite(groupId: string, inviteId: string) {
-    return this.request(
-      'POST',
-      `/groups/${encodeURIComponent(groupId)}/invites/${encodeURIComponent(inviteId)}/revoke`,
-      revokeInviteResultSchema,
     );
   }
 
@@ -221,16 +206,13 @@ export class SplitnextDeviceClient {
 
     return this.request(
       'POST',
-      `/groups/${encodeURIComponent(groupId)}/invites/preview`,
+      `/groups/${encodeURIComponent(groupId)}/invite/preview`,
       invitePreviewSchema,
       { body },
     );
   }
 
-  joinGroup(
-    groupId: string,
-    input: JoinGroupRequest,
-  ): Promise<JoinedGroup> {
+  joinGroup(groupId: string, input: JoinGroupRequest): Promise<JoinedGroup> {
     const body = jsonSchema.parse(joinGroupRequestSchema.parse(input));
 
     return this.request(
@@ -242,7 +224,10 @@ export class SplitnextDeviceClient {
   }
 
   /** Opens one revision-announcement subscription; see RealtimeSubscriptions. */
-  openRealtime(groupId: string, handlers: RealtimeSocketHandlers): RealtimeSocket {
+  openRealtime(
+    groupId: string,
+    handlers: RealtimeSocketHandlers,
+  ): RealtimeSocket {
     return this.transport.openRealtime(
       `/groups/${encodeURIComponent(groupId)}/realtime`,
       realtimeProtocols(this.deviceSecret),
@@ -337,7 +322,7 @@ class Transport {
         kind: 'response',
         ...exchange,
         status: response.status,
-        response: responseBody,
+        response: diagnosticBody(responseBody),
         outcomes: outcomesFrom(responseBody),
         duration_ms: Date.now() - startedAt,
       }),
@@ -433,11 +418,20 @@ function outcomesFrom(body: JsonValue): CommandOutcome[] {
 }
 
 function diagnosticBody(body: JsonValue): JsonValue {
+  if (Array.isArray(body)) return body.map(diagnosticBody);
+
   const parsed = diagnosticObjectSchema.safeParse(body);
 
-  return parsed.success && parsed.data.device_secret
-    ? { ...parsed.data, device_secret: '[redacted]' }
-    : body;
+  if (!parsed.success) return body;
+
+  return Object.fromEntries(
+    Object.entries(parsed.data).map(([key, value]) => [
+      key,
+      key === 'device_secret' || key === 'token' || key === 'invite_token'
+        ? '[redacted]'
+        : diagnosticBody(value),
+    ]),
+  );
 }
 
 function createRequestId(): string {
@@ -459,6 +453,12 @@ export {
   type InvitePreview,
 } from '../domain/invites';
 
+export { groupNameSchema } from '../domain/groups';
+
+export { identifierSchema } from '../domain/ids';
+
+export { memberNameSchema } from '../domain/members';
+
 export {
   browserWebSocket,
   type RealtimeSocket,
@@ -470,6 +470,7 @@ export {
   ClientOfflineError,
   SplitnextSyncClient,
   type ClientReplicaState,
+  type ClientGroupCreationInput,
   type ClientPreferredMemberChoice,
   type ClientGroupSummary,
   type SyncDeviceTransport,

@@ -1,18 +1,16 @@
 import { z } from 'zod';
 import { identifierSchema } from './ids';
+import {
+  inviteLinkInputSchema,
+  groupInviteSchema,
+  inviteTokenSchema,
+} from './invites';
 
 export const groupNameSchema = z.string().trim().min(1).max(100);
-
-const currencyCodeSchema = z
-  .string()
-  .trim()
-  .regex(/^[A-Za-z]{3}$/)
-  .transform((value) => value.toUpperCase());
 
 export const groupDetailsSchema = z.object({
   id: identifierSchema,
   name: z.string(),
-  currency_code: z.string(),
   created_at: z.iso.datetime(),
 });
 
@@ -35,17 +33,22 @@ export type GroupAccessGrant = z.output<typeof groupAccessGrantSchema>;
 export const createGroupRequestSchema = z.object({
   group_id: identifierSchema,
   name: groupNameSchema,
-  currency_code: currencyCodeSchema,
   creator_member_name: groupNameSchema,
+  invite: inviteLinkInputSchema,
 });
 
 export type CreateGroupRequest = z.output<typeof createGroupRequestSchema>;
 
-export const initializeGroupCommandSchema = createGroupRequestSchema.extend({
-  creator_identity_id: identifierSchema,
-  member_id: identifierSchema,
-  created_at: z.iso.datetime(),
-});
+export const initializeGroupCommandSchema = createGroupRequestSchema
+  .omit({ invite: true })
+  .extend({
+    invite_id: identifierSchema,
+    invite_token_hash: z.string().min(1),
+    invite_token: inviteTokenSchema,
+    creator_identity_id: identifierSchema,
+    member_id: identifierSchema,
+    created_at: z.iso.datetime(),
+  });
 
 export type InitializeGroupCommand = z.output<
   typeof initializeGroupCommandSchema
@@ -61,15 +64,19 @@ export const createdGroupSchema = z.object({
     updated_at: z.iso.datetime(),
   }),
   access: groupAccessGrantSchema,
+  invite: groupInviteSchema,
 });
 
 export type CreatedGroup = z.output<typeof createdGroupSchema>;
 
 export type InitialGroupState = {
   view: CreatedGroup;
+  invite_token_hash: string;
 };
 
-export function initializeGroup(command: InitializeGroupCommand): InitialGroupState {
+export function initializeGroup(
+  command: InitializeGroupCommand,
+): InitialGroupState {
   const revision = 1;
   const actorNumber = 1;
   const actorHandle = `User ${actorNumber}`;
@@ -83,15 +90,21 @@ export function initializeGroup(command: InitializeGroupCommand): InitialGroupSt
   };
 
   return {
+    invite_token_hash: command.invite_token_hash,
     view: {
       group: {
         id: command.group_id,
         name: command.name,
-        currency_code: command.currency_code,
         created_at: command.created_at,
         revision,
       },
       member,
+      invite: {
+        id: command.invite_id,
+        token: command.invite_token,
+        created_by_identity_id: command.creator_identity_id,
+        created_at: command.created_at,
+      },
       access: {
         identity_id: command.creator_identity_id,
         actor_handle: actorHandle,
@@ -107,7 +120,6 @@ export function initializeGroup(command: InitializeGroupCommand): InitialGroupSt
 export const accessibleGroupSchema = z.object({
   group_id: identifierSchema,
   name: z.string(),
-  currency_code: z.string(),
   status: z.enum(['active', 'left']),
   granted_at: z.iso.datetime(),
   left_at: z.iso.datetime().nullable(),

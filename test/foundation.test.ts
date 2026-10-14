@@ -8,7 +8,9 @@ beforeAll(async () => {
 
 describe('Cloudflare foundation', () => {
   it('reports liveness without touching dependencies', async () => {
-    const response = await exports.default.fetch('https://splitnext.test/health');
+    const response = await exports.default.fetch(
+      'https://splitnext.test/health',
+    );
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
@@ -19,7 +21,9 @@ describe('Cloudflare foundation', () => {
   });
 
   it('checks both D1 and SQLite Durable Object storage', async () => {
-    const response = await exports.default.fetch('https://splitnext.test/ready');
+    const response = await exports.default.fetch(
+      'https://splitnext.test/ready',
+    );
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
@@ -29,7 +33,9 @@ describe('Cloudflare foundation', () => {
   });
 
   it('returns JSON for unknown routes', async () => {
-    const response = await exports.default.fetch('https://splitnext.test/not-a-route');
+    const response = await exports.default.fetch(
+      'https://splitnext.test/not-a-route',
+    );
 
     expect(response.status).toBe(404);
     expect(response.headers.get('content-type')).toContain('application/json');
@@ -37,9 +43,12 @@ describe('Cloudflare foundation', () => {
   });
 
   it('answers CORS preflight requests for the API console', async () => {
-    const response = await exports.default.fetch('https://splitnext.test/health', {
-      method: 'OPTIONS',
-    });
+    const response = await exports.default.fetch(
+      'https://splitnext.test/health',
+      {
+        method: 'OPTIONS',
+      },
+    );
 
     expect(response.status).toBe(204);
     expect(response.headers.get('access-control-allow-origin')).toBe('*');
@@ -115,12 +124,24 @@ describe('Cloudflare foundation', () => {
     expect(javascript).toContain('SyncLab');
   });
 
-  it('redirects the root URL to the API test dashboard', async () => {
-    const response = await exports.default.fetch('https://splitnext.test/', {
+  it('renders the public beta homepage on the Worker', async () => {
+    const response = await env.APP_RENDERING.fetch('https://splitnext.test/', {
       redirect: 'manual',
     });
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/dashboard/');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(await response.text()).toContain('<h1');
+  });
+
+  it('renders the app and arbitrary invite entry pages without sending a token to the server', async () => {
+    for (const path of ['/app', '/join/test-group']) {
+      const response = await env.APP_RENDERING.fetch(
+        `https://splitnext.test${path}`,
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain('Opening your groups');
+    }
   });
 });

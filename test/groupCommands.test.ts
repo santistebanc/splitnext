@@ -2,10 +2,15 @@ import { exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createIdentifier, identifierSchema } from '../src/domain/ids';
+import { createInviteToken } from '../src/domain/invites';
 import { applyTestMigrations } from './harness';
 
 const createdSchema = z.object({
-  group: z.object({ id: identifierSchema, revision: z.number(), name: z.string() }),
+  group: z.object({
+    id: identifierSchema,
+    revision: z.number(),
+    name: z.string(),
+  }),
   member: z.object({ id: identifierSchema }),
 });
 
@@ -139,16 +144,19 @@ async function createFixture(seed: string) {
     body: JSON.stringify({ device_secret: deviceSecret }),
   });
 
-  const response = await exports.default.fetch('https://splitnext.test/groups', {
-    method: 'POST',
-    headers: requestHeaders(deviceSecret),
-    body: JSON.stringify({
-      group_id: createIdentifier(),
-      name: 'Berlin flat',
-      currency_code: 'EUR',
-      creator_member_name: 'Santi',
-    }),
-  });
+  const response = await exports.default.fetch(
+    'https://splitnext.test/groups',
+    {
+      method: 'POST',
+      headers: requestHeaders(deviceSecret),
+      body: JSON.stringify({
+        group_id: createIdentifier(),
+        name: 'Berlin flat',
+        creator_member_name: 'Santi',
+        invite: { invite_id: createIdentifier(), token: createInviteToken() },
+      }),
+    },
+  );
 
   const created = createdSchema.parse(await response.json());
 

@@ -1,7 +1,4 @@
-import type {
-  JoinGroupRequest,
-  PreferredMemberChoice,
-} from '../domain/access';
+import type { JoinGroupRequest, PreferredMemberChoice } from '../domain/access';
 import {
   applyGroupCommand,
   resolveMemberAliases,
@@ -14,6 +11,8 @@ import type {
   CreateGroupRequest,
 } from '../domain/groups';
 import type { IdentitySession } from '../domain/identities';
+import { createInviteToken } from '../domain/invites';
+import { upgradeClientStorage } from './storageUpgrade';
 import type {
   GroupSession,
   GroupSnapshot,
@@ -24,11 +23,16 @@ import {
   type ClientGroupReplica,
   type ClientStorageAdapter,
   type ClientStorageDocument,
-  type OwnInvite,
+  type PendingInvite,
   parseClientDocument,
   type PendingCommand,
   serializeClientDocument,
 } from './storage';
+
+export type ClientGroupCreationInput = Omit<
+  CreateGroupRequest,
+  'group_id' | 'invite'
+> & { group_id?: string };
 
 export type ClientReplicaState = {
   online: boolean;
@@ -41,19 +45,20 @@ export type ClientReplicaState = {
   notices: ClientGroupReplica['notices'];
   hidden: boolean;
   last_synced_at: string | null;
-  /** The current invite link, when this device created it and knows its token. */
-  own_invite: { invite_id: string; token: string } | null;
 };
 
 /** One entry in a device's list of groups. */
 export type ClientGroupSummary = {
   group_id: string;
   name: string;
-  currency_code: string;
   status: 'active' | 'left';
   /** Whether this device holds a copy; others are fetched when opened. */
   stored_locally: boolean;
   pending_commands: number;
+  /** Active members in the local copy; null until the group is stored here. */
+  member_count: number | null;
+  /** The member this identity calls “you” in the local copy, if any. */
+  you_name: string | null;
 };
 
 export type PreparedSync = {
@@ -69,6 +74,15 @@ export class ClientReplicaStore {
 
   session(): Promise<IdentitySession | null> {
     return this.read((document) => document.session);
+  }
+
+  upgradeStorage(
+    online: boolean,
+    refresh: (
+      groupId: string,
+    ) => Promise<{ revision: number; snapshot: GroupSnapshot }>,
+  ): Promise<void> {
+    return upgradeClientStorage(this.storage, online, refresh);
   }
 
   retainSession(session: IdentitySession): Promise<IdentitySession> {
@@ -88,7 +102,7 @@ export class ClientReplicaStore {
   }
 
   prepareGroupCreation(
-    input: Omit<CreateGroupRequest, 'group_id'> & { group_id?: string },
+    input: ClientGroupCreationInput,
     createId: () => string,
   ): Promise<CreateGroupRequest> {
     return this.change((document) => {
@@ -98,9 +112,12 @@ export class ClientReplicaStore {
 
       const requested = {
         name: input.name,
-        currency_code: input.currency_code,
         creator_member_name: input.creator_member_name,
         group_id: input.group_id ?? pending?.request.group_id ?? createId(),
+        invite: pending?.request.invite ?? {
+          invite_id: createId(),
+          token: createInviteToken(),
+        },
       };
 
       if (pending && !sameCreationInput(pending.request, requested)) {
@@ -126,26 +143,42 @@ export class ClientReplicaStore {
 
   confirmGroupCreation(created: CreatedGroup): Promise<void> {
     return this.change((document) => {
-      const snapshot: GroupSnapshot = {
-        group: {
-          id: created.group.id,
-          name: created.group.name,
-          currency_code: created.group.currency_code,
-          created_at: created.group.created_at,
-        },
-        members: [created.member],
-        access_grants: [created.access],
-        invite: null,
-      };
+      const pending = document.pending_group_creations.find(
+        (candidate) => candidate.request.group_id === created.group.id,
+      );
 
-      upsertReplica(document, {
-        group_id: created.group.id,
-        revision: created.group.revision,
-        snapshot,
-        outbox: [],
-        notices: [],
-        last_synced_at: this.now(),
-      });
+      // Discovery or another tab may already have synchronized this group.
+      // Keep that newer replica, but retain our creation token while its
+      // invite is still current, even if synchronization arrived first.
+      const existing = document.groups.find(
+        (group) => group.group_id === created.group.id,
+      );
+
+      if (!existing) {
+        if (!pending || pending.request.invite.invite_id !== created.invite.id)
+          throw new Error('group_creation_invite_mismatch');
+
+        const snapshot: GroupSnapshot = {
+          group: {
+            id: created.group.id,
+            name: created.group.name,
+            created_at: created.group.created_at,
+          },
+          members: [created.member],
+          access_grants: [created.access],
+          invite: created.invite,
+        };
+
+        upsertReplica(document, {
+          group_id: created.group.id,
+          revision: created.group.revision,
+          snapshot,
+          outbox: [],
+          notices: [],
+          last_synced_at: this.now(),
+        });
+      }
+
       document.pending_group_creations =
         document.pending_group_creations.filter(
           (candidate) => candidate.request.group_id !== created.group.id,
@@ -155,7 +188,9 @@ export class ClientReplicaStore {
 
   prepareJoin(
     groupId: string,
-    preferredMember: PreferredMemberChoice | { kind: 'new'; display_name: string },
+    preferredMember:
+      | PreferredMemberChoice
+      | { kind: 'new'; display_name: string },
     createId: () => string,
     inviteToken?: string,
   ): Promise<JoinGroupRequest> {
@@ -235,13 +270,21 @@ export class ClientReplicaStore {
             const projection = project(replica, session.identity.id);
             const access = accessFor(projection, session.identity.id);
 
+            const active = projection.members.filter(
+              (member) => member.status === 'active',
+            );
+
             return {
               group_id: replica.group_id,
               name: projection.group.name,
-              currency_code: projection.group.currency_code,
               status: access?.hidden_at ? 'left' : 'active',
               stored_locally: true,
               pending_commands: replica.outbox.length,
+              member_count: active.length,
+              you_name:
+                active.find(
+                  (member) => member.id === access?.preferred_member_id,
+                )?.display_name ?? null,
             };
           })
         : [];
@@ -250,14 +293,17 @@ export class ClientReplicaStore {
 
       const remoteOnly = document.group_directory
         .filter(({ group_id }) => !localIds.has(group_id))
-        .map((group): ClientGroupSummary => ({
-          group_id: group.group_id,
-          name: group.name,
-          currency_code: group.currency_code,
-          status: group.status,
-          stored_locally: false,
-          pending_commands: 0,
-        }));
+        .map(
+          (group): ClientGroupSummary => ({
+            group_id: group.group_id,
+            name: group.name,
+            status: group.status,
+            stored_locally: false,
+            pending_commands: 0,
+            member_count: null,
+            you_name: null,
+          }),
+        );
 
       return [...local, ...remoteOnly].sort(
         (left, right) =>
@@ -267,38 +313,31 @@ export class ClientReplicaStore {
     });
   }
 
-  /** Reuses an unconfirmed invite with the same lifetime so retries are safe. */
+  /** Reuses an unconfirmed invite so a lost response cannot rotate it twice. */
   prepareInvite(
     groupId: string,
-    expiresInHours: number,
     createId: () => string,
     createToken: () => string,
-  ): Promise<OwnInvite> {
+  ): Promise<PendingInvite> {
     return this.change((document) => {
       requireReplica(document, groupId);
 
-      const existing = document.own_invites.find(
+      const existing = document.pending_invites.find(
         (candidate) => candidate.group_id === groupId,
       );
 
-      if (
-        existing &&
-        !existing.confirmed &&
-        existing.expires_in_hours === expiresInHours
-      ) {
+      if (existing) {
         return existing;
       }
 
-      const invite: OwnInvite = {
+      const invite: PendingInvite = {
         group_id: groupId,
         invite_id: createId(),
         token: createToken(),
-        expires_in_hours: expiresInHours,
-        confirmed: false,
       };
 
-      document.own_invites = [
-        ...document.own_invites.filter(
+      document.pending_invites = [
+        ...document.pending_invites.filter(
           (candidate) => candidate.group_id !== groupId,
         ),
         invite,
@@ -308,26 +347,12 @@ export class ClientReplicaStore {
     });
   }
 
-  settleInvite(
-    groupId: string,
-    inviteId: string,
-    accepted: boolean,
-  ): Promise<void> {
+  settleInvite(groupId: string, inviteId: string): Promise<void> {
     return this.change((document) => {
-      const invite = document.own_invites.find(
+      document.pending_invites = document.pending_invites.filter(
         (candidate) =>
-          candidate.group_id === groupId && candidate.invite_id === inviteId,
+          candidate.group_id !== groupId || candidate.invite_id !== inviteId,
       );
-
-      if (!invite) return;
-
-      if (accepted) {
-        invite.confirmed = true;
-      } else {
-        document.own_invites = document.own_invites.filter(
-          (candidate) => candidate !== invite,
-        );
-      }
     });
   }
 
@@ -366,7 +391,10 @@ export class ClientReplicaStore {
       );
 
       if (!replica) {
-        return { request: { known_revision: null, commands: [] }, commands: [] };
+        return {
+          request: { known_revision: null, commands: [] },
+          commands: [],
+        };
       }
 
       const access = accessFor(replica.snapshot, session.identity.id);
@@ -424,10 +452,7 @@ export class ClientReplicaStore {
       );
 
       for (const outcome of response.outcomes) {
-        if (
-          outcome.status !== 'rejected' &&
-          outcome.status !== 'superseded'
-        ) {
+        if (outcome.status !== 'rejected' && outcome.status !== 'superseded') {
           continue;
         }
 
@@ -533,7 +558,6 @@ function stateFrom(
       notices: [],
       hidden: false,
       last_synced_at: null,
-      own_invite: null,
     };
   }
 
@@ -551,7 +575,6 @@ function stateFrom(
     notices: structuredClone(replica.notices),
     hidden: access?.hidden_at !== null && access?.hidden_at !== undefined,
     last_synced_at: replica.last_synced_at,
-    own_invite: ownInviteFor(document, projection),
   };
 }
 
@@ -596,9 +619,7 @@ function project(
   return snapshot;
 }
 
-function requireIdentity(
-  document: ClientStorageDocument,
-): IdentitySession {
+function requireIdentity(document: ClientStorageDocument): IdentitySession {
   if (!document.session) throw new Error('identity_not_initialized');
 
   return document.session;
@@ -645,23 +666,6 @@ function sameCreationInput(
   return (
     left.group_id === right.group_id &&
     left.name === right.name &&
-    left.currency_code === right.currency_code &&
     left.creator_member_name === right.creator_member_name
   );
-}
-
-function ownInviteFor(
-  document: ClientStorageDocument,
-  snapshot: GroupSnapshot,
-): ClientReplicaState['own_invite'] {
-  const current = snapshot.invite;
-
-  const invite = document.own_invites.find(
-    (candidate) =>
-      candidate.confirmed &&
-      candidate.group_id === snapshot.group.id &&
-      candidate.invite_id === current?.id,
-  );
-
-  return invite ? { invite_id: invite.invite_id, token: invite.token } : null;
 }

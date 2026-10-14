@@ -8,15 +8,16 @@ import {
 import type { CommandOutcome, MemberAlias } from './domain/commands';
 import type { CreatedGroup } from './domain/groups';
 import type { InviteRecord } from './domain/invites';
-import type { GroupSnapshot } from './domain/sync';
+import { groupSnapshotSchema, type GroupSnapshot } from './domain/sync';
 
 export type StoredGroupCreation = {
   creator_identity_id: string;
   request: {
     group_id: string;
     name: string;
-    currency_code: string;
     creator_member_name: string;
+    invite_id: string;
+    invite_token_hash: string;
   };
   response: CreatedGroup;
 };
@@ -61,7 +62,7 @@ export interface GroupPersistence extends AuditEventStore {
   findInvite(inviteId: string): StoredInvite | null;
   findInviteByTokenHash(tokenHash: string): StoredInvite | null;
   recordInvite(invite: StoredInvite): void;
-  revokeInvite(inviteId: string, revokedAt: string): void;
+  retireInvite(inviteId: string, revokedAt: string): void;
 }
 
 export interface GroupRepository {
@@ -146,6 +147,27 @@ export class DurableObjectGroupRepository implements GroupRepository {
          revoked_at TEXT
        );`,
     );
+
+    // The version 1 SQL above is the initial migration. Upgrade existing
+    // databases transactionally, retaining every invite and its revoked state.
+    this.storage.transactionSync(() => {
+      const version = this.storage.sql
+        .exec<{
+          value: string;
+        }>("SELECT value FROM group_metadata WHERE key = 'schema_version'")
+        .toArray()[0];
+
+      if (!version) throw new Error('group_schema_version_missing');
+
+      if (version.value === '1') {
+        this.storage.sql.exec(
+          `ALTER TABLE group_invites DROP COLUMN expires_at;
+           UPDATE group_metadata SET value = '2' WHERE key = 'schema_version';`,
+        );
+      } else if (version.value !== '2') {
+        throw new Error('unsupported_group_schema_version');
+      }
+    });
   }
 
   transaction<T>(operation: (persistence: GroupPersistence) => T): T {
@@ -173,7 +195,9 @@ class SQLiteGroupPersistence implements GroupPersistence {
       revision: row.revision,
       next_actor_number: row.next_actor_number,
       creation: parseJson<StoredGroupCreation>(row.creation_json),
-      snapshot: parseJson<GroupSnapshot>(row.snapshot_json),
+      snapshot: groupSnapshotSchema.parse(
+        parseJson<GroupSnapshot>(row.snapshot_json),
+      ),
     };
   }
 
@@ -250,9 +274,7 @@ class SQLiteGroupPersistence implements GroupPersistence {
           join_id: row.join_id,
           identity_id: row.identity_id,
           request_json: row.request_json,
-          response: parseJson<StoredJoinOutcome['response']>(
-            row.response_json,
-          ),
+          response: parseJson<StoredJoinOutcome['response']>(row.response_json),
         }
       : null;
   }
@@ -304,20 +326,18 @@ class SQLiteGroupPersistence implements GroupPersistence {
          token_hash,
          created_by_identity_id,
          created_at,
-         expires_at,
          revoked_at
        )
-       VALUES (?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?)`,
       invite.id,
       invite.token_hash,
       invite.created_by_identity_id,
       invite.created_at,
-      invite.expires_at,
       invite.revoked_at,
     );
   }
 
-  revokeInvite(inviteId: string, revokedAt: string): void {
+  retireInvite(inviteId: string, revokedAt: string): void {
     this.sql.exec(
       `UPDATE group_invites SET revoked_at = ?
        WHERE id = ? AND revoked_at IS NULL`,
@@ -334,7 +354,7 @@ class SQLiteGroupPersistence implements GroupPersistence {
       this.sql
         .exec<StoredInvite>(
           `SELECT id, token_hash, created_by_identity_id, created_at,
-                  expires_at, revoked_at
+                  revoked_at
            FROM group_invites
            WHERE ${column} = ?`,
           value,
@@ -381,7 +401,6 @@ class SQLiteGroupPersistence implements GroupPersistence {
         }),
       );
   }
-
 }
 
 type MemoryGroupData = {
@@ -471,9 +490,7 @@ class MemoryGroupPersistence implements GroupPersistence {
   findJoinOutcome(joinId: string): StoredJoinOutcome | null {
     return (
       clone(
-        this.data.joinOutcomes.find(
-          (outcome) => outcome.join_id === joinId,
-        ),
+        this.data.joinOutcomes.find((outcome) => outcome.join_id === joinId),
       ) ?? null
     );
   }
@@ -508,7 +525,7 @@ class MemoryGroupPersistence implements GroupPersistence {
     this.data.invites.push(clone(invite));
   }
 
-  revokeInvite(inviteId: string, revokedAt: string): void {
+  retireInvite(inviteId: string, revokedAt: string): void {
     const invite = this.data.invites.find(({ id }) => id === inviteId);
 
     if (invite && invite.revoked_at === null) invite.revoked_at = revokedAt;

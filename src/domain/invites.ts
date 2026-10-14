@@ -3,63 +3,54 @@ import { identifierSchema } from './ids';
 
 /**
  * A 256-bit secret encoded as unpadded base64url. The creating client
- * generates it, so a retried creation reuses the same link; the server keeps
- * only its hash.
+ * generates it, so a retried creation reuses the same link.
  */
 export const inviteTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 
-export const defaultInviteLifetimeHours = 24 * 7;
-
-export const maximumInviteLifetimeHours = 24 * 30;
-
-/** The current invite link as every participant sees it; never the token. */
-export const groupInviteSchema = z.object({
+/** Attribution retained in history without copying invitation secrets. */
+export const inviteMetadataSchema = z.object({
   id: identifierSchema,
   created_by_identity_id: identifierSchema,
   created_at: z.iso.datetime(),
-  expires_at: z.iso.datetime(),
+});
+
+/** The group's current link, shared through authenticated group snapshots. */
+export const groupInviteSchema = inviteMetadataSchema.extend({
+  token: inviteTokenSchema,
 });
 
 export type GroupInvite = z.output<typeof groupInviteSchema>;
 
 /** An invite as audit history records it, including when it stopped working. */
-export const inviteRecordSchema = groupInviteSchema.extend({
+export const inviteRecordSchema = inviteMetadataSchema.extend({
   revoked_at: z.iso.datetime().nullable(),
 });
 
 export type InviteRecord = z.output<typeof inviteRecordSchema>;
 
-export const createInviteRequestSchema = z.object({
+export const inviteLinkInputSchema = z.object({
   invite_id: identifierSchema,
   token: inviteTokenSchema,
-  expires_in_hours: z
-    .number()
-    .int()
-    .min(1)
-    .max(maximumInviteLifetimeHours)
-    .default(defaultInviteLifetimeHours),
 });
 
-export type CreateInviteRequest = z.input<typeof createInviteRequestSchema>;
+export type InviteLinkInput = z.input<typeof inviteLinkInputSchema>;
 
-export const createInviteCommandSchema = z.object({
+export const regenerateInviteCommandSchema = z.object({
   group_id: identifierSchema,
   identity_id: identifierSchema,
   invite_id: identifierSchema,
   token_hash: z.string().min(1),
+  token: inviteTokenSchema,
   created_at: z.iso.datetime(),
-  expires_at: z.iso.datetime(),
 });
 
-export type CreateInviteCommand = z.output<typeof createInviteCommandSchema>;
+export type RegenerateInviteCommand = z.output<
+  typeof regenerateInviteCommandSchema
+>;
 
 export const inviteResultSchema = z.object({
   revision: z.number().int().positive(),
   invite: groupInviteSchema,
-});
-
-export const revokeInviteResultSchema = z.object({
-  revision: z.number().int().positive(),
 });
 
 export const previewInviteRequestSchema = z.object({
@@ -71,12 +62,16 @@ export const invitePreviewSchema = z.object({
   group: z.object({
     id: identifierSchema,
     name: z.string(),
-    currency_code: z.string(),
   }),
   members: z.array(
-    z.object({ id: identifierSchema, display_name: z.string() }),
+    z.object({
+      id: identifierSchema,
+      display_name: z.string(),
+      in_use: z.boolean().meta({
+        description: 'Whether a current participant uses this member name.',
+      }),
+    }),
   ),
-  expires_at: z.iso.datetime(),
 });
 
 export type InvitePreview = z.output<typeof invitePreviewSchema>;
@@ -84,15 +79,10 @@ export type InvitePreview = z.output<typeof invitePreviewSchema>;
 export const inviteFailureCodes = [
   'invite_required',
   'invite_invalid',
-  'invite_expired',
-  'invite_revoked',
+  'invite_replaced',
 ] as const;
 
 export type InviteFailure = (typeof inviteFailureCodes)[number];
-
-export function inviteExpiry(createdAt: string, hours: number): string {
-  return new Date(Date.parse(createdAt) + hours * 3_600_000).toISOString();
-}
 
 export async function hashInviteToken(token: string): Promise<string> {
   const digest = await crypto.subtle.digest(

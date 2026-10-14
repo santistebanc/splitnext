@@ -1,19 +1,14 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { joinGroupRequestSchema } from '../domain/access';
-import {
-  createdGroupSchema,
-  createGroupRequestSchema,
-} from '../domain/groups';
+import { createdGroupSchema, createGroupRequestSchema } from '../domain/groups';
 import { createIdentifier, identifierSchema } from '../domain/ids';
 import {
-  createInviteRequestSchema,
+  inviteLinkInputSchema,
   hashInviteToken,
-  inviteExpiry,
   invitePreviewSchema,
   inviteResultSchema,
   isInviteFailure,
   previewInviteRequestSchema,
-  revokeInviteResultSchema,
 } from '../domain/invites';
 import {
   groupSessionSchema,
@@ -50,7 +45,8 @@ const createGroupRoute = createRoute({
   },
   responses: {
     201: {
-      description: 'The created group and initial member selection.',
+      description:
+        'The created group, initial member selection, and immediately usable invite.',
       content: { 'application/json': { schema: createdGroupSchema } },
     },
     400: errorResponse('The request body is invalid.'),
@@ -66,9 +62,10 @@ const joinGroupRoute = createRoute({
   tags: ['Groups'],
   summary: 'Join a group through its invite link, or rejoin it',
   description:
-    'Identities joining for the first time send the token from the group\'s current ' +
+    "Identities joining for the first time send the token from the group's current " +
     'invite link. Identities that already have access, including ones that left, ' +
-    'rejoin without one.',
+    'rejoin without one. Preferred-member selection is nonexclusive. A new-member ' +
+    'name that matches an active member selects that member without creating a duplicate.',
   security: [{ bearerAuth: [] }],
   request: {
     params: groupIdParameter,
@@ -85,9 +82,7 @@ const joinGroupRoute = createRoute({
     },
     400: errorResponse('The join request is invalid.'),
     401: errorResponse('The device credential is unavailable or invalid.'),
-    403: errorResponse(
-      'The invite token is missing, unknown, expired, or revoked.',
-    ),
+    403: errorResponse('The invite token is missing, unknown or revoked.'),
     404: errorResponse('The group does not exist.'),
     409: errorResponse('The preferred member choice conflicts.'),
     500: errorResponse('The group could not be joined.'),
@@ -138,26 +133,26 @@ const realtimeRoute = createRoute({
   },
 });
 
-const createInviteRoute = createRoute({
-  method: 'post',
-  path: '/groups/{groupId}/invites',
+const regenerateInviteRoute = createRoute({
+  method: 'put',
+  path: '/groups/{groupId}/invite',
   tags: ['Invites'],
-  summary: 'Create the group\'s invite link, revoking any previous one',
+  summary: "Replace the group's single current invite link",
   description:
     'The client generates the token and shares `/join/{groupId}#{token}`. The ' +
-    'server stores only its hash, so repeating the request with the same ' +
-    'invite id and token returns the same link.',
+    'server shares the current token in authenticated group snapshots. The same ' +
+    'invite id and token make retries safe and never restore a replaced link.',
   security: [{ bearerAuth: [] }],
   request: {
     params: groupIdParameter,
     headers: deviceAuthorizationHeadersSchema,
     body: {
       required: true,
-      content: { 'application/json': { schema: createInviteRequestSchema } },
+      content: { 'application/json': { schema: inviteLinkInputSchema } },
     },
   },
   responses: {
-    201: {
+    200: {
       description: 'The current invite link as participants see it.',
       content: { 'application/json': { schema: inviteResultSchema } },
     },
@@ -168,33 +163,9 @@ const createInviteRoute = createRoute({
   },
 });
 
-const revokeInviteRoute = createRoute({
-  method: 'post',
-  path: '/groups/{groupId}/invites/{inviteId}/revoke',
-  tags: ['Invites'],
-  summary: 'Revoke an invite link; access already granted remains',
-  security: [{ bearerAuth: [] }],
-  request: {
-    params: groupIdParameter.extend({
-      inviteId: identifierSchema.meta({
-        param: { name: 'inviteId', in: 'path' },
-      }),
-    }),
-    headers: deviceAuthorizationHeadersSchema,
-  },
-  responses: {
-    200: {
-      description: 'The group revision after revocation.',
-      content: { 'application/json': { schema: revokeInviteResultSchema } },
-    },
-    401: errorResponse('The identity has no current access to this group.'),
-    404: errorResponse('The group or invite does not exist.'),
-  },
-});
-
 const previewInviteRoute = createRoute({
   method: 'post',
-  path: '/groups/{groupId}/invites/preview',
+  path: '/groups/{groupId}/invite/preview',
   tags: ['Invites'],
   summary: 'Show a link holder the group before they join',
   security: [{ bearerAuth: [] }],
@@ -213,20 +184,21 @@ const previewInviteRoute = createRoute({
     },
     400: errorResponse('The request body is invalid.'),
     401: errorResponse('The device credential is unavailable or invalid.'),
-    403: errorResponse('The invite token is unknown, expired, or revoked.'),
+    403: errorResponse('The invite token is unknown or revoked.'),
     404: errorResponse('The group does not exist.'),
   },
 });
 
-const authenticatedGroupRoutes = new OpenAPIHono<AuthenticatedRequestEnvironment>({
-  defaultHook: (result, context) => {
-    if (result.success) return;
+const authenticatedGroupRoutes =
+  new OpenAPIHono<AuthenticatedRequestEnvironment>({
+    defaultHook: (result, context) => {
+      if (result.success) return;
 
-    return result.target === 'header'
-      ? context.json({ error: 'unauthorized' }, 401)
-      : context.json({ error: 'invalid_request' }, 400);
-  },
-});
+      return result.target === 'header'
+        ? context.json({ error: 'unauthorized' }, 401)
+        : context.json({ error: 'invalid_request' }, 400);
+    },
+  });
 
 authenticatedGroupRoutes.use('/groups', authenticateDevice);
 
@@ -242,7 +214,12 @@ export const groupRoutes = authenticatedGroupRoutes
     );
 
     const result = await group.createGroup({
-      ...input,
+      group_id: input.group_id,
+      name: input.name,
+      creator_member_name: input.creator_member_name,
+      invite_id: input.invite.invite_id,
+      invite_token_hash: await hashInviteToken(input.invite.token),
+      invite_token: input.invite.token,
       creator_identity_id: session.identity.id,
       member_id: createIdentifier(),
       created_at: new Date().toISOString(),
@@ -279,7 +256,9 @@ export const groupRoutes = authenticatedGroupRoutes
       group_id: groupId,
       identity_id: session.identity.id,
       joined_at: new Date().toISOString(),
-      invite_token_hash: inviteToken ? await hashInviteToken(inviteToken) : null,
+      invite_token_hash: inviteToken
+        ? await hashInviteToken(inviteToken)
+        : null,
     });
 
     if (!result.ok) {
@@ -360,7 +339,7 @@ export const groupRoutes = authenticatedGroupRoutes
 
     return group.fetch(new Request(context.req.raw, { headers }));
   })
-  .openapi(createInviteRoute, async (context) => {
+  .openapi(regenerateInviteRoute, async (context) => {
     const input = context.req.valid('json');
     const { groupId } = context.req.valid('param');
     const session = context.get('identitySession');
@@ -370,13 +349,13 @@ export const groupRoutes = authenticatedGroupRoutes
       context.env.GROUPS.idFromName(groupId),
     );
 
-    const result = await group.createInvite({
+    const result = await group.regenerateInvite({
       group_id: groupId,
       identity_id: session.identity.id,
       invite_id: input.invite_id,
       token_hash: await hashInviteToken(input.token),
+      token: input.token,
       created_at: createdAt,
-      expires_at: inviteExpiry(createdAt, input.expires_in_hours),
     });
 
     if (!result.ok) {
@@ -394,30 +373,8 @@ export const groupRoutes = authenticatedGroupRoutes
 
     return context.json(
       { revision: result.revision, invite: result.invite },
-      201,
+      200,
     );
-  })
-  .openapi(revokeInviteRoute, async (context) => {
-    const { groupId, inviteId } = context.req.valid('param');
-    const session = context.get('identitySession');
-
-    const group = context.env.GROUPS.get(
-      context.env.GROUPS.idFromName(groupId),
-    );
-
-    const result = await group.revokeInvite(
-      groupId,
-      session.identity.id,
-      inviteId,
-    );
-
-    if (!result.ok) {
-      return result.error === 'unauthorized' || result.error === 'invalid_request'
-        ? context.json({ error: 'unauthorized' as const }, 401)
-        : context.json({ error: result.error }, 404);
-    }
-
-    return context.json({ revision: result.revision }, 200);
   })
   .openapi(previewInviteRoute, async (context) => {
     const { token } = context.req.valid('json');

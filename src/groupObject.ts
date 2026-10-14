@@ -1,8 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import {
-  joinGroupCommandSchema,
-  type JoinGroupCommand,
-} from './domain/access';
+import { joinGroupCommandSchema, type JoinGroupCommand } from './domain/access';
 import {
   initializeGroup,
   initializeGroupCommandSchema,
@@ -10,8 +7,8 @@ import {
 } from './domain/groups';
 import { identifierSchema } from './domain/ids';
 import {
-  createInviteCommandSchema,
-  type CreateInviteCommand,
+  regenerateInviteCommandSchema,
+  type RegenerateInviteCommand,
 } from './domain/invites';
 import {
   realtimeGroupHiddenCode,
@@ -42,7 +39,9 @@ export class GroupObject extends DurableObject<Env> {
   private store = this.createStore();
 
   async health(): Promise<boolean> {
-    const probe = this.ctx.storage.sql.exec<ProbeRow>('SELECT 1 AS ok').toArray()[0];
+    const probe = this.ctx.storage.sql
+      .exec<ProbeRow>('SELECT 1 AS ok')
+      .toArray()[0];
 
     return probe?.ok === 1;
   }
@@ -77,6 +76,7 @@ export class GroupObject extends DurableObject<Env> {
 
     this.ctx.acceptWebSocket(pair[1], [identityId.data]);
     pair[1].send(announcement(access.revision));
+    this.announcePresence();
 
     return new Response(null, {
       status: 101,
@@ -87,6 +87,15 @@ export class GroupObject extends DurableObject<Env> {
 
   /** Clients only listen; anything they send is ignored. */
   webSocketMessage(): void {}
+
+  webSocketClose(socket: WebSocket): void {
+    this.announcePresence(socket);
+  }
+
+  webSocketError(socket: WebSocket): void {
+    socket.close(1011, 'connection_error');
+    this.announcePresence(socket);
+  }
 
   createGroup(command: InitializeGroupCommand) {
     const parsed = initializeGroupCommandSchema.safeParse(command);
@@ -131,33 +140,17 @@ export class GroupObject extends DurableObject<Env> {
     return result;
   }
 
-  createInvite(command: CreateInviteCommand) {
-    const parsed = createInviteCommandSchema.safeParse(command);
+  regenerateInvite(command: RegenerateInviteCommand) {
+    const parsed = regenerateInviteCommandSchema.safeParse(command);
 
     if (!parsed.success || this.ctx.id.name !== parsed.data.group_id) {
       return { ok: false as const, error: 'invalid_request' as const };
     }
 
-    const result = this.store.createInvite(parsed.data);
+    const result = this.store.regenerateInvite(parsed.data);
 
     // A retried creation repeats its announcement, which subscribers tolerate.
     if (result.ok) this.announce(result.revision);
-
-    return result;
-  }
-
-  revokeInvite(groupId: string, identityId: string, inviteId: string) {
-    if (this.ctx.id.name !== groupId) {
-      return { ok: false as const, error: 'invalid_request' as const };
-    }
-
-    const result = this.store.revokeInvite(
-      identityId,
-      inviteId,
-      new Date().toISOString(),
-    );
-
-    if (result.ok && result.changed) this.announce(result.revision);
 
     return result;
   }
@@ -167,7 +160,7 @@ export class GroupObject extends DurableObject<Env> {
       return { ok: false as const, error: 'invalid_request' as const };
     }
 
-    return this.store.previewInvite(tokenHash, new Date().toISOString());
+    return this.store.previewInvite(tokenHash);
   }
 
   inspectGroup(groupId: string) {
@@ -215,6 +208,8 @@ export class GroupObject extends DurableObject<Env> {
       for (const socket of this.ctx.getWebSockets(identityId)) {
         socket.close(realtimeGroupHiddenCode, 'group_hidden');
       }
+
+      this.announcePresence();
     }
 
     this.announce(response.revision);
@@ -228,6 +223,31 @@ export class GroupObject extends DurableObject<Env> {
         socket.send(message);
       } catch {
         // A closing socket cannot receive; its client catches up on reconnect.
+      }
+    }
+  }
+
+  private announcePresence(excluded?: WebSocket): void {
+    const sockets = this.ctx
+      .getWebSockets()
+      .filter(
+        (socket) => socket !== excluded && socket.readyState === WebSocket.OPEN,
+      );
+
+    const identityIds = [
+      ...new Set(sockets.flatMap((socket) => this.ctx.getTags(socket))),
+    ].sort();
+
+    const message = JSON.stringify({
+      type: 'presence',
+      identity_ids: identityIds,
+    });
+
+    for (const socket of sockets) {
+      try {
+        socket.send(message);
+      } catch {
+        // Closing connections receive a fresh roster after reconnecting.
       }
     }
   }
