@@ -11,6 +11,7 @@ declare global {
   namespace Cloudflare {
     interface Env {
       TEST_MIGRATIONS: D1Migration[];
+      APP_RENDERING: Fetcher;
     }
   }
 }
@@ -48,6 +49,12 @@ export type OpenApiDocument = {
         responses: object;
       };
     };
+    '/groups/{groupId}/invite': {
+      put: { responses: object };
+    };
+    '/groups/{groupId}/invite/preview': {
+      post: { responses: object };
+    };
     '/groups/{groupId}/join': {
       post: { responses: object };
     };
@@ -59,7 +66,9 @@ export function applyTestMigrations(): Promise<void> {
 }
 
 export async function fetchOpenApiDocument(): Promise<OpenApiDocument> {
-  const response = await exports.default.fetch('https://splitnext.test/openapi.json');
+  const response = await exports.default.fetch(
+    'https://splitnext.test/openapi.json',
+  );
 
   expect(response.status).toBe(200);
 
@@ -148,7 +157,8 @@ export async function joinThroughInvite(
   groupId: string,
   preferredMember: ClientPreferredMemberChoice,
 ) {
-  const token = (await creator.createInvite(groupId)).own_invite?.token;
+  const token = (await creator.regenerateInvite(groupId)).projected_snapshot
+    ?.invite.token;
 
   if (!token) throw new Error('invite_token_missing');
 

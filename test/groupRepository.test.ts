@@ -19,8 +19,10 @@ describe('in-memory group repository adapter', () => {
         creator_identity_id: identityId,
         member_id: memberId,
         name: 'Test group',
-        currency_code: 'EUR',
         creator_member_name: 'Santi',
+        invite_id: createIdentifier(),
+        invite_token_hash: 'initial-invite-hash',
+        invite_token: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
         created_at: createdAt,
       }),
     );
@@ -91,6 +93,9 @@ describe('in-memory group repository adapter', () => {
       audit_events: [{ sequence: 1 }, { sequence: 2 }],
     });
     expect(repository.inspect().command_outcomes).toHaveLength(2);
+    expect(JSON.stringify(store.history())).not.toContain(
+      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    );
   });
 
   it('keeps actor attribution as it was when each transition occurred', () => {
@@ -106,8 +111,10 @@ describe('in-memory group repository adapter', () => {
         creator_identity_id: identityId,
         member_id: memberId,
         name: 'Trip',
-        currency_code: 'EUR',
         creator_member_name: 'Santi',
+        invite_id: createIdentifier(),
+        invite_token_hash: 'initial-invite-hash',
+        invite_token: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
         created_at: '2026-09-23T10:00:00.000Z',
       }),
     );

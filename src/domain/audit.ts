@@ -6,7 +6,7 @@ import {
   groupDetailsSchema,
 } from './groups';
 import { identifierSchema } from './ids';
-import { inviteRecordSchema } from './invites';
+import { inviteRecordSchema, inviteMetadataSchema } from './invites';
 import { ledgerMemberSchema } from './members';
 
 const joinedStateSchema = z.object({
@@ -23,7 +23,7 @@ export const auditChangeSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('group.created'),
     before: z.null(),
-    after: createdGroupSchema,
+    after: createdGroupSchema.extend({ invite: inviteMetadataSchema }),
   }),
   z.object({
     action: z.literal('group.joined'),
@@ -100,10 +100,7 @@ export type NewAuditEvent = z.output<typeof newAuditEventSchema>;
 
 export type AuditEvent = z.output<typeof auditEventSchema>;
 
-export type AuditAttribution = Omit<
-  NewAuditEvent,
-  'id' | 'change'
->;
+export type AuditAttribution = Omit<NewAuditEvent, 'id' | 'change'>;
 
 export interface AuditEventStore {
   appendAudit(event: NewAuditEvent): AuditEvent;

@@ -14,6 +14,7 @@ import {
   SplitnextClient,
   SplitnextSyncClient,
   type ClientGroupSummary,
+  type ClientGroupCreationInput,
   type ClientPreferredMemberChoice,
   type ClientReplicaState,
   type ClientStorageAdapter,
@@ -21,9 +22,8 @@ import {
 } from '../client';
 import { z } from 'zod';
 import type { GroupCommand } from '../domain/commands';
-import type { CreateGroupRequest } from '../domain/groups';
 import type { IdentitySession } from '../domain/identities';
-import { revisionAnnouncementSchema } from '../domain/realtime';
+import { realtimeAnnouncementSchema } from '../domain/realtime';
 import { groupSnapshotSchema, type GroupSnapshot } from '../domain/sync';
 import type { IdentityDirectoryInspection } from '../identityDirectory';
 
@@ -39,14 +39,16 @@ export type PersistedLabDevice = {
   selected_group_id: string | null;
 };
 
-export const persistedLabDevicesSchema = z.array(z.object({
-  key: z.string().min(1),
-  label: z.string().min(1),
-  secret: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
-  online: z.boolean(),
-  registered: z.boolean(),
-  selected_group_id: z.string().nullable(),
-}));
+export const persistedLabDevicesSchema = z.array(
+  z.object({
+    key: z.string().min(1),
+    label: z.string().min(1),
+    secret: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    online: z.boolean(),
+    registered: z.boolean(),
+    selected_group_id: z.string().nullable(),
+  }),
+);
 
 type LabFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -95,6 +97,7 @@ export type LabDevice = {
   realtime: boolean;
   realtimeStatus: LabRealtimeStatus;
   realtimeEvents: LabRealtimeEvent[];
+  presence: string[] | null;
   session: IdentitySession | null;
   /** Every group this device's identity can access, active ones first. */
   groups: ClientGroupSummary[];
@@ -118,7 +121,6 @@ export type LabServer = {
 export type LabServerGroup = {
   group_id: string;
   name: string;
-  currency_code: string;
   revision: number;
 };
 
@@ -227,7 +229,9 @@ export class SyncLab {
   private readonly fetch: LabFetch;
   private readonly webSocket: RealtimeSocketFactory;
   private readonly createDeviceSecret: () => string;
-  private readonly storageForDevice: (key: LabDeviceKey) => ClientStorageAdapter;
+  private readonly storageForDevice: (
+    key: LabDeviceKey,
+  ) => ClientStorageAdapter;
   private readonly clearDeviceStorage: (key: LabDeviceKey) => void;
   private readonly onDevicesChanged: (devices: PersistedLabDevice[]) => void;
   private readonly now: () => Date;
@@ -241,8 +245,10 @@ export class SyncLab {
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
     this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.webSocket = options.webSocket ?? browserWebSocket;
-    this.createDeviceSecret = options.createDeviceSecret ?? generateDeviceSecret;
-    this.storageForDevice = options.storageForDevice ?? (() => new MemoryClientStorage());
+    this.createDeviceSecret =
+      options.createDeviceSecret ?? generateDeviceSecret;
+    this.storageForDevice =
+      options.storageForDevice ?? (() => new MemoryClientStorage());
     this.clearDeviceStorage = options.clearDeviceStorage ?? (() => undefined);
     this.onDevicesChanged = options.onDevicesChanged ?? (() => undefined);
     this.now = options.now ?? (() => new Date());
@@ -392,21 +398,23 @@ export class SyncLab {
       const runtime = this.runtimes.get(key);
 
       return runtime
-        ? [{
-            key,
-            label: device.label,
-            secret: runtime.secret,
-            online: device.online,
-            registered: device.session !== null,
-            selected_group_id: device.selectedGroupId,
-          }]
+        ? [
+            {
+              key,
+              label: device.label,
+              secret: runtime.secret,
+              online: device.online,
+              registered: device.session !== null,
+              selected_group_id: device.selectedGroupId,
+            },
+          ]
         : [];
     });
   }
 
   async createGroup(
     key: LabDeviceKey,
-    input: Omit<CreateGroupRequest, 'group_id'>,
+    input: ClientGroupCreationInput,
   ): Promise<ClientReplicaState> {
     const replica = await this.runtime(key).client.createGroup(input);
 
@@ -416,7 +424,10 @@ export class SyncLab {
   }
 
   /** Makes a group the device's selected one, fetching it if not stored. */
-  async selectGroup(key: LabDeviceKey, groupId: string): Promise<ClientReplicaState> {
+  async selectGroup(
+    key: LabDeviceKey,
+    groupId: string,
+  ): Promise<ClientReplicaState> {
     const device = this.device(key);
     const client = this.runtime(key).client;
     const known = device.groups.find((group) => group.group_id === groupId);
@@ -452,7 +463,10 @@ export class SyncLab {
   previewInvite(key: LabDeviceKey, link: string): Promise<InvitePreview> {
     const invite = requireInviteLink(link);
 
-    return this.runtime(key).client.previewInvite(invite.group_id, invite.token);
+    return this.runtime(key).client.previewInvite(
+      invite.group_id,
+      invite.token,
+    );
   }
 
   async joinWithInvite(
@@ -473,22 +487,20 @@ export class SyncLab {
     return replica;
   }
 
-  createInvite(key: LabDeviceKey, expiresInHours?: number) {
+  regenerateInvite(key: LabDeviceKey) {
     return this.mutate(key, (client, groupId) =>
-      client.createInvite(groupId, expiresInHours),
+      client.regenerateInvite(groupId),
     );
   }
 
-  revokeInvite(key: LabDeviceKey) {
-    return this.mutate(key, (client, groupId) => client.revokeInvite(groupId));
-  }
-
-  /** The shareable link, when this device created the group's current one. */
+  /** The group's shared link from this device's latest snapshot. */
   inviteLink(key: LabDeviceKey): string | null {
     const replica = this.device(key).replica;
 
-    return replica?.own_invite
-      ? formatInviteLink(this.baseUrl, replica.group_id, replica.own_invite.token)
+    const invite = replica?.projected_snapshot?.invite;
+
+    return invite && replica
+      ? formatInviteLink(this.baseUrl, replica.group_id, invite.token)
       : null;
   }
 
@@ -560,7 +572,8 @@ export class SyncLab {
         return [
           (async () => {
             try {
-              device.session = await this.runtime(key).client.initializeIdentity();
+              device.session =
+                await this.runtime(key).client.initializeIdentity();
               await this.finishDeviceInitialization(key);
             } catch {
               // Keep this device available if registration is temporarily unavailable.
@@ -698,7 +711,10 @@ export class SyncLab {
   async refreshServer(): Promise<void> {
     if (!this.state.server.online) return;
 
-    await Promise.all([this.refreshIdentityDirectory(), this.refreshServerGroups()]);
+    await Promise.all([
+      this.refreshIdentityDirectory(),
+      this.refreshServerGroups(),
+    ]);
     await this.refreshGroupInspection();
     this.changed();
   }
@@ -739,13 +755,22 @@ export class SyncLab {
       api,
       device_secret: secret,
       storage: this.storageForDevice(key),
-      realtime_reconnect_delay_ms: (attempt) => Math.min(250 * 2 ** attempt, 4000),
+      realtime_reconnect_delay_ms: (attempt) =>
+        Math.min(250 * 2 ** attempt, 4000),
       // Every watched group refreshes in the background; the group list shows
       // their names, and the selected one is also shown in full.
       on_background_sync: (replica) => {
-        if (replica.group_id === device.selectedGroupId) device.replica = replica;
+        if (replica.group_id === device.selectedGroupId)
+          device.replica = replica;
 
         void this.refreshAfterOperation();
+      },
+      on_presence_change: (groupId) => {
+        if (device.selectedGroupId === groupId) {
+          device.presence =
+            this.runtimes.get(key)?.client.presence(groupId) ?? null;
+          this.changed();
+        }
       },
     });
 
@@ -824,6 +849,7 @@ export class SyncLab {
     device.selectedGroupId = replica.group_id;
     device.replica = replica;
     this.state.inspectedGroupId = replica.group_id;
+    device.presence = this.runtime(key).client.presence(replica.group_id);
     await this.refreshAfterOperation();
     this.watchIfEnabled(key);
   }
@@ -914,6 +940,7 @@ export class SyncLab {
 
         if (device.selectedGroupId) {
           device.replica = await runtime.client.inspect(device.selectedGroupId);
+          device.presence = runtime.client.presence(device.selectedGroupId);
           this.captureReplicaCommands(device);
         }
       }),
@@ -959,7 +986,10 @@ export class SyncLab {
     this.state.server.subscribers = inspection?.subscribers ?? [];
   }
 
-  private async inspect<T>(path: string, schema: z.ZodType<T>): Promise<T | null> {
+  private async inspect<T>(
+    path: string,
+    schema: z.ZodType<T>,
+  ): Promise<T | null> {
     if (!this.state.server.online) return null;
 
     try {
@@ -1063,7 +1093,10 @@ export class SyncLab {
     this.changed();
   }
 
-  private onNetworkError(key: LabDeviceKey, event: ClientNetworkErrorEvent): void {
+  private onNetworkError(
+    key: LabDeviceKey,
+    event: ClientNetworkErrorEvent,
+  ): void {
     const device = this.device(key);
 
     completeRequest(device.requests, event, {
@@ -1237,7 +1270,6 @@ const serverGroupListSchema = z.object({
     z.object({
       group_id: z.string(),
       name: z.string(),
-      currency_code: z.string(),
       revision: z.number().int().positive(),
     }),
   ),
@@ -1256,6 +1288,7 @@ function newDevice(label: string): LabDevice {
     realtime: true,
     realtimeStatus: 'off',
     realtimeEvents: [],
+    presence: null,
     session: null,
     groups: [],
     selectedGroupId: null,
@@ -1284,9 +1317,12 @@ function completeRequest(
 
 function describeAnnouncement(data: string): string {
   try {
-    const parsed = revisionAnnouncementSchema.safeParse(JSON.parse(data));
+    const parsed = realtimeAnnouncementSchema.safeParse(JSON.parse(data));
 
-    if (parsed.success) return `Revision ${parsed.data.revision} announced`;
+    if (parsed.success)
+      return parsed.data.type === 'revision'
+        ? `Revision ${parsed.data.revision} announced`
+        : `Presence: ${parsed.data.identity_ids.length} connected identities`;
   } catch {
     // Unreadable messages are shown verbatim below.
   }

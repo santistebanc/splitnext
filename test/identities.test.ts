@@ -2,6 +2,7 @@ import { env, exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import app from '../src/app';
 import { createIdentifier } from '../src/domain/ids';
+import { createInviteToken } from '../src/domain/invites';
 import { identitySessionSchema } from '../src/domain/identities';
 import { applyTestMigrations, fetchOpenApiDocument } from './harness';
 
@@ -172,8 +173,9 @@ describe('anonymous identities API', () => {
 
     const session = identitySessionSchema.parse(await created.json());
 
-    await env.INDEX
-      .prepare('UPDATE identity_devices SET revoked_at = ? WHERE id = ?')
+    await env.INDEX.prepare(
+      'UPDATE identity_devices SET revoked_at = ? WHERE id = ?',
+    )
       .bind('2026-09-24T12:00:00.000Z', session.device.id)
       .run();
 
@@ -192,8 +194,8 @@ describe('anonymous identities API', () => {
         body: JSON.stringify({
           group_id: createIdentifier(),
           name: 'Rejected group',
-          currency_code: 'EUR',
           creator_member_name: 'Santi',
+          invite: { invite_id: createIdentifier(), token: createInviteToken() },
         }),
       }),
     ]);
@@ -207,9 +209,9 @@ describe('anonymous identities API', () => {
   it('publishes both identity operations in OpenAPI', async () => {
     const document = await fetchOpenApiDocument();
 
-    expect(document.paths['/identities/anonymous'].post.responses).toHaveProperty(
-      '201',
-    );
+    expect(
+      document.paths['/identities/anonymous'].post.responses,
+    ).toHaveProperty('201');
     expect(document.paths['/identity'].get.responses).toHaveProperty('200');
     expect(document.paths['/identity'].get.parameters).toContainEqual(
       expect.objectContaining({ name: 'authorization', in: 'header' }),

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { identifierSchema } from './ids';
 
 /** The subprotocol a server selects when it accepts a realtime connection. */
 export const realtimeProtocol = 'splitnext.v1';
@@ -14,7 +15,7 @@ const realtimeCredentialPrefix = 'splitnext.auth.';
 export const realtimeGroupHiddenCode = 4403;
 
 /**
- * The only realtime message: a newer group revision may exist. Clients
+ * A newer group revision may exist. Clients
  * synchronize through the ordinary snapshot path and never treat it as state.
  */
 export const revisionAnnouncementSchema = z.object({
@@ -23,6 +24,17 @@ export const revisionAnnouncementSchema = z.object({
 });
 
 export type RevisionAnnouncement = z.output<typeof revisionAnnouncementSchema>;
+
+/** Ephemeral connected identities, independent of ledger revisions and history. */
+export const presenceAnnouncementSchema = z.object({
+  type: z.literal('presence'),
+  identity_ids: z.array(identifierSchema),
+});
+
+export const realtimeAnnouncementSchema = z.discriminatedUnion('type', [
+  revisionAnnouncementSchema,
+  presenceAnnouncementSchema,
+]);
 
 export function realtimeProtocols(deviceSecret: string): string[] {
   return [realtimeProtocol, `${realtimeCredentialPrefix}v1.${deviceSecret}`];

@@ -734,6 +734,10 @@ pre {
   font-weight: 700;
 }
 
+.participant-marker { display: inline-block; margin-left: 5px; color: var(--muted); }
+.participant-marker.online { color: #246b56; }
+.participant-marker.unknown:not(.you) { color: transparent; -webkit-text-stroke: 1px var(--muted); }
+
 .group-editor input:focus,
 .member-row input:focus {
   outline: 2px solid var(--blue);

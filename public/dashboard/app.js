@@ -49,7 +49,9 @@ const lab = new SyncLab({
     localStorage.setItem('splitnext.tester.devices.v1', JSON.stringify(devices));
   },
   storageForDevice: (key) => new LocalStorageLabClientStorage(key),
-  clearDeviceStorage: (key) => new LocalStorageLabClientStorage(key).clear(),
+  clearDeviceStorage: (key) => {
+    new LocalStorageLabClientStorage(key).clear();
+  },
 });
 
 const state = lab.state;
@@ -141,10 +143,8 @@ function createDeviceView(key) {
     addMemberForm: query('[data-action-form="add-member"]'),
     inviteStatus: query('[data-role="invite-status"]'),
     inviteLink: query('[data-role="invite-link"]'),
-    inviteExpiry: query('[data-role="invite-expiry"]'),
     copyInvite: query('[data-action="copy-invite"]'),
-    createInvite: query('[data-action="create-invite"]'),
-    revokeInvite: query('[data-action="revoke-invite"]'),
+    regenerateInvite: query('[data-action="regenerate-invite"]'),
     commands: query('[data-role="commands"]'),
     requests: query('[data-role="requests"]'),
     clearTraffic: query('[data-action="clear-traffic"]'),
@@ -175,8 +175,7 @@ function createDeviceView(key) {
   view.joinForm.addEventListener('submit', (event) => joinGroup(event, key));
   view.joinLink.addEventListener('input', () => previewJoin(key));
   view.joinMember.addEventListener('change', () => renderJoinChoice(key));
-  view.createInvite.addEventListener('click', () => createInvite(key));
-  view.revokeInvite.addEventListener('click', () => revokeInvite(key));
+  view.regenerateInvite.addEventListener('click', () => regenerateInvite(key));
   view.copyInvite.addEventListener('click', () => copyInvite(key));
   view.addMemberForm.addEventListener('submit', (event) => addMember(event, key));
   view.memberList.addEventListener('submit', (event) =>
@@ -255,13 +254,13 @@ async function createGroup(event, key) {
   try {
     await lab.createGroup(key, {
       name: readText(fields, 'name'),
-      currency_code: readText(fields, 'currency_code'),
       creator_member_name: readText(fields, 'creator_member_name'),
     });
 
     newGroupTabs[key] = false;
+
     showToast(
-      `${state.devices[key].label} created the group. Create an invite link to let others join.`,
+      `${state.devices[key].label} created the group. Copy its invite link to let others join.`,
     );
   } catch (error) {
     showToast(describeError(error), true);
@@ -332,13 +331,18 @@ async function previewJoin(key) {
 
     view.joinMember.replaceChildren(
       new Option('I’m new to this group', 'new'),
-      ...preview.members.map((member) => new Option(member.display_name, member.id)),
+      ...preview.members.map(
+        (member) =>
+          new Option(
+            member.in_use ? `${member.display_name} · in use` : member.display_name,
+            member.id,
+          ),
+      ),
     );
     view.joinMember.disabled = false;
     view.joinPreview.className = 'join-preview';
     view.joinPreview.textContent =
-      `${preview.group.name} · ${preview.group.currency_code} · link ` +
-      `${describeExpiry(preview.expires_at)}. Choose who you are, or join as someone new.`;
+      `${preview.group.name}. Choose who you are, or join as someone new.`;
   } catch (error) {
     if (sequence !== previewSequences[key]) return;
 
@@ -388,7 +392,7 @@ async function joinGroup(event, key) {
   setBusy(button, true, 'Joining…');
 
   try {
-    await lab.joinWithInvite(
+    const joined = await lab.joinWithInvite(
       key,
       view.joinLink.value.trim(),
       preferredMember,
@@ -397,7 +401,14 @@ async function joinGroup(event, key) {
     newGroupTabs[key] = false;
     view.joinLink.value = '';
     resetJoinChoice(key, 'Who are you?');
-    showToast(`${state.devices[key].label} joined through the invite link`);
+    const snapshot = joined.projected_snapshot;
+
+    const preferred = snapshot?.access_grants.find(
+      (grant) => grant.identity_id === joined.session?.identity.id,
+    )?.preferred_member_id;
+
+    const name = snapshot?.members.find((member) => member.id === preferred)?.display_name;
+    showToast(`${state.devices[key].label} joined as ${name ?? 'a member'}`);
   } catch (error) {
     showToast(describeError(error), true);
   } finally {
@@ -406,24 +417,11 @@ async function joinGroup(event, key) {
   }
 }
 
-async function createInvite(key) {
-  const view = deviceViews[key];
-  const replacing = Boolean(currentInvite(key));
-
+async function regenerateInvite(key) {
   await runMutation(
     key,
-    () => lab.createInvite(key, Number(view.inviteExpiry.value)),
-    replacing
-      ? 'New invite link created; the previous one no longer works'
-      : 'Invite link created',
-  );
-}
-
-async function revokeInvite(key) {
-  await runMutation(
-    key,
-    () => lab.revokeInvite(key),
-    'Invite link revoked; people who already joined keep their access',
+    () => lab.regenerateInvite(key),
+    'Invite link changed; the previous one no longer works',
   );
 }
 
@@ -439,24 +437,6 @@ async function copyInvite(key) {
     deviceViews[key].inviteLink.select();
     showToast('Press Ctrl+C to copy the selected link', true);
   }
-}
-
-function currentInvite(key) {
-  return state.devices[key].replica?.projected_snapshot?.invite ?? null;
-}
-
-function describeExpiry(expiresAt) {
-  const remaining = Date.parse(expiresAt) - Date.now();
-
-  if (remaining <= 0) return 'expired';
-
-  const hours = remaining / 3_600_000;
-
-  if (hours < 1) return `expires in ${Math.max(1, Math.round(hours * 60))} min`;
-
-  if (hours < 48) return `expires in ${Math.round(hours)} h`;
-
-  return `expires in ${Math.round(hours / 24)} days`;
 }
 
 async function toggleDevice(key) {
@@ -729,7 +709,7 @@ async function rejoinGroup(event, key) {
 async function runMutation(key, operation, successMessage) {
   const device = state.devices[key];
 
-  if (!device.session || !device.selectedGroupId) return;
+  if (!device.session || !device.selectedGroupId) return false;
 
   try {
     const replica = await operation();
@@ -741,8 +721,12 @@ async function runMutation(key, operation, successMessage) {
     } else {
       showToast(`${successMessage}; queued until the server is reachable`);
     }
+
+    return true;
   } catch (error) {
     showToast(describeError(error), true);
+
+    return false;
   } finally {
     renderAll();
   }
@@ -816,7 +800,7 @@ function renderSetup() {
       'Each device can create a group or join one with an invite link. Start by creating one.';
   } else if (devicesWithGroups === 1) {
     elements.setupSummary.textContent =
-      'Create an invite link in the group, then join it from the other device.';
+      'Copy the group’s invite link, then join it from the other device.';
   } else {
     elements.setupSummary.textContent =
       'Pick a group in each device’s list. Try taking a device offline, leaving, or rotating a link.';
@@ -848,7 +832,7 @@ function renderDevice(key) {
   if (!snapshot) {
     view.memberList.replaceChildren();
   } else {
-    renderMembers(view.memberList, snapshot, device.session?.identity.id, true);
+    renderMembers(view.memberList, snapshot, device.session?.identity.id, true, device.presence);
   }
 
   renderCommands(key);
@@ -943,7 +927,7 @@ function renderGroupList(key) {
       tab.role = 'tab';
       tab.className = `group-tab ${group.status}${selected ? ' selected' : ''}`;
       tab.dataset.groupId = group.group_id;
-      tab.title = `${group.name} · ${group.currency_code} · ${group.group_id}`;
+      tab.title = `${group.name} · ${group.group_id}`;
       tab.setAttribute('aria-selected', String(selected));
       name.textContent = group.name;
       tab.append(name);
@@ -979,9 +963,7 @@ function renderGroupList(key) {
 function renderGroupEditor(element, group) {
   element.querySelector('[data-role="name-label"]').textContent =
     group?.name ?? 'No group';
-  element.querySelector('[data-role="group-detail"]').textContent = group
-    ? `${group.currency_code} · ${group.id}`
-    : '';
+  element.querySelector('[data-role="group-detail"]').textContent = group?.id ?? '';
 }
 
 function renderGroupSummary(element, group) {
@@ -991,11 +973,11 @@ function renderGroupSummary(element, group) {
 
   title.textContent = group.name;
   detail.className = 'member-note';
-  detail.textContent = `${group.currency_code} · ${group.id}`;
+  detail.textContent = group.id;
   element.append(title, detail);
 }
 
-function renderMembers(element, snapshot, identityId, editable = false) {
+function renderMembers(element, snapshot, identityId, editable = false, presence = null) {
   const members = snapshot.members.filter(({ status }) => status === 'active');
 
   const preferredByMember = (member) =>
@@ -1034,7 +1016,7 @@ function renderMembers(element, snapshot, identityId, editable = false) {
     const row = existing.get(member.id) ?? createMemberRow(member.id);
 
     existing.delete(member.id);
-    updateMemberRow(row, member, preferredByMember(member), identityId);
+    updateMemberRow(row, member, preferredByMember(member), identityId, presence);
 
     if (element.children[index] !== row) {
       element.insertBefore(row, element.children[index] ?? null);
@@ -1077,7 +1059,7 @@ function createMemberRow(memberId) {
   return row;
 }
 
-function updateMemberRow(row, member, preferredBy, identityId) {
+function updateMemberRow(row, member, preferredBy, identityId, presence) {
   const name = row.querySelector('[data-role="name-label"]');
   const edit = row.querySelector('[data-action="edit-name"]');
   const prefer = row.querySelector('button[value="prefer"]');
@@ -1095,12 +1077,25 @@ function updateMemberRow(row, member, preferredBy, identityId) {
   );
   setIconButton(row.querySelector('button[value="remove"]'), 'trash', `Remove ${member.display_name}`);
   users.className = `member-users${preferredBy.length > 1 ? ' shared' : ''}`;
-  users.textContent = describeUsers(preferredBy, identityId);
+
+  const markers = preferredBy.map((grant) => {
+    const marker = document.createElement('span');
+    const status = presence === null ? 'unknown' : presence.includes(grant.identity_id) ? 'online' : 'offline';
+    const you = grant.identity_id === identityId;
+
+    marker.className = `participant-marker ${status}${you ? ' you' : ''}`;
+    marker.textContent = you ? status === 'unknown' ? '☆' : '★' : '●';
+    marker.title = `${grant.actor_handle}${you ? ' (you)' : ''}: ${status}`;
+    marker.setAttribute('aria-label', marker.title);
+
+    return marker;
+  });
+
+  users.replaceChildren(document.createTextNode(describeUsers(preferredBy, identityId)), ...markers);
 }
 
 /**
- * Every participant sees that a link exists; only the device that created it
- * knows the token and can show or copy the link.
+ * Every participant can copy the group's current shared link.
  */
 function renderInvite(key, hasActiveGroup) {
   const device = state.devices[key];
@@ -1120,19 +1115,14 @@ function renderInvite(key, hasActiveGroup) {
     const byThisDevice = invite.created_by_identity_id === device.session?.identity.id;
 
     view.inviteStatus.textContent =
-      `By ${creator?.actor_handle ?? 'someone'}${byThisDevice ? ' (you)' : ''} · ` +
-      describeExpiry(invite.expires_at);
+      `By ${creator?.actor_handle ?? 'someone'}${byThisDevice ? ' (you)' : ''}`;
   }
 
   view.inviteLink.value = link ?? '';
-  view.inviteLink.placeholder = invite
-    ? 'Created on another device; create a new link to share it from here'
-    : 'Create a link to invite someone';
+  view.inviteLink.placeholder = 'Open a group to share its link';
   view.copyInvite.disabled = !link;
-  view.createInvite.disabled = !canManage;
-  view.createInvite.textContent = invite ? 'New link' : 'Create link';
-  view.revokeInvite.disabled = !canManage || !invite;
-  view.inviteExpiry.disabled = !canManage;
+  view.regenerateInvite.disabled = !canManage;
+  view.regenerateInvite.textContent = 'New link';
 }
 
 // Several identities may use the same member, so list every actor handle.
@@ -1286,14 +1276,14 @@ function summarizeRequest(entry) {
   }
 
   if (body?.creator_member_name) {
-    return `${body.name} · ${body.currency_code} · creator ${body.creator_member_name}`;
+    return `${body.name} · creator ${body.creator_member_name}`;
   }
 
   if (body?.preferred_member) {
     const preferred = body.preferred_member;
 
     return preferred.kind === 'new'
-      ? `Join as new member ${preferred.display_name}`
+      ? `Join by name ${preferred.display_name}`
       : `Join as existing member ${shortId(preferred.member_id)}`;
   }
 
@@ -1578,8 +1568,7 @@ function showToast(message, error = false) {
 const inviteErrors = {
   invite_required: 'Joining for the first time needs an invite link.',
   invite_invalid: 'This invite link is not valid for the group.',
-  invite_expired: 'This invite link has expired. Ask for a new one.',
-  invite_revoked: 'This invite link was revoked or replaced. Ask for a new one.',
+  invite_replaced: 'This invite link was replaced. Ask for the current one.',
 };
 
 function describeError(error) {

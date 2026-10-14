@@ -22,7 +22,7 @@ export const joinGroupRequestSchema = z.object({
   invite_token: inviteTokenSchema.optional(),
 });
 
-/** The token itself never enters a Durable Object; only its hash does. */
+/** Join authorization uses the token hash, independent of the shared link. */
 export const joinGroupCommandSchema = joinGroupRequestSchema
   .omit({ invite_token: true })
   .extend({

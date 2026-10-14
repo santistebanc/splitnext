@@ -1,9 +1,6 @@
 import { z } from 'zod';
 import { joinGroupRequestSchema } from '../domain/access';
-import {
-  commandOutcomeSchema,
-  groupCommandSchema,
-} from '../domain/commands';
+import { commandOutcomeSchema, groupCommandSchema } from '../domain/commands';
 import {
   accessibleGroupSchema,
   createGroupRequestSchema,
@@ -43,25 +40,22 @@ const pendingGroupCreationSchema = z.object({
 });
 
 /**
- * The plaintext of the last invite link this device created for a group. The
- * server keeps only a hash, so this is the only place the link can be shown
- * again. An unconfirmed entry is retried with the same token.
+ * A link replacement awaiting acknowledgment. Retries use the same token;
+ * confirmed shared links live in group snapshots.
  */
-const ownInviteSchema = z.object({
+const pendingInviteSchema = z.object({
   group_id: identifierSchema,
   invite_id: identifierSchema,
   token: inviteTokenSchema,
-  expires_in_hours: z.number().int().positive(),
-  confirmed: z.boolean(),
 });
 
 export const clientStorageDocumentSchema = z.object({
-  schema_version: z.literal(1),
+  schema_version: z.literal(2),
   session: identitySessionSchema.nullable(),
   groups: z.array(clientGroupReplicaSchema),
   pending_group_creations: z.array(pendingGroupCreationSchema),
   pending_joins: z.array(pendingJoinSchema),
-  own_invites: z.array(ownInviteSchema),
+  pending_invites: z.array(pendingInviteSchema),
   // The server's last list of accessible groups, kept for offline display.
   group_directory: z.array(accessibleGroupSchema),
 });
@@ -76,7 +70,7 @@ export type PendingJoin = z.output<typeof pendingJoinSchema>;
 
 export type PendingGroupCreation = z.output<typeof pendingGroupCreationSchema>;
 
-export type OwnInvite = z.output<typeof ownInviteSchema>;
+export type PendingInvite = z.output<typeof pendingInviteSchema>;
 
 export type ClientStorageDocument = z.output<
   typeof clientStorageDocumentSchema
@@ -97,7 +91,10 @@ export interface ClientStorageAdapter {
 
 export class ClientStorageError extends Error {
   constructor(
-    readonly code: 'corrupt_document' | 'unsupported_schema_version',
+    readonly code:
+      | 'corrupt_document'
+      | 'unsupported_schema_version'
+      | 'upgrade_requires_connection',
   ) {
     super(code);
     this.name = 'ClientStorageError';
@@ -148,7 +145,7 @@ export type IndexedDbClientStorageOptions = {
   document_key: string;
 };
 
-/** Atomic browser adapter intended for the future PWA, not the test lab. */
+/** Atomic browser adapter used by the app; the test lab has its own adapter. */
 export class IndexedDbClientStorage implements ClientStorageAdapter {
   private readonly database: Promise<IDBDatabase>;
   private readonly documentKey: string;
@@ -163,7 +160,10 @@ export class IndexedDbClientStorage implements ClientStorageAdapter {
 
     return new Promise((resolve, reject) => {
       const transaction = database.transaction(documentStore, 'readonly');
-      const request = transaction.objectStore(documentStore).get(this.documentKey);
+
+      const request = transaction
+        .objectStore(documentStore)
+        .get(this.documentKey);
 
       request.onsuccess = () => {
         const value = z.string().optional().safeParse(request.result);
@@ -201,9 +201,10 @@ export class IndexedDbClientStorage implements ClientStorageAdapter {
           hasResult = true;
           store.put(updated.serialized, this.documentKey);
         } catch (cause) {
-          operationError = cause instanceof Error
-            ? cause
-            : new ClientStorageError('corrupt_document');
+          operationError =
+            cause instanceof Error
+              ? cause
+              : new ClientStorageError('corrupt_document');
           transaction.abort();
         }
       };
@@ -226,12 +227,12 @@ export class IndexedDbClientStorage implements ClientStorageAdapter {
 
 export function emptyClientDocument(): ClientStorageDocument {
   return {
-    schema_version: 1,
+    schema_version: 2,
     session: null,
     groups: [],
     pending_group_creations: [],
     pending_joins: [],
-    own_invites: [],
+    pending_invites: [],
     group_directory: [],
   };
 }
@@ -256,7 +257,7 @@ export function parseClientDocument(
   const version = z.object({ schema_version: z.number() }).safeParse(parsed);
 
   throw new ClientStorageError(
-    version.success && version.data.schema_version !== 1
+    version.success && version.data.schema_version !== 2
       ? 'unsupported_schema_version'
       : 'corrupt_document',
   );

@@ -62,14 +62,24 @@ describe('groups an identity can access', () => {
     const restored = await createDevice(original.secret);
 
     expect(await restored.client.listGroups()).toMatchObject([
-      { group_id: group.group_id, stored_locally: false },
+      {
+        group_id: group.group_id,
+        stored_locally: false,
+        member_count: null,
+        you_name: null,
+      },
     ]);
 
     const reopened = await restored.client.syncGroup(group.group_id);
 
     expect(reopened.projected_snapshot?.group.name).toBe('Flat');
     expect(await restored.client.listGroups()).toMatchObject([
-      { group_id: group.group_id, stored_locally: true },
+      {
+        group_id: group.group_id,
+        stored_locally: true,
+        member_count: 1,
+        you_name: reopened.projected_snapshot?.members[0]?.display_name,
+      },
     ]);
   });
 
@@ -116,7 +126,6 @@ async function createDevice(secret = randomDeviceSecret()) {
 function createGroup(client: SplitnextSyncClient, name: string) {
   return client.createGroup({
     name,
-    currency_code: 'EUR',
     creator_member_name: 'Santi',
   });
 }

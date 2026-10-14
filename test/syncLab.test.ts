@@ -16,6 +16,47 @@ beforeAll(async () => {
 afterEach(() => settleWorkerSockets());
 
 describe('synchronization lab', () => {
+  it('shows separate live identities sharing one member and clears presence during outages', async () => {
+    const lab = new SyncLab({
+      baseUrl: 'https://splitnext.test',
+      fetch: (input, init) => exports.default.fetch(input, init),
+      webSocket: workerWebSocket,
+    });
+
+    const first = await lab.addDevice();
+
+    const group = await lab.createGroup(first, {
+      name: 'Shared name presence',
+      creator_member_name: 'Santi',
+    });
+
+    const memberId = group.projected_snapshot?.members[0]?.id;
+    const link = lab.inviteLink(first);
+
+    if (!memberId || !link) throw new Error('initial_group_missing');
+    const second = await lab.addDevice();
+    await lab.joinWithInvite(second, link, {
+      kind: 'existing',
+      member_id: memberId,
+    });
+    const firstId = deviceOf(lab, first).session?.identity.id;
+    const secondId = deviceOf(lab, second).session?.identity.id;
+
+    if (!firstId || !secondId) throw new Error('identity_missing');
+    const both = [firstId, secondId].sort();
+    await expect.poll(() => deviceOf(lab, first).presence).toEqual(both);
+    await expect.poll(() => deviceOf(lab, second).presence).toEqual(both);
+    const revision = deviceOf(lab, first).replica?.revision;
+    await lab.toggleDevice(second);
+    await expect.poll(() => deviceOf(lab, first).presence).toEqual([firstId]);
+    expect(deviceOf(lab, second).presence).toBeNull();
+    expect(deviceOf(lab, first).replica?.revision).toBe(revision);
+    await lab.toggleDevice(second);
+    await expect.poll(() => deviceOf(lab, first).presence).toEqual(both);
+    lab.toggleRealtime(first);
+    expect(deviceOf(lab, first).presence).toBeNull();
+    lab.dispose();
+  });
   it('creates an identity once a newly opened offline device reconnects', async () => {
     const lab = new SyncLab({
       baseUrl: 'https://splitnext.test',
@@ -46,12 +87,10 @@ describe('synchronization lab', () => {
       webSocket: workerWebSocket,
     });
 
-
     const first = await lab.addDevice();
 
     const group = await lab.createGroup(first, {
       name: 'Shared identity group',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -60,8 +99,14 @@ describe('synchronization lab', () => {
 
     if (!memberId) throw new Error('creator_member_missing');
 
-    await lab.createInvite(first);
     const inviteLink = lab.inviteLink(first);
+
+    expect(group.projected_snapshot?.invite.token).toBeTruthy();
+    expect(
+      deviceOf(lab, first).requests.some(({ path }) =>
+        path.endsWith('/invite'),
+      ),
+    ).toBe(false);
 
     if (!inviteLink) throw new Error('invite_missing');
 
@@ -69,7 +114,35 @@ describe('synchronization lab', () => {
     const secondSession = deviceOf(lab, second).session;
 
     expect(secondSession?.identity.id).not.toBe(firstSession?.identity.id);
-    await lab.joinWithInvite(second, inviteLink, { kind: 'existing', member_id: memberId });
+    await lab.joinWithInvite(second, inviteLink, {
+      kind: 'existing',
+      member_id: memberId,
+    });
+
+    expect(lab.inviteLink(second)).toBe(inviteLink);
+
+    await lab.regenerateInvite(second);
+    await lab.syncDevice(first);
+    expect(lab.inviteLink(first)).toBe(lab.inviteLink(second));
+    expect(lab.inviteLink(first)).not.toBe(inviteLink);
+
+    const third = await lab.addDevice();
+    const currentLink = lab.inviteLink(first);
+
+    if (!currentLink) throw new Error('Expected the shared link');
+
+    const joinedByName = await lab.joinWithInvite(third, currentLink, {
+      kind: 'new',
+      display_name: ' santi ',
+    });
+
+    expect(joinedByName.projected_snapshot?.members).toHaveLength(1);
+    expect(
+      joinedByName.projected_snapshot?.access_grants.map(
+        (grant) => grant.preferred_member_id,
+      ),
+    ).toEqual([memberId, memberId, memberId]);
+    expect(lab.inviteLink(third)).toBe(currentLink);
 
     const joinedGroupResponse = await exports.default.fetch(
       `https://splitnext.test/debug/groups/${group.group_id}`,
@@ -89,7 +162,7 @@ describe('synchronization lab', () => {
         expect.objectContaining({ identity_id: secondSession?.identity.id }),
       ]),
     );
-    expect(joinedGroupState.snapshot.access_grants).toHaveLength(2);
+    expect(joinedGroupState.snapshot.access_grants).toHaveLength(3);
     expect(lab.state.server.identityDirectory?.identities).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -108,7 +181,8 @@ describe('synchronization lab', () => {
 
     const options = {
       baseUrl: 'https://splitnext.test',
-      fetch: (input: string, init?: RequestInit) => exports.default.fetch(input, init),
+      fetch: (input: string, init?: RequestInit) =>
+        exports.default.fetch(input, init),
       webSocket: workerWebSocket,
       clearDeviceStorage: (key: string) => stores.delete(key),
       storageForDevice: (key: string) => {
@@ -128,7 +202,6 @@ describe('synchronization lab', () => {
 
     const group = await firstLab.createGroup(deviceKey, {
       name: 'Survives refresh',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -144,9 +217,12 @@ describe('synchronization lab', () => {
     expect(restoredLab.state.devices[deviceKey]?.session?.identity.id).toBe(
       firstLab.state.devices[deviceKey]?.session?.identity.id,
     );
-    expect(restoredLab.state.devices[deviceKey]?.replica?.outbox).toHaveLength(1);
+    expect(restoredLab.state.devices[deviceKey]?.replica?.outbox).toHaveLength(
+      1,
+    );
     expect(
-      restoredLab.state.devices[deviceKey]?.replica?.projected_snapshot?.group.name,
+      restoredLab.state.devices[deviceKey]?.replica?.projected_snapshot?.group
+        .name,
     ).toBe('Pending while offline');
     expect(restoredLab.state.devices[deviceKey]?.selectedGroupId).toBe(
       group.group_id,
@@ -173,7 +249,6 @@ describe('synchronization lab', () => {
 
     await lab.createGroup(one, {
       name: 'Flat',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
     await invite(lab, one, two, 'Robin');
@@ -214,7 +289,6 @@ describe('synchronization lab', () => {
 
     await lab.createGroup(one, {
       name: 'Original name',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -268,7 +342,6 @@ describe('synchronization lab', () => {
 
     await lab.createGroup(one, {
       name: 'Original name',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -317,7 +390,6 @@ describe('synchronization lab', () => {
 
     const group = await lab.createGroup(creator, {
       name: 'Private group',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -325,12 +397,12 @@ describe('synchronization lab', () => {
 
     const memberSyncCount = () =>
       deviceOf(lab, member).requests.filter(
-      (request) => request.path === `/groups/${group.group_id}/sync`,
+        (request) => request.path === `/groups/${group.group_id}/sync`,
       ).length;
 
     const beforeInviteChange = memberSyncCount();
 
-    await lab.createInvite(creator);
+    await lab.regenerateInvite(creator);
 
     await expect.poll(memberSyncCount).toBeGreaterThan(beforeInviteChange);
     expect(
@@ -355,7 +427,6 @@ describe('synchronization lab', () => {
 
     const created = await lab.createGroup(one, {
       name: 'Doomed',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -363,7 +434,6 @@ describe('synchronization lab', () => {
 
     const unusedDeviceGroup = await lab.createGroup(three, {
       name: 'No current device',
-      currency_code: 'EUR',
       creator_member_name: 'Ari',
     });
 
@@ -427,7 +497,6 @@ describe('synchronization lab', () => {
 
     await lab.createGroup(one, {
       name: 'Before outage',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -462,13 +531,11 @@ describe('synchronization lab', () => {
 
     const flat = await lab.createGroup(one, {
       name: 'Flat',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
     const trip = await lab.createGroup(two, {
       name: 'Trip',
-      currency_code: 'USD',
       creator_member_name: 'Robin',
     });
 
@@ -502,7 +569,10 @@ describe('synchronization lab', () => {
     // The server panel lists all groups represented in the server index.
     expect(lab.knownGroups()).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ group_id: flat.group_id, name: 'Shared flat' }),
+        expect.objectContaining({
+          group_id: flat.group_id,
+          name: 'Shared flat',
+        }),
         expect.objectContaining({ group_id: trip.group_id, name: 'Trip' }),
       ]),
     );
@@ -525,7 +595,6 @@ describe('synchronization lab', () => {
 
     const group = await lab.createGroup(one, {
       name: 'Flat',
-      currency_code: 'EUR',
       creator_member_name: 'Santi',
     });
 
@@ -567,13 +636,16 @@ async function invite(
   to: string,
   displayName: string,
 ) {
-  await lab.createInvite(from);
+  await lab.regenerateInvite(from);
 
   const link = lab.inviteLink(from);
 
   if (!link) throw new Error('invite_link_missing');
 
-  return lab.joinWithInvite(to, link, { kind: 'new', display_name: displayName });
+  return lab.joinWithInvite(to, link, {
+    kind: 'new',
+    display_name: displayName,
+  });
 }
 
 function deviceOf(lab: SyncLab, key: string) {

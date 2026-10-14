@@ -12,9 +12,8 @@ export const groupSnapshotSchema = z.object({
   group: groupDetailsSchema,
   members: z.array(ledgerMemberSchema),
   access_grants: z.array(groupAccessGrantSchema),
-  // The current invite link, if any. Expired links stay until replaced or
-  // revoked, so clients compare `expires_at` with the time.
-  invite: groupInviteSchema.nullable(),
+  // Every group has one reusable link, replaced only through regeneration.
+  invite: groupInviteSchema,
 });
 
 export const syncGroupRequestSchema = z.object({

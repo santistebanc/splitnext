@@ -2,6 +2,7 @@ import { exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createIdentifier, identifierSchema } from '../src/domain/ids';
+import { createInviteToken } from '../src/domain/invites';
 import { applyTestMigrations } from './harness';
 
 const createdGroupSchema = z.object({
@@ -41,9 +42,7 @@ describe('member.archive sync command', () => {
       state: {
         kind: 'snapshot',
         snapshot: {
-          members: [
-            { id: fixture.created.member.id, status: 'archived' },
-          ],
+          members: [{ id: fixture.created.member.id, status: 'archived' }],
           access_grants: [{ preferred_member_id: null }],
         },
       },
@@ -161,8 +160,8 @@ async function createGroupFixture(seed: string) {
       body: JSON.stringify({
         group_id: createIdentifier(),
         name: 'Berlin flat',
-        currency_code: 'EUR',
         creator_member_name: 'Santi',
+        invite: { invite_id: createIdentifier(), token: createInviteToken() },
       }),
     },
   );

@@ -2,6 +2,7 @@ import { exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createIdentifier, identifierSchema } from '../src/domain/ids';
+import { createInviteToken, groupInviteSchema } from '../src/domain/invites';
 import { applyTestMigrations, fetchOpenApiDocument } from './harness';
 
 const identityResponseSchema = z.object({
@@ -9,10 +10,10 @@ const identityResponseSchema = z.object({
 });
 
 const groupResponseSchema = z.object({
-  group: z.object({
+  invite: groupInviteSchema,
+  group: z.strictObject({
     id: identifierSchema,
     name: z.string(),
-    currency_code: z.string(),
     created_at: z.iso.datetime(),
     revision: z.number(),
   }),
@@ -51,12 +52,11 @@ describe('group sync API', () => {
           group: {
             id: fixture.created.group.id,
             name: fixture.created.group.name,
-            currency_code: fixture.created.group.currency_code,
             created_at: fixture.created.group.created_at,
           },
           members: [fixture.created.member],
           access_grants: [fixture.created.access],
-          invite: null,
+          invite: fixture.created.invite,
         },
       },
     });
@@ -130,9 +130,9 @@ describe('group sync API', () => {
   it('publishes sync in OpenAPI', async () => {
     const document = await fetchOpenApiDocument();
 
-    expect(document.paths['/groups/{groupId}/sync'].post.responses).toHaveProperty(
-      '200',
-    );
+    expect(
+      document.paths['/groups/{groupId}/sync'].post.responses,
+    ).toHaveProperty('200');
   });
 });
 
@@ -148,8 +148,8 @@ async function createGroupFixture(seed: string) {
       body: JSON.stringify({
         group_id: groupId,
         name: 'Berlin flat',
-        currency_code: 'EUR',
         creator_member_name: 'Santi',
+        invite: { invite_id: createIdentifier(), token: createInviteToken() },
       }),
     },
   );

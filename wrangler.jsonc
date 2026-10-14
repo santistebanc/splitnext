@@ -3,10 +3,17 @@
   "name": "splitnext-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "find_additional_modules": true,
+  "rules": [
+    { "type": "CommonJS", "globs": ["generated/expo-server/**/*.js"], "fallthrough": false },
+    { "type": "Text", "globs": ["generated/expo-server/**/*.json"], "fallthrough": false }
+  ],
   "workers_dev": true,
   "assets": {
-    "directory": "./public",
-    "binding": "ASSETS"
+    "directory": "./.wrangler/app-assets",
+    "binding": "ASSETS",
+    "run_worker_first": ["/", "/app", "/app/*", "/join/*"]
   },
   "vars": {
     "DEPLOY_SHA": "local",

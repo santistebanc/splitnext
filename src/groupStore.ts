@@ -22,11 +22,10 @@ import {
 } from './domain/groups';
 import { createIdentifier } from './domain/ids';
 import type {
-  CreateInviteCommand,
+  RegenerateInviteCommand,
   GroupInvite,
   InviteFailure,
   InvitePreview,
-  InviteRecord,
 } from './domain/invites';
 import type {
   GroupSnapshot,
@@ -62,23 +61,15 @@ export type JoinStoredGroupResult =
         | 'idempotency_conflict'
         | 'member_not_found'
         | 'member_archived'
-        | 'member_name_taken'
         | 'member_id_exists'
         | InviteFailure;
     };
 
-export type CreateStoredInviteResult =
+export type RegenerateStoredInviteResult =
   | { ok: true; revision: number; invite: GroupInvite }
   | {
       ok: false;
       error: 'group_not_found' | 'unauthorized' | 'idempotency_conflict';
-    };
-
-export type RevokeStoredInviteResult =
-  | { ok: true; revision: number; changed: boolean }
-  | {
-      ok: false;
-      error: 'group_not_found' | 'unauthorized' | 'invite_not_found';
     };
 
 export type PreviewStoredInviteResult =
@@ -104,11 +95,16 @@ export class GroupStore {
     return this.repository.transaction((persistence) => {
       const existing = persistence.loadState();
 
-      if (existing) return this.resolveCreateRetry(existing, initial.view);
+      if (existing) return this.resolveCreateRetry(existing, initial);
 
       const state = this.createState(initial);
-      const { group, member, access } = initial.view;
+      const { group, member, access, invite } = initial.view;
 
+      persistence.recordInvite({
+        ...inviteView(invite),
+        token_hash: initial.invite_token_hash,
+        revoked_at: null,
+      });
       persistence.saveState(state);
       this.auditHistory(persistence).record(
         { action: 'group.created', before: null, after: initial.view },
@@ -153,14 +149,16 @@ export class GroupStore {
 
       // Access is permanent, so an identity that left rejoins without a link.
       if (!this.accessFor(state, identityId)) {
-        const failure = inviteFailure(
-          persistence,
-          command.invite_token_hash,
-          command.joined_at,
-        );
+        const failure = inviteFailure(persistence, command.invite_token_hash);
 
         if (failure) return { ok: false, error: failure };
       }
+
+      if (
+        command.preferred_member.kind === 'new' &&
+        persistence.memberAliases().has(command.preferred_member.member_id)
+      )
+        return { ok: false, error: 'member_id_exists' };
 
       const transition = applyGroupJoin(
         state.snapshot,
@@ -169,6 +167,9 @@ export class GroupStore {
       );
 
       if (!transition.ok) return transition;
+
+      if (transition.memberAlias)
+        persistence.recordMemberAlias(transition.memberAlias);
 
       if (transition.changed && transition.audit) {
         state.next_actor_number = transition.nextActorNumber;
@@ -237,8 +238,7 @@ export class GroupStore {
       if (state.revision !== revisionBefore) persistence.saveState(state);
 
       const synchronizedState =
-        command.commands.length > 0 ||
-        command.known_revision !== state.revision
+        command.commands.length > 0 || command.known_revision !== state.revision
           ? {
               kind: 'snapshot' as const,
               snapshot: structuredClone(state.snapshot),
@@ -257,10 +257,12 @@ export class GroupStore {
   }
 
   /**
-   * Creates the group's current invite link, revoking any previous one.
-   * Repeating a creation with the same id and token returns the same link.
+   * Replaces the group's single current link and retires the previous token.
+   * Retries acknowledge the current link without restoring an older one.
    */
-  createInvite(command: CreateInviteCommand): CreateStoredInviteResult {
+  regenerateInvite(
+    command: RegenerateInviteCommand,
+  ): RegenerateStoredInviteResult {
     return this.repository.transaction((persistence) => {
       const state = persistence.loadState();
 
@@ -269,7 +271,8 @@ export class GroupStore {
       const identityId = command.identity_id;
       const actor = this.accessFor(state, identityId);
 
-      if (!actor || actor.hidden_at) return { ok: false, error: 'unauthorized' };
+      if (!actor || actor.hidden_at)
+        return { ok: false, error: 'unauthorized' };
 
       const existing =
         persistence.findInvite(command.invite_id) ??
@@ -279,7 +282,11 @@ export class GroupStore {
         return existing.id === command.invite_id &&
           existing.token_hash === command.token_hash &&
           existing.created_by_identity_id === identityId
-          ? { ok: true, revision: state.revision, invite: inviteView(existing) }
+          ? {
+              ok: true,
+              revision: state.revision,
+              invite: state.snapshot.invite,
+            }
           : { ok: false, error: 'idempotency_conflict' };
       }
 
@@ -290,15 +297,17 @@ export class GroupStore {
         token_hash: command.token_hash,
         created_by_identity_id: identityId,
         created_at: command.created_at,
-        expires_at: command.expires_at,
         revoked_at: null,
       };
 
-      if (previous) persistence.revokeInvite(previous.id, command.created_at);
+      persistence.retireInvite(previous.id, command.created_at);
 
       persistence.recordInvite(created);
 
-      const invite = inviteView(created);
+      const invite: GroupInvite = {
+        ...inviteView(created),
+        token: command.token,
+      };
 
       this.commitTransition(
         persistence,
@@ -306,7 +315,7 @@ export class GroupStore {
         { ...state.snapshot, invite },
         {
           action: 'invite.created',
-          before: previous ? { ...previous, revoked_at: command.created_at } : null,
+          before: { ...previous, revoked_at: command.created_at },
           after: { ...invite, revoked_at: null },
         },
         actor,
@@ -321,61 +330,14 @@ export class GroupStore {
     });
   }
 
-  /** Revoking stops new joins through the link; granted access remains. */
-  revokeInvite(
-    identityId: string,
-    inviteId: string,
-    revokedAt: string,
-  ): RevokeStoredInviteResult {
-    return this.repository.transaction((persistence) => {
-      const state = persistence.loadState();
-
-      if (!state) return { ok: false, error: 'group_not_found' };
-
-      const actor = this.accessFor(state, identityId);
-
-      if (!actor || actor.hidden_at) return { ok: false, error: 'unauthorized' };
-
-      const current = state.snapshot.invite;
-
-      if (current?.id !== inviteId) {
-        return persistence.findInvite(inviteId)
-          ? { ok: true, revision: state.revision, changed: false }
-          : { ok: false, error: 'invite_not_found' };
-      }
-
-      const before: InviteRecord = { ...current, revoked_at: null };
-
-      persistence.revokeInvite(inviteId, revokedAt);
-      this.commitTransition(
-        persistence,
-        state,
-        { ...state.snapshot, invite: null },
-        {
-          action: 'invite.revoked',
-          before,
-          after: { ...before, revoked_at: revokedAt },
-        },
-        actor,
-        this.memberNameFor(state, actor),
-        { kind: 'invite', id: inviteId },
-        null,
-        revokedAt,
-      );
-      persistence.saveState(state);
-
-      return { ok: true, revision: state.revision, changed: true };
-    });
-  }
-
   /** Lets a link holder see the group and choose who they are before joining. */
-  previewInvite(tokenHash: string, at: string): PreviewStoredInviteResult {
+  previewInvite(tokenHash: string): PreviewStoredInviteResult {
     return this.repository.transaction((persistence) => {
       const state = persistence.loadState();
 
       if (!state) return { ok: false, error: 'group_not_found' };
 
-      const failure = inviteFailure(persistence, tokenHash, at);
+      const failure = inviteFailure(persistence, tokenHash);
 
       if (failure) return { ok: false, error: failure };
 
@@ -383,7 +345,7 @@ export class GroupStore {
 
       if (!invite) return { ok: false, error: 'invite_invalid' };
 
-      const { group, members } = state.snapshot;
+      const { group, members, access_grants: grants } = state.snapshot;
 
       return {
         ok: true,
@@ -391,14 +353,22 @@ export class GroupStore {
           group: {
             id: group.id,
             name: group.name,
-            currency_code: group.currency_code,
           },
           members: members.flatMap((member) =>
             member.status === 'active'
-              ? [{ id: member.id, display_name: member.display_name }]
+              ? [
+                  {
+                    id: member.id,
+                    display_name: member.display_name,
+                    in_use: grants.some(
+                      (grant) =>
+                        grant.preferred_member_id === member.id &&
+                        !grant.hidden_at,
+                    ),
+                  },
+                ]
               : [],
           ),
-          expires_at: invite.expires_at,
         },
       };
     });
@@ -441,7 +411,7 @@ export class GroupStore {
   }
 
   private createState(initial: InitialGroupState): StoredGroupState {
-    const { group, member, access } = initial.view;
+    const { group, member, access, invite } = initial.view;
 
     return {
       revision: group.revision,
@@ -451,8 +421,9 @@ export class GroupStore {
         request: {
           group_id: group.id,
           name: group.name,
-          currency_code: group.currency_code,
           creator_member_name: member.display_name,
+          invite_id: invite.id,
+          invite_token_hash: initial.invite_token_hash,
         },
         response: initial.view,
       },
@@ -460,21 +431,21 @@ export class GroupStore {
         group: {
           id: group.id,
           name: group.name,
-          currency_code: group.currency_code,
           created_at: group.created_at,
         },
         members: [member],
         access_grants: [access],
-        invite: null,
+        invite,
       },
     };
   }
 
   private resolveCreateRetry(
     state: StoredGroupState,
-    requested: CreatedGroup,
+    initial: InitialGroupState,
   ): CreateStoredGroupResult {
     const stored = state.creation;
+    const requested = initial.view;
 
     if (stored.creator_identity_id !== requested.access.identity_id) {
       return { ok: false, error: 'group_exists' };
@@ -483,8 +454,9 @@ export class GroupStore {
     const sameInput =
       stored.request.group_id === requested.group.id &&
       stored.request.name === requested.group.name &&
-      stored.request.currency_code === requested.group.currency_code &&
-      stored.request.creator_member_name === requested.member.display_name;
+      stored.request.creator_member_name === requested.member.display_name &&
+      stored.request.invite_id === requested.invite.id &&
+      stored.request.invite_token_hash === initial.invite_token_hash;
 
     if (!sameInput) return { ok: false, error: 'idempotency_conflict' };
 
@@ -633,7 +605,6 @@ export class GroupStore {
 function inviteFailure(
   persistence: GroupPersistence,
   tokenHash: string | null,
-  at: string,
 ): InviteFailure | null {
   if (!tokenHash) return 'invite_required';
 
@@ -641,18 +612,17 @@ function inviteFailure(
 
   if (!invite) return 'invite_invalid';
 
-  if (invite.revoked_at) return 'invite_revoked';
+  if (invite.revoked_at) return 'invite_replaced';
 
-  return Date.parse(invite.expires_at) <= Date.parse(at)
-    ? 'invite_expired'
-    : null;
+  return null;
 }
 
-function inviteView(invite: StoredInvite): GroupInvite {
+function inviteView(
+  invite: Pick<StoredInvite, 'id' | 'created_by_identity_id' | 'created_at'>,
+): Omit<GroupInvite, 'token'> {
   return {
     id: invite.id,
     created_by_identity_id: invite.created_by_identity_id,
     created_at: invite.created_at,
-    expires_at: invite.expires_at,
   };
 }

@@ -9,11 +9,13 @@ realtime revision announcements; expenses are intentionally deferred.
 
 - Anonymous per-installation identities and device credentials backed by D1;
   there is no sign-in or account linking.
-- Retry-safe group creation with a client-generated group id.
+- Retry-safe group creation with a client-generated group id and an immediately
+  usable invite, created atomically by the API.
 - Joining through a reusable invite link with a preview of the group, then
   choosing an existing member or joining as someone new.
-- One current invite link per group, with a chosen expiry (1 hour to 30 days),
-  replacement, and revocation. Only token hashes are stored.
+- Exactly one current invite link per group with no time limit and
+  regeneration. Every participant can share the same current link.
+  Regeneration invalidates the previous link.
 - Offline-capable group rename and member add, rename, and archive commands.
 - Nonexclusive preferred-member selection (the member the UI calls “you”).
 - Leaving and rejoining a group without revoking its permanent access grant.
@@ -29,6 +31,44 @@ realtime revision announcements; expenses are intentionally deferred.
 - A server group engine with Durable Object and in-memory repository adapters.
 - A visual `/dashboard/` synchronization lab for two independent devices and
   the authoritative server.
+- A `/components` workbench, enabled with debug inspection, for searching the
+  app's reusable components and previewing them under editable props and state.
+- A responsive Expo web app at `/app`, with a public homepage and invite entry
+  pages rendered by the same Cloudflare Worker. It includes single-screen group
+  creation, member management, invitation sharing, joining and rejoining,
+  group switching, and offline command/conflict feedback.
+- The invitation sheet shows an inline copy icon, native sharing when
+  supported, and New link to regenerate the invitation after confirming that
+  the current link will stop working.
+- The groups list has a Your groups heading, or Start a group with a one-line
+  prompt when there are none. Group settings open from a Settings button, and
+  leaving asks for confirmation with a Cancel option. Offline captions name
+  the blocked action. When joining or rejoining, names already used by a
+  current participant are marked In use.
+- Group rows show the member count and who you are, left groups appear as rows
+  with Rejoin, and a placeholder list shows while local storage opens. Share
+  invite becomes secondary once someone else has joined. Errors appear beside
+  the row or button that caused them; background sync errors join the status
+  banner. Sheets close with Escape and keep keyboard focus inside them, and
+  every control has a visible keyboard focus outline.
+- A compact Members list supports adding and editing inline, saving on blur
+  without shifting the row or needing confirm/cancel controls. It has no member
+  avatars or a heading count. Click a person icon to choose who is you; the
+  selected member stays first with animated row movement.
+  Other names currently used by joined participants have a dark filled icon;
+  names without a current participant stay outlined.
+  Ringed status dots overlay the icon's right edge, with a same-size circled
+  star for you. Three markers fit per row, with small gaps and upward wrapping.
+  Hollow markers mean presence is unavailable. Multiple tabs count once.
+  A cross icon removes other members immediately; it is hidden on your own row,
+  retaining them for history. The app list shows current members only.
+- Mobile and touch layouts use a full page for group settings, with
+  keyboard-aware scrolling and Back to group. Desktop layouts retain a dialog.
+- A separate app installation credential, SDK replicas persisted atomically in
+  IndexedDB, and reopening the last group on a returning visit.
+- Groups have no currency setting. Future expenses and settlements will record
+  their own currency, with separate balances per currency; see
+  [ADR 0014](./docs/adr/0014-record-currency-per-expense.md).
 
 ## Run locally
 
@@ -40,17 +80,89 @@ npm run dev
 The development command applies pending migrations to the local D1 database
 before starting Wrangler.
 
-Open `http://localhost:8787/dashboard/`. The test lab lets you:
+Open `http://localhost:8787/` for the homepage or `/app` for the app. Creating a
+group uses one form for group name and your name, with
+Create group and Back to groups actions. The app remembers the last name used
+as you on this installation in localStorage and prefills it when creating a
+group or joining as someone new. The name stays editable. The group
+opens with its Members list visible and actions to add members or invite friends.
+Invite recipients preview the group and choose an existing name or add their
+own. Entering an existing member's name while joining selects that member, even
+when another participant uses it, without creating a duplicate. Invite links
+for a group already joined on this installation open that
+group directly, keeping the selected member. The invite entry route remains
+available for future native app handoff. Expenses and balances are not
+implemented in this beta.
+
+The app and dashboard have separate installation storage. Browser app replicas
+use IndexedDB; the installation credential and last group are retained in
+localStorage. Losing that credential loses this installation's access. On a
+fresh installation, use a current invite link to join each group again.
+
+After an online visit has cached the app shell, `/app` can reload without a
+connection. The service worker caches public entry HTML and build assets only;
+API responses, invite previews, and dashboard traffic are not cached. Saved
+ledger replicas stay in IndexedDB, and supported edits queue through the SDK.
+Startup restores those replicas before refreshing in the background, so a
+stalled server does not block opening a saved group. Other tabs on the same
+origin share the installation and reread replicas through a BroadcastChannel.
+
+`npm run dev` exports the Expo web client, combines its client assets with the
+dashboard, and starts the API and server-rendered entry pages on port 8787.
+For fast UI iteration, keep that Worker running and use `npm run app:dev` in a
+second terminal; Expo runs on port 8081 and connects to the API on port 8787.
+Native release and platform-specific persistence are a later slice.
+
+Open `http://localhost:8787/components` (or `:8081/components` under Expo) for
+the component workbench. Search the sidebar, pick a component, and edit its
+controls; callbacks such as presses appear in the Events log. `MemberList` runs
+against an in-memory group, with controls for members, who is you, other
+participants, presence, connection, latency, and forced command errors. The
+viewport presets resize the canvas only; components that read the window size
+still see the real window. The Screens and Sheets groups render each app screen
+(groups list, create, group, join, invite, settings, review) against the same
+in-memory fake, with connection, latency, and failure controls. Add examples
+with `defineStory` in `apps/client/src/workbench/catalog.tsx` or `screens.tsx`.
+The Worker serves this route only when `ENABLE_DEBUG_INSPECTION` is true.
+
+Metro watches the repository's `src/` folder as well as the workspaces, so SDK
+edits reload under `npm run app:dev` without a restart.
+
+### App actions
+
+Everything a person can do in the app is an app action in
+`apps/client/src/model/actions.ts` ([ADR 0016](./docs/adr/0016-dispatch-app-actions-through-one-caller-agnostic-catalog.md)).
+`createDispatcher(controller)` returns one caller-agnostic surface:
+
+- `dispatch(name, input, { confirmed, origin })` validates input with the
+  action's zod schema, checks preconditions (online, reachable, open group),
+  and returns an `Outcome`: `done`, `needs_confirmation` with a message, or
+  `failed` with an error code. It never throws.
+- `dispatchJson(name, json)` does the same for callers holding only names and
+  JSON, such as RPC or an assistant.
+- `describe()` lists every action with its description, preconditions,
+  whether it needs confirmation, an example input, and a JSON Schema.
+- `observe(listener)` reports each dispatch with its origin and status.
+
+Actions that need approval (replacing the invite link, leaving, choosing a
+member another participant uses) return `needs_confirmation` until called
+with `confirmed: true`; each caller obtains approval its own way. The UI uses
+`useActionCall()`, and every screen changes data only through actions;
+startup, background refresh, and online tracking stay on the controller. The
+workbench's Action console calls any action by name with JSON input against an
+in-memory group.
+
+Open `http://localhost:8787/dashboard/` for the test lab. It lets you:
 
 1. Add devices. Each immediately creates its own anonymous identity. To use the
    same group on another device, copy a current invite link to that device and
    join with it. The second device has a separate identity and actor history,
    even if it selects the same ledger member.
-2. Create groups from any device, create an invite link in a group, and join
+2. Create groups from any device, copy the initial invite link, and join
    from another device by pasting the link and choosing who it is. Each device
    shows its groups as tabs, marking the ones it left, plus a "+ New" tab.
 3. Toggle any device or the simulated server offline.
-4. Queue optimistic changes while offline.
+4. Queue optimistic group and member changes while offline.
 5. Watch changes reach the other device through realtime announcements, or
    turn a device's Live toggle off to see it fall behind and catch up.
 6. Watch request traffic, realtime activity, command outcomes, snapshots, and
@@ -72,6 +184,10 @@ Run the complete verification suite with:
 ```bash
 npm run check
 ```
+
+This also exports the app, checks its TypeScript, and tests frontend rendering
+against the actual bundled Worker. Run `npm test` after a build/check has
+prepared `.wrangler/dry-run`; the renderer tests load that bundle.
 
 ## Synchronization contract
 
@@ -104,18 +220,33 @@ fetches one explicitly, for example to choose a member before rejoining. See
 
 ## Invite links
 
-A group has at most one current invite link, shared as
-`{app}/join/{groupId}#{token}`. The creating client generates the token, so a
-retried creation reuses the same link, and keeps the plaintext locally; the
-server stores only its SHA-256 hash, and the Worker hashes tokens before they
-reach the group's Durable Object. Every participant sees the link's creator
-and expiry in the group snapshot, but only the creating device can show the
-link again. Creating a new link revokes the previous one.
+Every group has exactly one current invite link, shared as
+`{app}/join/{groupId}#{token}`. The client generates the token before creation
+or regeneration so retries reuse it. The server retains the current token in
+the authoritative group snapshot and its hash for redemption checks. Every
+participant receives the same usable link in authenticated creation, join,
+and synchronization responses, and caches it with the group for offline sharing.
+Regeneration replaces the link for everyone through normal synchronization;
+links never expire with time. There is no standalone revoke action. Public
+previews, audit history, and SDK diagnostic logs omit tokens.
+
+`PUT /groups/{groupId}/invite` replaces this single resource and returns 200
+with current metadata. A retry reuses the client-generated invite id and token;
+retrying an older replacement never overwrites a newer link. The SDK exposes
+this as `regenerateInvite(groupId)`.
+
+`POST /groups` requires `invite: { invite_id, token }` alongside the group id,
+group name, and creator member name. It creates the group, member, access grant,
+and invite in one transaction and returns public invite metadata. The sync SDK
+generates and saves the token before sending the request, then makes the link
+available through `projected_snapshot.invite.token`; callers supply only the group and member
+names. A retry returns the original creation result without replacing a newer
+invite.
 
 A new identity previews the group with the token, then joins with it and
 either an existing member or a new one. An identity that left rejoins without
-a link. Revoking or expiring a link never removes access it already granted.
-See [ADR 0009](./docs/adr/0009-generate-invite-tokens-on-clients-and-store-hashes.md).
+a link. Regenerating a link never removes access it already granted.
+See [ADR 0015](./docs/adr/0015-share-the-current-invite-through-group-snapshots.md).
 
 ## Realtime announcements
 
@@ -125,13 +256,21 @@ cannot set headers on WebSockets, the client offers two subprotocols:
 `splitnext.v1`, rejects identities that lack access or have left the group,
 and closes a subscription with code 4403 when its identity leaves.
 
-The only message is `{ "type": "revision", "revision": n }`, sent on connect
+The revision message is `{ "type": "revision", "revision": n }`, sent on connect
 and after every applied change. It is a hint, not state: the SDK synchronizes
 through the normal snapshot path when the announced revision is newer than its
 confirmed one. The announcement on connect makes every reconnect a catch-up,
 so missed, duplicate, or reordered messages are harmless. Synchronizations are
 serialized per group, so a burst of announcements costs at most one extra
 request. See [ADR 0008](./docs/adr/0008-announce-revisions-over-hibernatable-websockets.md).
+
+Separate `{ "type": "presence", "identity_ids": [...] }` messages identify
+connected participants, deduplicating their tabs. The SDK exposes the current
+roster through `client.presence(groupId)` and `on_presence_change`; a disconnected
+client returns `null` for unknown presence. These updates do not advance revisions
+or write snapshots or audit history. Abrupt network loss is reflected when the
+server detects the disconnect. The dashboard's member markers show the same
+presence and respond to its device Offline and Live controls.
 
 ## Client SDK
 
@@ -160,7 +299,6 @@ const client = new SplitnextSyncClient({
 await client.initializeIdentity();
 const group = await client.createGroup({
   name: 'Berlin flat',
-  currency_code: 'EUR',
   creator_member_name: 'Santi',
 });
 
@@ -174,7 +312,7 @@ client.watchGroup(group.group_id);
 ```
 
 `MemoryClientStorage` is useful for tests. `IndexedDbClientStorage` is the atomic
-browser adapter prepared for a future PWA. React Native can provide a SQLite
+browser adapter used by the app. React Native can provide a SQLite
 adapter at the same opaque storage seam. The dashboard's localStorage adapter is
 only for preserving tester devices and replicas between page reloads.
 
@@ -185,6 +323,10 @@ their own.
 The client persistence module validates its versioned document and serializes
 updates so concurrent client instances and in-flight synchronization cannot
 discard newly queued intent.
+Startup upgrades saved pre-shared-invite documents automatically while retaining
+identities, pending edits, and retries. A device without the saved link token
+needs one connection to fetch its group's current snapshot for that upgrade;
+failed attempts preserve the original data.
 
 ## Storage seams
 
@@ -223,9 +365,8 @@ separate implementations.
 - `GET /identity/groups`
 - `POST /groups`
 - `POST /groups/{groupId}/join`
-- `POST /groups/{groupId}/invites`
-- `POST /groups/{groupId}/invites/preview`
-- `POST /groups/{groupId}/invites/{inviteId}/revoke`
+- `PUT /groups/{groupId}/invite`
+- `POST /groups/{groupId}/invite/preview`
 - `POST /groups/{groupId}/sync`
 - `GET /groups/{groupId}/realtime` (WebSocket)
 - `GET /openapi.json`

@@ -101,7 +101,6 @@
               <form class="create-group" data-action-form="create-group">
                 <input name="name" aria-label="Group name" maxlength="100" required value="Berlin flat">
                 <input name="creator_member_name" aria-label="Your member name" maxlength="100" required placeholder="Your name">
-                <input class="currency" name="currency_code" aria-label="Currency code" minlength="3" maxlength="3" required value="EUR">
                 <button type="submit">Create</button>
               </form>
             <strong>Join with an invite link</strong>
@@ -110,7 +109,7 @@
                 <select data-role="join-member" aria-label="Who are you?" disabled>
                   <option value="">Who are you?</option>
                 </select>
-                <input data-role="join-name" aria-label="New member name" maxlength="100" placeholder="Your name">
+                <input data-role="join-name" aria-label="Your name" maxlength="100" placeholder="Your name">
                 <button type="submit" disabled>Join</button>
                 <small data-role="join-preview" class="join-preview"></small>
               </form>
@@ -121,7 +120,7 @@
           <form class="rejoin-group" data-action-form="rejoin" hidden>
             <strong>You left this group. Rejoin as:</strong>
             <select data-role="rejoin-member" aria-label="Who are you?"></select>
-            <input data-role="rejoin-name" aria-label="New member name" maxlength="100" placeholder="Your name">
+            <input data-role="rejoin-name" aria-label="Your name" maxlength="100" placeholder="Your name">
             <button type="submit">Rejoin</button>
           </form>
 
@@ -147,14 +146,7 @@
                 <button class="icon-button secondary" type="button" data-action="copy-invite" title="Copy link" aria-label="Copy link"><svg class="icon" aria-hidden="true"><use href="#icon-copy"></use></svg></button>
               </div>
               <div class="invite-controls">
-                <select data-role="invite-expiry" aria-label="Link lifetime">
-                  <option value="1">1 hour</option>
-                  <option value="24">1 day</option>
-                  <option value="168" selected>7 days</option>
-                  <option value="720">30 days</option>
-                </select>
-                <button type="button" data-action="create-invite">Create link</button>
-                <button class="icon-button danger-text" type="button" data-action="revoke-invite" title="Revoke link; people who joined keep access" aria-label="Revoke link"><svg class="icon" aria-hidden="true"><use href="#icon-ban"></use></svg></button>
+                <button type="button" data-action="regenerate-invite">New link</button>
               </div>
             </section>
 
