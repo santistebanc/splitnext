@@ -2,7 +2,7 @@ import type { ActionExecutions, PendingExecution } from '../executions';
 import { z } from 'zod';
 import { activeMembers, type JsonValue } from '@splitnext/client';
 import type { ActionInvocation, AppController, AppState } from '../controller';
-import type { AppUiState, UiState, ViewName } from '../uiState';
+import type { AppUiState, UiState } from '../uiState';
 import type { ValueSource } from '../actionInputs';
 import { isSubmission, workflowGuard, type WorkflowIntent } from '../workflow';
 
@@ -26,7 +26,7 @@ export type ActionHost = Pick<
   | 'regenerateInvite'
   | 'retryNotice'
   | 'dismissNotice'
-> & {
+> & Partial<Pick<AppController, 'subscribe'>> & {
   forInvocation?: (invocation: ActionInvocation) => ActionHost;
   client: Pick<AppController['client'], 'previewInvite'> & Partial<Pick<AppController['client'], 'observeDiagnostics'>>;
 };
@@ -121,6 +121,13 @@ export type Locks<S extends z.ZodType> = (
 /** The member row editor, locked while a member save finishes it. */
 export const editorLock = 'memberEditor';
 
+/**
+ * Held by a navigation that changes the open group, which decides the next
+ * view. Every workflow step waits for it, so none starts on a view about to be
+ * replaced; switching panels within a group is instant and does not hold it.
+ */
+export const navigationLock = 'navigation';
+
 export function defineAction<S extends z.ZodType, O>(spec: ActionSpec<S, O>) {
   function holds(context: ActionContext, input?: z.output<S>): readonly string[] {
     return spec.holds?.(context, input) ?? [];
@@ -146,6 +153,7 @@ export function defineAction<S extends z.ZodType, O>(spec: ActionSpec<S, O>) {
       ...(spec.waitsFor?.(context, input) ?? []),
       // Navigating away would discard the editor a running save finishes.
       ...(spec.workflow === 'navigate' ? [editorLock] : []),
+      ...(spec.workflow ? [navigationLock] : []),
     ];
 
     const pending = context.executions?.find((entry) => entry.resources.some((resource) => needed.includes(resource)));
@@ -289,21 +297,6 @@ export function requireOpenable(state: AppState, groupId?: string): BlockedActio
     return unavailable('client_offline', 'Go online to open this group.');
 
   return null;
-}
-
-/** Whether the group a view shows is there: panels need it open, rejoining needs it left. */
-export function viewFits(view: ViewName, state: AppState): boolean {
-  switch (view) {
-    case 'settings':
-    case 'invite':
-      return meets('openGroup', state);
-    case 'notices':
-      return meets('selectedGroup', state);
-    case 'rejoin':
-      return Boolean(state.group?.hidden);
-    default:
-      return true;
-  }
 }
 
 export function openSnapshot(state: AppState) {

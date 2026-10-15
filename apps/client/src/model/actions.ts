@@ -5,7 +5,7 @@ import type { ClientDiagnosticObserver, JsonValue } from '@splitnext/client';
 import { AppUiState, type UiState } from './uiState';
 import { sourceOptions, type ValueSource } from './actionInputs';
 import { workflowEffect, workflowCompletions } from './workflow';
-import { unavailable, type ActionAvailability, type ActionContext, type ActionHost, type ActionPlatform, type DispatchOptions, type DispatcherOptions, type Outcome } from './actions/define';
+import { navigationLock, unavailable, type ActionAvailability, type ActionContext, type ActionHost, type ActionPlatform, type DispatchOptions, type DispatcherOptions, type Outcome } from './actions/define';
 import { accessActions } from './actions/access';
 import { ledgerActions } from './actions/ledger';
 import { uiActions } from './actions/ui';
@@ -92,6 +92,12 @@ export function createDispatcher(
     () => host.lastYouName(),
     options.initialLink,
   );
+
+  // A panel whose group went away returns to the groups list, unless a
+  // navigation still running is about to choose the next view itself.
+  host.subscribe?.(() => {
+    if (!executions.snapshot().some((entry) => entry.resources.includes(navigationLock))) ui.fitToApp();
+  });
 
   // Collected in every build from the start, for devtools and support reports.
   const diagnostics = new DiagnosticsLog();

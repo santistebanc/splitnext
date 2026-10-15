@@ -59,6 +59,13 @@ phase and drafts on failure; request identifiers keep obsolete responses from
 changing a newer workflow. Actions declare locks they hold and locks they wait
 for, so a save protects its editor and target while unrelated ledger edits stay
 available, including offline. Navigation always waits for a running member save.
+A navigation that changes the open group holds a lock every workflow step waits
+for, so none starts on a view about to be replaced; switching panels within a
+group is instant and holds nothing, which keeps their openers enabled to take
+focus back. Because availability and the lock check run
+synchronously when dispatch is called, a second click sees the first one's
+locks. The UI state leaves a panel or member editor whose group went away, in
+this tab or another, so that rule does not depend on which action ran last.
 
 Confirmations remember their group and navigation revision; approving after
 either changed requires a new confirmation, and approval rechecks the original

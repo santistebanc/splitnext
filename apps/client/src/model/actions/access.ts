@@ -199,8 +199,7 @@ export const accessActions = {
       const navigation = ui.snapshot().navigation.revision;
 
       await host.submit({ type: 'group.leave', payload: {} });
-
-      if (ui.snapshot().navigation.revision === navigation) ui.show('home');
+      ui.showAfter(navigation, 'home');
     },
   }),
 };

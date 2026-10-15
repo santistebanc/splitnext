@@ -143,6 +143,73 @@ describe('app actions', () => {
     unsubscribe();
   });
 
+  it('makes workflow steps wait while a navigation loads its group', async () => {
+    const { host, state } = createHost();
+    const opening = deferred<void>();
+    const actions = createDispatcher({ ...host, openGroup: () => opening.promise });
+    const open = actions.dispatch('openGroup', { groupId: state.group?.group_id ?? '' });
+
+    expect(actions.availability('showCreateGroup', {})).toMatchObject({ available: false, error: 'operation_busy' });
+    expect(await actions.dispatch('createGroup', { name: 'Ski', yourName: 'Ana' })).toMatchObject({ status: 'failed', error: 'operation_busy' });
+    opening.resolve();
+    expect(await open).toMatchObject({ status: 'done' });
+    expect(actions.availability('showCreateGroup', {}).available).toBe(true);
+  });
+
+  it('returns from a panel or member editor whose group goes away', async () => {
+    const { host, state } = createHost();
+    const listeners = new Set<() => void>();
+    let current = state;
+
+    const actions = createDispatcher({
+      ...host,
+      snapshot: () => current,
+      subscribe: (listener) => {
+        listeners.add(listener);
+
+        return () => listeners.delete(listener);
+      },
+    });
+
+    // Another tab left the group; this one learns of it by synchronizing.
+    const publish = (hidden: boolean) => {
+      current = { ...state, group: state.group && { ...state.group, hidden } };
+
+      for (const listener of listeners) listener();
+    };
+
+    await actions.dispatch('showSettings', {});
+    publish(true);
+    expect(actions.state().ui).toMatchObject({ view: 'home', navigation: { mode: 'replace' } });
+
+    publish(false);
+    await actions.dispatch('beginAddMember', {});
+    publish(true);
+    expect(actions.state().ui.memberEdit).toBeNull();
+  });
+
+  it('finishes a leave without moving the view another running step decides', async () => {
+    const { host } = createHost();
+    const leaving = deferred<void>();
+    const creating = deferred<void>();
+
+    const actions = createDispatcher({
+      ...host,
+      submit: (intent) => (intent.type === 'group.leave' ? leaving.promise : host.submit(intent)),
+      createGroup: () => creating.promise,
+    });
+
+    const leave = actions.dispatch('leaveGroup', {}, { confirmed: true });
+    const create = actions.dispatch('createGroup', { name: 'Ski', yourName: 'Ana' });
+
+    expect(actions.state().ui.phase).toBe('creating');
+    leaving.resolve();
+    expect(await leave).toMatchObject({ status: 'done' });
+    expect(actions.state().ui.phase).toBe('creating');
+    creating.resolve();
+    expect(await create).toMatchObject({ status: 'done' });
+  });
+
   it('releases successful operations and exposes input choices and a live workflow map', async () => {
     const { host } = createHost();
     const request = deferred<void>();

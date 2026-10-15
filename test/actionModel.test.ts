@@ -14,23 +14,34 @@ import { randomDeviceSecret } from './harness';
  * Model-based check of the app action layer, driven the way any generic
  * caller drives it: pick an action from the catalog, fill its JSON Schema
  * inputs from app state or a small pool of values, and dispatch it against
- * the real controller, SDK, and in-memory group engine.
+ * the real controller, SDK, and in-memory group engine, sometimes twice
+ * before the first finishes, as a double click or an impatient assistant
+ * would.
  */
 
 const appUrl = 'https://splitnext.test';
 
 const actionNames = describeActions().map((action) => action.name);
 
+const callArbitrary = fc.record({
+  action: fc.nat(),
+  // Usually an action available now, as a person or assistant would choose.
+  fromAvailable: fc.nat({ max: 4 }).map((roll) => roll > 0),
+  picks: fc.array(fc.nat({ max: 99 }), { minLength: 8, maxLength: 8 }),
+  confirmed: fc.boolean(),
+});
+
+type Call = typeof callArbitrary extends fc.Arbitrary<infer T> ? T : never;
+
 const stepArbitrary = fc.oneof(
+  { weight: 10, arbitrary: fc.record({ kind: fc.constant('dispatch' as const), call: callArbitrary }) },
   {
-    weight: 12,
+    weight: 2,
     arbitrary: fc.record({
-      kind: fc.constant('dispatch' as const),
-      action: fc.nat(),
-      // Usually an action available now, as a person or assistant would choose.
-      fromAvailable: fc.nat({ max: 4 }).map((roll) => roll > 0),
-      picks: fc.array(fc.nat({ max: 99 }), { minLength: 8, maxLength: 8 }),
-      confirmed: fc.boolean(),
+      kind: fc.constant('together' as const),
+      first: callArbitrary,
+      // A double click repeats the first call; otherwise the second is chosen once the first has started.
+      second: fc.option(callArbitrary),
     }),
   },
   { weight: 1, arbitrary: fc.record({ kind: fc.constant('connection' as const), online: fc.boolean() }) },
@@ -121,36 +132,68 @@ async function simulate(steps: readonly Step[]): Promise<void> {
   const described = new Map(actions.describe().map((action) => [action.name, action]));
   const trace: string[] = [];
 
+  /** The action and input a caller would choose for a call in the current state. */
+  function choose(call: Call): Chosen {
+    const available = actionNames.filter((candidate) => actions.availability(candidate).available);
+    const choices = call.fromAvailable && available.length ? available : actionNames;
+    const name = choices[call.action % choices.length];
+    const description = name && described.get(name);
+
+    if (!name || !description) throw new Error('missing_action');
+    const fields = formFields(parseSchema(description.inputSchema));
+
+    // Like a caller trying inputs, take the first variant availability accepts.
+    const variants = call.picks.map((_, shift): JsonValue =>
+      buildInput(fields, valuesFor(fields, [...call.picks.slice(shift), ...call.picks.slice(0, shift)], actions.state(), pool)));
+
+    const input = (call.fromAvailable && variants.find((candidate) => actions.availability(name, candidate).available)) || variants[0] || {};
+
+    return { name, input, confirmed: call.confirmed };
+  }
+
+  /** Dispatches a call, remembering the availability it was dispatched under. */
+  function start(chosen: Chosen) {
+    const before = actions.availability(chosen.name, chosen.input);
+
+    return { ...chosen, before, outcome: actions.dispatchJson(chosen.name, chosen.input, { confirmed: chosen.confirmed, origin: 'model' }) };
+  }
+
+  /**
+   * Dispatch enforces exactly the answer availability gave when it was
+   * called, and an available action fails only for what only the server can
+   * decide, even while another dispatch is running.
+   */
+  async function expectAgrees(started: ReturnType<typeof start>, prefix = ''): Promise<void> {
+    const { name, input, before } = started;
+    const outcome = await started.outcome;
+
+    trace.push(`${prefix}${name} ${JSON.stringify(input)} → ${outcome.status}${outcome.status === 'failed' ? ` ${outcome.error}` : ''}`);
+
+    if (!before.available) expect(outcome, trace.join('\n')).toMatchObject({ status: 'failed', error: before.error });
+    else if (outcome.status === 'failed') expect(serverDecides(name, outcome.error), trace.join('\n')).toBe(true);
+  }
+
   try {
     for (const step of steps) {
-      if (step.kind === 'connection') {
-        trace.push(step.online ? 'online' : 'offline');
-        await app.setOnline(step.online);
-        continue;
+      switch (step.kind) {
+        case 'connection':
+          trace.push(step.online ? 'online' : 'offline');
+          await app.setOnline(step.online);
+
+          continue;
+        case 'dispatch':
+          await expectAgrees(start(choose(step.call)));
+          break;
+        case 'together': {
+          const first = start(choose(step.first));
+          // Chosen and checked while the first call runs.
+          const second = start(step.second ? choose(step.second) : first);
+
+          await Promise.all([first.outcome, second.outcome]);
+          await expectAgrees(first, '‖ ');
+          await expectAgrees(second, '‖ ');
+        }
       }
-
-      const available = actionNames.filter((candidate) => actions.availability(candidate).available);
-      const choices = step.fromAvailable && available.length ? available : actionNames;
-      const name = choices[step.action % choices.length];
-      const description = name && described.get(name);
-
-      if (!name || !description) throw new Error('missing_action');
-      const fields = formFields(parseSchema(description.inputSchema));
-
-      // Like a caller trying inputs, take the first variant availability accepts.
-      const variants = step.picks.map((_, shift): JsonValue =>
-        buildInput(fields, valuesFor(fields, [...step.picks.slice(shift), ...step.picks.slice(0, shift)], actions.state(), pool)));
-
-      const input = (step.fromAvailable && variants.find((candidate) => actions.availability(name, candidate).available)) || variants[0] || {};
-      const before = actions.availability(name, input);
-      const outcome = await actions.dispatchJson(name, input, { confirmed: step.confirmed, origin: 'model' });
-
-      trace.push(`${name} ${JSON.stringify(input)} → ${outcome.status}${outcome.status === 'failed' ? ` ${outcome.error}` : ''}`);
-
-      // Dispatch enforces exactly the answer availability gave, and an
-      // available action fails only for what only the server can decide.
-      if (!before.available) expect(outcome, trace.join('\n')).toMatchObject({ status: 'failed', error: before.error });
-      else if (outcome.status === 'failed') expect(serverDecides(name, outcome.error), trace.join('\n')).toBe(true);
 
       expectSettled(actions.state(), trace.join('\n'));
     }
@@ -158,6 +201,8 @@ async function simulate(steps: readonly Step[]): Promise<void> {
     app.dispose();
   }
 }
+
+type Chosen = { name: (typeof actionNames)[number]; input: JsonValue; confirmed: boolean };
 
 /**
  * Joining someone else's group depends on members and invites only the

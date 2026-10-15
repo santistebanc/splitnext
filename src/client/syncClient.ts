@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { commandFromIntent, commandOutcomeSchema, requiresServerDecision, type CommandIntent } from '../domain/commands';
 import { clientErrorKind } from './errors';
 import type { ClientDiagnosticEvent, ClientDiagnosticObserver, ClientExchange, ClientRequestContext, ClientInvocationIds } from './diagnostics';
-import type { PendingCommand } from './storage';
+import { ClientStorageError, type PendingCommand } from './storage';
 import { SplitnextNetworkError, SplitnextRequestError } from './errors';
 import type { JoinGroupRequest } from '../domain/access';
 import type { GroupCommand } from '../domain/commands';
@@ -31,6 +31,7 @@ import {
   type ClientGroupCreationInput,
   type ClientReplicaState,
   type ClientGroupSummary,
+  type PreparedSync,
 } from './replicaStore';
 import {
   defaultReconnectDelayMs,
@@ -121,7 +122,7 @@ export class SplitnextSyncClient {
     this.api = options.api;
     this.deviceApi = options.api.forDevice(options.device_secret);
     this.deviceSecret = options.device_secret;
-    this.replicas = new ClientReplicaStore(options.storage, now);
+    this.replicas = new ClientReplicaStore(options.storage, now, () => this.online);
     this.createId = options.create_id ?? createIdentifier;
     this.onBackgroundSync = options.on_background_sync ?? (() => undefined);
     this.onBackgroundError = options.on_background_error ?? (() => undefined);
@@ -246,9 +247,7 @@ export class SplitnextSyncClient {
       throw error;
     }
 
-    await this.replicas.confirmGroupCreation(created);
-
-    return this.replicas.state(created.group.id, this.online);
+    return this.replicas.confirmGroupCreation(created);
   }
 
   /**
@@ -266,7 +265,7 @@ export class SplitnextSyncClient {
     return this.serialize(groupId, async () => {
       // Deliver earlier intent first, such as a leave whose response was
       // lost, so leaving and rejoining reach the server in the order made.
-      if ((await this.replicas.state(groupId, this.online)).outbox.length > 0)
+      if ((await this.replicas.state(groupId)).outbox.length > 0)
         await this.synchronize(groupId, true, invocationId);
 
       const request = await this.replicas.prepareJoin(
@@ -279,9 +278,7 @@ export class SplitnextSyncClient {
       try {
         const joined = await this.exchange(this.requestContext('joinGroup', groupId, invocationId), (context) => this.deviceApi.joinGroup(groupId, request, context));
 
-        await this.replicas.confirmJoin(groupId, joined);
-
-        return this.replicas.state(groupId, this.online);
+        return await this.replicas.confirmJoin(groupId, joined);
       } catch (error) {
         if (error instanceof Error && isServerRejection(error)) {
           await this.replicas.rejectJoin(groupId, request.join_id);
@@ -322,9 +319,9 @@ export class SplitnextSyncClient {
 
     // The replacement succeeded: show its link even if the follow-up
     // synchronization cannot run because the connection dropped meanwhile.
-    await this.replicas.settleInvite(groupId, invite.invite_id, replaced);
+    const settled = await this.replicas.settleInvite(groupId, invite.invite_id, replaced);
 
-    return this.deliverQueued(groupId, invocationId);
+    return this.deliverQueued(groupId, settled, invocationId);
   }
 
   /**
@@ -350,7 +347,7 @@ export class SplitnextSyncClient {
 
   /** Reads summaries, notice counts, and requested replicas from one local document. */
   installationState(groupIds: readonly string[] = []): Promise<ClientInstallationState> {
-    return this.replicas.installationState(groupIds, this.online);
+    return this.replicas.installationState(groupIds);
   }
 
   /** The same list as `listGroups`, from local data only. */
@@ -417,25 +414,23 @@ export class SplitnextSyncClient {
   }
 
   inspect(groupId: string): Promise<ClientReplicaState> {
-    return this.replicas.state(groupId, this.online);
+    return this.replicas.state(groupId);
   }
 
   async dismissNotice(
     groupId: string,
     commandId: string,
   ): Promise<ClientReplicaState> {
-    await this.replicas.dismissNotice(groupId, commandId);
-
-    return this.replicas.state(groupId, this.online);
+    return this.replicas.dismissNotice(groupId, commandId);
   }
 
   /** Retry a notice as fresh intent, retiring it only with the durable outbox write. */
   async retryNotice(groupId: string, commandId: string, invocationId?: string): Promise<ClientReplicaState> {
-    const pending = await this.replicas.retryNotice(groupId, commandId, this.createId, () => this.requireOnline(), invocationId);
+    const { pending, state } = await this.replicas.retryNotice(groupId, commandId, this.createId, () => this.requireOnline(), invocationId);
 
     this.queued(groupId, pending, commandId);
 
-    return this.deliverQueued(groupId, invocationId);
+    return this.deliverQueued(groupId, state, invocationId);
   }
 
   private async queueCommand(
@@ -446,27 +441,32 @@ export class SplitnextSyncClient {
     ) => GroupCommand,
     invocationId?: string,
   ): Promise<ClientReplicaState> {
-    const pending = await this.replicas.queueCommand(groupId, createCommand, invocationId);
+    const { pending, state } = await this.replicas.queueCommand(groupId, createCommand, invocationId);
 
     this.queued(groupId, pending);
 
-    return this.deliverQueued(groupId, invocationId);
+    return this.deliverQueued(groupId, state, invocationId);
   }
 
-  private async deliverQueued(groupId: string, invocationId?: string): Promise<ClientReplicaState> {
-    if (!this.online) return this.replicas.state(groupId, this.online);
+  /**
+   * Delivers the outbox after a call saved its change, so that call has
+   * succeeded even if delivery fails: an unreachable server is
+   * indistinguishable from being offline, and storage failing meanwhile is
+   * reported like a failed background synchronization. A later
+   * synchronization delivers it.
+   */
+  private async deliverQueued(groupId: string, queued: ClientReplicaState, invocationId?: string): Promise<ClientReplicaState> {
+    if (this.online) {
+      try {
+        return await this.syncGroup(groupId, invocationId);
+      } catch (error) {
+        if (!(error instanceof Error) || !(isTransportFailure(error) || isStorageFailure(error))) throw error;
 
-    try {
-      return await this.syncGroup(groupId, invocationId);
-    } catch (error) {
-      // An unreachable server is indistinguishable from being offline: the
-      // intent is safely queued and a later synchronization delivers it.
-      if (error instanceof Error && isTransportFailure(error)) {
-        return this.replicas.state(groupId, this.online);
+        if (isStorageFailure(error)) this.reportBackgroundError(error);
       }
-
-      throw error;
     }
+
+    return queued;
   }
 
   private async synchronize(
@@ -475,22 +475,22 @@ export class SplitnextSyncClient {
     invocationId?: ClientInvocationIds,
   ): Promise<ClientReplicaState> {
     const prepared = await this.replicas.prepareSync(groupId, includeLeft);
-
-    if (prepared) {
-      const exchange = this.requestContext('syncGroup', groupId, invocationId);
-
-      exchange.command_ids = prepared.commands.map((pending) => pending.command.command_id);
-      exchange.invocation_ids = [...new Set([...exchange.invocation_ids, ...prepared.commands.flatMap((pending) => pending.invocation_id ? [pending.invocation_id] : [])])];
-      const response = await this.exchange(exchange, (context) => this.deviceApi.syncGroup(groupId, prepared.request, context));
-
-      await this.replicas.reconcile(groupId, prepared.commands, response);
-    }
-
-    const state = await this.replicas.state(groupId, this.online);
+    const state = prepared ? await this.send(groupId, prepared, invocationId) : await this.replicas.state(groupId);
 
     if (state.hidden) this.realtime.unwatch(groupId);
 
     return state;
+  }
+
+  /** Sends the outbox and records the response, returning the replica it left. */
+  private async send(groupId: string, prepared: PreparedSync, invocationId?: ClientInvocationIds): Promise<ClientReplicaState> {
+    const exchange = this.requestContext('syncGroup', groupId, invocationId);
+
+    exchange.command_ids = prepared.commands.map((pending) => pending.command.command_id);
+    exchange.invocation_ids = [...new Set([...exchange.invocation_ids, ...prepared.commands.flatMap((pending) => pending.invocation_id ? [pending.invocation_id] : [])])];
+    const response = await this.exchange(exchange, (context) => this.deviceApi.syncGroup(groupId, prepared.request, context));
+
+    return this.replicas.reconcile(groupId, prepared.commands, response);
   }
 
   /**
@@ -517,7 +517,7 @@ export class SplitnextSyncClient {
     const background = this.serialize(groupId, async () => {
       if (!this.online) return null;
 
-      const state = await this.replicas.state(groupId, this.online);
+      const state = await this.replicas.state(groupId);
 
       const current =
         state.revision !== null &&
@@ -535,13 +535,15 @@ export class SplitnextSyncClient {
       .then((state) => {
         if (state) this.onBackgroundSync(state);
       })
-      .catch((cause) => {
-        try {
-          this.onBackgroundError(cause instanceof Error ? cause : new Error('sync_failed'));
-        } catch {
-          // A diagnostic consumer cannot create an unhandled background rejection.
-        }
-      });
+      .catch((cause) => this.reportBackgroundError(cause instanceof Error ? cause : new Error('sync_failed')));
+  }
+
+  private reportBackgroundError(error: Error): void {
+    try {
+      this.onBackgroundError(error);
+    } catch {
+      // A diagnostic consumer cannot create an unhandled background rejection.
+    }
   }
 
   private requireOnline(): void {
@@ -556,6 +558,11 @@ function isServerRejection(error: Error): boolean {
 /** The request never produced a server answer, as opposed to a rejection. */
 function isTransportFailure(error: Error): boolean {
   return error instanceof SplitnextNetworkError;
+}
+
+/** The device could not read or save its local document, as opposed to finding it unusable. */
+function isStorageFailure(error: Error): boolean {
+  return error instanceof ClientStorageError && error.code === 'storage_unavailable';
 }
 
 export type {
