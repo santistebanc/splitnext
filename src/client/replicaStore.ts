@@ -499,16 +499,15 @@ export class ClientReplicaStore {
     createId: () => string,
     requireOnline: () => void,
     invocationId?: string,
-  ): Promise<{ requiresServer: boolean; pending: PendingCommand }> {
+  ): Promise<PendingCommand> {
     return this.change((document) => {
       const session = requireIdentity(document);
       const replica = requireReplica(document, groupId);
       const notice = replica.notices.find((entry) => entry.command.command_id === commandId);
 
       if (!notice) throw new Error('notice_not_found');
-      const requiresServer = requiresServerDecision(notice.command.type);
 
-      if (requiresServer) requireOnline();
+      if (requiresServerDecision(notice.command.type)) requireOnline();
       const command = commandForRetry(notice, project(replica, session.identity.id), createId);
 
       const pending: PendingCommand = { command, queued_at: this.now() };
@@ -517,7 +516,7 @@ export class ClientReplicaStore {
       replica.outbox.push(pending);
       replica.notices = replica.notices.filter((entry) => entry !== notice);
 
-      return { requiresServer, pending };
+      return pending;
     });
   }
 

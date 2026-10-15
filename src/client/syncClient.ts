@@ -365,15 +365,14 @@ export class SplitnextSyncClient {
    * Queues one command, completed against the local projection, and delivers
    * it when online. An omitted precondition, such as a rename's expected
    * name, is the name the person currently sees, so a concurrent change
-   * supersedes this one instead of being overwritten. Leaving needs a server
-   * decision, so a transport failure is reported for it.
+   * supersedes this one instead of being overwritten. Leaving can only start
+   * online; if the connection then drops, it completes on reconnect like any
+   * other queued command.
    */
   async submit(groupId: string, intent: CommandIntent, invocationId?: string): Promise<ClientReplicaState> {
-    const requiresServer = requiresServerDecision(intent.type);
+    if (requiresServerDecision(intent.type)) this.requireOnline();
 
-    if (requiresServer) this.requireOnline();
-
-    return this.queueCommand(groupId, (snapshot) => commandFromIntent(intent, snapshot, this.createId), invocationId, requiresServer);
+    return this.queueCommand(groupId, (snapshot) => commandFromIntent(intent, snapshot, this.createId), invocationId);
   }
 
   async syncGroup(groupId: string, invocationId?: ClientInvocationIds): Promise<ClientReplicaState> {
@@ -428,11 +427,11 @@ export class SplitnextSyncClient {
 
   /** Retry a notice as fresh intent, retiring it only with the durable outbox write. */
   async retryNotice(groupId: string, commandId: string, invocationId?: string): Promise<ClientReplicaState> {
-    const { requiresServer, pending } = await this.replicas.retryNotice(groupId, commandId, this.createId, () => this.requireOnline(), invocationId);
+    const pending = await this.replicas.retryNotice(groupId, commandId, this.createId, () => this.requireOnline(), invocationId);
 
     this.queued(groupId, pending, commandId);
 
-    return this.deliverQueued(groupId, requiresServer, invocationId);
+    return this.deliverQueued(groupId, invocationId);
   }
 
   private async queueCommand(
@@ -442,18 +441,15 @@ export class SplitnextSyncClient {
       identityId: string,
     ) => GroupCommand,
     invocationId?: string,
-    requiresServer = false,
   ): Promise<ClientReplicaState> {
     const pending = await this.replicas.queueCommand(groupId, createCommand, invocationId);
 
     this.queued(groupId, pending);
 
-    return this.deliverQueued(groupId, requiresServer, invocationId);
+    return this.deliverQueued(groupId, invocationId);
   }
 
-  private async deliverQueued(groupId: string, requiresServer = false, invocationId?: string): Promise<ClientReplicaState> {
-    if (requiresServer) this.requireOnline();
-
+  private async deliverQueued(groupId: string, invocationId?: string): Promise<ClientReplicaState> {
     if (!this.online) return this.replicas.state(groupId, this.online);
 
     try {
@@ -461,7 +457,7 @@ export class SplitnextSyncClient {
     } catch (error) {
       // An unreachable server is indistinguishable from being offline: the
       // intent is safely queued and a later synchronization delivers it.
-      if (!requiresServer && error instanceof Error && isTransportFailure(error)) {
+      if (error instanceof Error && isTransportFailure(error)) {
         return this.replicas.state(groupId, this.online);
       }
 

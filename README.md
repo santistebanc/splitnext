@@ -270,7 +270,9 @@ plus a complete authoritative snapshot whenever state may differ.
 
 The client retains its outbox when transport fails. Edits made while the server
 is unreachable resolve with the queued local state, as they would offline;
-only server rejections and leaving a group report the failure. If the server applied a
+only server rejections report a failure. Leaving can start only online, but
+once queued it is not undone by a lost response: the group shows as left and
+the leave is delivered on reconnect. If the server applied a
 command but the response was lost, retrying the same command id returns the
 stored outcome without applying the change twice. Concurrent intent conflicts
 are returned as `superseded` or `rejected`; the SDK replaces its confirmed
@@ -430,8 +432,8 @@ failed attempts preserve the original data.
 The SDK owns notice retries through `retryNotice(groupId, commandId)`. It
 creates fresh command identifiers and rename preconditions from the current
 projection, retaining that intent and retiring the old notice in one atomic
-storage update. Ordinary retries work offline; leaving still needs a server
-decision. The app uses this SDK operation.
+storage update. Ordinary retries work offline; retrying a leave must start
+online. The app uses this SDK operation.
 
 ## Storage seams
 

@@ -484,6 +484,21 @@ describe('stateful offline client SDK', () => {
     expect(retried.outbox).toEqual([]);
     expect(retried.revision).toBe(2);
     expect(retried.projected_snapshot?.members).toHaveLength(2);
+
+    // Leaving starts only online, but a lost response is not a failure: the
+    // group shows as left and the queued leave completes on the next sync.
+    loseNextSyncResponse = true;
+    const leaving = await client.submit(created.group_id, { type: 'group.leave', payload: {} });
+
+    expect(leaving.hidden).toBe(true);
+    expect(leaving.outbox).toHaveLength(1);
+    const left = await client.refreshGroup(created.group_id);
+
+    expect(left.outbox).toEqual([]);
+    expect(left.hidden).toBe(true);
+    expect(left.confirmed_snapshot?.access_grants[0]?.hidden_at).not.toBeNull();
+    client.setOnline(false);
+    await expect(client.submit(created.group_id, { type: 'group.leave', payload: {} })).rejects.toMatchObject({ name: 'ClientOfflineError' });
   });
 
   it('reuses the group id and usable initial link after a lost response and reload', async () => {

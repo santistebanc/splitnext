@@ -262,7 +262,10 @@ operations remain available without opening an editor, including offline.
   server.
 - Actions that establish or deliberately stop authority require an online
   server decision. These include creating or joining a group, leaving/hiding a
-  group, managing invites, and revoking a device credential.
+  group, managing invites, and revoking a device credential. Leaving starts only
+  online; if the connection drops before the server answers, the group shows as
+  left and the queued leave completes on reconnect instead of reporting a
+  failure.
 - Reconnecting sends the ordered outbox as one synchronization batch. Transport
   failure leaves the outbox intact for retry.
 - Joining or rejoining first delivers the group's outbox, so intent reaches the
