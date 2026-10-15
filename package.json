@@ -27,7 +27,7 @@
     "frontend:check": "npm run frontend:build && node --check .wrangler/app-assets/service-worker.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "check": "npm run frontend:check && npm run types:check && npm run lint && npm run typecheck && npm run app:typecheck && wrangler deploy --dry-run --outdir .wrangler/dry-run && npm test"
+    "check": "node scripts/check-text.mjs && npm run frontend:check &&npm run types:check && npm run lint && npm run typecheck && npm run app:typecheck && wrangler deploy --dry-run --outdir .wrangler/dry-run && npm test"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.1.9",
