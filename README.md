@@ -47,8 +47,11 @@ realtime revision announcements; expenses are intentionally deferred.
   with Rejoin, and a placeholder list shows while local storage opens. Share
   invite becomes secondary once someone else has joined. Errors appear beside
   the row or button that caused them; background sync errors join the status
-  banner. Sheets close with Escape and keep keyboard focus inside them, and
-  every control has a visible keyboard focus outline.
+  banner. Sheets close with Escape and keep keyboard focus inside them, then
+  return it to the control that opened them without taking it from anything
+  focused while they fade out; every control has a visible keyboard focus
+  outline. On the web, sheets render in their own layer
+  (`ui/SheetOverlay.web.tsx`) instead of React Native Web's Modal.
 - A compact Members list supports adding and editing inline, saving on blur
   without shifting the row or needing confirm/cancel controls. It has no member
   avatars or a heading count. Click a person icon to choose who is you; the

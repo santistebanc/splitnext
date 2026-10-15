@@ -1,5 +1,5 @@
-﻿import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { Keyboard, Modal, Pressable, Text, View } from 'react-native';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { Keyboard, Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { AppController } from '../model/controller';
 import { createDispatcher } from '../model/actions';
@@ -15,6 +15,7 @@ import { InvitePanel } from './InvitePanel';
 import { JoinGroup } from './JoinGroup';
 import { NoticesPanel } from './NoticesPanel';
 import { Sheet } from './Sheet';
+import { SheetOverlay } from './SheetOverlay';
 import { navigationSchema } from './navigation';
 import { Devtools } from '../devtools/Devtools';
 import { ActionsProvider } from './useActionCall';
@@ -395,12 +396,7 @@ function ReadyApp(props: AppProps) {
               <GroupsView app={app} />
             )}
           </ViewTransition>
-          <Modal
-            visible={isSheet}
-            transparent
-            animationType="fade"
-            onRequestClose={close}
-          >
+          <SheetOverlay visible={isSheet} onClose={close}>
             <View style={[s.overlay, mobile && s.mobileOverlay]}>
               <Pressable
                 accessibilityRole="button"
@@ -418,7 +414,7 @@ function ReadyApp(props: AppProps) {
                 ) : null}
               </Sheet>
             </View>
-          </Modal>
+          </SheetOverlay>
         </Frame>
         <Devtools />
       </View>

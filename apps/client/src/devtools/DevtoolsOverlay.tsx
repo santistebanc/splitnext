@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 
 type OverlayProps = { children: ReactNode; close: () => void };
 
-/** A viewport layer above React Native Web's separately portalled modals. */
+/** A viewport layer above the app's separately portalled sheets. */
 export function DevtoolsOverlay(props: OverlayProps) {
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
 
@@ -17,7 +17,7 @@ export function DevtoolsOverlay(props: OverlayProps) {
       pointerEvents: 'none',
     });
 
-    // Modal's document-level focus trap must let this developer layer receive
+    // A sheet's document-level focus trap must let this developer layer receive
     // focus. React input handlers use focusin and continue to run normally.
     const allowFocus = (event: FocusEvent) => {
       if (event.target instanceof Node && layer.contains(event.target))

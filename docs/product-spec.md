@@ -32,8 +32,9 @@ After creation, show the group and its Members list immediately, with inline Add
 Invite actions. Share invite stays the primary action until another participant
 has joined, then becomes secondary. Adding names and inviting can happen in
 either order. The groups list shows each locally stored group's active member
-count and the member this installation uses. Sheets close with Escape and keep
-keyboard focus inside them. Sharing
+count and the member this installation uses. Sheets close with Escape, keep
+keyboard focus inside them, and return it to their opener without taking it
+from anything chosen while they close. Sharing
 opens a compact sheet with a copy icon inline with the invite-link field,
 native Share link where supported, New link, and Done. New link first asks
 for confirmation, stating that the current link will stop working, with
