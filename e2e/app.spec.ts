@@ -103,6 +103,11 @@ test('returns to the groups list while an invite check is still running', async 
   await expect(page.getByText('Checking…')).toBeVisible();
   await button(page, '← Back').click();
   await expect(page.getByText('Start a group')).toBeVisible({ timeout: 2000 });
+
+  // The invite token leaves the address bar with the join page.
+  await expect(page).toHaveURL(/\/app$/);
+  await page.goto(link);
+  await expect(page.getByText('Who are you?')).toBeVisible();
 });
 
 test('keeps offline edits pending and delivers them on reconnect', async ({ page, context }) => {

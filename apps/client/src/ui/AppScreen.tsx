@@ -255,13 +255,8 @@ function ReadyApp(props: AppProps) {
       window.history.pushState(entry, '', window.location.href);
     else window.history.replaceState(entry, '', window.location.href);
 
-    if (
-      props.incomingGroupId &&
-      ui.view === 'home' &&
-      app.snapshot().group &&
-      !app.snapshot().group?.hidden
-    )
-      enterApp();
+    // Leaving the join page for a group or the groups list drops the invite URL.
+    if (props.incomingGroupId && ui.view === 'home') enterApp();
   }, [ui.navigation.revision]);
 
   function close(): void {
