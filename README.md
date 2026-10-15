@@ -57,10 +57,11 @@ realtime revision announcements; expenses are intentionally deferred.
   selected member stays first with animated row movement.
   Other names currently used by joined participants have a dark filled icon;
   names without a current participant stay outlined.
-  Ringed status dots overlay the icon's right edge, with a same-size circled
-  star for you. Three markers fit per row, with small gaps and upward wrapping.
+  One ringed status dot (or a YOU badge) overlays the icon's right edge,
+  online if any participant using that name is online; a "+N" badge on the
+  left edge counts the other participants using it.
   Hollow markers mean presence is unavailable. Multiple tabs count once.
-  A cross icon removes other members immediately; it is hidden on your own row,
+  A cross icon removes any member immediately, including your own,
   retaining them for history. The app list shows current members only.
 - Mobile and touch layouts use a full page for group settings, with
   keyboard-aware scrolling and Back to group. Desktop layouts retain a dialog.
@@ -115,7 +116,10 @@ Native release and platform-specific persistence are a later slice.
 
 Open `http://localhost:8787/components` (or `:8081/components` under Expo) for
 the component workbench. Search the sidebar, pick a component, and edit its
-controls; callbacks such as presses appear in the Events log. `MemberList` runs
+controls; callbacks such as presses appear in the Events log. `MemberIcon` has
+an explicit `isYou` switch, separate presence controls, and an other-participant
+count; turn `isYou` off with one other participant to preview a dot without the
+YOU badge. `MemberList` runs
 against an in-memory group, with controls for members, who is you, other
 participants, presence, connection, latency, and forced command errors. The
 viewport presets resize the canvas only; components that read the window size
@@ -127,6 +131,12 @@ The Worker serves this route only when `ENABLE_DEBUG_INSPECTION` is true.
 
 Metro watches the repository's `src/` folder as well as the workspaces, so SDK
 edits reload under `npm run app:dev` without a restart.
+
+The component workbench uses the production `AppController`, SDK, and group
+engine through an isolated memory transport. Its fixtures use valid contracts;
+creation, joining, leaving, replacement links, aliases, outboxes, and notices
+follow the same rules as the app. Latency and forced server failures apply
+to connected requests; offline ledger edits continue to queue locally.
 
 ### App actions
 
@@ -141,16 +151,95 @@ Everything a person can do in the app is an app action in
 - `dispatchJson(name, json)` does the same for callers holding only names and
   JSON, such as RPC or an assistant.
 - `describe()` lists every action with its description, preconditions,
-  whether it needs confirmation, an example input, and a JSON Schema.
+  group, current availability, contextual suggestion rank, whether it needs
+  confirmation, an example input, and a JSON Schema.
+- `inputOptions(source)` resolves state-backed choices and suggestions for any caller.
+- `availability(name, input?)` checks current state and platform support
+  without running anything; with input, it also validates the proposed values.
+  Unavailable results include a short reason and the same failure code dispatch
+  enforces. This is a local preflight, not a guarantee of server success.
+- `stateActionMap()` returns the live state/action map.
+- `executions.snapshot()` and `executions.subscribe()` expose shared pending work.
 - `observe(listener)` reports each dispatch with its origin and status.
 
 Actions that need approval (replacing the invite link, leaving, choosing a
 member another participant uses) return `needs_confirmation` until called
 with `confirmed: true`; each caller obtains approval its own way. The UI uses
-`useActionCall()`, and every screen changes data only through actions;
-startup, background refresh, and online tracking stay on the controller. The
-workbench's Action console calls any action by name with JSON input against an
-in-memory group.
+`useActionCall()`. Navigation, form drafts, member editors, join choices,
+visibility toggles, and copy/share also use the catalog. `showGroups` returns
+to the group list; `showSettings`, `showInvite`, and related actions open the
+same views from any caller. `changeDraft` updates a named field without saving;
+submission actions consume the shared draft. `ui.snapshot()` and
+`ui.subscribe()` expose the shared screen state, and `state()` includes it.
+`confirmAction` and `cancelConfirmation` resolve a pending request by id.
+Every screen changes data only through actions;
+startup, background refresh, and online tracking stay on the controller.
+
+`model/workflow.ts` defines the local view/phase state machine and pure
+transitions. The catalog declares each workflow intent and uses the same rules
+for availability and execution. The current phase and local focus also
+determine Suggested candidates and base priorities. The catalog
+maps actions to these steps, applies availability checks, and adjusts priorities
+using drafts and domain context, rather than duplicating view/phase checks.
+Shared checking, creating, joining, and saving
+phases work across callers; repeated submissions are blocked, failed requests
+retain their draft, and obsolete invite responses are ignored. Direct ledger
+operations still work from any view and can queue offline. No state-machine
+library is required.
+
+Pending action executions are observable and shared across callers. The
+catalog declares affected resources so direct mutations and draft submissions
+use the same busy guards. Member saves protect the editor and target while
+unrelated ledger edits remain available, including offline. Resource guards
+release after success or failure. `stateActionMap()` exposes the current
+workflow, evaluated completion edges, action metadata and availability,
+suggestion ranks, and pending executions. Devtools renders it in the Map tab;
+there is no separate transition table to maintain.
+
+### Devtools
+
+Open `/app?devtools` to switch on a development panel inside the app; the
+choice is remembered on that device, and `?devtools=0` switches it off. A
+`</>` button opens a panel with four tabs. The button and panel remain above
+app dialogs and popups; devtools fields stay usable while a dialog is open.
+Escape inside devtools closes its panel without closing the app dialog.
+
+The tabs are:
+
+- **Map** shows the current workflow, completion transitions, action availability,
+  requirements, input fields, suggestion ranks, and pending operations, generated
+  from the catalog and transition evaluator.
+- **Actions** calls any app action against the real open group, through the
+  same dispatcher as the screens (origin `devtools`). Actions are grouped into
+  **UI**, **Ledger changes**, and **Access & sync**, according to their main
+  purpose. **Suggested** opens first and lists all available contextual
+  next steps derived from the workflow phase and focus, filtered and ranked
+  by the catalog using drafts, selections, connection, and group data.
+  Steps appear in priority order, including edit/remove member actions in a group;
+  removal is suggested whenever an active member exists, including you. Its
+  selector defaults to another member when available and includes you.
+  Browse actions through these
+  tabs, without a search field, secondary categories, or an All tab.
+  Available actions come first; unavailable actions are faded at the bottom
+  and remain selectable for inspection. Dispatch
+  is disabled with a short reason until state and inputs permit the action;
+  approval also rechecks the original pending action. Each action gets a form
+  generated from its input schema: dropdowns for fixed options and for values
+  that must be a member, group, or notice of this installation (labelled by
+  name); text fields with suggestions where app state can help, such as the
+  current invite link; plain text, number, and switch fields otherwise; and a
+  kind dropdown for inputs with variants. The JSON it sends is shown below the
+  form. A confirmation shows its message with Approve and Cancel.
+- **Log** lists every dispatch from any caller, with its origin (`ui`,
+  `devtools`, `history`), result, and time, collected from when the app opened.
+- **State** shows the connection, groups, open group, and UI drafts and view as
+  the action layer sees them, including the workflow phase and request id.
+  Invite credentials are omitted from this display.
+
+Devtools run in Expo development and in builds served by a Worker with
+`ENABLE_DEBUG_INSPECTION` enabled, as `npm run dev` does; the app asks
+`GET /debug/status`, which answers only then. Production never enables them,
+and every build is identical, so no build setting can switch them on.
 
 Open `http://localhost:8787/dashboard/` for the test lab. It lets you:
 
@@ -328,6 +417,13 @@ identities, pending edits, and retries. A device without the saved link token
 needs one connection to fetch its group's current snapshot for that upgrade;
 failed attempts preserve the original data.
 
+The SDK owns notice retries through `retryNotice(groupId, commandId)`. It
+creates fresh command identifiers and rename preconditions from the current
+projection, retaining that intent and retiring the old notice in one atomic
+storage update. Ordinary retries work offline; leaving still needs a server
+decision. The app and dashboard use the same SDK operation. Dashboard reconnects deliver
+outboxes even when Live revision announcements are switched off.
+
 ## Storage seams
 
 - D1 stores global access identities and device credentials.
@@ -356,6 +452,11 @@ The pure command transition rules are shared by the server and the optimistic
 client projection. Cloudflare storage and client-local persistence remain
 separate implementations.
 
+Shared snapshot selectors in `src/domain/selectors.ts` define active members,
+joined participants, preferred members, and invite-preview choices for the
+server, SDK, app, and dashboard. Display ordering and presence markers live
+in the app model; devtools input choices also live in the model.
+
 ## HTTP surface
 
 - `GET /health`
@@ -374,6 +475,7 @@ separate implementations.
 
 Debug-only routes, hidden unless `ENABLE_DEBUG_INSPECTION` is enabled:
 
+- `GET /debug/status`
 - `GET /debug/identity-directory`
 - `GET /debug/groups`
 - `GET /debug/groups/{groupId}`
@@ -388,3 +490,28 @@ placeholder D1 database id.
 - [Accepted product behavior](./docs/product-spec.md)
 - [Architecture decisions](./docs/adr/)
 - [Agent working agreement](./AGENTS.md)
+
+SDK failures distinguish network, server, protocol, storage and offline causes
+through `clientErrorKind(error)`. Cached identity and queued-command fallback
+apply only to `SplitnextNetworkError`. Invalid server replies are observable
+as `protocol_error` in SDK transport diagnostics and dashboard request cards;
+storage and programming failures are surfaced rather than marked offline.
+
+`SplitnextSyncClient.installationState(groupIds)` returns group summaries,
+notice counts, and requested replicas from one local storage read. The app
+and dashboard use it to publish consistent state without reparsing the entire
+installation once per group. Pending responses reread current storage before
+publication so newer local work takes precedence.
+
+HTTP and memory transports run the same contract suite for input validation,
+access and invite failures, replacement, directory discovery, idempotency and
+lost sync responses. Failure status mapping is shared with Worker routes;
+memory transports keep independent device identities over the same isolated
+server state.
+
+Devtools Log includes action UUIDs, durations and workflow changes alongside
+SDK command/request/outcome diagnostics. `observeDiagnostics` is available on
+the SDK and dispatcher. Request IDs match HTTP observer and dashboard traffic
+IDs; offline command attribution survives local reload until acknowledgment.
+Observer failures cannot change operation results. Diagnostics contain IDs and
+outcome codes, with credentials, invite links and draft inputs excluded.

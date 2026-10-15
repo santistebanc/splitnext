@@ -3,19 +3,19 @@ import { Pressable, Text, View } from 'react-native';
 import type { ClientGroupSummary } from '@splitnext/client';
 import type { AppController } from '../model/controller';
 import { Button, ErrorMessage, s } from './components';
-import type { Navigate } from './navigation';
-import { useActionCall } from './useActionCall';
+import { useActionCall, useActions, useUiState } from './useActionCall';
 import { useCompactLayout } from './useVisibleViewport';
 
 export type GroupsViewApp = Pick<AppController, 'snapshot'>;
 
-type GroupsViewProps = { app: GroupsViewApp; navigate: Navigate };
+type GroupsViewProps = { app: GroupsViewApp };
 
 /** The installation's groups, with create, join, and rejoin entry points. */
 export function GroupsView(props: GroupsViewProps) {
   const mobile = useCompactLayout();
   const state = props.app.snapshot();
-  const [showLeft, setShowLeft] = useState(false);
+  const showLeft = useUiState().showLeftGroups;
+  const actions = useActions();
   // The row last pressed, so a failure to open it appears beside that row.
   const [target, setTarget] = useState<string | null>(null);
   const action = useActionCall();
@@ -24,9 +24,7 @@ export function GroupsView(props: GroupsViewProps) {
 
   function open(group: ClientGroupSummary): void {
     setTarget(group.group_id);
-    void action.call('openGroup', { groupId: group.group_id }, () =>
-      props.navigate(group.status === 'left' ? 'rejoin' : 'home'),
-    );
+    void action.call('openGroup', { groupId: group.group_id });
   }
 
   function row(group: ClientGroupSummary) {
@@ -80,7 +78,10 @@ export function GroupsView(props: GroupsViewProps) {
 
   return (
     <View style={s.stack}>
-      <Text accessibilityRole="header" style={[s.title, mobile && s.mobileTitle]}>
+      <Text
+        accessibilityRole="header"
+        style={[s.title, mobile && s.mobileTitle]}
+      >
         {active.length ? 'Your groups' : 'Start a group'}
       </Text>
       {!active.length ? (
@@ -92,16 +93,36 @@ export function GroupsView(props: GroupsViewProps) {
         <View style={[s.card, s.listCard]}>{active.map(row)}</View>
       ) : null}
       <View style={s.actions}>
-        <Button grow onPress={() => props.navigate('create')}>
+        <Button
+          grow
+          onPress={() => {
+            void action.call('showCreateGroup', {});
+          }}
+        >
           + Create group
         </Button>
-        <Button grow secondary onPress={() => props.navigate('join')}>
+        <Button
+          grow
+          secondary
+          onPress={() => {
+            void action.call('showJoinGroup', {});
+          }}
+        >
           Join group
         </Button>
       </View>
       {left.length ? (
         <>
-          <Button quiet onPress={() => setShowLeft(!showLeft)}>
+          <Button
+            quiet
+            onPress={() => {
+              void actions.dispatch(
+                'setLeftGroupsVisible',
+                { visible: !showLeft },
+                { origin: 'ui' },
+              );
+            }}
+          >
             {showLeft ? 'Hide' : 'Show'} left groups · {left.length}
           </Button>
           {showLeft ? (

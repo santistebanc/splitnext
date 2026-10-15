@@ -129,6 +129,21 @@ describe('anonymous identities API', () => {
     expect(resetResponse.status).toBe(404);
   });
 
+  it('reports whether inspection is enabled for development tools', async () => {
+    const disabled = await app.fetch(
+      new Request('https://splitnext.test/debug/status'),
+      { ...env, ENABLE_DEBUG_INSPECTION: 'false' },
+    );
+
+    const enabled = await exports.default.fetch(
+      'https://splitnext.test/debug/status',
+    );
+
+    expect(disabled.status).toBe(404);
+    expect(enabled.status).toBe(200);
+    expect(await enabled.json()).toEqual({ enabled: true });
+  });
+
   it('rejects malformed identity creation input', async () => {
     const response = await exports.default.fetch(
       'https://splitnext.test/identities/anonymous',

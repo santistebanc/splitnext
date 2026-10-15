@@ -7,7 +7,7 @@ import { useActionCall } from './useActionCall';
 
 export type NoticesPanelApp = Pick<AppController, 'snapshot'>;
 
-type NoticesPanelProps = { app: NoticesPanelApp; close: () => void };
+type NoticesPanelProps = { app: NoticesPanelApp; close?: () => void };
 
 type Notice = ClientReplicaState['notices'][number];
 
@@ -63,7 +63,12 @@ export function NoticesPanel(props: NoticesPanelProps) {
         <Text accessibilityRole="header" style={s.heading}>
           Changes to review
         </Text>
-        <Button quiet onPress={props.close}>
+        <Button
+          quiet
+          onPress={() => {
+            void action.call('closePanel', {}, props.close);
+          }}
+        >
           Done
         </Button>
       </View>
@@ -88,18 +93,14 @@ export function NoticesPanel(props: NoticesPanelProps) {
               <Button
                 secondary
                 disabled={action.busy}
-                onPress={() =>
-                  act(commandId, 'applyChangeAgain')
-                }
+                onPress={() => act(commandId, 'applyChangeAgain')}
               >
                 Apply again
               </Button>
               <Button
                 quiet
                 disabled={action.busy}
-                onPress={() =>
-                  act(commandId, 'dismissNotice')
-                }
+                onPress={() => act(commandId, 'dismissNotice')}
               >
                 Dismiss
               </Button>

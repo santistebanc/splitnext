@@ -1,9 +1,16 @@
+import type { ClientRequestContext } from './diagnostics';
+
+export type { ClientDiagnosticEvent, ClientDiagnosticObserver, ClientRequestContext } from './diagnostics';
+
 import { z } from 'zod';
 import {
   joinGroupRequestSchema,
   type JoinGroupRequest,
 } from '../domain/access';
-import { errorSchema } from '../domain/errors';
+import { SplitnextNetworkError, SplitnextProtocolError, SplitnextRequestError } from './errors';
+
+export { SplitnextNetworkError, SplitnextProtocolError, SplitnextRequestError, clientErrorKind } from './errors';
+
 import {
   commandOutcomeSchema,
   groupCommandSchema,
@@ -54,6 +61,7 @@ type ClientExchange = {
   path: string;
   body: JsonValue;
   commands: GroupCommand[];
+  invocation_ids: string[];
 };
 
 export type ClientTransportEvent =
@@ -66,7 +74,7 @@ export type ClientTransportEvent =
       duration_ms: number;
     })
   | (ClientExchange & {
-      kind: 'network_error';
+      kind: 'network_error' | 'protocol_error';
       error: Error;
       duration_ms: number;
     })
@@ -92,36 +100,6 @@ export type SplitnextClientOptions = {
   observer?: ClientObserver;
 };
 
-export class SplitnextRequestError extends Error {
-  readonly status: number;
-  readonly code: string;
-  readonly response: JsonValue;
-
-  constructor(status: number, response: JsonValue) {
-    const parsed = errorSchema.safeParse(response);
-    const code = parsed.success ? parsed.data.error : `http_${status}`;
-
-    super(code);
-    this.name = 'SplitnextRequestError';
-    this.status = status;
-    this.code = code;
-    this.response = response;
-  }
-}
-
-export class SplitnextProtocolError extends Error {
-  readonly response: JsonValue;
-
-  constructor(
-    code: 'invalid_json_response' | 'invalid_response',
-    response: JsonValue,
-  ) {
-    super(code);
-    this.name = 'SplitnextProtocolError';
-    this.response = response;
-  }
-}
-
 export class SplitnextClient {
   private readonly transport: Transport;
 
@@ -137,7 +115,7 @@ export class SplitnextClient {
     return this.transport.request('GET', '/ready', readinessResponseSchema);
   }
 
-  createAnonymousIdentity(deviceSecret: string): Promise<IdentitySession> {
+  createAnonymousIdentity(deviceSecret: string, context?: ClientRequestContext): Promise<IdentitySession> {
     const body = jsonSchema.parse({
       device_secret: deviceSecretSchema.parse(deviceSecret),
     });
@@ -146,7 +124,7 @@ export class SplitnextClient {
       'POST',
       '/identities/anonymous',
       identitySessionSchema,
-      { body },
+      { body, context },
     );
   }
 
@@ -168,58 +146,58 @@ export class SplitnextDeviceClient {
     return this.request('GET', '/identity', identitySessionSchema);
   }
 
-  listGroups() {
-    return this.request('GET', '/identity/groups', accessibleGroupsSchema);
+  listGroups(context?: ClientRequestContext) {
+    return this.request('GET', '/identity/groups', accessibleGroupsSchema, { context });
   }
 
-  createGroup(input: CreateGroupRequest) {
+  async createGroup(input: CreateGroupRequest, context?: ClientRequestContext) {
     const body = jsonSchema.parse(createGroupRequestSchema.parse(input));
 
-    return this.request('POST', '/groups', createdGroupSchema, { body });
+    return this.request('POST', '/groups', createdGroupSchema, { body, context });
   }
 
-  syncGroup(groupId: string, input: SyncGroupRequest) {
+  async syncGroup(groupId: string, input: SyncGroupRequest, context?: ClientRequestContext) {
     const body = jsonSchema.parse(syncGroupRequestSchema.parse(input));
 
     return this.request(
       'POST',
       `/groups/${encodeURIComponent(groupId)}/sync`,
       syncGroupResponseSchema,
-      { body },
+      { body, context },
     );
   }
 
-  regenerateInvite(groupId: string, input: InviteLinkInput) {
+  async regenerateInvite(groupId: string, input: InviteLinkInput, context?: ClientRequestContext) {
     const body = jsonSchema.parse(inviteLinkInputSchema.parse(input));
 
     return this.request(
       'PUT',
       `/groups/${encodeURIComponent(groupId)}/invite`,
       inviteResultSchema,
-      { body },
+      { body, context },
     );
   }
 
   /** The token travels in the body, never in a URL. */
-  previewInvite(groupId: string, token: string): Promise<InvitePreview> {
+  async previewInvite(groupId: string, token: string, context?: ClientRequestContext): Promise<InvitePreview> {
     const body = jsonSchema.parse(previewInviteRequestSchema.parse({ token }));
 
     return this.request(
       'POST',
       `/groups/${encodeURIComponent(groupId)}/invite/preview`,
       invitePreviewSchema,
-      { body },
+      { body, context },
     );
   }
 
-  joinGroup(groupId: string, input: JoinGroupRequest): Promise<JoinedGroup> {
+  async joinGroup(groupId: string, input: JoinGroupRequest, context?: ClientRequestContext): Promise<JoinedGroup> {
     const body = jsonSchema.parse(joinGroupRequestSchema.parse(input));
 
     return this.request(
       'POST',
       `/groups/${encodeURIComponent(groupId)}/join`,
       groupSessionSchema,
-      { body },
+      { body, context },
     );
   }
 
@@ -239,7 +217,7 @@ export class SplitnextDeviceClient {
     method: string,
     path: string,
     responseSchema: TSchema,
-    options: { body?: JsonValue } = {},
+    options: { body?: JsonValue; context?: ClientRequestContext | undefined } = {},
   ): Promise<z.output<TSchema>> {
     return this.transport.request(method, path, responseSchema, {
       ...options,
@@ -265,17 +243,18 @@ class Transport {
     method: string,
     path: string,
     responseSchema: TSchema,
-    options: { body?: JsonValue; deviceSecret?: string } = {},
+    options: { body?: JsonValue; deviceSecret?: string; context?: ClientRequestContext | undefined } = {},
   ): Promise<z.output<TSchema>> {
     const startedAt = Date.now();
     const body = options.body ?? null;
 
     const exchange = {
-      request_id: createRequestId(),
+      request_id: options.context?.request_id ?? createRequestId(),
       method,
       path,
       body: diagnosticBody(body),
       commands: commandsFrom(body),
+      invocation_ids: options.context?.invocation_ids ?? [],
     };
 
     notify(() => this.observer({ kind: 'request', ...exchange }));
@@ -301,7 +280,7 @@ class Transport {
     try {
       response = await this.fetch(`${this.baseUrl}${path}`, request);
     } catch (cause) {
-      const error = cause instanceof Error ? cause : new Error('network_error');
+      const error = new SplitnextNetworkError(cause);
 
       notify(() =>
         this.observer({
@@ -315,7 +294,18 @@ class Transport {
       throw error;
     }
 
-    const responseBody = await readResponseBody(response);
+    let responseBody: JsonValue;
+
+    try {
+      responseBody = await readResponseBody(response);
+    } catch (error) {
+      notify(() => this.observer({
+        ...exchange, kind: error instanceof SplitnextProtocolError ? 'protocol_error' : 'network_error',
+        error: error instanceof Error ? error : new SplitnextNetworkError(error),
+        duration_ms: Date.now() - startedAt,
+      }));
+      throw error;
+    }
 
     notify(() =>
       this.observer({
@@ -335,7 +325,10 @@ class Transport {
     const parsed = responseSchema.safeParse(responseBody);
 
     if (!parsed.success) {
-      throw new SplitnextProtocolError('invalid_response', responseBody);
+      const error = new SplitnextProtocolError('invalid_response', responseBody);
+
+      notify(() => this.observer({ ...exchange, kind: 'protocol_error', error, duration_ms: Date.now() - startedAt }));
+      throw error;
     }
 
     return parsed.data;
@@ -376,7 +369,13 @@ class Transport {
 }
 
 async function readResponseBody(response: Response): Promise<JsonValue> {
-  const text = await response.text();
+  let text: string;
+
+  try {
+    text = await response.text();
+  } catch (cause) {
+    throw new SplitnextNetworkError(cause);
+  }
 
   if (!text) return null;
 
@@ -453,6 +452,8 @@ export {
   type InvitePreview,
 } from '../domain/invites';
 
+export { activeMembers, joinedParticipants, participantsForMember, preferredMember, previewFromSnapshot } from '../domain/selectors';
+
 export { groupNameSchema } from '../domain/groups';
 
 export { identifierSchema } from '../domain/ids';
@@ -469,6 +470,7 @@ export {
 export {
   ClientOfflineError,
   SplitnextSyncClient,
+  type ClientInstallationState,
   type ClientReplicaState,
   type ClientGroupCreationInput,
   type ClientPreferredMemberChoice,

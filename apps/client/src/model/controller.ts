@@ -1,5 +1,9 @@
+import type { ActionHost } from './actions';
+
+import { RefreshCoordinator } from './refresh';
 import {
-  SplitnextRequestError,
+  preferredMember,
+  SplitnextNetworkError,
   ClientOfflineError,
   ClientStorageError,
   SplitnextSyncClient,
@@ -7,6 +11,8 @@ import {
   type ClientPreferredMemberChoice,
   type ClientReplicaState,
 } from '@splitnext/client';
+
+export type ActionInvocation = { id: string; groupId: string | undefined };
 
 export type NewGroup = {
   name: string;
@@ -49,7 +55,15 @@ export class AppController {
   private readonly listeners = new Set<() => void>();
   private readonly watched = new Set<string>();
   private opening = 0;
+  private reading = 0;
+  private readonly refreshInvocationIds = new Set<string>();
   private disposed = false;
+  private readonly refreshCoordinator = new RefreshCoordinator({
+    run: () => this.refreshOnce(),
+    failed: (error) => this.reportSyncError(error),
+    needsRetry: () => this.state.online && !this.state.syncError &&
+      (!this.state.reachable || this.state.groups.some((group) => group.pending_commands > 0)),
+  });
 
   constructor(
     readonly client: SplitnextSyncClient,
@@ -61,6 +75,29 @@ export class AppController {
   ) {}
 
   snapshot = (): AppState => this.state;
+
+  forInvocation(invocation: ActionInvocation): ActionHost {
+    return {
+      snapshot: this.snapshot,
+      lastYouName: () => this.lastYouName(),
+      refresh: () => this.refresh(invocation),
+      createGroup: (input) => this.createGroup(input, invocation),
+      joinGroup: (groupId, choice, token) => this.joinGroup(groupId, choice, token, invocation),
+      openGroup: (groupId, isCurrent) => this.openGroup(groupId, isCurrent, invocation),
+      openJoinedGroup: (groupId, isCurrent) => this.openJoinedGroup(groupId, isCurrent, invocation),
+      showGroups: () => this.showGroups(),
+      renameGroup: (name, observed) => this.renameGroup(name, observed, invocation),
+      addPerson: (name) => this.addPerson(name, invocation),
+      renamePerson: (memberId, name, observed) => this.renamePerson(memberId, name, observed, invocation),
+      archivePerson: (memberId) => this.archivePerson(memberId, invocation),
+      selectPerson: (memberId) => this.selectPerson(memberId, invocation),
+      regenerateInvite: () => this.regenerateInvite(invocation),
+      leaveGroup: () => this.leaveGroup(invocation),
+      applyAgain: (commandId) => this.applyAgain(commandId, invocation),
+      dismissNotice: (commandId) => this.dismissNotice(commandId, invocation),
+      client: { previewInvite: (groupId, token) => this.client.previewInvite(groupId, token, invocation.id) },
+    };
+  }
 
   lastYouName(): string | null {
     return this.preferences.lastYouName();
@@ -129,16 +166,32 @@ export class AppController {
 
     if (reachable !== this.state.reachable)
       this.publish({ ...this.state, reachable });
+
+    this.refreshCoordinator.schedule();
+  }
+
+  reportSyncError(cause: unknown): void {
+    this.publish({ ...this.state, syncError: cause instanceof Error ? cause : new Error('sync_failed') });
   }
 
   async setOnline(online: boolean): Promise<void> {
     this.client.setOnline(online);
     this.publish({ ...this.state, online });
 
-    if (online) await this.refresh();
+    if (online) await this.refreshCoordinator.request(true);
+    else this.refreshCoordinator.cancelTimer();
   }
 
-  async refresh(): Promise<void> {
+  refresh(invocation?: ActionInvocation): Promise<void> {
+    if (!invocation) return this.refreshCoordinator.request();
+    this.refreshInvocationIds.add(invocation.id);
+
+    return this.refreshCoordinator.request().finally(() => this.refreshInvocationIds.delete(invocation.id));
+  }
+
+  private async refreshOnce(): Promise<void> {
+    const invocationIds = [...this.refreshInvocationIds];
+
     if (this.disposed) return;
 
     if (!this.state.online) {
@@ -149,25 +202,28 @@ export class AppController {
 
     this.client.setOnline(true);
     this.publish({ ...this.state, syncError: null });
-    const groups = await this.client.listGroups();
+    const groups = await this.client.listGroups(invocationIds);
 
     this.publish({ ...this.state, groups });
     this.watch(groups);
 
     for (const group of groups) {
-      if (this.disposed) break;
+      if (this.disposed || !this.state.online) break;
 
       if (group.status !== 'active' && group.pending_commands === 0) continue;
 
       try {
         const synced =
           group.status === 'left'
-            ? await this.client.refreshGroup(group.group_id)
-            : await this.client.syncGroup(group.group_id);
+            ? await this.client.refreshGroup(group.group_id, invocationIds)
+            : await this.client.syncGroup(group.group_id, invocationIds);
 
         await this.receive(synced);
       } catch (error) {
-        if (error instanceof SplitnextRequestError) throw error;
+        if (!(error instanceof SplitnextNetworkError)) {
+          this.reportSyncError(error);
+          throw error;
+        }
 
         this.setReachable(false);
         break;
@@ -175,17 +231,21 @@ export class AppController {
     }
   }
 
-  async openGroup(groupId: string): Promise<void> {
+  async openGroup(
+    groupId: string,
+    isCurrent: () => boolean = () => true,
+    invocation?: ActionInvocation,
+  ): Promise<void> {
     const opening = ++this.opening;
     let group = await this.client.inspect(groupId);
 
     if (this.client.isOnline()) {
       try {
         group = group.hidden
-          ? await this.client.refreshGroup(groupId)
-          : await this.client.syncGroup(groupId);
+          ? await this.client.refreshGroup(groupId, invocation?.id)
+          : await this.client.syncGroup(groupId, invocation?.id);
       } catch (error) {
-        if (error instanceof SplitnextRequestError || !group.projected_snapshot)
+        if (!(error instanceof SplitnextNetworkError) || !group.projected_snapshot)
           throw error;
 
         this.setReachable(false);
@@ -194,26 +254,33 @@ export class AppController {
 
     if (!group.projected_snapshot) throw new Error('group_unavailable_offline');
 
-    if (opening !== this.opening) return;
+    const groups = await this.client.knownGroups();
+
+    if (opening !== this.opening || !isCurrent()) return;
 
     this.publish({
       ...this.state,
       group,
-      groups: await this.client.knownGroups(),
+      groups,
     });
 
     if (!group.hidden) this.preferences.rememberGroup(groupId);
   }
 
   /** Invite entry opens an already joined group without redeeming its token. */
-  async openJoinedGroup(groupId: string): Promise<boolean> {
+  async openJoinedGroup(
+    groupId: string,
+    isCurrent: () => boolean = () => true,
+    invocation?: ActionInvocation,
+  ): Promise<boolean> {
+    const opening = this.opening;
     let groups = await this.client.knownGroups();
 
     if (
       !groups.some((group) => group.group_id === groupId) &&
       this.client.isOnline()
     )
-      groups = await this.client.listGroups();
+      groups = await this.client.listGroups(invocation?.id);
 
     if (
       !groups.some(
@@ -222,9 +289,16 @@ export class AppController {
     )
       return false;
 
-    if (this.state.group?.group_id !== groupId) await this.openGroup(groupId);
+    if (opening !== this.opening || !isCurrent()) return false;
 
-    return this.state.group?.group_id === groupId && !this.state.group.hidden;
+    if (this.state.group?.group_id !== groupId)
+      await this.openGroup(groupId, isCurrent, invocation);
+
+    return (
+      isCurrent() &&
+      this.state.group?.group_id === groupId &&
+      !this.state.group.hidden
+    );
   }
 
   showGroups(): void {
@@ -236,25 +310,26 @@ export class AppController {
     if (this.state.group?.group_id === groupId) this.publish({ ...this.state });
   }
 
-  async createGroup(input: NewGroup): Promise<void> {
-    await this.openResult(await this.client.createGroup(input));
+  async createGroup(input: NewGroup, invocation?: ActionInvocation): Promise<void> {
+    await this.openResult(await this.client.createGroup(input, invocation?.id));
   }
 
   async joinGroup(
     groupId: string,
     choice: ClientPreferredMemberChoice,
     token?: string,
+    invocation?: ActionInvocation,
   ): Promise<void> {
-    await this.openResult(await this.client.joinGroup(groupId, choice, token));
+    await this.openResult(await this.client.joinGroup(groupId, choice, token, invocation?.id));
   }
 
-  async addPerson(name: string): Promise<void> {
-    await this.receive(await this.client.addMember(this.groupId(), name));
+  async addPerson(name: string, invocation?: ActionInvocation): Promise<void> {
+    await this.receive(await this.client.addMember(this.groupId(invocation), name, invocation?.id));
   }
 
-  async renameGroup(name: string, observedName: string): Promise<void> {
+  async renameGroup(name: string, observedName: string, invocation?: ActionInvocation): Promise<void> {
     await this.receive(
-      await this.client.renameGroup(this.groupId(), name, observedName),
+      await this.client.renameGroup(this.groupId(invocation), name, observedName, invocation?.id),
     );
   }
 
@@ -262,154 +337,104 @@ export class AppController {
     memberId: string,
     name: string,
     observedName: string,
+    invocation?: ActionInvocation,
   ): Promise<void> {
     await this.receive(
       await this.client.renameMember(
-        this.groupId(),
+        this.groupId(invocation),
         memberId,
         name,
         observedName,
+        invocation?.id,
       ),
     );
   }
 
-  async archivePerson(memberId: string): Promise<void> {
+  async archivePerson(memberId: string, invocation?: ActionInvocation): Promise<void> {
     await this.receive(
-      await this.client.removeMember(this.groupId(), memberId),
+      await this.client.removeMember(this.groupId(invocation), memberId, invocation?.id),
     );
   }
 
-  async selectPerson(memberId: string): Promise<void> {
+  async selectPerson(memberId: string, invocation?: ActionInvocation): Promise<void> {
     await this.receive(
-      await this.client.selectPreferredMember(this.groupId(), memberId),
+      await this.client.selectPreferredMember(this.groupId(invocation), memberId, invocation?.id),
     );
   }
 
-  async regenerateInvite(): Promise<void> {
-    await this.receive(await this.client.regenerateInvite(this.groupId()));
+  async regenerateInvite(invocation?: ActionInvocation): Promise<void> {
+    await this.receive(await this.client.regenerateInvite(this.groupId(invocation), invocation?.id));
   }
 
-  async leaveGroup(): Promise<void> {
-    const group = await this.client.leaveGroup(this.groupId());
+  async leaveGroup(invocation?: ActionInvocation): Promise<void> {
+    const opening = this.opening;
+    const group = await this.client.leaveGroup(this.groupId(invocation), invocation?.id);
 
     await this.receive(group);
 
-    if (group.hidden) {
+    if (group.hidden && opening === this.opening && this.state.group?.group_id === group.group_id) {
       this.preferences.rememberGroup(null);
       this.showGroups();
     }
   }
 
-  async dismissNotice(commandId: string): Promise<void> {
+  async dismissNotice(commandId: string, invocation?: ActionInvocation): Promise<void> {
     await this.receive(
-      await this.client.dismissNotice(this.groupId(), commandId),
+      await this.client.dismissNotice(this.groupId(invocation), commandId),
     );
   }
 
-  async applyAgain(commandId: string): Promise<void> {
-    const notice = this.state.group?.notices.find(
-      (candidate) => candidate.command.command_id === commandId,
-    );
-
-    if (!notice) return;
-
-    const command = notice.command;
-    const groupId = this.groupId();
-    let result: ClientReplicaState;
-
-    switch (command.type) {
-      case 'group.rename':
-        result = await this.client.renameGroup(groupId, command.payload.name);
-        break;
-      case 'member.create':
-        result = await this.client.addMember(
-          groupId,
-          command.payload.display_name,
-        );
-        break;
-      case 'member.rename':
-        result = await this.client.renameMember(
-          groupId,
-          command.payload.member_id,
-          command.payload.display_name,
-        );
-        break;
-      case 'member.archive':
-        result = await this.client.removeMember(
-          groupId,
-          command.payload.member_id,
-        );
-        break;
-      case 'preference.set':
-        result = await this.client.selectPreferredMember(
-          groupId,
-          command.payload.member_id,
-        );
-        break;
-      case 'group.leave':
-        result = await this.client.leaveGroup(groupId);
-        break;
-    }
+  async applyAgain(commandId: string, invocation?: ActionInvocation): Promise<void> {
+    const opening = this.opening;
+    const result = await this.client.retryNotice(this.groupId(invocation), commandId, invocation?.id);
 
     await this.receive(result);
-    await this.dismissNotice(commandId);
+
+    if (result.hidden && opening === this.opening && this.state.group?.group_id === result.group_id) {
+      this.preferences.rememberGroup(null);
+      this.showGroups();
+    }
   }
 
   async receive(group: ClientReplicaState): Promise<void> {
     if (this.disposed) return;
 
-    const groups = await this.client.knownGroups();
-
-    const reviewGroups = new Set(this.state.reviewGroups);
-
-    if (group.notices.length) reviewGroups.add(group.group_id);
-    else reviewGroups.delete(group.group_id);
-
-    this.publish({
-      ...this.state,
-      groups,
-      reviewGroups: [...reviewGroups],
-      group:
-        this.state.group?.group_id === group.group_id
-          ? group
-          : this.state.group,
-    });
-    this.watch(groups);
+    // The supplied replica can already be superseded by another tab or command.
+    await this.readStorage();
 
     if (!this.disposed) this.notifications.changed(group.group_id);
   }
 
-  /** Another tab changed the shared replica; reread without broadcasting again. */
+  /** Another tab changed shared storage; publish one coherent installation view. */
   async readStorage(): Promise<void> {
     if (this.disposed) return;
+    const reading = ++this.reading;
+    const opening = this.opening;
+    const groupId = this.state.group?.group_id;
+    const installation = await this.client.installationState(groupId ? [groupId] : []);
 
-    const groups = await this.client.knownGroups();
+    if (this.disposed || reading !== this.reading) return;
 
-    const reviewGroups: string[] = [];
+    if (opening !== this.opening) {
+      await this.readStorage();
 
-    for (const group of groups) {
-      const replica = await this.client.inspect(group.group_id);
-
-      if (replica.notices.length) reviewGroups.push(group.group_id);
+      return;
     }
-
-    const group = this.state.group
-      ? await this.client.inspect(this.state.group.group_id)
-      : null;
 
     this.publish({
       ...this.state,
-      groups,
-      group,
-      reviewGroups,
+      groups: installation.groups,
+      group: installation.replicas[0] ?? null,
+      reviewGroups: Object.entries(installation.notice_counts).flatMap(([id, count]) => count > 0 ? [id] : []),
     });
-    this.watch(groups);
+    this.watch(installation.groups);
   }
 
   dispose(): void {
     if (this.disposed) return;
 
     this.disposed = true;
+    this.refreshCoordinator.dispose();
     this.client.setOnline(false);
 
     for (const groupId of this.watched) this.client.unwatchGroup(groupId);
@@ -426,7 +451,9 @@ export class AppController {
     await this.receive(group);
   }
 
-  private groupId(): string {
+  private groupId(invocation?: ActionInvocation): string {
+    if (invocation?.groupId) return invocation.groupId;
+
     if (!this.state.group) throw new Error('no_group_selected');
 
     return this.state.group.group_id;
@@ -462,13 +489,7 @@ export class AppController {
     const group = state.group;
     const snapshot = group?.projected_snapshot;
 
-    const preferred = snapshot?.access_grants.find(
-      (grant) => grant.identity_id === group?.session?.identity.id,
-    )?.preferred_member_id;
-
-    const name = snapshot?.members.find(
-      (member) => member.id === preferred && member.status === 'active',
-    )?.display_name;
+    const name = preferredMember(snapshot, group?.session?.identity.id)?.display_name;
 
     if (name && !group?.hidden && name !== this.preferences.lastYouName())
       this.preferences.rememberYouName(name);

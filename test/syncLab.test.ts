@@ -16,6 +16,30 @@ beforeAll(async () => {
 afterEach(() => settleWorkerSockets());
 
 describe('synchronization lab', () => {
+  it('surfaces protocol failures on reconnect instead of swallowing them as network outages', async () => {
+    let malformed = false;
+
+    const lab = new SyncLab({
+      baseUrl: 'https://splitnext.test',
+      fetch: (input, init) => malformed && input.endsWith('/sync') ? Promise.resolve(new Response('<html>invalid</html>')) : exports.default.fetch(input, init),
+      webSocket: () => ({ close: () => undefined }),
+    });
+
+    const key = await lab.addDevice();
+
+    await lab.createGroup(key, { name: 'Failure categories', creator_member_name: 'Ana' });
+    await lab.toggleDevice(key);
+    await lab.addMember(key, 'Ben');
+    malformed = true;
+    await expect(lab.toggleDevice(key)).rejects.toMatchObject({ name: 'SplitnextProtocolError' });
+    expect(deviceOf(lab, key).syncError).toMatchObject({ kind: 'protocol', message: 'invalid_json_response' });
+    expect(deviceOf(lab, key).replica?.outbox).toHaveLength(1);
+    malformed = false;
+    await lab.syncDevice(key);
+    expect(deviceOf(lab, key).syncError).toBeNull();
+    lab.dispose();
+  });
+
   it('shows separate live identities sharing one member and clears presence during outages', async () => {
     const lab = new SyncLab({
       baseUrl: 'https://splitnext.test',
@@ -272,7 +296,7 @@ describe('synchronization lab', () => {
     lab.dispose();
   });
 
-  it('models divergent devices and reads authoritative state directly', async () => {
+  it('reconciles divergent devices with Live off, exposes notices, and retries or dismisses them', async () => {
     let nextSecret = 0;
 
     const lab = new SyncLab({
@@ -293,6 +317,8 @@ describe('synchronization lab', () => {
     });
 
     await invite(lab, one, two, 'Robin');
+    lab.toggleRealtime(one);
+    lab.toggleRealtime(two);
     await lab.toggleDevice(one);
     await lab.toggleDevice(two);
 
@@ -325,6 +351,19 @@ describe('synchronization lab', () => {
     );
     expect(deviceOf(lab, one).requests.length).toBeGreaterThan(0);
     expect(lab.state.server.incoming.length).toBeGreaterThan(0);
+    const notice = deviceOf(lab, two).replica?.notices[0];
+
+    if (!notice) throw new Error('missing conflict notice');
+    await lab.retryNotice(two, notice.command.command_id);
+    expect(lab.state.server.snapshot?.group.name).toBe('Device two name');
+    expect(deviceOf(lab, two).replica?.notices).toHaveLength(0);
+    await lab.renameGroup(two, 'Another retry', 'Original name');
+    const dismissible = deviceOf(lab, two).replica?.notices[0];
+
+    if (!dismissible) throw new Error('missing dismissible notice');
+    await lab.dismissNotice(two, dismissible.command.command_id);
+    expect(deviceOf(lab, two).replica?.notices).toHaveLength(0);
+    expect(lab.state.server.snapshot?.group.name).toBe('Device two name');
     lab.dispose();
   });
   it('pushes changes to the other device through realtime announcements', async () => {

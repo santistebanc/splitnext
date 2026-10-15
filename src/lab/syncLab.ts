@@ -7,6 +7,9 @@ import type {
   RealtimeSocketHandlers,
 } from '../client';
 import {
+  clientErrorKind,
+  SplitnextNetworkError,
+  ClientOfflineError,
   browserWebSocket,
   formatInviteLink,
   MemoryClientStorage,
@@ -60,7 +63,7 @@ export type LabRequestResult =
       duration_ms: number;
     }
   | {
-      kind: 'network_error';
+      kind: 'network_error' | 'protocol_error';
       status: 0;
       error: string;
       duration_ms: number;
@@ -68,6 +71,8 @@ export type LabRequestResult =
 
 export type LabRequest = {
   request_id: string;
+  invocation_ids?: string[];
+  command_ids?: string[];
   at: string;
   method: string;
   path: string;
@@ -97,6 +102,7 @@ export type LabDevice = {
   realtime: boolean;
   realtimeStatus: LabRealtimeStatus;
   realtimeEvents: LabRealtimeEvent[];
+  syncError: { kind: ReturnType<typeof clientErrorKind>; message: string } | null;
   presence: string[] | null;
   session: IdentitySession | null;
   /** Every group this device's identity can access, active ones first. */
@@ -191,7 +197,7 @@ type ClientResponseEvent = Extract<ClientTransportEvent, { kind: 'response' }>;
 
 type ClientNetworkErrorEvent = Extract<
   ClientTransportEvent,
-  { kind: 'network_error' }
+  { kind: 'network_error' | 'protocol_error' }
 >;
 
 export type SyncLabOptions = {
@@ -355,14 +361,18 @@ export class SyncLab {
         try {
           device.session = await runtime.client.initializeIdentity();
           device.groups = await runtime.client.knownGroups();
-        } catch {
+        } catch (error) {
+          if (!(error instanceof SplitnextNetworkError)) this.reportSyncError(savedDevice.key, error);
+
           // A device can still open with cached local data when the server is down.
           device.groups = await runtime.client.knownGroups();
         }
       } else if (savedDevice.registered) {
         try {
           device.session = await runtime.client.initializeIdentity();
-        } catch {
+        } catch (error) {
+          if (!(error instanceof ClientOfflineError)) this.reportSyncError(savedDevice.key, error);
+
           // Preserve the cached session even when the device is offline.
         }
 
@@ -511,15 +521,17 @@ export class SyncLab {
     this.runtimes.get(key)?.client.setOnline(device.online);
     this.changed();
 
-    if (device.online && this.state.server.online) {
-      try {
-        device.session = await this.runtime(key).client.initializeIdentity();
-        await this.finishDeviceInitialization(key);
-      } catch {
-        // Continue with cached identity and local state when reconnect is partial.
-        await this.deliverOutboxes(key);
+    if (device.online) {
+      if (this.state.server.online) {
+        try {
+          device.session = await this.runtime(key).client.initializeIdentity();
+          await this.finishDeviceInitialization(key);
+        } catch {
+          // Continue with cached identity and local state when reconnect is partial.
+        }
       }
-    } else if (device.online) {
+
+      // Outbox delivery is independent of revision announcements and the Live toggle.
       await this.deliverOutboxes(key);
     }
   }
@@ -636,6 +648,7 @@ export class SyncLab {
     const replica = await runtime.client.syncGroup(device.selectedGroupId);
 
     device.replica = replica;
+    device.syncError = null;
     await this.refreshAfterOperation();
 
     return replica;
@@ -674,6 +687,14 @@ export class SyncLab {
     return this.mutate(key, (client, groupId) =>
       client.selectPreferredMember(groupId, memberId),
     );
+  }
+
+  retryNotice(key: LabDeviceKey, commandId: string) {
+    return this.mutate(key, (client, groupId) => client.retryNotice(groupId, commandId));
+  }
+
+  dismissNotice(key: LabDeviceKey, commandId: string) {
+    return this.mutate(key, (client, groupId) => client.dismissNotice(groupId, commandId));
   }
 
   leaveGroup(key: LabDeviceKey) {
@@ -760,11 +781,14 @@ export class SyncLab {
       // Every watched group refreshes in the background; the group list shows
       // their names, and the selected one is also shown in full.
       on_background_sync: (replica) => {
+        device.syncError = null;
+
         if (replica.group_id === device.selectedGroupId)
           device.replica = replica;
 
-        void this.refreshAfterOperation();
+        void this.refreshAfterOperation().catch((cause) => this.reportSyncError(key, cause));
       },
+      on_background_error: (error) => this.reportSyncError(key, error),
       on_presence_change: (groupId) => {
         if (device.selectedGroupId === groupId) {
           device.presence =
@@ -877,6 +901,13 @@ export class SyncLab {
     }
   }
 
+  private reportSyncError(key: LabDeviceKey, cause: unknown): void {
+    const error = cause instanceof Error ? cause : new Error('sync_failed');
+
+    this.device(key).syncError = { kind: clientErrorKind(error), message: error.message };
+    this.changed();
+  }
+
   /** Sends queued changes for every group, as a client would on reconnecting. */
   private async deliverOutboxes(key: LabDeviceKey): Promise<void> {
     const device = this.device(key);
@@ -893,8 +924,13 @@ export class SyncLab {
       pending.map(async (group) => {
         try {
           await client.syncGroup(group.group_id);
-        } catch {
-          // The traffic log already shows the failure; the outbox stays queued.
+          device.syncError = null;
+        } catch (error) {
+          // Only network outages are handled by keeping the outbox queued.
+          if (!(error instanceof SplitnextNetworkError)) {
+            this.reportSyncError(key, error);
+            throw error;
+          }
         }
       }),
     );
@@ -936,10 +972,15 @@ export class SyncLab {
 
         const device = this.device(key);
 
-        device.groups = await runtime.client.knownGroups();
+        const selected = device.selectedGroupId;
+        const installation = await runtime.client.installationState(selected ? [selected] : []);
+
+        device.groups = installation.groups;
+
+        if (device.selectedGroupId !== selected) return;
+        device.replica = installation.replicas[0] ?? null;
 
         if (device.selectedGroupId) {
-          device.replica = await runtime.client.inspect(device.selectedGroupId);
           device.presence = runtime.client.presence(device.selectedGroupId);
           this.captureReplicaCommands(device);
         }
@@ -1017,6 +1058,7 @@ export class SyncLab {
         this.onResponse(key, event);
         break;
       case 'network_error':
+      case 'protocol_error':
         this.onNetworkError(key, event);
         break;
       case 'realtime':
@@ -1030,6 +1072,8 @@ export class SyncLab {
 
     const entry: LabRequest = {
       request_id: event.request_id,
+      invocation_ids: event.invocation_ids,
+      command_ids: event.commands.map((command) => command.command_id),
       at: this.timestamp(),
       method: event.method,
       path: event.path,
@@ -1100,7 +1144,7 @@ export class SyncLab {
     const device = this.device(key);
 
     completeRequest(device.requests, event, {
-      kind: 'network_error',
+      kind: event.kind,
       status: 0,
       duration_ms: event.duration_ms,
       error: event.error.message,
@@ -1109,7 +1153,7 @@ export class SyncLab {
       device,
       event.commands,
       'queued',
-      'Network unavailable; still queued',
+      event.kind === 'protocol_error' ? 'Invalid server response; intent retained' : 'Network unavailable; still queued',
     );
     this.changed();
   }
@@ -1288,6 +1332,7 @@ function newDevice(label: string): LabDevice {
     realtime: true,
     realtimeStatus: 'off',
     realtimeEvents: [],
+    syncError: null,
     presence: null,
     session: null,
     groups: [],

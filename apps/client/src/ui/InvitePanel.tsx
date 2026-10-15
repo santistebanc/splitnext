@@ -1,23 +1,21 @@
-import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { formatInviteLink } from '@splitnext/client';
 import type { AppController } from '../model/controller';
 import { ConfirmBanner } from './ConfirmBanner';
-import { Button, ErrorMessage, Field, s, useAction } from './components';
-import { useActionCall } from './useActionCall';
+import { Button, ErrorMessage, Field, s } from './components';
+import { useActionCall, useActions, useUiState } from './useActionCall';
 
 export type InvitePanelApp = Pick<AppController, 'snapshot'>;
 
-type InvitePanelProps = { app: InvitePanelApp; close: () => void };
+type InvitePanelProps = { app: InvitePanelApp; close?: () => void };
 
 /** The group's single invite link, with copy, share, and replacement. */
 export function InvitePanel(props: InvitePanelProps) {
   const replica = props.app.snapshot().group;
   const invite = replica?.projected_snapshot?.invite;
-  const [copied, setCopied] = useState(false);
-  const canShare = 'share' in navigator;
-  // Copying and sharing stay local; replacing the link is an app action.
-  const action = useAction();
+  const copied = useUiState().copiedInviteId === invite?.id;
+  const canShare = useActions().capabilities.shareLink;
+  const action = useActionCall();
   const replace = useActionCall();
   const online = props.app.snapshot().online;
 
@@ -26,42 +24,18 @@ export function InvitePanel(props: InvitePanelProps) {
       ? formatInviteLink(window.location.origin, replica.group_id, invite.token)
       : null;
 
-  // A replaced link has not been copied yet.
-  useEffect(() => setCopied(false), [link]);
-
-  async function copy(): Promise<void> {
-    if (!link) return;
-
-    await navigator.clipboard.writeText(link);
-    setCopied(true);
-  }
-
-  async function share(): Promise<void> {
-    if (!link) return;
-
-    if (!navigator.share) {
-      await copy();
-
-      return;
-    }
-
-    try {
-      await navigator.share({
-        title: `Join ${replica?.projected_snapshot?.group.name ?? 'our group'}`,
-        url: link,
-      });
-    } catch (cause) {
-      if (!(cause instanceof Error) || cause.name !== 'AbortError') throw cause;
-    }
-  }
-
   return (
     <>
       <View style={s.between}>
         <Text accessibilityRole="header" style={s.heading}>
           Invite your people
         </Text>
-        <Button quiet onPress={props.close}>
+        <Button
+          quiet
+          onPress={() => {
+            void action.call('closePanel', {}, props.close);
+          }}
+        >
           Done
         </Button>
       </View>
@@ -78,7 +52,7 @@ export function InvitePanel(props: InvitePanelProps) {
               accessibilityState={{ disabled: action.busy }}
               disabled={action.busy}
               onPress={() => {
-                void action.run(copy);
+                void action.call('copyInviteLink', {});
               }}
               style={({ pressed }) => [
                 s.copyButton,
@@ -104,7 +78,7 @@ export function InvitePanel(props: InvitePanelProps) {
           <Button
             disabled={action.busy}
             onPress={() => {
-              void action.run(share);
+              void action.call('shareInviteLink', {});
             }}
           >
             Share link

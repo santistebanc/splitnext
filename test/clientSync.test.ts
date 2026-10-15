@@ -1,5 +1,6 @@
+import type { ClientStorageUpdate } from '../src/client/storage';
 import { exports } from 'cloudflare:workers';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   ClientStorageError,
   MemoryClientStorage,
@@ -17,6 +18,129 @@ beforeAll(async () => {
 });
 
 describe('stateful offline client SDK', () => {
+  it('classifies storage read failures during initialization without marking them as network failures', async () => {
+    const storage = new MemoryClientStorage();
+
+    vi.spyOn(storage, 'read').mockRejectedValue(new Error('disk_unavailable'));
+    const client = createSyncClient('b', storage);
+
+    await expect(client.initializeIdentity()).rejects.toMatchObject({ name: 'ClientStorageError', code: 'storage_unavailable', cause: expect.any(Error) });
+  });
+
+  it('reads installation summaries, notice counts and requested replicas with one storage read', async () => {
+    const storage = new MemoryClientStorage();
+    const client = createSyncClient('b', storage);
+
+    await client.initializeIdentity();
+    const created = await client.createGroup({ name: 'Batch read', creator_member_name: 'Ana' });
+
+    client.setOnline(false);
+    await client.renameGroup(created.group_id, 'Offline name');
+    const read = vi.spyOn(storage, 'read');
+    const installation = await client.installationState([created.group_id, created.group_id]);
+
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(installation.groups).toMatchObject([{ name: 'Offline name', pending_commands: 1 }]);
+    expect(installation.notice_counts[created.group_id]).toBe(0);
+    expect(installation.replicas).toHaveLength(1);
+    expect(installation.replicas[0]?.projected_snapshot?.group.name).toBe('Offline name');
+    expect(installation.replicas[0]?.outbox).toHaveLength(1);
+  });
+
+  it('retries a rename through a merged member alias using the current real member', async () => {
+    const editor = createSyncClient('e');
+    const other = createSyncClient('f');
+
+    await editor.initializeIdentity();
+    await other.initializeIdentity();
+    const created = await editor.createGroup({ name: 'Alias retries', creator_member_name: 'Ana' });
+
+    await joinThroughInvite(editor, other, created.group_id, { kind: 'new', display_name: 'Visitor' });
+    await editor.syncGroup(created.group_id);
+    editor.setOnline(false);
+    const local = await editor.addMember(created.group_id, 'Shared');
+    const alias = local.projected_snapshot?.members.find((member) => member.display_name === 'Shared');
+
+    if (!alias) throw new Error('missing alias');
+    await editor.renameMember(created.group_id, alias.id, 'Taken');
+    await other.addMember(created.group_id, 'Shared');
+    const competing = await other.addMember(created.group_id, 'Taken');
+    const taken = competing.projected_snapshot?.members.find((member) => member.display_name === 'Taken');
+
+    if (!taken) throw new Error('missing competing member');
+    editor.setOnline(true);
+    const conflict = await editor.syncGroup(created.group_id);
+    const notice = conflict.notices[0];
+
+    if (!notice) throw new Error('missing notice');
+    expect(notice.command).toMatchObject({ type: 'member.rename', payload: { member_id: alias.id } });
+    expect(conflict.projected_snapshot?.members.some((member) => member.id === alias.id)).toBe(false);
+    await other.removeMember(created.group_id, taken.id);
+    await editor.syncGroup(created.group_id);
+    const retried = await editor.retryNotice(created.group_id, notice.command.command_id);
+
+    expect(retried.notices).toHaveLength(0);
+    expect(retried.confirmed_snapshot?.members.filter((member) => member.status === 'active' && member.display_name === 'Taken')).toHaveLength(1);
+  });
+
+  it('retains a notice on storage failure and retries it once across client instances offline', async () => {
+    class FailingStorage extends MemoryClientStorage {
+      fail = false;
+
+      override async update<T>(change: (current: string | null) => ClientStorageUpdate<T>): Promise<T> {
+        if (this.fail) throw new Error('disk_full');
+
+        return super.update(change);
+      }
+    }
+
+    const storage = new FailingStorage();
+    const editor = createSyncClient('c', storage);
+    const other = createSyncClient('d');
+
+    await editor.initializeIdentity();
+    await other.initializeIdentity();
+    const created = await editor.createGroup({ name: 'Original', creator_member_name: 'Ana' });
+
+    await joinThroughInvite(editor, other, created.group_id, { kind: 'new', display_name: 'Ben' });
+    await other.renameGroup(created.group_id, 'Their name');
+    const conflict = await editor.renameGroup(created.group_id, 'My name', 'Original');
+    const notice = conflict.notices[0];
+
+    if (!notice) throw new Error('missing notice');
+    editor.setOnline(false);
+    storage.fail = true;
+    await expect(editor.retryNotice(created.group_id, notice.command.command_id)).rejects.toThrow('storage_unavailable');
+    storage.fail = false;
+    expect((await editor.inspect(created.group_id)).notices).toHaveLength(1);
+    expect((await editor.inspect(created.group_id)).outbox).toHaveLength(0);
+    const sameInstallation = createSyncClient('c', storage);
+
+    sameInstallation.setOnline(false);
+    await sameInstallation.initializeIdentity();
+
+    const retries = await Promise.allSettled([
+      editor.retryNotice(created.group_id, notice.command.command_id),
+      sameInstallation.retryNotice(created.group_id, notice.command.command_id),
+    ]);
+
+    expect(retries.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
+    const queued = await sameInstallation.inspect(created.group_id);
+
+    expect(queued.notices).toHaveLength(0);
+    expect(queued.outbox).toHaveLength(1);
+    expect(queued.outbox[0]?.command.command_id).not.toBe(notice.command.command_id);
+    expect(queued.outbox[0]?.command).toMatchObject({
+      type: 'group.rename', payload: { expected_name: 'Their name', name: 'My name' },
+    });
+    expect(queued.projected_snapshot?.group.name).toBe('My name');
+    sameInstallation.setOnline(true);
+    const applied = await sameInstallation.syncGroup(created.group_id);
+
+    expect(applied.confirmed_snapshot?.group.name).toBe('My name');
+    expect(applied.notices).toHaveLength(0);
+  });
+
   it('projects offline commands and reconciles them through the outbox', async () => {
     const client = createSyncClient('M');
 

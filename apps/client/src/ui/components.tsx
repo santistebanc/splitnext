@@ -177,12 +177,21 @@ export function errorMessage(error: Error): string {
       return 'Someone with that name is already in this group. Choose their existing name.';
     case 'member_archived':
       return 'That member has been removed. Choose another member or add a new name.';
+    case 'storage_unavailable':
+      return 'Changes could not be saved on this device. Free some storage and try again.';
+    case 'invalid_response':
+    case 'invalid_json_response':
+      return 'The server returned an unreadable reply. Your saved changes are retained. Try again.';
+    case 'confirmation_context_changed':
+      return 'The selected group changed. Request confirmation again.';
     case 'corrupt_document':
       return 'The saved data on this device could not be read. It has been kept intact.';
     case 'upgrade_requires_connection':
       return 'Connect once to update your saved groups. Your entries are still here.';
     case 'invalid_input':
       return 'Check what you entered and try again.';
+    case 'workflow_busy':
+      return 'Please wait for the current step to finish.';
     case 'no_open_group':
       return 'Open a group first.';
     default:
@@ -383,40 +392,49 @@ export const s = StyleSheet.create({
   },
   memberPresence: {
     position: 'absolute',
-    right: -6,
+    left: 26,
     bottom: -2,
-    width: 44,
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap-reverse',
-    justifyContent: 'flex-start',
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
     gap: 2,
-    rowGap: 5,
+    alignItems: 'flex-end',
+    overflow: 'visible',
+  },
+  participantMore: {
+    position: 'absolute',
+    left: -8,
+    bottom: -2,
+    minWidth: 20,
+    height: 14,
+    paddingHorizontal: 5,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: colors.muted,
+    backgroundColor: colors.surface,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  participantMoreLabel: {
+    fontSize: 9,
+    lineHeight: 10,
+    fontWeight: '700',
+    color: colors.ink,
+    includeFontPadding: false,
   },
   presenceMarker: {
     width: 12,
     height: 12,
+    flexShrink: 0,
     borderRadius: 6,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  presenceYouSlot: {
-    width: 26,
+  presenceMarkerYou: {
+    width: 30,
+    height: 16,
     backgroundColor: 'transparent',
     borderRadius: 0,
-  },
-  presenceOverflowText: {
-    color: colors.muted,
-    fontSize: 10,
-    lineHeight: 10,
-    fontWeight: '600',
-    includeFontPadding: false,
-  },
-  presenceMarkerYou: {
-    position: 'absolute',
-    left: 6,
-    bottom: 0,
   },
   presenceRing: {
     position: 'absolute',

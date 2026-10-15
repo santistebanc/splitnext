@@ -31,7 +31,8 @@ export default function DocumentRoot(props: DocumentProps) {
         <style
           dangerouslySetInnerHTML={{
             __html:
-              ':focus-visible{outline:2px solid #246b56!important;outline-offset:2px}',
+              ':focus-visible{outline:2px solid #246b56!important;outline-offset:2px}' +
+              'input:focus-visible,textarea:focus-visible{outline-offset:-2px}',
           }}
         />
         {document.headNodes}

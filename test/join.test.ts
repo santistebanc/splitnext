@@ -8,7 +8,7 @@ import {
   hashInviteToken,
   inviteTokenSchema,
 } from '../src/domain/invites';
-import { MemoryGroupRepository } from '../src/groupRepository';
+import { MemoryGroupRepository } from '../src/memoryGroupRepository';
 import { GroupStore } from '../src/groupStore';
 import {
   groupSessionSchema,

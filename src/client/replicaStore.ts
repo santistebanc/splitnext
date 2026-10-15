@@ -1,3 +1,5 @@
+import { commandForRetry } from './commandRetry';
+import { activeMembers, preferredMember } from '../domain/selectors';
 import type { JoinGroupRequest, PreferredMemberChoice } from '../domain/access';
 import {
   applyGroupCommand,
@@ -20,6 +22,7 @@ import type {
   SyncGroupResponse,
 } from '../domain/sync';
 import {
+  withStorageErrors,
   type ClientGroupReplica,
   type ClientStorageAdapter,
   type ClientStorageDocument,
@@ -61,16 +64,27 @@ export type ClientGroupSummary = {
   you_name: string | null;
 };
 
+/** One coherent local document read, with only the requested full replicas. */
+export type ClientInstallationState = {
+  groups: ClientGroupSummary[];
+  notice_counts: Record<string, number>;
+  replicas: ClientReplicaState[];
+};
+
 export type PreparedSync = {
   request: SyncGroupRequest;
   commands: PendingCommand[];
 };
 
 export class ClientReplicaStore {
+  private readonly storage: ClientStorageAdapter;
+
   constructor(
-    private readonly storage: ClientStorageAdapter,
+    storage: ClientStorageAdapter,
     private readonly now: () => string,
-  ) {}
+  ) {
+    this.storage = withStorageErrors(storage);
+  }
 
   session(): Promise<IdentitySession | null> {
     return this.read((document) => document.session);
@@ -262,55 +276,15 @@ export class ClientReplicaStore {
    * last list mentioned.
    */
   groupSummaries(): Promise<ClientGroupSummary[]> {
-    return this.read((document) => {
-      const session = document.session;
+    return this.read(summariesFrom);
+  }
 
-      const local = session
-        ? document.groups.map((replica): ClientGroupSummary => {
-            const projection = project(replica, session.identity.id);
-            const access = accessFor(projection, session.identity.id);
-
-            const active = projection.members.filter(
-              (member) => member.status === 'active',
-            );
-
-            return {
-              group_id: replica.group_id,
-              name: projection.group.name,
-              status: access?.hidden_at ? 'left' : 'active',
-              stored_locally: true,
-              pending_commands: replica.outbox.length,
-              member_count: active.length,
-              you_name:
-                active.find(
-                  (member) => member.id === access?.preferred_member_id,
-                )?.display_name ?? null,
-            };
-          })
-        : [];
-
-      const localIds = new Set(local.map(({ group_id }) => group_id));
-
-      const remoteOnly = document.group_directory
-        .filter(({ group_id }) => !localIds.has(group_id))
-        .map(
-          (group): ClientGroupSummary => ({
-            group_id: group.group_id,
-            name: group.name,
-            status: group.status,
-            stored_locally: false,
-            pending_commands: 0,
-            member_count: null,
-            you_name: null,
-          }),
-        );
-
-      return [...local, ...remoteOnly].sort(
-        (left, right) =>
-          Number(left.status === 'left') - Number(right.status === 'left') ||
-          left.name.localeCompare(right.name),
-      );
-    });
+  installationState(groupIds: readonly string[], online: boolean): Promise<ClientInstallationState> {
+    return this.read((document) => ({
+      groups: summariesFrom(document),
+      notice_counts: Object.fromEntries(document.groups.map((replica) => [replica.group_id, replica.notices.length])),
+      replicas: [...new Set(groupIds)].map((groupId) => stateFrom(document, groupId, online)),
+    }));
   }
 
   /** Reuses an unconfirmed invite so a lost response cannot rotate it twice. */
@@ -362,16 +336,22 @@ export class ClientReplicaStore {
       snapshot: GroupSnapshot,
       identityId: string,
     ) => GroupCommand,
-  ): Promise<void> {
+    invocationId?: string,
+  ): Promise<PendingCommand> {
     return this.change((document) => {
       const session = requireIdentity(document);
       const replica = requireReplica(document, groupId);
       const projection = project(replica, session.identity.id);
 
-      replica.outbox.push({
+      const pending: PendingCommand = {
         command: createCommand(projection, session.identity.id),
         queued_at: this.now(),
-      });
+      };
+
+      if (invocationId) pending.invocation_id = invocationId;
+      replica.outbox.push(pending);
+
+      return pending;
     });
   }
 
@@ -502,6 +482,35 @@ export class ClientReplicaStore {
     return this.read((document) => stateFrom(document, groupId, online));
   }
 
+  /** Queue fresh intent and retire its notice in one atomic local update. */
+  retryNotice(
+    groupId: string,
+    commandId: string,
+    createId: () => string,
+    requireOnline: () => void,
+    invocationId?: string,
+  ): Promise<{ requiresServer: boolean; pending: PendingCommand }> {
+    return this.change((document) => {
+      const session = requireIdentity(document);
+      const replica = requireReplica(document, groupId);
+      const notice = replica.notices.find((entry) => entry.command.command_id === commandId);
+
+      if (!notice) throw new Error('notice_not_found');
+      const requiresServer = notice.command.type === 'group.leave';
+
+      if (requiresServer) requireOnline();
+      const command = commandForRetry(notice, project(replica, session.identity.id), createId);
+
+      const pending: PendingCommand = { command, queued_at: this.now() };
+
+      if (invocationId) pending.invocation_id = invocationId;
+      replica.outbox.push(pending);
+      replica.notices = replica.notices.filter((entry) => entry !== notice);
+
+      return { requiresServer, pending };
+    });
+  }
+
   dismissNotice(groupId: string, commandId: string): Promise<void> {
     return this.change((document) => {
       const replica = requireReplica(document, groupId);
@@ -522,19 +531,60 @@ export class ClientReplicaStore {
     });
   }
 
-  private change<T>(
-    operation: (document: ClientStorageDocument) => T,
-  ): Promise<T> {
+  private change<T>(operation: (document: ClientStorageDocument) => T): Promise<T> {
     return this.storage.update((serialized) => {
       const document = parseClientDocument(serialized);
       const result = operation(document);
 
-      return {
-        serialized: serializeClientDocument(document),
-        result: structuredClone(result),
-      };
+      return { serialized: serializeClientDocument(document), result: structuredClone(result) };
     });
   }
+}
+
+function summariesFrom(document: ClientStorageDocument): ClientGroupSummary[] {
+  const session = document.session;
+
+  const local = session
+    ? document.groups.map((replica): ClientGroupSummary => {
+        const projection = project(replica, session.identity.id);
+        const access = accessFor(projection, session.identity.id);
+
+        const active = activeMembers(projection);
+
+        return {
+          group_id: replica.group_id,
+          name: projection.group.name,
+          status: access?.hidden_at ? 'left' : 'active',
+          stored_locally: true,
+          pending_commands: replica.outbox.length,
+          member_count: active.length,
+          you_name:
+            preferredMember(projection, session.identity.id)?.display_name ?? null,
+        };
+      })
+    : [];
+
+  const localIds = new Set(local.map(({ group_id }) => group_id));
+
+  const remoteOnly = document.group_directory
+    .filter(({ group_id }) => !localIds.has(group_id))
+    .map(
+      (group): ClientGroupSummary => ({
+        group_id: group.group_id,
+        name: group.name,
+        status: group.status,
+        stored_locally: false,
+        pending_commands: 0,
+        member_count: null,
+        you_name: null,
+      }),
+    );
+
+  return [...local, ...remoteOnly].sort(
+    (left, right) =>
+      Number(left.status === 'left') - Number(right.status === 'left') ||
+      left.name.localeCompare(right.name),
+  );
 }
 
 function stateFrom(

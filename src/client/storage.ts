@@ -13,6 +13,7 @@ import { groupSnapshotSchema } from '../domain/sync';
 const pendingCommandSchema = z.object({
   command: groupCommandSchema,
   queued_at: z.iso.datetime(),
+  invocation_id: z.uuid().optional(),
 });
 
 const clientNoticeSchema = z.object({
@@ -94,11 +95,40 @@ export class ClientStorageError extends Error {
     readonly code:
       | 'corrupt_document'
       | 'unsupported_schema_version'
-      | 'upgrade_requires_connection',
+      | 'upgrade_requires_connection'
+      | 'storage_unavailable',
+    options?: ErrorOptions,
   ) {
-    super(code);
+    super(code, options);
     this.name = 'ClientStorageError';
   }
+}
+
+/** Classify adapter I/O failures without relabeling domain errors from its callback. */
+export function withStorageErrors(adapter: ClientStorageAdapter): ClientStorageAdapter {
+  return {
+    read: async () => {
+      try { return await adapter.read(); } catch (cause) {
+        throw cause instanceof ClientStorageError ? cause : new ClientStorageError('storage_unavailable', { cause });
+      }
+    },
+    update: async (change) => {
+      let operationFailed = false;
+
+      try {
+        return await adapter.update((serialized) => {
+          try { return change(serialized); } catch (error) {
+            operationFailed = true;
+            throw error;
+          }
+        });
+      } catch (cause) {
+        if (operationFailed || cause instanceof ClientStorageError) throw cause;
+
+        throw new ClientStorageError('storage_unavailable', { cause });
+      }
+    },
+  };
 }
 
 export class MemoryClientStorage implements ClientStorageAdapter {

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { formatInviteLink } from '@splitnext/client';
 import { LoadingGroups } from '../ui/AppScreen';
@@ -13,7 +13,6 @@ import { Sheet } from '../ui/Sheet';
 import { s } from '../ui/components';
 import { ActionsProvider } from '../ui/useActionCall';
 import { useCompactLayout } from '../ui/useVisibleViewport';
-import { ActionConsole } from './ActionConsole';
 import {
   useFakeApp,
   useFakeDispatcher,
@@ -53,7 +52,7 @@ const commandControls = {
     kind: 'select',
     options: failures,
     default: 'none',
-    hint: 'Every command rejects with this error.',
+    hint: 'Connected requests fail with this error; offline edits still queue.',
   },
 } as const;
 
@@ -70,6 +69,7 @@ type ScreenDemoProps = {
   options: Omit<FakeAppOptions, 'scenario'> &
     Partial<Pick<FakeAppOptions, 'scenario'>>;
   sheet?: boolean;
+  initialAction?: 'showCreateGroup' | 'showSettings';
   children: (app: FakeApp) => ReactNode;
 };
 
@@ -78,6 +78,13 @@ function ScreenDemo(props: ScreenDemoProps) {
   const app = useFakeApp({ scenario: defaultScenario, ...props.options });
   const actions = useFakeDispatcher(app);
   const mobile = useCompactLayout();
+
+  useEffect(() => {
+    if (props.initialAction && actions)
+      void actions.dispatch(props.initialAction, {}, { origin: 'workbench' });
+  }, [actions, props.initialAction]);
+
+  if (!app || !actions) return <LoadingGroups />;
 
   // Sheets sit on the app's dimmed overlay at a fixed height, so their height
   // limit and scrolling behave as they do over a page.
@@ -95,38 +102,6 @@ function ScreenDemo(props: ScreenDemoProps) {
 }
 
 export const screenStories: Story[] = [
-  defineStory({
-    id: 'action-console',
-    group: 'Actions',
-    title: 'Action console',
-    description:
-      'Every app action, called by name with JSON input as RPC or an ' +
-      'assistant would, against an in-memory group.',
-    controls: {
-      you: { kind: 'text', default: 'Ana' },
-      others: {
-        kind: 'text',
-        default: 'Ben',
-        hint: 'Member names other participants use; try selectYou on one.',
-      },
-      ...commandControls,
-    },
-    render: (values, log) => (
-      <ActionConsole
-        options={{
-          scenario: {
-            ...defaultScenario,
-            you: values.you.trim(),
-            others: listValue(values.others),
-          },
-          connection: values.connection,
-          latency: values.latency,
-          failure: values.failure,
-          log,
-        }}
-      />
-    ),
-  }),
   defineStory({
     id: 'loading-groups',
     group: 'Screens',
@@ -158,12 +133,13 @@ export const screenStories: Story[] = [
           latency: values.latency,
           failure: values.failure,
           log,
-          groups: fixtureGroups(listValue(values.active), listValue(values.left)),
+          groups: fixtureGroups(
+            listValue(values.active),
+            listValue(values.left),
+          ),
         }}
       >
-        {(app) => (
-          <GroupsView app={app} navigate={(view) => log('navigate', view)} />
-        )}
+        {(app) => <GroupsView app={app} />}
       </ScreenDemo>
     ),
   }),
@@ -171,7 +147,8 @@ export const screenStories: Story[] = [
     id: 'create-group',
     group: 'Screens',
     title: 'CreateGroup',
-    description: 'Group creation, including its offline and unreachable states.',
+    description:
+      'Group creation, including its offline and unreachable states.',
     controls: {
       lastYouName: {
         kind: 'text',
@@ -182,6 +159,7 @@ export const screenStories: Story[] = [
     },
     render: (values, log) => (
       <ScreenDemo
+        initialAction="showCreateGroup"
         options={{
           connection: values.connection,
           latency: values.latency,
@@ -212,7 +190,11 @@ export const screenStories: Story[] = [
         default: '',
         hint: 'Member names other participants use; any makes invite secondary.',
       },
-      left: { kind: 'boolean', default: false, hint: 'This installation left.' },
+      left: {
+        kind: 'boolean',
+        default: false,
+        hint: 'This installation left.',
+      },
       notices: { kind: 'boolean', default: false },
       ...commandControls,
     },
@@ -233,17 +215,11 @@ export const screenStories: Story[] = [
           log,
           hidden: values.left,
           notices: values.notices
-            ? [renameNotice('member-2', 'Ben', 'Benji', 'superseded')]
+            ? [renameNotice('member-2______________', 'Ben', 'Benji', 'superseded')]
             : [],
         }}
       >
-        {(app) => (
-          <GroupView
-            app={app}
-            navigate={(view) => log('navigate', view)}
-            showReview
-          />
-        )}
+        {(app) => <GroupView app={app} showReview />}
       </ScreenDemo>
     ),
   }),
@@ -278,6 +254,7 @@ export const screenStories: Story[] = [
     },
     render: (values, log) => (
       <ScreenDemo
+        initialAction="showSettings"
         sheet={!values.fullPage}
         options={{
           connection: values.connection,
@@ -335,6 +312,8 @@ export const screenStories: Story[] = [
           failure: values.failure,
           log,
           lastYouName: values.lastYouName,
+          hidden: values.mode === 'rejoin',
+          visitor: values.mode !== 'rejoin',
         }}
       >
         {(app) => (
@@ -379,10 +358,10 @@ export const screenStories: Story[] = [
           log,
           notices: [
             ...(values.notices === 'rejected' || values.notices === 'both'
-              ? [renameNotice('member-2', 'Ben', 'Ana', 'rejected')]
+              ? [renameNotice('member-2______________', 'Ben', 'Ana', 'rejected')]
               : []),
             ...(values.notices === 'superseded' || values.notices === 'both'
-              ? [renameNotice('member-3', 'Chloe', 'Clo', 'superseded')]
+              ? [renameNotice('member-3______________', 'Chloe', 'Clo', 'superseded')]
               : []),
           ],
         }}

@@ -189,6 +189,18 @@ describe('Splitnext client SDK', () => {
     expect(responseIds).toEqual([requestIds[1], requestIds[0]]);
   });
 
+  it('distinguishes a failed connection from malformed JSON and observes both', async () => {
+    const events: ClientTransportEvent[] = [];
+    const network = new SplitnextClient({ baseUrl: 'https://splitnext.test', observer: (event) => events.push(event), fetch: async () => { throw new TypeError('connection_lost'); } });
+
+    await expect(network.health()).rejects.toMatchObject({ name: 'SplitnextNetworkError' });
+    expect(events.at(-1)).toMatchObject({ kind: 'network_error' });
+    const protocol = new SplitnextClient({ baseUrl: 'https://splitnext.test', observer: (event) => events.push(event), fetch: async () => new Response('<html>broken</html>') });
+
+    await expect(protocol.health()).rejects.toMatchObject({ name: 'SplitnextProtocolError' });
+    expect(events.at(-1)).toMatchObject({ kind: 'protocol_error' });
+  });
+
   it('rejects a successful HTTP response that violates the shared contract', async () => {
     const client = new SplitnextClient({
       baseUrl: 'https://splitnext.test',

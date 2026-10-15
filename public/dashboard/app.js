@@ -1,4 +1,7 @@
 import {
+  activeMembers,
+  participantsForMember,
+  preferredMember as findPreferredMember,
   ClientOfflineError,
   SplitnextRequestError,
   SyncLab,
@@ -150,6 +153,14 @@ function createDeviceView(key) {
     clearTraffic: query('[data-action="clear-traffic"]'),
     rawState: query('[data-role="raw-state"]'),
   };
+
+  const syncError = document.createElement('p');
+
+  syncError.dataset.role = 'sync-error';
+  syncError.className = 'status error';
+  syncError.setAttribute('role', 'alert');
+  view.identity.after(syncError);
+  view.syncError = syncError;
 
   root.dataset.device = key;
   view.label.textContent = device.label;
@@ -403,11 +414,7 @@ async function joinGroup(event, key) {
     resetJoinChoice(key, 'Who are you?');
     const snapshot = joined.projected_snapshot;
 
-    const preferred = snapshot?.access_grants.find(
-      (grant) => grant.identity_id === joined.session?.identity.id,
-    )?.preferred_member_id;
-
-    const name = snapshot?.members.find((member) => member.id === preferred)?.display_name;
+    const name = findPreferredMember(snapshot, joined.session?.identity.id)?.display_name;
     showToast(`${state.devices[key].label} joined as ${name ?? 'a member'}`);
   } catch (error) {
     showToast(describeError(error), true);
@@ -654,14 +661,7 @@ function otherUsersOf(key, memberId) {
   const snapshot = device.replica?.projected_snapshot;
   const identityId = device.session?.identity.id;
 
-  return (snapshot?.access_grants ?? [])
-    .filter(
-      (grant) =>
-        grant.preferred_member_id === memberId &&
-        !grant.hidden_at &&
-        grant.identity_id !== identityId,
-    )
-    .map((grant) => grant.actor_handle);
+  return participantsForMember(snapshot, memberId).flatMap((grant) => grant.identity_id !== identityId ? [grant.actor_handle] : []);
 }
 
 async function leaveGroup(key) {
@@ -692,12 +692,7 @@ async function rejoinGroup(event, key) {
   try {
     const replica = await lab.rejoinGroup(key, preferredMember);
 
-    const member = replica.projected_snapshot.members.find(
-      ({ id }) => id === replica.projected_snapshot.access_grants.find(
-        ({ identity_id }) => identity_id === replica.session.identity.id,
-      )?.preferred_member_id,
-    );
-
+    const member = findPreferredMember(replica.projected_snapshot, replica.session?.identity.id);
     showToast(`${state.devices[key].label} rejoined as ${member?.display_name ?? 'a member'}`);
   } catch (error) {
     showToast(describeError(error), true);
@@ -813,6 +808,8 @@ function renderDevice(key) {
   const replica = device.replica;
   const snapshot = replica?.projected_snapshot;
 
+  view.syncError.hidden = !device.syncError;
+  view.syncError.textContent = device.syncError ? `${device.syncError.kind}: ${device.syncError.message}` : '';
   renderConnection(view.toggle, device.online);
   renderRealtimeToggle(view.realtimeToggle, device);
   renderRealtimeEvents(view.realtimeEvents, device.realtimeEvents);
@@ -875,9 +872,7 @@ function renderRejoin(key) {
 
   if (!left) return;
 
-  const members = (replica.projected_snapshot?.members ?? []).filter(
-    (member) => member.status === 'active',
-  );
+  const members = activeMembers(replica.projected_snapshot);
 
   const options = [
     ...members.map((member) => [member.id, member.display_name]),
@@ -978,12 +973,8 @@ function renderGroupSummary(element, group) {
 }
 
 function renderMembers(element, snapshot, identityId, editable = false, presence = null) {
-  const members = snapshot.members.filter(({ status }) => status === 'active');
-
-  const preferredByMember = (member) =>
-    snapshot.access_grants.filter(
-      (grant) => grant.preferred_member_id === member.id && !grant.hidden_at,
-    );
+  const members = activeMembers(snapshot);
+  const preferredByMember = (member) => participantsForMember(snapshot, member.id);
 
   if (!editable) {
     element.replaceChildren(
@@ -1162,6 +1153,23 @@ function renderCommands(key) {
     status.textContent = entry.status.replace('_', ' ');
     detail.textContent = `${shortId(entry.command.command_id)}${entry.detail ? ` · ${describeReason(entry.detail)}` : ''}`;
     card.append(summary, status, detail);
+
+    const notice = device.replica?.notices.find((item) => item.command.command_id === entry.command.command_id);
+
+    if (notice) {
+      const retry = document.createElement('button');
+      const dismiss = document.createElement('button');
+
+      retry.type = 'button';
+      retry.textContent = 'Apply again';
+      retry.disabled = notice.command.type === 'group.leave' && !device.online;
+      retry.addEventListener('click', () => runMutation(key, () => lab.retryNotice(key, entry.command.command_id), 'Change queued again'));
+      dismiss.type = 'button';
+      dismiss.textContent = 'Dismiss';
+      dismiss.addEventListener('click', () => runMutation(key, () => lab.dismissNotice(key, entry.command.command_id), 'Notice dismissed'));
+      card.append(retry, dismiss);
+    }
+
     element.append(card);
   }
 }
@@ -1216,10 +1224,11 @@ function renderRequestList(element, entries, { showSource = false } = {}) {
 
     summary.append(method, endpoint, important, result, time);
     exchange.append(
+      renderExchangeBlock('Trace', { request_id: entry.request_id, invocation_ids: entry.invocation_ids ?? [], command_ids: entry.command_ids ?? [] }),
       renderExchangeBlock('Request body', entry.body),
       renderExchangeBlock(
         'Response',
-        entry.result?.kind === 'network_error'
+        ['network_error', 'protocol_error'].includes(entry.result?.kind)
           ? { error: entry.result.error }
           : entry.result?.body ?? 'Waiting for response…',
       ),
@@ -1245,7 +1254,7 @@ function renderExchangeBlock(label, value) {
 function requestOutcome(entry) {
   if (!entry.result) return 'pending';
 
-  if (entry.result.kind === 'network_error' || entry.result.status >= 400) {
+  if (['network_error', 'protocol_error'].includes(entry.result.kind) || entry.result.status >= 400) {
     return 'error';
   }
 
@@ -1254,6 +1263,8 @@ function requestOutcome(entry) {
 
 function summarizeResult(result) {
   if (!result) return 'Pending';
+
+  if (result.kind === 'protocol_error') return `Protocol error · ${result.duration_ms}ms`;
 
   if (result.kind === 'network_error') {
     return `Network error · ${result.duration_ms}ms`;

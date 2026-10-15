@@ -19,6 +19,12 @@ export function useSheetKeyboard(open: boolean, close: () => void): void {
     if (!open || Platform.OS !== 'web') return;
 
     const keydown = (event: KeyboardEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[data-splitnext-devtools]')
+      )
+        return;
+
       if (event.key === 'Escape') {
         event.preventDefault();
         latestClose.current();
@@ -32,7 +38,9 @@ export function useSheetKeyboard(open: boolean, close: () => void): void {
 
       if (!sheet) return;
 
-      const targets = [...sheet.querySelectorAll<HTMLElement>(focusable)].filter(
+      const targets = [
+        ...sheet.querySelectorAll<HTMLElement>(focusable),
+      ].filter(
         (target) =>
           !target.hasAttribute('disabled') &&
           target.getAttribute('aria-disabled') !== 'true',

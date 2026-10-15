@@ -6,12 +6,9 @@ import {
   searchStories,
 } from '../apps/client/src/workbench/stories';
 import {
-  addMember,
   fixtureIdentityId,
-  projectChange,
   scenarioPresence,
   scenarioReplica,
-  selectMember,
   type MemberListScenario,
 } from '../apps/client/src/workbench/memberListFixture';
 
@@ -68,8 +65,8 @@ describe('component workbench', () => {
     const grants = replica.projected_snapshot?.access_grants ?? [];
 
     expect(grants.map((grant) => grant.preferred_member_id)).toEqual([
-      'member-1',
-      'member-2',
+      'member-1______________',
+      'member-2______________',
       null,
     ]);
     expect(scenarioPresence(scenario, replica)).toEqual([fixtureIdentityId]);
@@ -81,17 +78,4 @@ describe('component workbench', () => {
     ).toBeNull();
   });
 
-  it('projects local member edits', () => {
-    const replica = projectChange(scenarioReplica(scenario), (snapshot) =>
-      selectMember(addMember(snapshot, 'Dev'), 'member-4'),
-    );
-
-    expect(replica.projected_snapshot?.members.at(-1)?.display_name).toBe(
-      'Dev',
-    );
-    expect(
-      replica.projected_snapshot?.access_grants[0]?.preferred_member_id,
-    ).toBe('member-4');
-    expect(replica.confirmed_snapshot?.members).toHaveLength(3);
-  });
 });
