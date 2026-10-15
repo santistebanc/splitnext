@@ -1,18 +1,8 @@
 import { z } from 'zod';
 
-export const viewNames = [
-  'home',
-  'create',
-  'join',
-  'invite',
-  'settings',
-  'notices',
-  'rejoin',
-] as const;
+import { viewNames } from '../model/uiState';
 
-export type ViewName = (typeof viewNames)[number];
-
-export type Navigate = (view: ViewName) => void;
+export { viewNames, type ViewName } from '../model/uiState';
 
 /** Browser history entries the app writes, read back on Back and Forward. */
 export const navigationSchema = z.object({

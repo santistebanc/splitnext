@@ -6,12 +6,15 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import type { ClientReplicaState } from '@splitnext/client';
+import { preferredMember, type ClientReplicaState } from '@splitnext/client';
+import { orderedMembers, participantMarkers, memberStatus, type ParticipantMarker } from '../model/memberPresentation';
 import type { AppController } from '../model/controller';
 import { Button, ErrorMessage, colors, s } from './components';
-import { useActionCall } from './useActionCall';
+import { useActionCall, useActions, useUiState } from './useActionCall';
 import { MemberRowTransition } from './MemberRowTransition';
 import { YouBadge } from './YouBadge';
+
+export type { ParticipantMarker } from '../model/memberPresentation';
 
 type LedgerMember = NonNullable<
   ClientReplicaState['projected_snapshot']
@@ -24,24 +27,16 @@ export type MemberListApp = Pick<AppController, 'snapshot'> & {
 
 type MemberListProps = { app: MemberListApp; replica: ClientReplicaState };
 
-export type ParticipantMarker = {
-  identityId: string;
-  label: string;
-  you: boolean;
-  status: 'online' | 'offline' | 'unknown';
-};
-
 type MemberRowProps = MemberListProps & {
   member: LedgerMember;
-  editing: boolean;
-  beginEdit: () => void;
-  finishEdit: () => void;
 };
 
 /** A compact editable list; names and preferred-member selection stay in place. */
 export function MemberList(props: MemberListProps) {
-  const [adding, setAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const edit = useUiState().memberEdit;
+  const adding = edit !== null && edit.memberId === null;
+  const action = useActionCall();
+  const actions = useActions();
   const [reducedMotion, setReducedMotion] = useState(true);
 
   useEffect(() => {
@@ -61,27 +56,8 @@ export function MemberList(props: MemberListProps) {
     };
   }, []);
 
-  const preferredId = props.replica.projected_snapshot?.access_grants.find(
-    (grant) => grant.identity_id === props.replica.session?.identity.id,
-  )?.preferred_member_id;
-
-  const claimedMemberIds = new Set(
-    props.replica.projected_snapshot?.access_grants
-      .filter((grant) => !grant.hidden_at)
-      .map((grant) => grant.preferred_member_id) ?? [],
-  );
-
-  const members =
-    props.replica.projected_snapshot?.members.filter(
-      (member) => member.status === 'active',
-    ) ?? [];
-
-  members.sort(
-    (left, right) =>
-      Number(right.id === preferredId) - Number(left.id === preferredId) ||
-      Number(claimedMemberIds.has(right.id)) -
-        Number(claimedMemberIds.has(left.id)),
-  );
+  const preferredId = preferredMember(props.replica.projected_snapshot, props.replica.session?.identity.id)?.id;
+  const members = orderedMembers(props.replica);
   const order = members.map((member) => member.id).join(',');
 
   return (
@@ -93,28 +69,17 @@ export function MemberList(props: MemberListProps) {
           selected={member.id === preferredId}
           reducedMotion={reducedMotion}
         >
-          <MemberRow
-            app={props.app}
-            replica={props.replica}
-            member={member}
-            editing={editingId === member.id}
-            beginEdit={() => setEditingId(member.id)}
-            finishEdit={() =>
-              setEditingId((current) =>
-                current === member.id ? null : current,
-              )
-            }
-          />
+          <MemberRow app={props.app} replica={props.replica} member={member} />
         </MemberRowTransition>
       ))}
       {adding ? (
-        <NewMemberRow finish={() => setAdding(false)} />
+        <NewMemberRow />
       ) : (
         <Button
           quiet
+          disabled={!actions.availability('beginAddMember', {}).available}
           onPress={() => {
-            setEditingId(null);
-            setAdding(true);
+            void action.call('beginAddMember', {});
           }}
         >
           + Add member
@@ -128,17 +93,9 @@ export function MemberIcon(props: {
   joined: boolean;
   participants: ParticipantMarker[];
 }) {
-  const markers = [...props.participants].sort(
-    (left, right) => Number(right.you) - Number(left.you),
-  );
-
-  const you = markers.some((participant) => participant.you);
-  const capacity = you ? 5 : 6;
-
-  const visibleMarkers =
-    markers.length > capacity ? markers.slice(0, capacity - 1) : markers;
-
-  const overflow = markers.length > visibleMarkers.length;
+  const you = props.participants.some((participant) => participant.you);
+  const count = props.participants.length;
+  const status = memberStatus(props.participants);
 
   return (
     <View style={s.memberSelectIcon} aria-hidden>
@@ -160,59 +117,50 @@ export function MemberIcon(props: {
           ]}
         />
       </View>
-      <View style={s.memberPresence} pointerEvents="none">
-        {visibleMarkers.map((participant) => (
-          <View
-            key={participant.identityId}
-            style={[s.presenceMarker, participant.you && s.presenceYouSlot]}
-          >
-            {participant.you ? (
-              <View style={s.presenceMarkerYou}>
-                <YouBadge status={participant.status} />
-              </View>
+      {count > 1 ? (
+        <View style={s.participantMore} pointerEvents="none">
+          <Text numberOfLines={1} style={s.participantMoreLabel}>
+            +{count - 1}
+          </Text>
+        </View>
+      ) : null}
+      {count > 0 ? (
+        <View style={s.memberPresence} pointerEvents="none">
+          <View style={[s.presenceMarker, you && s.presenceMarkerYou]}>
+            {you ? (
+              <YouBadge status={status} />
             ) : (
               <>
                 <View
                   style={[
                     s.presenceRing,
-                    participant.status === 'online' && s.presenceRingOnline,
+                    status === 'online' && s.presenceRingOnline,
                   ]}
                 />
                 <View
                   style={[
                     s.presenceDot,
-                    participant.status === 'online' && s.presenceDotOnline,
-                    participant.status === 'offline' && s.presenceDotOffline,
+                    status === 'online' && s.presenceDotOnline,
+                    status === 'offline' && s.presenceDotOffline,
                   ]}
                 />
               </>
             )}
           </View>
-        ))}
-        {overflow ? (
-          <View style={s.presenceMarker}>
-            <View style={s.presenceRing} />
-            <Text style={s.presenceOverflowText}>…</Text>
-          </View>
-        ) : null}
-      </View>
+        </View>
+      ) : null}
     </View>
   );
 }
 
-function NewMemberRow(props: { finish: () => void }) {
-  const [name, setName] = useState('');
+function NewMemberRow() {
+  const name = useUiState().memberEdit?.name ?? '';
+  const actions = useActions();
   const input = useRef<TextInput>(null);
   const action = useActionCall();
 
   function save(): void {
-    if (!name.trim()) {
-      props.finish();
-
-      return;
-    }
-
-    void action.call('addMember', { name }, props.finish);
+    void action.call('saveMemberEdit', {});
   }
 
   return (
@@ -228,8 +176,14 @@ function NewMemberRow(props: { finish: () => void }) {
             placeholder="Member name"
             placeholderTextColor={colors.muted}
             value={name}
-            onChangeText={setName}
-            editable={!action.busy}
+            onChangeText={(value) => {
+              void actions.dispatch(
+                'changeDraft',
+                { field: 'member.name', value },
+                { origin: 'ui' },
+              );
+            }}
+            editable={!action.busy && actions.availability('changeDraft', { field: 'member.name', value: name }).available}
             autoFocus
             maxLength={100}
             style={[s.name, s.memberNameInput]}
@@ -251,44 +205,19 @@ function NewMemberRow(props: { finish: () => void }) {
 
 function MemberRow(props: MemberRowProps) {
   const member = props.member;
-  const [name, setName] = useState(member.display_name);
-  const [observedName, setObservedName] = useState(member.display_name);
+  const draft = useUiState().memberEdit;
+  const editing = draft?.memberId === member.id;
+  const name = editing ? draft.name : member.display_name;
+  const actions = useActions();
   const select = useActionCall();
   const remove = useActionCall();
   const busy = select.busy || remove.busy;
   const editAction = useActionCall();
   const input = useRef<TextInput>(null);
 
-  const actors =
-    props.replica.projected_snapshot?.access_grants.filter(
-      (grant) => grant.preferred_member_id === member.id && !grant.hidden_at,
-    ) ?? [];
-
-  const isYou = actors.some(
-    (grant) => grant.identity_id === props.replica.session?.identity.id,
-  );
-
-  const presence = props.app.client.presence(props.replica.group_id);
-
-  const participants: ParticipantMarker[] = actors.map((grant) => {
-    const you = grant.identity_id === props.replica.session?.identity.id;
-
-    const disconnected =
-      !props.app.snapshot().online || !props.app.snapshot().reachable;
-
-    return {
-      identityId: grant.identity_id,
-      label: `${grant.actor_handle}${you ? ' (you)' : ''}`,
-      you,
-      status: presence
-        ? presence.includes(grant.identity_id)
-          ? 'online'
-          : 'offline'
-        : you && disconnected
-          ? 'offline'
-          : 'unknown',
-    };
-  });
+  const state = props.app.snapshot();
+  const participants = participantMarkers(props.replica, member.id, props.app.client.presence(props.replica.group_id), state.online && state.reachable);
+  const isYou = participants.some((participant) => participant.you);
 
   const participantLabels = participants
     .map((participant) => `${participant.label}: ${participant.status}`)
@@ -301,28 +230,11 @@ function MemberRow(props: MemberRowProps) {
   );
 
   function edit(): void {
-    if (!editAction.error) {
-      setName(member.display_name);
-      setObservedName(member.display_name);
-    }
-
-    props.beginEdit();
+    void editAction.call('beginEditMember', { memberId: member.id });
   }
 
   function save(): void {
-    const submitted = name.trim();
-
-    if (!submitted || submitted === observedName) {
-      props.finishEdit();
-
-      return;
-    }
-
-    void editAction.call(
-      'renameMember',
-      { memberId: member.id, name, expectedName: observedName },
-      props.finishEdit,
-    );
+    if (editing) void editAction.call('saveMemberEdit', {});
   }
 
   return (
@@ -331,9 +243,9 @@ function MemberRow(props: MemberRowProps) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${isYou ? 'You' : 'This is me'}: ${member.display_name}, ${participantLabels || 'unclaimed'}`}
-          accessibilityState={{ selected: isYou, disabled: busy }}
+          accessibilityState={{ selected: isYou, disabled: busy || !actions.availability('selectYou', { memberId: member.id }).available }}
           aria-pressed={isYou}
-          disabled={busy}
+          disabled={busy || !actions.availability('selectYou', { memberId: member.id }).available}
           onPress={() => {
             if (!isYou) void select.call('selectYou', { memberId: member.id });
           }}
@@ -342,16 +254,22 @@ function MemberRow(props: MemberRowProps) {
             (pressed || busy) && s.dim,
           ]}
         >
-          <MemberIcon joined={actors.length > 0} participants={participants} />
+          <MemberIcon joined={participants.length > 0} participants={participants} />
         </Pressable>
         <View style={s.personText}>
-          {props.editing ? (
+          {editing ? (
             <TextInput
               ref={input}
               accessibilityLabel="Member name"
               value={name}
-              onChangeText={setName}
-              editable={!editAction.busy && !busy}
+              onChangeText={(value) => {
+                void actions.dispatch(
+                  'changeDraft',
+                  { field: 'member.name', value },
+                  { origin: 'ui' },
+                );
+              }}
+              editable={!editAction.busy && !busy && actions.availability('changeDraft', { field: 'member.name', value: name }).available}
               maxLength={100}
               autoFocus
               style={[s.name, s.memberNameInput]}
@@ -369,7 +287,13 @@ function MemberRow(props: MemberRowProps) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Edit ${member.display_name}`}
-              disabled={busy || editAction.busy}
+              disabled={
+                busy ||
+                editAction.busy ||
+                !actions.availability('beginEditMember', {
+                  memberId: member.id,
+                }).available
+              }
               onPress={edit}
               style={s.editableMemberName}
             >
@@ -379,20 +303,18 @@ function MemberRow(props: MemberRowProps) {
             </Pressable>
           )}
         </View>
-        {!isYou ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Remove ${member.display_name}`}
-            accessibilityState={{ disabled: busy }}
-            disabled={busy}
-            onPress={() => {
-              void remove.call('removeMember', { memberId: member.id });
-            }}
-            style={s.memberActionsButton}
-          >
-            <Text style={s.name}>×</Text>
-          </Pressable>
-        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Remove ${member.display_name}`}
+          accessibilityState={{ disabled: busy || !actions.availability('removeMember', { memberId: member.id }).available }}
+          disabled={busy || !actions.availability('removeMember', { memberId: member.id }).available}
+          onPress={() => {
+            void remove.call('removeMember', { memberId: member.id });
+          }}
+          style={s.memberActionsButton}
+        >
+          <Text style={s.name}>×</Text>
+        </Pressable>
       </View>
       {select.confirmation && !isYou ? (
         <View style={s.stack}>
@@ -401,11 +323,7 @@ function MemberRow(props: MemberRowProps) {
             <Button quiet disabled={busy} onPress={select.cancel}>
               Cancel
             </Button>
-            <Button
-              quiet
-              disabled={busy}
-              onPress={select.confirmation.confirm}
-            >
+            <Button quiet disabled={busy} onPress={select.confirmation.confirm}>
               Use anyway
             </Button>
           </View>

@@ -1,18 +1,20 @@
+import { joinedParticipants, preferredMember } from '@splitnext/client';
 import { Text, View } from 'react-native';
 import { Button, s } from './components';
 import { MemberList, type MemberListApp } from './MemberList';
-import type { Navigate } from './navigation';
+import { useActionCall, useActions } from './useActionCall';
 import { useCompactLayout } from './useVisibleViewport';
 
 type GroupViewProps = {
   app: MemberListApp;
-  navigate: Navigate;
   showReview: boolean;
 };
 
 /** The open group: its name, invite action, and Members list. */
 export function GroupView(props: GroupViewProps) {
   const mobile = useCompactLayout();
+  const action = useActionCall();
+  const actions = useActions();
   const replica = props.app.snapshot().group;
   const snapshot = replica?.projected_snapshot;
 
@@ -20,14 +22,10 @@ export function GroupView(props: GroupViewProps) {
 
   const identityId = replica.session?.identity.id;
 
-  const mine = snapshot.access_grants.find(
-    (grant) => grant.identity_id === identityId,
-  );
+  const you = preferredMember(snapshot, identityId);
 
   // Inviting stays the primary action until someone else has joined.
-  const othersJoined = snapshot.access_grants.some(
-    (grant) => grant.identity_id !== identityId && !grant.hidden_at,
-  );
+  const othersJoined = joinedParticipants(snapshot).some((grant) => grant.identity_id !== identityId);
 
   return (
     <>
@@ -44,7 +42,10 @@ export function GroupView(props: GroupViewProps) {
           <Button
             quiet
             label="Group settings"
-            onPress={() => props.navigate('settings')}
+            disabled={!actions.availability('showSettings', {}).available}
+            onPress={() => {
+              void action.call('showSettings', {});
+            }}
           >
             Settings
           </Button>
@@ -53,22 +54,38 @@ export function GroupView(props: GroupViewProps) {
       {replica.hidden ? (
         <View style={s.prompt}>
           <Text style={s.body}>You left this group.</Text>
-          <Button onPress={() => props.navigate('rejoin')}>Rejoin group</Button>
+          <Button
+            disabled={!actions.availability('showRejoin', {}).available}
+            onPress={() => {
+              void action.call('showRejoin', {});
+            }}
+          >
+            Rejoin group
+          </Button>
         </View>
       ) : (
         <>
           {replica.notices.length && props.showReview ? (
-            <Button secondary onPress={() => props.navigate('notices')}>
+            <Button
+              secondary
+              disabled={!actions.availability('showNotices', {}).available}
+              onPress={() => {
+                void action.call('showNotices', {});
+              }}
+            >
               Review changes · {replica.notices.length}
             </Button>
           ) : null}
           <Button
             secondary={othersJoined}
-            onPress={() => props.navigate('invite')}
+            disabled={!actions.availability('showInvite', {}).available}
+            onPress={() => {
+              void action.call('showInvite', {});
+            }}
           >
             Share invite
           </Button>
-          {!mine?.preferred_member_id ? (
+          {!you ? (
             <View style={s.banner}>
               <Text style={s.body}>
                 Which one is you? Tap the person icon beside your name.

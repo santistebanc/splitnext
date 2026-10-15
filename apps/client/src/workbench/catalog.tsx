@@ -182,15 +182,23 @@ export const stories: Story[] = [
     id: 'member-icon',
     group: 'Members',
     title: 'MemberIcon',
-    description: 'Person figure with the presence markers of its participants.',
+    description:
+      'Person figure with one combined presence marker and a +N for extra participants.',
     controls: {
       joined: { kind: 'boolean', default: true },
-      you: {
-        kind: 'select',
-        options: ['absent', ...statuses],
-        default: 'online',
+      isYou: {
+        kind: 'boolean',
+        default: true,
+        hint: "Shows the YOU badge. Switch off to preview another participant's dot.",
       },
-      others: { kind: 'number', default: 2, min: 0, max: 8 },
+      yourStatus: { kind: 'select', options: statuses, default: 'online' },
+      others: {
+        kind: 'number',
+        default: 1,
+        min: 0,
+        max: 8,
+        hint: 'Participants other than you. Set to 1 for a single presence dot.',
+      },
       othersStatus: { kind: 'select', options: statuses, default: 'offline' },
       zoom: { kind: 'number', default: 3, min: 1, max: 6 },
     },
@@ -205,12 +213,12 @@ export const stories: Story[] = [
         }),
       );
 
-      if (values.you !== 'absent')
+      if (values.isYou)
         participants.push({
           identityId: 'you',
           label: 'You',
           you: true,
-          status: values.you,
+          status: values.yourStatus,
         });
 
       return (
@@ -225,7 +233,7 @@ export const stories: Story[] = [
     group: 'Members',
     title: 'MemberList',
     description:
-      'The editable members list over a fake group. Edits apply locally; ' +
+      'The editable members list through the real client and memory server; ' +
       'change a control to start over.',
     controls: {
       members: { kind: 'text', default: 'Ana, Ben, Chloe, Dev' },
@@ -262,7 +270,7 @@ export const stories: Story[] = [
         kind: 'select',
         options: errorCodes,
         default: 'none',
-        hint: 'Every command rejects with this error.',
+        hint: 'Connected requests fail with this error; offline edits still queue.',
       },
     },
     render: (values, log) => (
@@ -378,7 +386,7 @@ type MemberListDemoProps = {
   log: Log;
 };
 
-/** Runs MemberList against an in-memory group instead of the sync client. */
+/** Runs MemberList through the real client over an in-memory server. */
 function MemberListDemo(props: MemberListDemoProps) {
   const app = useFakeApp({
     scenario: props.scenario,
@@ -389,9 +397,9 @@ function MemberListDemo(props: MemberListDemoProps) {
   });
 
   const actions = useFakeDispatcher(app);
-  const replica = app.snapshot().group;
+  const replica = app?.snapshot().group;
 
-  return replica ? (
+  return replica && app && actions ? (
     <ActionsProvider value={actions}>
       <MemberList app={app} replica={replica} />
     </ActionsProvider>

@@ -89,26 +89,25 @@ each row, left of the name, selects who is you, replacing the text button and
 You badge. Tapping the name edits it without an edit icon. Omit actor-handle
 subtitles such as User 1; retain those handles in shared-selection warnings.
 Overlay one dot per identity currently selecting the name along the person icon's
-right edge, and a star in place of this installation's dot. Dot badges
-have a filled center, a small surface-colored gap, and an outer circular outline.
-Keep the person artwork compact with a 44px tap target. Arrange markers horizontally over it, with the
-star inside a white circular badge on the far right, with overflow rows stacking
-upward. All markers have the same 12px size, with 3px gaps; fit three in the
-44px row before wrapping. Its circular outline matches the dots, with
-a clear gap around the star. Both use centered SVG geometry; dot fills and
-outlines are concentric with a narrow white gap.
-The marker row may extend a little past the icon's width.
-Green shows online, gray shows
+right edge, with a white YOU badge in place of this installation's dot.
+Keep the person artwork compact with a 44px tap target. Start one horizontal
+row at the first dot's position, 26px from the icon's left edge and 2px below
+its bottom. YOU comes first; other dots extend to its right with 2px gaps.
+The row never wraps or truncates and may overflow freely to the right.
+Dots are 12px; YOU is 30px wide and 16px tall, with bold text and a presence-colored
+outline, aligned with the dots' bottom edges. Dot fills and outlines are
+concentric with a narrow white gap. Green shows online, lightly filled gray shows
 offline, and hollow shows unknown presence when the live connection is unavailable.
 Give you a slightly larger filled green person silhouette on a pale rounded
 background, within the same icon and tap-target dimensions. This highlight
-identifies the preferred member independently of connection status; the star
+identifies the preferred member independently of connection status; the badge
 continues to show presence. Keep other selected names dark-filled and unused
 names outlined.
 Use accessible labels,
 pressed state, and a 44px tap target. Omit member avatars and the heading count.
 Keep you at the top, with smooth row movement when the selection changes;
-retain the other members' existing order and honor reduced-motion settings.
+show other claimed names next, then unclaimed names, retaining their order
+within each set and honoring reduced-motion settings.
 Use dark filled icons for other names currently selected by a joined participant,
 and outlined icons for names no participant currently selects. Include the
 joined status in the icon's accessible label without adding text to the row.

@@ -1,3 +1,4 @@
+import { previewFromSnapshot } from './domain/selectors';
 import type { JoinGroupCommand } from './domain/access';
 import {
   AuditHistory,
@@ -37,7 +38,7 @@ import type {
   GroupRepository,
   StoredGroupState,
   StoredInvite,
-} from './groupRepository';
+} from './groupPersistence';
 
 export type CreateStoredGroupResult =
   | { ok: true; created: CreatedGroup }
@@ -345,32 +346,7 @@ export class GroupStore {
 
       if (!invite) return { ok: false, error: 'invite_invalid' };
 
-      const { group, members, access_grants: grants } = state.snapshot;
-
-      return {
-        ok: true,
-        preview: {
-          group: {
-            id: group.id,
-            name: group.name,
-          },
-          members: members.flatMap((member) =>
-            member.status === 'active'
-              ? [
-                  {
-                    id: member.id,
-                    display_name: member.display_name,
-                    in_use: grants.some(
-                      (grant) =>
-                        grant.preferred_member_id === member.id &&
-                        !grant.hidden_at,
-                    ),
-                  },
-                ]
-              : [],
-          ),
-        },
-      };
+      return { ok: true, preview: previewFromSnapshot(state.snapshot) };
     });
   }
 

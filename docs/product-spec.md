@@ -44,8 +44,9 @@ Done returns to the same group.
 Creating a link does not imply anyone has joined.
 
 Use a calm visual direction and animated state-driven views. Use compact mobile
-layouts with clear labels and usable touch targets. Avoid
-repeated explanatory text, duplicate actions, unsupported controls, and rename
+layouts with clear labels and usable touch targets. Draw textbox keyboard focus
+outlines inside the field's edge so scroll containers and inline actions cannot
+clip them. Avoid repeated explanatory text, duplicate actions, unsupported controls, and rename
 save actions before a name changes. Use precise control labels rather than
 static explanatory paragraphs in app views and sheets. Keep access-recovery
 details in the product documentation and the current beta scope on the homepage. Keep URL handling
@@ -68,34 +69,29 @@ when at least one active access identity currently selects that member; leave
 unselected names outlined. This follows current preferred-member choices,
 not a permanent ownership or historical attendance record. Retain
 the warning and Use anyway confirmation when another identity uses the name.
-Overlay compact markers along the right edge of each person icon, one per active access identity
-currently selecting that name. Use a compact badge reading "YOU" in bold instead of a
-dot for this installation's identity. It is 30px wide and 16px tall, with its
-bottom edge aligned with the 12px dots. It occupies two dot slots on the far
-right (26px including their gap), shifted 6px to the right within that slot
-and growing upward.
-The reserved slot has no visible dot or background. Its extra width overflows to the
-right without moving the dots or changing wrapping. Its background stays white;
-only its outline and text carry the presence color, green when connected and
-gray otherwise. Dot badges have a filled
+Overlay one compact marker at the right edge of each person icon that at least
+one active access identity is currently selecting, 26px from the icon's left
+edge and 2px below its bottom edge. When this installation's identity is among
+them, the marker is a compact badge reading "YOU" in bold instead of a dot.
+It is 30px wide and 16px tall, with its bottom edge aligned with the 12px dots.
+Its background stays white; only its outline and text carry the presence
+color, green when connected and gray otherwise. Dot badges have a filled
 center and outer circular outline separated by a small surface-colored gap.
-Use 2px horizontal spacing, 5px between stacked rows to clear the taller badge,
-and a 44px row, fitting
-three dot slots before wrapping upward; the YOU badge uses two of those slots.
-Cap the display at two rows. When participants exceed that capacity, reserve
-the final dot slot for an ellipsis marker. Always retain YOU; the person
-button's accessible label continues to list every participant and their status.
-Rows may slightly exceed the
-person icon's width. Keep the person artwork compact in its 44px tap target,
+The marker combines every identity selecting the name: online when at least
+one is online, unknown only when all are unknown, otherwise offline.
+When two or more identities select the name, a small circled badge such as
+"+2" overlays the icon's bottom-left edge, counting the identities beyond the
+first. The person button's accessible label lists every
+participant and their status.
+Keep the person artwork compact in its 44px tap target,
 independently of the overlay markers. Center each dot and ring on the same point.
 Keep the dot's white gap narrow, with an 8px center in its 12px ring.
 Green means connected; lightly filled gray dots
 mean disconnected, retaining a clear outer ring; hollow means presence is unknown while reconnecting or when
 this installation cannot observe live presence. A known local outage makes its
-own you badge gray. Multiple tabs for one identity share one marker, and a member may
-have several markers. Unassigned identities have no member marker.
+own you badge gray. Multiple tabs for one identity count once. Unassigned identities have no member marker.
 Use a plain Members heading without a count. A cross icon at the end of each
-row removes the member immediately, without a confirmation; hide it on the
+row removes the member immediately, without a confirmation, including the
 currently selected you member. Removal archives
 the member; the UI calls this removed and shows only current members, without
 a removed-member list or toggle.
@@ -120,7 +116,66 @@ Back leaves unsaved edits unapplied. Sharing and conflict
 review may use compact drawers because they need no editable fields. Desktop
 pointer layouts may continue to use a dialog for group settings.
 
+Pending member saves protect their draft and target across UI, devtools, and
+other callers. While saving, prevent repeated saves, changing or closing that
+editor, navigation that discards it, and competing mutations of that member.
+Unrelated ledger edits remain available. Success or failure releases the
+protection; failures retain the draft. Devtools includes a live state/actions
+map derived from the same workflow and catalog used for dispatch.
+
+Confirmations apply to the group and navigation context in which they were
+requested. Later navigation takes precedence over a completed leave. Connection
+events update immediately during pending requests. Only connection failures use
+offline fallback; protocol, server and storage failures stay visible with saved
+intent retained. Background refreshes share pending work and back off retries.
+Devtools traces connect action invocation, workflow changes, queued commands,
+requests and outcomes without logging credentials, invite links or draft inputs.
+
 ## Product principles
+
+Every user-initiated change in the app, including navigation, opening and
+closing panels, editing drafts, selecting join names, showing left groups,
+copy/share, retry, and confirmation decisions, goes through the same action
+catalog as domain operations. These UI actions update shared local screen
+state so devtools and other callers operate the visible app. Organize the
+devtools catalog into UI, Ledger changes, and Access & sync by primary
+purpose, with a Suggested tab showing all available contextual next steps
+derived from the workflow machine's current phase and local focus. The catalog
+filters these steps through shared availability guards and ranks them using
+drafts, selections, connection, and group data. Pending submissions have no
+ordinary suggested steps; invite checking may suggest returning to groups.
+Order suggestions by priority without a fixed count limit. In an open group,
+include editing and removing any active member, including the current you and
+when you are the only member. Default the removal selector to another member
+when available while keeping you selectable. Member editors and confirmations
+take focus over general group steps.
+Open Suggested by default and browse actions by tab
+without a search field. In an open group, suggest choosing which member is you when an alternative
+active member exists, and prioritize it when this installation is unassigned.
+Its member selector defaults to another member, retaining the current you as
+an available choice.
+Omit secondary categories and an All tab. Use a single navigation row
+with an active underline for these tabs, visually distinct from the outlined
+action buttons. Let the row scroll horizontally on narrow screens. Place available
+actions first and fade unavailable actions at the bottom of the same list,
+without a separate section, keeping them
+selectable for inspection; disable dispatch with a short
+reason and update availability as state or inputs change. Use the same
+preconditions for discovery and execution, retaining offline ledger edits.
+Keep the devtools widget and panel above app dialogs and popups, with working
+pointer and keyboard controls while a dialog is open.
+Keep automatic synchronization and animation
+outside user actions. Draft changes do not submit ledger commands.
+
+Use explicit local workflow phases for creation, joining, invite checking,
+and settings saves. Availability and dispatch share the same transition rules.
+While creating, joining, or saving, disable repeated submissions, draft edits,
+and navigation until the operation settles. Failures retain the draft and
+restore the editable phase. Keep fields mounted when the phase changes.
+Invite checks may be abandoned or superseded by editing the link; obsolete
+responses cannot change the current view, preview, or selected group.
+Connection status stays independent of workflow state, and direct ledger
+operations remain available without opening an editor, including offline.
 
 - Web/PWA and React Native clients are offline-first. Losing connectivity must
   not lose user intent.
@@ -226,6 +281,11 @@ pointer layouts may continue to use a dialog for group settings.
   queue and project locally, and are delivered once the server responds.
 - Local storage implementations and Cloudflare persistence are adapters; their
   details are not shared between clients and the server.
+
+Retrying a conflict notice atomically retains fresh intent in the outbox and
+retires the old notice. A storage failure preserves the old notice. Retry
+uses the current projected rename preconditions and fresh command identifiers;
+a later rejection produces a new notice.
 
 ## Synchronization contract
 

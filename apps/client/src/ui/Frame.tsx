@@ -8,7 +8,12 @@ import {
   useVisibleViewportHeight,
 } from './useVisibleViewport';
 
-type FrameProps = { children: ReactNode; onGroups?: (() => void) | undefined };
+type FrameProps = {
+  children: ReactNode;
+  onGroups?: (() => void) | undefined;
+  onHomepage?: (() => void) | undefined;
+  navigationDisabled?: boolean;
+};
 
 /** The page shell: brand header, optional Groups action, and scrolling body. */
 export function Frame(props: FrameProps) {
@@ -42,14 +47,22 @@ export function Frame(props: FrameProps) {
             <Pressable
               accessibilityRole="link"
               accessibilityLabel="Splitnext homepage"
-              onPress={() => router.push('/')}
+              disabled={props.navigationDisabled}
+              accessibilityState={{
+                disabled: Boolean(props.navigationDisabled),
+              }}
+              onPress={props.onHomepage ?? (() => router.push('/'))}
               style={s.brand}
             >
               {brand}
             </Pressable>
           )}
           {props.onGroups ? (
-            <Button quiet onPress={props.onGroups}>
+            <Button
+              quiet
+              disabled={Boolean(props.navigationDisabled)}
+              onPress={props.onGroups}
+            >
               Groups
             </Button>
           ) : null}

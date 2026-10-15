@@ -11,6 +11,11 @@ const lastGroupKey = 'splitnext.last-group.v1';
 
 const lastYouNameKey = 'splitnext.last-you-name.v1';
 
+/** The Worker serving the API: Expo development points elsewhere. */
+export function apiBaseUrl(): string {
+  return process.env.EXPO_PUBLIC_API_URL ?? window.location.origin;
+}
+
 function installationSecret(): string {
   let secret = localStorage.getItem(installationKey);
 
@@ -40,7 +45,7 @@ export async function createBrowserApp(): Promise<AppController> {
   let controller: AppController | null = null;
 
   const api = new SplitnextClient({
-    baseUrl: process.env.EXPO_PUBLIC_API_URL ?? window.location.origin,
+    baseUrl: apiBaseUrl(),
     fetch: (input, init) =>
       fetch(input, { ...init, signal: AbortSignal.timeout(5000) }),
     observer: (event) => {
@@ -58,8 +63,9 @@ export async function createBrowserApp(): Promise<AppController> {
       document_key: secret,
     }),
     on_background_sync: (state) => {
-      void controller?.receive(state);
+      void controller?.receive(state).catch((error) => controller?.reportSyncError(error));
     },
+    on_background_error: (error) => controller?.reportSyncError(error),
     on_presence_change: (groupId) => controller?.presenceChanged(groupId),
   });
 
@@ -81,7 +87,7 @@ export async function createBrowserApp(): Promise<AppController> {
   );
 
   channel.onmessage = () => {
-    void controller?.readStorage().catch(() => undefined);
+    void controller?.readStorage().catch((error) => controller?.reportSyncError(error));
   };
 
   if (!process.env.EXPO_PUBLIC_API_URL && 'serviceWorker' in navigator) {

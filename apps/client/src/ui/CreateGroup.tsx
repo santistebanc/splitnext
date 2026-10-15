@@ -1,33 +1,32 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { Text, View, type TextInput } from 'react-native';
 import type { AppController } from '../model/controller';
+import { workflowBusy } from '../model/workflow';
 import { Button, ErrorMessage, Field, s } from './components';
-import { useActionCall } from './useActionCall';
+import { useActionCall, useActions, useUiState } from './useActionCall';
 import { useCompactLayout } from './useVisibleViewport';
 
 export type CreateGroupApp = Pick<AppController, 'snapshot' | 'lastYouName'>;
 
-type CreateGroupProps = { app: CreateGroupApp; close: () => void };
+type CreateGroupProps = { app: CreateGroupApp; close?: () => void };
 
 /** One form for the group name and the creator's own member name. */
 export function CreateGroup(props: CreateGroupProps) {
   const mobile = useCompactLayout();
-  const [name, setName] = useState('');
-  const [person, setPerson] = useState(() => props.app.lastYouName() ?? '');
+  const ui = useUiState();
+  const { name, yourName: person } = ui.create;
+  const actions = useActions();
   const personInput = useRef<TextInput>(null);
   const action = useActionCall();
   const { online, reachable } = props.app.snapshot();
 
-  const valid = Boolean(name.trim()) && Boolean(person.trim());
+  const busy = action.busy || workflowBusy(ui);
+  const canSubmit = actions.availability('submitCreateGroup', {}).available;
 
   function submit(): void {
-    if (!valid || !online || !reachable) return;
+    if (!canSubmit) return;
 
-    void action.call(
-      'createGroup',
-      { name, yourName: person },
-      props.close,
-    );
+    void action.call('submitCreateGroup', {}, props.close);
   }
 
   return (
@@ -43,7 +42,14 @@ export function CreateGroup(props: CreateGroupProps) {
           label="Group name"
           placeholder="e.g. Lisbon weekend"
           value={name}
-          onChangeText={setName}
+          editable={!busy}
+          onChangeText={(value) => {
+            void actions.dispatch(
+              'changeDraft',
+              { field: 'create.name', value },
+              { origin: 'ui' },
+            );
+          }}
           maxLength={100}
           autoFocus
           returnKeyType="next"
@@ -55,7 +61,14 @@ export function CreateGroup(props: CreateGroupProps) {
           inputRef={personInput}
           placeholder="e.g. Santi"
           value={person}
-          onChangeText={setPerson}
+          editable={!busy}
+          onChangeText={(value) => {
+            void actions.dispatch(
+              'changeDraft',
+              { field: 'create.yourName', value },
+              { origin: 'ui' },
+            );
+          }}
           maxLength={100}
           returnKeyType="done"
           onSubmitEditing={submit}
@@ -65,19 +78,17 @@ export function CreateGroup(props: CreateGroupProps) {
           <Button
             grow
             quiet
-            disabled={action.busy}
+            disabled={busy || !actions.availability('showGroups', {}).available}
             onPress={() => {
-              void action.call('closeGroup', {}, props.close);
+              void action.call('showGroups', {}, props.close);
             }}
           >
             Back to groups
           </Button>
-          <Button
-            grow
-            onPress={submit}
-            disabled={!valid || !online || !reachable || action.busy}
-          >
-            {action.busy ? 'Creating…' : 'Create group'}
+          <Button grow onPress={submit} disabled={!canSubmit || busy}>
+            {ui.phase === 'creating' || action.busy
+              ? 'Creating…'
+              : 'Create group'}
           </Button>
         </View>
         {!online ? (

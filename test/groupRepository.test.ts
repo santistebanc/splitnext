@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { initializeGroup } from '../src/domain/groups';
 import { createIdentifier } from '../src/domain/ids';
-import { MemoryGroupRepository } from '../src/groupRepository';
+import { MemoryGroupRepository } from '../src/memoryGroupRepository';
 import { GroupStore } from '../src/groupStore';
 
 describe('in-memory group repository adapter', () => {

@@ -1,3 +1,5 @@
+export { activeMembers, participantsForMember, preferredMember } from '../client';
+
 export { ClientOfflineError, SplitnextRequestError } from '../client';
 
 export {

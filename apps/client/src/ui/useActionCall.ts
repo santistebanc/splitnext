@@ -1,4 +1,10 @@
-import { createContext, useContext, useRef, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import type {
   ActionInput,
   ActionOutput,
@@ -20,11 +26,17 @@ export function useActions(): Dispatcher {
   return actions;
 }
 
-type Confirmation = {
-  message: string;
-  /** Runs the same call again with the person's approval. */
-  confirm: () => void;
-};
+export function useUiState() {
+  const actions = useActions();
+
+  useSyncExternalStore(actions.executions.subscribe, actions.executions.snapshot, actions.executions.snapshot);
+
+  return useSyncExternalStore(
+    actions.ui.subscribe,
+    actions.ui.snapshot,
+    actions.ui.snapshot,
+  );
+}
 
 /**
  * The UI's adapter for app actions: one control's busy state, error message,
@@ -32,10 +44,13 @@ type Confirmation = {
  */
 export function useActionCall() {
   const actions = useActions();
+  const ui = useUiState();
   const running = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const [requestId, setRequestId] = useState<string | null>(null);
+  const onConfirmed = useRef<(() => void) | null>(null);
+  const pending = ui.confirmation?.id === requestId ? ui.confirmation : null;
 
   async function call<N extends AppActionName>(
     name: N,
@@ -55,17 +70,19 @@ export function useActionCall() {
         confirmed,
       });
 
-      setConfirmation(
+      setRequestId(
         outcome.status === 'needs_confirmation'
-          ? {
-              message: outcome.message,
-              confirm: () => {
-                setConfirmation(null);
-                void call(name, input, onDone, true);
-              },
-            }
+          ? (outcome.requestId ?? null)
           : null,
       );
+      onConfirmed.current =
+        outcome.status === 'needs_confirmation'
+          ? () => {
+              // SAFETY: the catalog's confirmation-bearing actions return void;
+              // this callback runs only after one of those actions succeeds.
+              onDone?.(undefined as ActionOutput<N>);
+            }
+          : null;
 
       if (outcome.status === 'failed')
         setError(errorMessage(new Error(outcome.error)));
@@ -77,11 +94,48 @@ export function useActionCall() {
     }
   }
 
+  async function confirm(): Promise<void> {
+    if (!pending || running.current) return;
+    running.current = true;
+    setBusy(true);
+    setError(null);
+
+    try {
+      const outcome = await actions.dispatch(
+        'confirmAction',
+        { requestId: pending.id },
+        { origin: 'ui' },
+      );
+
+      if (outcome.status === 'failed')
+        setError(errorMessage(new Error(outcome.error)));
+
+      if (outcome.status === 'done') onConfirmed.current?.();
+    } finally {
+      running.current = false;
+      setBusy(false);
+    }
+  }
+
   return {
     call,
     busy,
     error,
-    confirmation,
-    cancel: () => setConfirmation(null),
+    confirmation: pending
+      ? {
+          message: pending.message,
+          confirm: () => {
+            void confirm();
+          },
+        }
+      : null,
+    cancel: () => {
+      if (pending)
+        void actions.dispatch(
+          'cancelConfirmation',
+          { requestId: pending.id },
+          { origin: 'ui' },
+        );
+    },
   };
 }

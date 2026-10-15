@@ -81,6 +81,29 @@ describe('user-facing app flows', () => {
     expect(await app.openJoinedGroup(createIdentifier())).toBe(false);
     expect(app.snapshot().group?.group_id).toBe(target.group_id);
 
+    app.showGroups();
+    const readGroups = app.client.knownGroups.bind(app.client);
+    let release: () => void = () => undefined;
+
+    const delayed = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    app.client.knownGroups = async () => {
+      await delayed;
+
+      return readGroups();
+    };
+
+    let current = true;
+    const obsolete = app.openJoinedGroup(target.group_id, () => current);
+    current = false;
+    release();
+    expect(await obsolete).toBe(false);
+    expect(app.snapshot().group).toBeNull();
+    app.client.knownGroups = readGroups;
+    await app.openGroup(target.group_id);
+
     await app.leaveGroup();
     expect(await app.openJoinedGroup(target.group_id)).toBe(false);
     expect(app.snapshot().group).toBeNull();

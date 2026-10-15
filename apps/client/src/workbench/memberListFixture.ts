@@ -29,14 +29,18 @@ const at = '2026-01-01T00:00:00.000Z';
 // A well-formed identifier, so invite links built from it parse.
 export const fixtureGroupId = 'wbGroupFixture00000000';
 
-export const fixtureIdentityId = 'workbench-you';
+export function fixtureId(label: string): string {
+  return label.padEnd(22, '_').slice(0, 22);
+}
+
+export const fixtureIdentityId = fixtureId('workbench-you');
 
 export function scenarioReplica(
   scenario: MemberListScenario,
 ): ClientReplicaState {
   const members = scenario.members.map(
     (name, index): Member => ({
-      id: `member-${index + 1}`,
+      id: fixtureId(`member-${index + 1}`),
       display_name: name,
       status: 'active',
       created_at: at,
@@ -61,7 +65,7 @@ export function scenarioReplica(
         hidden_at: null,
       },
       ...scenario.others.map((name, index) => ({
-        identity_id: `workbench-participant-${index + 1}`,
+        identity_id: fixtureId(`wb-participant-${index + 1}`),
         actor_handle: `Participant ${index + 1}`,
         preferred_member_id: memberId(name),
         granted_at: at,
@@ -69,7 +73,7 @@ export function scenarioReplica(
       })),
     ],
     invite: {
-      id: 'workbench-invite',
+      id: fixtureId('workbench-invite'),
       created_by_identity_id: fixtureIdentityId,
       created_at: at,
       token: 'w'.repeat(43),
@@ -80,7 +84,7 @@ export function scenarioReplica(
     online: scenario.connection === 'online',
     session: {
       identity: { id: fixtureIdentityId, created_at: at },
-      device: { id: 'workbench-device', created_at: at },
+      device: { id: fixtureId('workbench-device'), created_at: at },
     },
     group_id: fixtureGroupId,
     revision: 1,
@@ -108,58 +112,6 @@ export function scenarioPresence(
     .filter((id) => id === fixtureIdentityId || scenario.othersOnline);
 }
 
-/** Applies a local edit to the projected snapshot, as the outbox would. */
-export function projectChange(
-  replica: ClientReplicaState,
-  change: (snapshot: Snapshot) => Snapshot,
-): ClientReplicaState {
-  const snapshot = replica.projected_snapshot;
-
-  return snapshot
-    ? { ...replica, projected_snapshot: change(snapshot) }
-    : replica;
-}
-
-export function addMember(snapshot: Snapshot, name: string): Snapshot {
-  return {
-    ...snapshot,
-    members: [
-      ...snapshot.members,
-      {
-        id: `member-${snapshot.members.length + 1}`,
-        display_name: name,
-        status: 'active',
-        created_at: at,
-        updated_at: at,
-      },
-    ],
-  };
-}
-
-export function updateMember(
-  snapshot: Snapshot,
-  memberId: string,
-  change: Partial<Pick<Member, 'display_name' | 'status'>>,
-): Snapshot {
-  return {
-    ...snapshot,
-    members: snapshot.members.map((member) =>
-      member.id === memberId ? { ...member, ...change } : member,
-    ),
-  };
-}
-
-export function selectMember(snapshot: Snapshot, memberId: string): Snapshot {
-  return {
-    ...snapshot,
-    access_grants: snapshot.access_grants.map((grant) =>
-      grant.identity_id === fixtureIdentityId
-        ? { ...grant, preferred_member_id: memberId }
-        : grant,
-    ),
-  };
-}
-
 /** Group list entries for names, the left ones marked as left. */
 export function fixtureGroups(
   active: string[],
@@ -170,7 +122,7 @@ export function fixtureGroups(
     ...left.map((name, index) => ({ name, left: true, index })),
   ].map(
     (entry): ClientGroupSummary => ({
-      group_id: `${entry.left ? 'left' : 'group'}-${entry.index + 1}`,
+      group_id: fixtureId(`${entry.left ? 'left' : 'group'}-${entry.index + 1}`),
       name: entry.name,
       status: entry.left ? 'left' : 'active',
       stored_locally: true,
@@ -205,7 +157,7 @@ export function renameNotice(
   to: string,
   status: 'rejected' | 'superseded',
 ): Notice {
-  const commandId = `notice-${memberId}-${status}`;
+  const commandId = fixtureId(`notice-${memberId.slice(0, 8)}-${status.slice(0, 3)}`);
 
   return {
     command: {

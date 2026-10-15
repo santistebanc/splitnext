@@ -7,6 +7,12 @@ import { IdentityDirectory } from '../identityDirectory';
 const resetRequestSchema = z.object({}).strict();
 
 export const debugRoutes = new OpenAPIHono<{ Bindings: Env }>()
+  // Lets development tools in the app check whether inspection is enabled.
+  .get('/debug/status', (context) =>
+    debugEnabled(context.env)
+      ? context.json({ enabled: true }, 200)
+      : context.json({ error: 'not_found' }, 404),
+  )
   .get('/debug/identity-directory', async (context) => {
     if (!debugEnabled(context.env)) {
       return context.json({ error: 'not_found' }, 404);

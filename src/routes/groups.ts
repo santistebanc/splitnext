@@ -1,3 +1,4 @@
+import { groupFailureStatus } from '../groupTransport';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { joinGroupRequestSchema } from '../domain/access';
 import { createdGroupSchema, createGroupRequestSchema } from '../domain/groups';
@@ -7,7 +8,6 @@ import {
   hashInviteToken,
   invitePreviewSchema,
   inviteResultSchema,
-  isInviteFailure,
   previewInviteRequestSchema,
 } from '../domain/invites';
 import {
@@ -226,11 +226,7 @@ export const groupRoutes = authenticatedGroupRoutes
     });
 
     if (!result.ok) {
-      if (result.error === 'invalid_request') {
-        return context.json({ error: result.error }, 400);
-      }
-
-      return context.json({ error: result.error }, 409);
+      return context.json({ error: result.error }, groupFailureStatus.create(result.error));
     }
 
     await new GroupIndex(context.env.INDEX).refresh(
@@ -262,19 +258,7 @@ export const groupRoutes = authenticatedGroupRoutes
     });
 
     if (!result.ok) {
-      if (result.error === 'invalid_request') {
-        return context.json({ error: result.error }, 400);
-      }
-
-      if (result.error === 'group_not_found') {
-        return context.json({ error: result.error }, 404);
-      }
-
-      if (isInviteFailure(result.error)) {
-        return context.json({ error: result.error }, 403);
-      }
-
-      return context.json({ error: result.error }, 409);
+      return context.json({ error: result.error }, groupFailureStatus.join(result.error));
     }
 
     await new GroupIndex(context.env.INDEX).refresh(
@@ -307,9 +291,7 @@ export const groupRoutes = authenticatedGroupRoutes
     });
 
     if (!result.ok) {
-      return result.error === 'invalid_request'
-        ? context.json({ error: result.error }, 400)
-        : context.json({ error: result.error }, 401);
+      return context.json({ error: result.error }, groupFailureStatus.sync(result.error));
     }
 
     if (result.response.state.kind === 'snapshot') {
@@ -359,16 +341,7 @@ export const groupRoutes = authenticatedGroupRoutes
     });
 
     if (!result.ok) {
-      switch (result.error) {
-        case 'invalid_request':
-          return context.json({ error: result.error }, 400);
-        case 'unauthorized':
-          return context.json({ error: result.error }, 401);
-        case 'group_not_found':
-          return context.json({ error: result.error }, 404);
-        case 'idempotency_conflict':
-          return context.json({ error: result.error }, 409);
-      }
+      return context.json({ error: result.error }, groupFailureStatus.invite(result.error));
     }
 
     return context.json(
@@ -390,13 +363,7 @@ export const groupRoutes = authenticatedGroupRoutes
     );
 
     if (!result.ok) {
-      if (result.error === 'invalid_request') {
-        return context.json({ error: result.error }, 400);
-      }
-
-      return result.error === 'group_not_found'
-        ? context.json({ error: result.error }, 404)
-        : context.json({ error: result.error }, 403);
+      return context.json({ error: result.error }, groupFailureStatus.preview(result.error));
     }
 
     return context.json(result.preview, 200);

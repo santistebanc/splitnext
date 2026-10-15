@@ -1,15 +1,15 @@
-import { useState } from 'react';
 import { Text, View } from 'react-native';
 import type { AppController } from '../model/controller';
+import { workflowBusy } from '../model/workflow';
 import { ConfirmBanner } from './ConfirmBanner';
 import { Button, ErrorMessage, Field, s } from './components';
-import { useActionCall } from './useActionCall';
+import { useActionCall, useActions, useUiState } from './useActionCall';
 
 export type GroupSettingsApp = Pick<AppController, 'snapshot'>;
 
 type GroupSettingsProps = {
   app: GroupSettingsApp;
-  close: () => void;
+  close?: () => void;
   fullPage?: boolean;
 };
 
@@ -18,23 +18,17 @@ export function GroupSettings(props: GroupSettingsProps) {
   const replica = props.app.snapshot().group;
   const online = props.app.snapshot().online;
 
-  const [observedName] = useState(
-    replica?.projected_snapshot?.group.name ?? '',
-  );
-
-  const [name, setName] = useState(observedName);
+  const ui = useUiState();
+  const { name, expectedName: observedName } = ui.settings;
+  const actions = useActions();
   const rename = useActionCall();
   const leave = useActionCall();
-  const busy = rename.busy || leave.busy;
+  const busy = rename.busy || leave.busy || workflowBusy(ui);
 
   function saveName(): void {
-    if (!name.trim() || name.trim() === observedName) return;
+    if (!actions.availability('saveGroupSettings', {}).available) return;
 
-    void rename.call(
-      'renameGroup',
-      { name, expectedName: observedName },
-      props.close,
-    );
+    void rename.call('saveGroupSettings', {}, props.close);
   }
 
   return (
@@ -43,21 +37,36 @@ export function GroupSettings(props: GroupSettingsProps) {
         <Text accessibilityRole="header" style={s.heading}>
           Group settings
         </Text>
-        <Button quiet onPress={props.close} disabled={busy}>
+        <Button
+          quiet
+          onPress={() => {
+            void rename.call('closePanel', {}, props.close);
+          }}
+          disabled={busy}
+        >
           {props.fullPage ? 'Back to group' : 'Done'}
         </Button>
       </View>
       <Field
         label="Group name"
         value={name}
-        onChangeText={setName}
+        editable={!busy}
+        onChangeText={(value) => {
+          void actions.dispatch(
+            'changeDraft',
+            { field: 'settings.name', value },
+            { origin: 'ui' },
+          );
+        }}
         maxLength={100}
         returnKeyType="done"
         onSubmitEditing={saveName}
       />
       {name.trim() !== observedName ? (
         <Button
-          disabled={!name.trim() || busy || Boolean(replica?.hidden)}
+          disabled={
+            busy || !actions.availability('saveGroupSettings', {}).available
+          }
           onPress={saveName}
         >
           Save group name

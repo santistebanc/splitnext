@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+﻿import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Keyboard, Modal, Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { AppController } from '../model/controller';
 import { createDispatcher } from '../model/actions';
+import { workflowBusy } from '../model/workflow';
+import { browserActionPlatform } from './browserPlatform';
 import { createBrowserApp } from '../model/browser';
 import { ViewTransition } from './ViewTransition';
 import { CreateGroup } from './CreateGroup';
@@ -14,15 +16,14 @@ import { InvitePanel } from './InvitePanel';
 import { JoinGroup } from './JoinGroup';
 import { NoticesPanel } from './NoticesPanel';
 import { Sheet } from './Sheet';
-import { navigationSchema, type ViewName } from './navigation';
+import { navigationSchema } from './navigation';
+import { Devtools } from '../devtools/Devtools';
 import { ActionsProvider } from './useActionCall';
 import { useSheetKeyboard } from './useSheetKeyboard';
 import { useCompactLayout, useTouchInput } from './useVisibleViewport';
 import { Button, ErrorMessage, errorMessage, s, useAction } from './components';
 
 type ScreenProps = { incomingGroupId?: string };
-
-type Navigation = { view: ViewName };
 
 type AppProps = { controller: AppController; incomingGroupId?: string };
 
@@ -82,7 +83,7 @@ export function AppScreen(props: ScreenProps) {
       <Frame>
         {error ? (
           <View style={s.main}>
-            <Text style={s.heading}>Let’s try that again</Text>
+            <Text style={s.heading}>Letâ€™s try that again</Text>
             <ErrorMessage message={error} />
             <Button
               onPress={() => {
@@ -107,7 +108,7 @@ export function AppScreen(props: ScreenProps) {
 export function LoadingGroups() {
   return (
     <View
-      accessibilityLabel="Opening your groups…"
+      accessibilityLabel="Opening your groupsâ€¦"
       accessibilityLiveRegion="polite"
       aria-busy
       style={s.stack}
@@ -144,17 +145,25 @@ function ReadyApp(props: AppProps) {
   const touch = useTouchInput();
   const app = props.controller;
   const state = useSyncExternalStore(app.subscribe, app.snapshot, app.snapshot);
-  const actions = useMemo(() => createDispatcher(app), [app]);
 
-  const [navigation, setNavigation] = useState<Navigation>({
-    view: props.incomingGroupId ? 'join' : 'home',
-  });
-
-  const [initialLink] = useState(() =>
-    props.incomingGroupId ? window.location.href : '',
+  const actions = useMemo(
+    () =>
+      createDispatcher(app, {
+        ...browserActionPlatform(),
+        initialLink: props.incomingGroupId ? window.location.href : '',
+      }),
+    [app],
   );
 
-  const [noticeSummary, setNoticeSummary] = useState(true);
+  const ui = useSyncExternalStore(
+    actions.ui.subscribe,
+    actions.ui.snapshot,
+    actions.ui.snapshot,
+  );
+
+  const navigation = { view: ui.view };
+  const noticeSummary = ui.showNoticeSummary;
+  const initialLink = ui.join.link;
 
   const noticeKey =
     state.group?.notices.map((notice) => notice.command.command_id).join(',') ??
@@ -163,36 +172,28 @@ function ReadyApp(props: AppProps) {
   const action = useAction();
 
   useEffect(() => {
-    setNoticeSummary(true);
+    void actions.dispatch(
+      'setNoticeSummaryVisible',
+      { visible: true },
+      { origin: 'lifecycle' },
+    );
   }, [noticeKey]);
 
   useEffect(() => {
     const online = () => {
-      void action.run(() => app.setOnline(navigator.onLine));
+      void app.setOnline(navigator.onLine).catch((error) => app.reportSyncError(error));
     };
 
     const foreground = () => {
       if (document.visibilityState === 'visible' && navigator.onLine)
-        void action.run(() => app.refresh());
+        void app.refresh().catch((error) => app.reportSyncError(error));
     };
-
-    const timer = setInterval(() => {
-      const current = app.snapshot();
-
-      if (
-        current.online &&
-        (!current.reachable ||
-          current.groups.some((group) => group.pending_commands > 0))
-      )
-        void action.run(() => app.refresh());
-    }, 10000);
 
     window.addEventListener('online', online);
     window.addEventListener('offline', online);
     document.addEventListener('visibilitychange', foreground);
 
     return () => {
-      clearInterval(timer);
       window.removeEventListener('online', online);
       window.removeEventListener('offline', online);
       document.removeEventListener('visibilitychange', foreground);
@@ -203,8 +204,8 @@ function ReadyApp(props: AppProps) {
     window.history.replaceState(
       {
         splitnext: true,
-        view: navigation.view,
-        groupId: state.group?.group_id ?? null,
+        view: ui.view,
+        groupId: app.snapshot().group?.group_id ?? null,
       },
       '',
     );
@@ -219,17 +220,13 @@ function ReadyApp(props: AppProps) {
       const next = parsed.data;
 
       void action.run(async () => {
-        const outcome = next.groupId
-          ? await actions.dispatch(
-              'openGroup',
-              { groupId: next.groupId },
-              { origin: 'history' },
-            )
-          : await actions.dispatch('closeGroup', {}, { origin: 'history' });
+        const outcome = await actions.dispatch(
+          'restoreNavigation',
+          { view: next.view, groupId: next.groupId ?? undefined },
+          { origin: 'history' },
+        );
 
         if (outcome.status === 'failed') throw new Error(outcome.error);
-
-        setNavigation({ view: next.view });
       });
     };
 
@@ -238,30 +235,30 @@ function ReadyApp(props: AppProps) {
     return () => window.removeEventListener('popstate', back);
   }, [app]);
 
-  function navigate(view: ViewName): void {
+  useEffect(() => {
     Keyboard.dismiss();
 
-    const next = { view };
+    const entry = {
+      splitnext: true,
+      view: ui.view,
+      groupId: app.snapshot().group?.group_id ?? null,
+    };
 
-    window.history.pushState(
-      {
-        splitnext: true,
-        ...next,
-        groupId: app.snapshot().group?.group_id ?? null,
-      },
-      '',
-    );
-    setNavigation(next);
-  }
+    if (ui.navigation.mode === 'push')
+      window.history.pushState(entry, '', window.location.href);
+    else window.history.replaceState(entry, '', window.location.href);
 
-  function close(): void {
     if (
       props.incomingGroupId &&
-      !app.snapshot().group?.hidden &&
-      app.snapshot().group
-    ) {
+      ui.view === 'home' &&
+      app.snapshot().group &&
+      !app.snapshot().group?.hidden
+    )
       enterApp();
-    } else navigate('home');
+  }, [ui.navigation.revision]);
+
+  function close(): void {
+    void actions.dispatch('closePanel', {}, { origin: 'ui' });
   }
 
   const group = state.group;
@@ -292,106 +289,137 @@ function ReadyApp(props: AppProps) {
 
   return (
     <ActionsProvider value={actions}>
-      <Frame
-        onGroups={
-          // Create and join pages have their own Back action.
-          !['create', 'join', 'rejoin'].includes(navigation.view) &&
-          !isFormPage &&
-          (group || navigation.view !== 'home')
-            ? () => {
-                void actions.dispatch('closeGroup', {}, { origin: 'ui' });
-                navigate('home');
-              }
-            : undefined
-        }
-      >
-        <ViewTransition key={pageKey} mobile={mobile}>
-          {!state.online || !state.reachable || pending > 0 ? (
-            <View accessibilityLiveRegion="polite" style={[s.banner, s.between]}>
-              <Text style={s.body}>
-                {!state.online
-                  ? 'Offline'
-                  : !state.reachable
-                    ? 'Connection unavailable'
-                    : 'Syncing…'}
-                {pending > 0 ? ` · ${pending} pending` : ''}
-              </Text>
-              {state.online && !state.reachable ? (
-                <Button
-                  quiet
-                  disabled={action.busy}
-                  onPress={() => {
-                    void action.run(() => app.refresh());
-                  }}
-                >
-                  Retry
-                </Button>
-              ) : null}
-            </View>
-          ) : null}
-          {backgroundError ? (
-            <View style={[s.banner, s.errorBanner]}>
-              <ErrorMessage message={backgroundError} />
-            </View>
-          ) : null}
-          {notices > 0 && noticeSummary ? (
-            <View style={s.banner}>
-              <View style={s.row}>
-                <Button secondary onPress={() => navigate('notices')}>
-                  Review changes · {notices}
-                </Button>
-                <Button quiet onPress={() => setNoticeSummary(false)}>
-                  Hide
-                </Button>
-              </View>
-            </View>
-          ) : null}
-          {navigation.view === 'create' ? (
-            <CreateGroup app={app} close={close} />
-          ) : navigation.view === 'join' || navigation.view === 'rejoin' ? (
-            <JoinGroup
-              app={app}
-              close={close}
-              initialLink={initialLink}
-              rejoining={navigation.view === 'rejoin'}
-            />
-          ) : isFormPage && navigation.view === 'settings' ? (
-            <GroupSettings app={app} close={close} fullPage />
-          ) : group?.projected_snapshot ? (
-            <GroupView
-              app={app}
-              navigate={navigate}
-              showReview={!noticeSummary}
-            />
-          ) : (
-            <GroupsView app={app} navigate={navigate} />
-          )}
-        </ViewTransition>
-        <Modal
-          visible={isSheet}
-          transparent
-          animationType="fade"
-          onRequestClose={close}
+      <View style={s.page}>
+        <Frame
+          navigationDisabled={workflowBusy(ui)}
+          onHomepage={() => {
+            void actions.dispatch('showHomepage', {}, { origin: 'ui' });
+          }}
+          onGroups={
+            // Create and join pages have their own Back action.
+            !['create', 'join', 'rejoin'].includes(navigation.view) &&
+            !isFormPage &&
+            (group || navigation.view !== 'home')
+              ? () => {
+                  void actions.dispatch('showGroups', {}, { origin: 'ui' });
+                }
+              : undefined
+          }
         >
-          <View style={[s.overlay, mobile && s.mobileOverlay]}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close popup"
-              onPress={close}
-              style={s.backdrop}
-            />
-            <Sheet mobile={mobile}>
-              {navigation.view === 'invite' ? (
-                <InvitePanel app={app} close={close} />
-              ) : navigation.view === 'settings' ? (
-                <GroupSettings app={app} close={close} />
-              ) : navigation.view === 'notices' ? (
-                <NoticesPanel app={app} close={close} />
-              ) : null}
-            </Sheet>
-          </View>
-        </Modal>
-      </Frame>
+          <ViewTransition key={pageKey} mobile={mobile}>
+            {!state.online || !state.reachable || pending > 0 ? (
+              <View
+                accessibilityLiveRegion="polite"
+                style={[s.banner, s.between]}
+              >
+                <Text style={s.body}>
+                  {!state.online
+                    ? 'Offline'
+                    : !state.reachable
+                      ? 'Connection unavailable'
+                      : 'Syncingâ€¦'}
+                  {pending > 0 ? ` Â· ${pending} pending` : ''}
+                </Text>
+                {state.online && !state.reachable ? (
+                  <Button
+                    quiet
+                    disabled={action.busy}
+                    onPress={() => {
+                      void action.run(async () => {
+                        const outcome = await actions.dispatch(
+                          'refreshGroups',
+                          {},
+                          { origin: 'ui' },
+                        );
+
+                        if (outcome.status === 'failed')
+                          throw new Error(outcome.error);
+                      });
+                    }}
+                  >
+                    Retry
+                  </Button>
+                ) : null}
+              </View>
+            ) : null}
+            {backgroundError ? (
+              <View style={[s.banner, s.errorBanner]}>
+                <ErrorMessage message={backgroundError} />
+              </View>
+            ) : null}
+            {notices > 0 && noticeSummary ? (
+              <View style={s.banner}>
+                <View style={s.row}>
+                  <Button
+                    secondary
+                    onPress={() => {
+                      void actions.dispatch(
+                        'showNotices',
+                        {},
+                        { origin: 'ui' },
+                      );
+                    }}
+                  >
+                    Review changes Â· {notices}
+                  </Button>
+                  <Button
+                    quiet
+                    onPress={() => {
+                      void actions.dispatch(
+                        'setNoticeSummaryVisible',
+                        { visible: false },
+                        { origin: 'ui' },
+                      );
+                    }}
+                  >
+                    Hide
+                  </Button>
+                </View>
+              </View>
+            ) : null}
+            {navigation.view === 'create' ? (
+              <CreateGroup app={app} />
+            ) : navigation.view === 'join' || navigation.view === 'rejoin' ? (
+              <JoinGroup
+                app={app}
+                initialLink={initialLink}
+                rejoining={navigation.view === 'rejoin'}
+              />
+            ) : isFormPage && navigation.view === 'settings' ? (
+              <GroupSettings app={app} fullPage />
+            ) : group?.projected_snapshot ? (
+              <GroupView app={app} showReview={!noticeSummary} />
+            ) : (
+              <GroupsView app={app} />
+            )}
+          </ViewTransition>
+          <Modal
+            visible={isSheet}
+            transparent
+            animationType="fade"
+            onRequestClose={close}
+          >
+            <View style={[s.overlay, mobile && s.mobileOverlay]}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close popup"
+                onPress={close}
+                style={s.backdrop}
+              />
+              <Sheet mobile={mobile}>
+                {navigation.view === 'invite' ? (
+                  <InvitePanel app={app} />
+                ) : navigation.view === 'settings' ? (
+                  <GroupSettings app={app} />
+                ) : navigation.view === 'notices' ? (
+                  <NoticesPanel app={app} />
+                ) : null}
+              </Sheet>
+            </View>
+          </Modal>
+        </Frame>
+        <Devtools />
+      </View>
     </ActionsProvider>
   );
 }
