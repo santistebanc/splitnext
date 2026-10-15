@@ -259,6 +259,23 @@ a private window; tabs in one profile share an installation. Compare their
 devtools Log request IDs, and read the server's state with
 `GET /debug/groups/{groupId}`.
 
+### Diagnosing problems in any build
+
+Every SDK request carries an `x-request-id` header, and the Worker writes one
+JSON log line per request under that id, echoing it in the response: route,
+status, duration, error code, identity and group ids, and for synchronization
+the known and new revision and each command's id, type, status, and reason.
+Lines never contain names, tokens, credentials, or request bodies.
+`LOG_REQUESTS` switches them off (tests do); deployed Workers keep them on.
+
+The app's dispatcher keeps the last 100 dispatches and SDK request events from
+the moment it starts, in every build. Devtools show them, and **Copy
+diagnostics** at the bottom of the groups list copies them as a report for
+support: app and connection state, this installation's identity id, group ids
+with their outboxes and notices as ids and codes, recent actions with
+invocation ids and failure codes, and requests with their request ids. Search
+the Worker logs for those request ids to see what the server decided.
+
 Run the complete verification suite with:
 
 ```bash

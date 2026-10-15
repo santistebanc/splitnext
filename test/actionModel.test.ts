@@ -115,7 +115,7 @@ async function simulate(steps: readonly Step[]): Promise<void> {
   await app.start(true);
 
   const actions = createDispatcher(app, {
-    appUrl, copyLink: async () => undefined, shareLink: async () => undefined, openHomepage: () => undefined,
+    appUrl, copyText: async () => undefined, shareLink: async () => undefined, openHomepage: () => undefined,
   });
 
   const described = new Map(actions.describe().map((action) => [action.name, action]));

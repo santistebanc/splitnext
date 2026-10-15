@@ -39,14 +39,17 @@ export const actionGroups = ['UI', 'Ledger changes', 'Access & sync'] as const;
 
 export type ActionGroup = (typeof actionGroups)[number];
 
+/** Effects and services outside the catalog that actions may use. */
 export type ActionPlatform = {
   appUrl: string;
-  copyLink?: (link: string) => Promise<void>;
+  copyText?: (text: string) => Promise<void>;
   shareLink?: (link: string, title: string) => Promise<void>;
   openHomepage?: () => void;
+  /** The dispatcher's diagnostics report; see DiagnosticsLog. */
+  diagnosticsReport?: () => string;
 };
 
-export type DispatcherOptions = Partial<ActionPlatform> & { initialLink?: string };
+export type DispatcherOptions = Partial<Omit<ActionPlatform, 'diagnosticsReport'>> & { initialLink?: string };
 
 export type ActionAvailability =
   | { available: true }
@@ -365,12 +368,12 @@ export function requireConfirmation(
 
 export function requireInvite(
   context: ActionContext,
-  kind: 'copyLink' | 'shareLink',
+  kind: 'copyText' | 'shareLink',
 ): BlockedAction | null {
   if (!context.platform[kind])
     return unavailable(
       'platform_unavailable',
-      kind === 'copyLink'
+      kind === 'copyText'
         ? 'Clipboard is unavailable on this device.'
         : 'Sharing is unavailable on this device.',
     );

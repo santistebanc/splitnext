@@ -1,4 +1,5 @@
 import { ActionExecutions } from './executions';
+import { DiagnosticsLog } from './diagnosticsLog';
 import { z } from 'zod';
 import type { ClientDiagnosticObserver, JsonValue } from '@splitnext/client';
 import { AppUiState, type UiState } from './uiState';
@@ -92,7 +93,16 @@ export function createDispatcher(
     options.initialLink,
   );
 
-  const platform: ActionPlatform = { appUrl: options.appUrl ?? '', ...options };
+  // Collected in every build from the start, for devtools and support reports.
+  const diagnostics = new DiagnosticsLog();
+
+  host.client.observeDiagnostics?.((event) => diagnostics.recordEvent(event));
+
+  const platform: ActionPlatform = {
+    appUrl: options.appUrl ?? '',
+    ...options,
+    diagnosticsReport: () => diagnostics.report(host.snapshot(), ui.snapshot()),
+  };
 
   let pendingAvailability: {
     id: string;
@@ -211,6 +221,8 @@ export function createDispatcher(
             : null,
     };
 
+    diagnostics.recordDispatch(record);
+
     for (const observer of observers) {
       try {
         observer(record);
@@ -295,9 +307,16 @@ export function createDispatcher(
     stateActionMap,
     observe,
     observeDiagnostics: (observer: ClientDiagnosticObserver) => host.client.observeDiagnostics?.(observer) ?? (() => undefined),
+    /** Recent dispatches and SDK events, collected since the dispatcher started. */
+    diagnostics: {
+      snapshot: diagnostics.snapshot,
+      subscribe: diagnostics.subscribe,
+      clear: () => diagnostics.clear(),
+      report: () => diagnostics.report(host.snapshot(), ui.snapshot()),
+    },
     ui: { snapshot: ui.snapshot, subscribe: ui.subscribe },
     capabilities: {
-      copyLink: Boolean(platform.copyLink),
+      copyText: Boolean(platform.copyText),
       shareLink: Boolean(platform.shareLink),
     },
     executions: { snapshot: executions.snapshot, subscribe: executions.subscribe },

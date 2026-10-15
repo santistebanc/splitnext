@@ -3,6 +3,7 @@ import { createMiddleware } from 'hono/factory';
 import type { IdentitySession } from '../domain/identities';
 import { credentialFromProtocols } from '../domain/realtime';
 import { IdentityDirectory } from '../identityDirectory';
+import { annotateRequest } from '../requestLog';
 
 export const deviceAuthorizationHeadersSchema = z.object({
   authorization: z
@@ -39,6 +40,7 @@ export const authenticateDevice = createMiddleware<
 
   if (!session) return context.json({ error: 'unauthorized' as const }, 401);
 
+  annotateRequest(context.req.raw, { identity_id: session.identity.id });
   context.set('identitySession', session);
   await next();
 });

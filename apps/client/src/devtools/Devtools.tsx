@@ -1,8 +1,9 @@
-import { type ClientDiagnosticEvent, activeMembers, joinedParticipants, preferredMember } from '@splitnext/client';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { activeMembers, joinedParticipants, preferredMember } from '@splitnext/client';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import type { DispatchRecord, Outcome } from '../model/actions';
+import type { Outcome } from '../model/actions';
 import { actionGroups, type ActionGroup } from '../model/actions';
+import type { LoggedDispatch, LoggedEvent } from '../model/diagnosticsLog';
 import { Button, colors, s } from '../ui/components';
 import { useActions, useUiState } from '../ui/useActionCall';
 import { useCompactLayout } from '../ui/useVisibleViewport';
@@ -21,8 +22,6 @@ import { DevtoolsOverlay } from './DevtoolsOverlay';
 
 type Tab = 'actions' | 'map' | 'log' | 'state';
 
-type LoggedDispatch = DispatchRecord & { id: string; time: string };
-
 type Printable = Parameters<typeof JSON.stringify>[0];
 
 /**
@@ -34,37 +33,17 @@ export function Devtools() {
   const enabled = useDevtoolsEnabled();
   const actions = useActions();
   const [open, setOpen] = useState(false);
-  const [log, setLog] = useState<LoggedDispatch[]>([]);
-  const [diagnostics, setDiagnostics] = useState<ClientDiagnosticEvent[]>([]);
   const close = useCallback(() => setOpen(false), []);
 
-  // Collect from the start so the log explains what happened before opening.
-  useEffect(() => {
-    if (!enabled) return;
-
-    return actions.observe((record) => {
-      const entry = {
-        ...record,
-        id: record.invocationId,
-        time: new Date().toLocaleTimeString(),
-      };
-
-      setLog((current) => [entry, ...current].slice(0, 100));
-    });
-  }, [actions, enabled]);
-
-  useEffect(() => {
-    if (!enabled) return;
-
-    return actions.observeDiagnostics((event) => setDiagnostics((current) => [event, ...current].slice(0, 100)));
-  }, [actions, enabled]);
+  // The dispatcher collects from the start, so the log explains what happened before opening.
+  const log = useSyncExternalStore(actions.diagnostics.subscribe, actions.diagnostics.snapshot, actions.diagnostics.snapshot);
 
   if (!enabled) return null;
 
   return (
     <DevtoolsOverlay close={close}>
       {open ? (
-        <DevtoolsPanel log={log} diagnostics={diagnostics} clearLog={() => { setLog([]); setDiagnostics([]); }} close={close} />
+        <DevtoolsPanel log={log.dispatches} diagnostics={log.events} clearLog={actions.diagnostics.clear} close={close} />
       ) : null}
       {!open ? (
         <Pressable
@@ -114,7 +93,7 @@ function useDevtoolsEnabled(): boolean {
 
 type PanelProps = {
   log: LoggedDispatch[];
-  diagnostics: ClientDiagnosticEvent[];
+  diagnostics: LoggedEvent[];
   clearLog: () => void;
   close: () => void;
 };
@@ -437,7 +416,7 @@ function MapTab() {
   );
 }
 
-function LogTab(props: { log: LoggedDispatch[]; diagnostics: ClientDiagnosticEvent[]; clear: () => void }) {
+function LogTab(props: { log: LoggedDispatch[]; diagnostics: LoggedEvent[]; clear: () => void }) {
   return (
     <View style={ds.section}>
       <View style={s.between}>
@@ -451,7 +430,7 @@ function LogTab(props: { log: LoggedDispatch[]; diagnostics: ClientDiagnosticEve
         ) : null}
       </View>
       {props.log.map((entry) => (
-        <View key={entry.id} style={ds.logEntry}>
+        <View key={entry.invocationId} style={ds.logEntry}>
           <Text style={ds.mono}>
             {entry.name}{' '}
             <Text
@@ -467,7 +446,7 @@ function LogTab(props: { log: LoggedDispatch[]; diagnostics: ClientDiagnosticEve
             </Text>
           </Text>
           <Text style={s.caption}>
-            {[entry.time, entry.origin, `${entry.durationMs}ms`, entry.detail]
+            {[new Date(entry.time).toLocaleTimeString(), entry.origin, `${entry.durationMs}ms`, entry.detail]
               .filter(Boolean)
               .join(' · ')}
           </Text>
