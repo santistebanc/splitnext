@@ -3,7 +3,6 @@ import { Keyboard, Modal, Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { AppController } from '../model/controller';
 import { createDispatcher } from '../model/actions';
-import { workflowBusy } from '../model/workflow';
 import { browserActionPlatform } from './browserPlatform';
 import { createBrowserApp } from '../model/browser';
 import { ViewTransition } from './ViewTransition';
@@ -161,6 +160,14 @@ function ReadyApp(props: AppProps) {
     actions.ui.snapshot,
   );
 
+  // Availability also changes when a running action finishes, without any UI
+  // state change, so the header's navigation must follow executions too.
+  useSyncExternalStore(
+    actions.executions.subscribe,
+    actions.executions.snapshot,
+    actions.executions.snapshot,
+  );
+
   const navigation = { view: ui.view };
   const noticeSummary = ui.showNoticeSummary;
   const initialLink = ui.join.link;
@@ -291,7 +298,7 @@ function ReadyApp(props: AppProps) {
     <ActionsProvider value={actions}>
       <View style={s.page}>
         <Frame
-          navigationDisabled={workflowBusy(ui)}
+          navigationDisabled={!actions.availability('showGroups', {}).available}
           onHomepage={() => {
             void actions.dispatch('showHomepage', {}, { origin: 'ui' });
           }}

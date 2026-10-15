@@ -170,7 +170,7 @@ function ActionsTab() {
   const actions = useActions();
   useUiState();
   const described = actions.describe();
-  const [group, setGroup] = useState<ActionGroup | 'Suggested'>('Suggested');
+  const [group, setGroup] = useState<ActionGroup>(actionGroups[0]);
 
   const state = actions.state();
   const origin = window.location.origin;
@@ -255,7 +255,7 @@ function ActionsTab() {
         style={ds.groupTabs}
         contentContainerStyle={ds.groupTabsContent}
       >
-        {(['Suggested', ...actionGroups] as const).map((name) => (
+        {actionGroups.map((name) => (
           <Pressable
             key={name}
             accessibilityRole="button"
@@ -427,8 +427,6 @@ function MapTab() {
             </Text>
             <Text style={s.caption}>
               {action.group}{action.requires.length ? ` · Requires ${action.requires.join(', ')}` : ''}
-              {action.nextStep ? ` · Step ${action.nextStep}` : ''}
-              {action.suggested !== null ? ` · Priority ${action.suggested}` : ''}
             </Text>
             {effect ? <Text style={s.caption}>{action.workflow} → {effect.kind === 'phase' ? `${effect.view} / ${effect.phase}` : 'navigation destination'}</Text> : null}
             {inputs.length ? <Text style={s.caption}>Input: {inputs.join(', ')}</Text> : null}

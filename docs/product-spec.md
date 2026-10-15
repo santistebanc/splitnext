@@ -139,21 +139,9 @@ copy/share, retry, and confirmation decisions, goes through the same action
 catalog as domain operations. These UI actions update shared local screen
 state so devtools and other callers operate the visible app. Organize the
 devtools catalog into UI, Ledger changes, and Access & sync by primary
-purpose, with a Suggested tab showing all available contextual next steps
-derived from the workflow machine's current phase and local focus. The catalog
-filters these steps through shared availability guards and ranks them using
-drafts, selections, connection, and group data. Pending submissions have no
-ordinary suggested steps; invite checking may suggest returning to groups.
-Order suggestions by priority without a fixed count limit. In an open group,
-include editing and removing any active member, including the current you and
-when you are the only member. Default the removal selector to another member
-when available while keeping you selectable. Member editors and confirmations
-take focus over general group steps.
-Open Suggested by default and browse actions by tab
-without a search field. In an open group, suggest choosing which member is you when an alternative
-active member exists, and prioritize it when this installation is unassigned.
-Its member selector defaults to another member, retaining the current you as
-an available choice.
+purpose; open UI by default and browse actions by tab without a search field.
+Member selectors for removing a member or choosing who is you default to
+another member when available while keeping the current you selectable.
 Omit secondary categories and an All tab. Use a single navigation row
 with an active underline for these tabs, visually distinct from the outlined
 action buttons. Let the row scroll horizontally on narrow screens. Place available

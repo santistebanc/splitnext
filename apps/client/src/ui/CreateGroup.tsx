@@ -1,7 +1,6 @@
 import { useRef } from 'react';
 import { Text, View, type TextInput } from 'react-native';
 import type { AppController } from '../model/controller';
-import { workflowBusy } from '../model/workflow';
 import { Button, ErrorMessage, Field, s } from './components';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 import { useCompactLayout } from './useVisibleViewport';
@@ -18,13 +17,11 @@ export function CreateGroup(props: CreateGroupProps) {
   const actions = useActions();
   const personInput = useRef<TextInput>(null);
   const action = useActionCall();
+  const back = useActionCall();
   const { online, reachable } = props.app.snapshot();
 
-  const busy = action.busy || workflowBusy(ui);
-  const canSubmit = actions.availability('submitCreateGroup', {}).available;
-
   function submit(): void {
-    if (!canSubmit) return;
+    if (!action.can('submitCreateGroup')) return;
 
     void action.call('submitCreateGroup', {}, props.close);
   }
@@ -42,7 +39,7 @@ export function CreateGroup(props: CreateGroupProps) {
           label="Group name"
           placeholder="e.g. Lisbon weekend"
           value={name}
-          editable={!busy}
+          editable={actions.availability('changeDraft', { field: 'create.name', value: name }).available}
           onChangeText={(value) => {
             void actions.dispatch(
               'changeDraft',
@@ -61,7 +58,7 @@ export function CreateGroup(props: CreateGroupProps) {
           inputRef={personInput}
           placeholder="e.g. Santi"
           value={person}
-          editable={!busy}
+          editable={actions.availability('changeDraft', { field: 'create.yourName', value: person }).available}
           onChangeText={(value) => {
             void actions.dispatch(
               'changeDraft',
@@ -73,19 +70,19 @@ export function CreateGroup(props: CreateGroupProps) {
           returnKeyType="done"
           onSubmitEditing={submit}
         />
-        <ErrorMessage message={action.error} />
+        <ErrorMessage message={action.error ?? back.error} />
         <View style={s.actions}>
           <Button
             grow
             quiet
-            disabled={busy || !actions.availability('showGroups', {}).available}
+            disabled={!back.can('showGroups')}
             onPress={() => {
-              void action.call('showGroups', {}, props.close);
+              void back.call('showGroups', {}, props.close);
             }}
           >
             Back to groups
           </Button>
-          <Button grow onPress={submit} disabled={!canSubmit || busy}>
+          <Button grow onPress={submit} disabled={!action.can('submitCreateGroup')}>
             {ui.phase === 'creating' || action.busy
               ? 'Creating…'
               : 'Create group'}

@@ -158,7 +158,7 @@ describe('app actions', () => {
 
     expect(map.current).toEqual({ view: 'create', phase: 'editing' });
     expect(map.actions.find((entry) => entry.name === 'submitCreateGroup')).toMatchObject({
-      nextStep: 'submitCreate', availability: { available: true },
+      availability: { available: true },
       workflowEffect: { kind: 'phase', view: 'create', phase: 'creating' },
     });
     expect(actions.state().ui).not.toBe(original);
@@ -278,9 +278,7 @@ describe('app actions', () => {
       view: 'join',
       phase: 'joining',
     });
-    expect(browseActions(actions.describe(), { group: 'Suggested' })).toEqual(
-      [],
-    );
+    expect(actions.availability('chooseJoinMember')).toMatchObject({ available: false, error: 'workflow_busy' });
     expect(
       await actions.dispatch('joinGroup', {
         groupId,
@@ -393,9 +391,6 @@ describe('app actions', () => {
     const saving = actions.dispatch('saveGroupSettings', {});
 
     expect(actions.state().ui.phase).toBe('saving');
-    expect(browseActions(actions.describe(), { group: 'Suggested' })).toEqual(
-      [],
-    );
     expect(actions.availability('saveGroupSettings').available).toBe(false);
     expect(actions.availability('closePanel').available).toBe(false);
     expect(await actions.dispatch('createMember', { name: 'Dev' })).toMatchObject({
@@ -412,7 +407,7 @@ describe('app actions', () => {
     expect(calls).toEqual(['member.create Dev']);
   });
 
-  it('suspends ordinary suggestions during direct creation and restores editor focus on failure', async () => {
+  it('keeps the member editor during direct creation and restores it on failure', async () => {
     const { host, state } = createHost();
     const request = deferred<void>();
 
@@ -421,17 +416,11 @@ describe('app actions', () => {
       createGroup: () => request.promise,
     });
 
-    const next = () =>
-      browseActions(actions.describe(), { group: 'Suggested' }).map(
-        (action) => action.name,
-      );
-
     await actions.dispatch('beginAddMember', {});
     await actions.dispatch('changeDraft', {
       field: 'member.name',
       value: 'Dev',
     });
-    expect(next()).toEqual(['saveMemberEdit', 'cancelMemberEdit']);
 
     const running = actions.dispatch('createGroup', {
       name: 'Trip',
@@ -445,19 +434,15 @@ describe('app actions', () => {
     });
     expect(actions.availability('refreshGroups').available).toBe(true);
     expect(actions.availability('saveMemberEdit').available).toBe(true);
-    expect(next()).toEqual([]);
+    expect(actions.availability('showGroups')).toMatchObject({ available: false, error: 'workflow_busy' });
 
     request.reject(new Error('request_failed'));
     await running;
-    expect(next()).toEqual([
-      'refreshGroups',
-      'saveMemberEdit',
-      'cancelMemberEdit',
-    ]);
+    expect(actions.availability('showGroups').available).toBe(true);
     expect(actions.state().ui.memberEdit?.name).toBe('Dev');
   });
 
-  it('suggests leaving a pending invite check, then moves to member choices', async () => {
+  it('allows leaving a pending invite check, then offers member choices', async () => {
     const { host, state } = createHost();
 
     const preview =
@@ -468,11 +453,6 @@ describe('app actions', () => {
       client: { previewInvite: () => preview.promise },
     });
 
-    const next = () =>
-      browseActions(actions.describe(), { group: 'Suggested' }).map(
-        (action) => action.name,
-      );
-
     const groupId = 'uy9ogmKJRD2VRfbN4PDsAw';
     const link = `https://splitnext.test/join/${groupId}#${'w'.repeat(43)}`;
 
@@ -480,230 +460,16 @@ describe('app actions', () => {
     state.syncError = new Error('request_failed');
     expect(actions.state().ui.phase).toBe('checking');
     expect(actions.availability('refreshGroups').available).toBe(true);
-    expect(next()).toEqual(['showGroups']);
+    expect(actions.availability('showGroups').available).toBe(true);
+    expect(actions.availability('checkInvite', { link }).available).toBe(false);
+    expect(actions.availability('chooseJoinMember').available).toBe(false);
 
     preview.resolve({ group: { id: groupId, name: 'Trip' }, members: [] });
     await running;
-    expect(next()).toEqual(['refreshGroups', 'chooseJoinMember', 'showGroups']);
+    expect(actions.availability('chooseJoinMember').available).toBe(true);
+    expect(actions.availability('submitJoin').available).toBe(false);
     await actions.dispatch('chooseJoinMember', { as: { kind: 'new' } });
-    expect(next()).toEqual([
-      'refreshGroups',
-      'submitJoin',
-      'chooseJoinMember',
-      'showGroups',
-    ]);
-  });
-
-  it('suggests logical group entry actions without dispatching anything', async () => {
-    const { host, calls } = createHost({ open: false });
-    const actions = createDispatcher(host);
-
-    const next = () =>
-      browseActions(actions.describe(), { group: 'Suggested' }).map(
-        (action) => action.name,
-      );
-
-    expect(next()).toEqual(['showCreateGroup', 'showJoinGroup']);
-    expect(calls).toEqual([]);
-    await actions.dispatch('showCreateGroup', {});
-    expect(next()).toEqual(['showGroups']);
-    await actions.dispatch('changeDraft', {
-      field: 'create.name',
-      value: 'Trip',
-    });
-    expect(next()).toEqual(['submitCreateGroup', 'showGroups']);
-    await actions.dispatch('closePanel', {});
-    expect(next()).toEqual(['showCreateGroup', 'showJoinGroup']);
-    expect(calls).toEqual([]);
-  });
-
-  it('prioritizes inviting from a solo group and member editing after others join', () => {
-    const solo = createDispatcher(createHost().host);
-    const joined = createDispatcher(createHost({ others: ['Ben'] }).host);
-
-    const next = (actions: typeof solo) =>
-      browseActions(actions.describe(), { group: 'Suggested' }).map(
-        (action) => action.name,
-      );
-
-    expect(next(solo)).toEqual([
-      'showInvite',
-      'beginAddMember',
-      'setPreferredMember',
-      'showSettings',
-      'beginEditMember',
-      'archiveMember',
-      'showGroups',
-    ]);
-    expect(next(joined)).toEqual([
-      'beginAddMember',
-      'showInvite',
-      'setPreferredMember',
-      'showSettings',
-      'beginEditMember',
-      'archiveMember',
-      'showGroups',
-    ]);
-  });
-
-  it('suggests removing any active member in the group view, including you and offline', async () => {
-    const { host, state, calls } = createHost({ connection: 'offline' });
-    const actions = createDispatcher(host);
-
-    const next = () =>
-      browseActions(actions.describe(), { group: 'Suggested' }).map(
-        (action) => action.name,
-      );
-
-    const snapshot = state.group?.projected_snapshot;
-
-    if (!snapshot) throw new Error('missing_fixture');
-
-    expect(next()).toContain('archiveMember');
-    expect(next()).toContain('beginEditMember');
-    expect(next().length).toBeGreaterThan(4);
-    expect(calls).toEqual([]);
-    snapshot.members[1]!.status = 'archived';
-    expect(next()).toContain('archiveMember');
-    expect(next()).toContain('beginEditMember');
-    expect(
-      await actions.dispatch('archiveMember', { memberId: 'member-1______________' }),
-    ).toMatchObject({ status: 'done' });
-    expect(calls).toEqual(['member.archive member-1______________']);
-    snapshot.members[1]!.status = 'active';
-
-    await actions.dispatch('beginEditMember', { memberId: 'member-2______________' });
-    expect(next()).toEqual(['cancelMemberEdit']);
-    await actions.dispatch('cancelMemberEdit', {});
-    expect(next()).toContain('archiveMember');
-    await actions.dispatch('showSettings', {});
-    expect(next()).not.toContain('archiveMember');
-  });
-
-  it('prioritizes choosing you when unassigned and omits it without an alternative', async () => {
-    const { host, state } = createHost();
-    const actions = createDispatcher(host);
-    const snapshot = state.group?.projected_snapshot;
-
-    if (!snapshot) throw new Error('missing_fixture');
-
-    const self = snapshot.access_grants.find(
-      (grant) => grant.identity_id === state.group?.session?.identity.id,
-    );
-
-    if (!self) throw new Error('missing_fixture');
-    self.preferred_member_id = null;
-
-    const next = () =>
-      browseActions(actions.describe(), { group: 'Suggested' }).map(
-        (action) => action.name,
-      );
-
-    expect(next()[0]).toBe('setPreferredMember');
-    self.preferred_member_id = 'member-1______________';
-    snapshot.members[1]!.status = 'archived';
-    expect(next()).not.toContain('setPreferredMember');
-    snapshot.members[1]!.status = 'active';
-    expect(next()).toContain('setPreferredMember');
-    await actions.dispatch('showSettings', {});
-    expect(next()).not.toContain('setPreferredMember');
-    await actions.dispatch('closePanel', {});
-    await actions.dispatch('beginEditMember', { memberId: 'member-1______________' });
-    expect(next()).not.toContain('setPreferredMember');
-  });
-
-  it('changes suggestions with drafts and excludes unavailable platform actions', async () => {
-    const { host } = createHost();
-
-    const actions = createDispatcher(host, {
-      appUrl: 'https://splitnext.test',
-      copyLink: async () => undefined,
-    });
-
-    const next = () =>
-      browseActions(actions.describe(), { group: 'Suggested' }).map(
-        (action) => action.name,
-      );
-
-    await actions.dispatch('showSettings', {});
-    expect(next()).toEqual(['closePanel']);
-    await actions.dispatch('changeDraft', {
-      field: 'settings.name',
-      value: 'New name',
-    });
-    expect(next()).toEqual(['saveGroupSettings', 'closePanel']);
-    await actions.dispatch('changeDraft', {
-      field: 'settings.name',
-      value: '',
-    });
-    expect(next()).toEqual(['closePanel']);
-    await actions.dispatch('showInvite', {});
-    expect(next()).toEqual(['copyInviteLink', 'closePanel']);
-    expect(next()).not.toContain('regenerateInvite');
-    await actions.dispatch('closePanel', {});
-    await actions.dispatch('beginAddMember', {});
-    expect(next()).toEqual(['cancelMemberEdit']);
-    await actions.dispatch('changeDraft', {
-      field: 'member.name',
-      value: 'Dev',
-    });
-    expect(next()).toEqual(['saveMemberEdit', 'cancelMemberEdit']);
-  });
-
-  it('focuses suggestions on pending confirmation and respects offline availability', async () => {
-    const { host, state } = createHost();
-    const actions = createDispatcher(host);
-
-    const next = () =>
-      browseActions(actions.describe(), { group: 'Suggested' }).map(
-        (action) => action.name,
-      );
-
-    await actions.dispatch('regenerateInvite', {});
-    expect(next()).toEqual(['confirmAction', 'cancelConfirmation']);
-    state.online = false;
-    expect(next()).toEqual(['cancelConfirmation']);
-    await actions.dispatch('cancelConfirmation', {
-      requestId: actions.state().ui.confirmation?.id ?? '',
-    });
-    expect(next()).toEqual([
-      'showInvite',
-      'beginAddMember',
-      'setPreferredMember',
-      'showSettings',
-      'beginEditMember',
-      'archiveMember',
-      'showGroups',
-    ]);
-    expect(
-      actions
-        .describe()
-        .filter((action) => action.suggested !== null)
-        .every((action) => action.availability.available),
-    ).toBe(true);
-  });
-
-  it('suggests preview, member choice, and join as the join form progresses', async () => {
-    const { host } = createHost();
-    const actions = createDispatcher(host);
-
-    const next = () =>
-      browseActions(actions.describe(), { group: 'Suggested' }).map(
-        (action) => action.name,
-      );
-
-    const link = `https://splitnext.test/join/uy9ogmKJRD2VRfbN4PDsAw#${'w'.repeat(43)}`;
-
-    await actions.dispatch('showJoinGroup', {});
-    expect(next()).toEqual(['showGroups']);
-    await actions.dispatch('changeDraft', { field: 'join.link', value: link });
-    expect(next()).toEqual(['checkInvite', 'showGroups']);
-    await actions.dispatch('checkInvite', { link });
-    expect(next()).toEqual(['chooseJoinMember', 'showGroups']);
-    await actions.dispatch('chooseJoinMember', { as: { kind: 'new' } });
-    expect(next()).toEqual(['submitJoin', 'chooseJoinMember', 'showGroups']);
-    await actions.dispatch('changeDraft', { field: 'join.name', value: '' });
-    expect(next()).toEqual(['chooseJoinMember', 'showGroups']);
+    expect(actions.availability('submitJoin').available).toBe(true);
   });
 
   it('classifies actions by purpose without secondary categories', () => {
