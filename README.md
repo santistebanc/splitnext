@@ -429,10 +429,13 @@ client.watchGroup(group.group_id);
 Every group command goes through `submit(groupId, intent)`. An intent is the
 command without its identifiers; omitted preconditions, such as the name a
 rename expects to replace, default to what the local projection shows. The app
-controller and app actions use the same path. A new command is its schema,
-rule and intent completion in `src/domain/commands.ts`, its audit change, its
-retry intent and notice wording, and one app action; each of those places is
-an exhaustive switch, so the compiler lists any it misses. Each command keeps
+controller and app actions use the same path. Each command is one file in
+`src/domain/commands/` holding its schema, the rule the server and every
+client projection apply, its target, member alias handling, intent
+completion, retry intent, and audit change. A new command is that file, its
+entries in `groupCommandSchema`, `registered`, and `groupCommandTypes`, its
+notice wording, and one app action; the registry's type rejects a missing or
+mismatched entry, and the notice wording is an exhaustive switch. Each command keeps
 one name everywhere: the `groupCommandTypes` key, such as `archiveMember`,
 names its app action, and its value, such as `member.archive`, is the wire
 type.
