@@ -26,7 +26,7 @@ export type TransportControls = {
 
 /** The production group engine behind an isolated transport; no network or browser storage. */
 export async function memoryTransport(session: IdentitySession, replicas: ClientReplicaState[], controls: TransportControls) {
-  const stores = new Map<string, GroupStore>();
+  const repositories = new Map<string, MemoryGroupRepository>();
   const now = () => new Date().toISOString();
 
   for (const replica of replicas) {
@@ -52,15 +52,15 @@ export async function memoryTransport(session: IdentitySession, replicas: Client
       if (!state) throw new Error('missing_workbench_group');
       persistence.saveState({ ...state, revision: replica.revision ?? 1, snapshot, next_actor_number: snapshot.access_grants.length + 1 });
     });
-    stores.set(replica.group_id, store);
+    repositories.set(replica.group_id, repository);
   }
 
   function requireStore(groupId: string): GroupStore {
-    const store = stores.get(groupId);
+    const repository = repositories.get(groupId);
 
-    if (!store) throw new SplitnextRequestError(404, { error: 'group_not_found' });
+    if (!repository) throw new SplitnextRequestError(404, { error: 'group_not_found' });
 
-    return store;
+    return new GroupStore(repository);
   }
 
   async function request(name: string, detail: string, mutation = true): Promise<void> {
@@ -84,8 +84,8 @@ export async function memoryTransport(session: IdentitySession, replicas: Client
     listGroups: async () => {
       await request('listGroups', '', false);
 
-      return { groups: [...stores.entries()].flatMap(([groupId, store]) => {
-        const snapshot = store.inspect()?.snapshot;
+      return { groups: [...repositories.entries()].flatMap(([groupId, repository]) => {
+        const snapshot = new GroupStore(repository).inspect()?.snapshot;
         const access = snapshot?.access_grants.find((grant) => grant.identity_id === session.identity.id);
 
         return snapshot && access ? [{ group_id: groupId, name: snapshot.group.name,
@@ -96,9 +96,9 @@ export async function memoryTransport(session: IdentitySession, replicas: Client
     createGroup: async (raw) => {
       const input = createGroupRequestSchema.parse(raw);
       await request('createGroup', `${input.name} as ${input.creator_member_name}`);
-      const store = stores.get(input.group_id) ?? new GroupStore(new MemoryGroupRepository());
+      const repository = repositories.get(input.group_id) ?? new MemoryGroupRepository();
 
-      const result = store.create(initializeGroup({
+      const result = new GroupStore(repository).create(initializeGroup({
         group_id: input.group_id, creator_identity_id: session.identity.id,
         member_id: createIdentifier(), name: input.name, creator_member_name: input.creator_member_name,
         invite_id: input.invite.invite_id, invite_token: input.invite.token,
@@ -106,14 +106,14 @@ export async function memoryTransport(session: IdentitySession, replicas: Client
       }));
 
       if (!result.ok) throw new SplitnextRequestError(groupFailureStatus.create(result.error), { error: result.error });
-      stores.set(input.group_id, store);
+      repositories.set(input.group_id, repository);
 
       return result.created;
     },
     syncGroup: async (groupId, raw) => {
       const input = syncGroupRequestSchema.parse(raw);
       await request('syncGroup', input.commands.map((command) => command.type).join(', '), input.commands.length > 0);
-      const store = stores.get(groupId) ?? new GroupStore(new MemoryGroupRepository());
+      const store = new GroupStore(repositories.get(groupId) ?? new MemoryGroupRepository());
       const result = store.sync({ ...input, group_id: groupId, identity_id: session.identity.id }, now());
 
       if (!result.ok) throw new SplitnextRequestError(groupFailureStatus.sync(result.error), { error: result.error });
@@ -187,5 +187,10 @@ export async function memoryTransport(session: IdentitySession, replicas: Client
     forDevice: (secret) => deviceFor(sessionFor(secret)),
   };
 
-  return { api, inspect: (groupId: string) => requireStore(groupId).inspect()?.snapshot };
+  return {
+    api,
+    inspect: (groupId: string) => requireStore(groupId).inspect()?.snapshot,
+    /** Everything the server recorded for a group, including outcomes and audit history. */
+    repository: (groupId: string) => repositories.get(groupId)?.inspect() ?? null,
+  };
 }

@@ -250,12 +250,19 @@ export class ClientReplicaStore {
 
   confirmJoin(groupId: string, joined: GroupSession): Promise<void> {
     return this.change((document) => {
+      const existing = document.groups.find(
+        (candidate) => candidate.group_id === groupId,
+      );
+
+      const current = existing && existing.revision > joined.revision ? existing : joined;
+
+      // Rejoining keeps unreviewed notices and intent queued meanwhile.
       upsertReplica(document, {
         group_id: groupId,
-        revision: joined.revision,
-        snapshot: joined.snapshot,
-        outbox: [],
-        notices: [],
+        revision: current.revision,
+        snapshot: current.snapshot,
+        outbox: existing?.outbox ?? [],
+        notices: existing?.notices ?? [],
         last_synced_at: this.now(),
       });
       document.pending_joins = document.pending_joins.filter(
@@ -415,6 +422,7 @@ export class ClientReplicaStore {
             notices: [],
             last_synced_at: this.now(),
           });
+          settleJoins(document, groupId, response.state.snapshot);
         }
 
         return;
@@ -475,6 +483,7 @@ export class ClientReplicaStore {
       }
 
       replica.last_synced_at = this.now();
+      settleJoins(document, groupId, replica.snapshot);
     });
   }
 
@@ -701,6 +710,24 @@ function upsertReplica(
   } else {
     document.groups[index] = replica;
   }
+}
+
+/**
+ * A confirmed snapshot showing this identity's active access settles any join
+ * it was retrying, so a later rejoin sends a new request instead of replaying
+ * one the server already answered.
+ */
+function settleJoins(
+  document: ClientStorageDocument,
+  groupId: string,
+  snapshot: GroupSnapshot,
+): void {
+  const access = document.session && accessFor(snapshot, document.session.identity.id);
+
+  if (access && !access.hidden_at)
+    document.pending_joins = document.pending_joins.filter(
+      (candidate) => candidate.group_id !== groupId,
+    );
 }
 
 function accessFor(snapshot: GroupSnapshot, identityId: string) {
