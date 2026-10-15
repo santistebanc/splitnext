@@ -252,6 +252,15 @@ This also exports the app, checks its TypeScript, and tests frontend rendering
 against the actual bundled Worker. Run `npm test` after a build/check has
 prepared `.wrangler/dry-run`; the renderer tests load that bundle.
 
+`npm run test:e2e` drives the built app in headless Chromium through
+`e2e/app.spec.ts`: creating groups, member edits, settings, invite
+replacement, joining from a second device with realtime updates, offline
+edits, and leaving and rejoining. It starts its own Worker on port 8791 with
+separate local storage in `.wrangler/e2e-state`, recreated on every run, so it
+does not touch `npm run dev` data. Install the browser once with
+`npx playwright install chromium-headless-shell`; a failure keeps a trace in
+`test-results/` that `npx playwright show-trace` opens.
+
 ## Synchronization contract
 
 `POST /groups/{groupId}/sync` receives the client's last confirmed revision and

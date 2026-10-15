@@ -15,6 +15,8 @@
     "worker-configuration.d.ts",
     "src/**/*.ts",
     "test/**/*.ts",
+    "e2e/**/*.ts",
+    "playwright.config.ts",
     "vitest.config.ts"
   ]
 }
