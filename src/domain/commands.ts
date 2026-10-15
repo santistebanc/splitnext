@@ -16,12 +16,16 @@ import {
 } from './members';
 import type { GroupSnapshot } from './sync';
 
+/**
+ * Each command's name, used for its app action and SDK intent, and the wire
+ * type it is stored and synchronized as.
+ */
 export const groupCommandTypes = {
   renameGroup: 'group.rename',
   createMember: 'member.create',
   renameMember: 'member.rename',
   archiveMember: 'member.archive',
-  setPreference: 'preference.set',
+  setPreferredMember: 'preference.set',
   leaveGroup: 'group.leave',
 } as const;
 
@@ -65,7 +69,7 @@ export const archiveMemberCommandSchema = z.object({
 
 export const setPreferredMemberCommandSchema = z.object({
   command_id: identifierSchema,
-  type: z.literal(groupCommandTypes.setPreference),
+  type: z.literal(groupCommandTypes.setPreferredMember),
   payload: z.object({ member_id: identifierSchema }),
 });
 
@@ -91,6 +95,87 @@ export type CreateMemberCommand = z.output<typeof createMemberCommandSchema>;
 export type RenameMemberCommand = z.output<typeof renameMemberCommandSchema>;
 
 export type ArchiveMemberCommand = z.output<typeof archiveMemberCommandSchema>;
+
+type CommandOf<T extends GroupCommand['type']> = Extract<GroupCommand, { type: T }>;
+
+type IntentOf<
+  T extends GroupCommand['type'],
+  Filled extends keyof CommandOf<T>['payload'] = never,
+> = {
+  type: T;
+  payload: Omit<CommandOf<T>['payload'], Filled> & {
+    [K in Filled]?: CommandOf<T>['payload'][K] | undefined;
+  };
+};
+
+/**
+ * A command as a person states it. The client assigns its identifiers and
+ * fills an omitted precondition from the state the person saw.
+ */
+export type CommandIntent =
+  | IntentOf<'group.rename', 'expected_name'>
+  | IntentOf<'member.create', 'member_id'>
+  | IntentOf<'member.rename', 'expected_display_name'>
+  | IntentOf<'member.archive'>
+  | IntentOf<'preference.set'>
+  | IntentOf<'group.leave'>;
+
+/** Completes an intent against the projection the person saw. */
+export function commandFromIntent(
+  intent: CommandIntent,
+  snapshot: GroupSnapshot,
+  createId: () => string,
+): GroupCommand {
+  const command_id = createId();
+
+  switch (intent.type) {
+    case 'group.rename':
+      return {
+        command_id,
+        type: intent.type,
+        payload: {
+          name: intent.payload.name,
+          expected_name: intent.payload.expected_name ?? snapshot.group.name,
+        },
+      };
+    case 'member.create':
+      return {
+        command_id,
+        type: intent.type,
+        payload: {
+          member_id: intent.payload.member_id ?? createId(),
+          display_name: intent.payload.display_name,
+        },
+      };
+    case 'member.rename': {
+      const memberId = intent.payload.member_id;
+      const member = snapshot.members.find((candidate) => candidate.id === memberId);
+
+      if (!member) throw new Error('member_not_found_locally');
+
+      return {
+        command_id,
+        type: intent.type,
+        payload: {
+          member_id: member.id,
+          display_name: intent.payload.display_name,
+          expected_display_name:
+            intent.payload.expected_display_name ?? member.display_name,
+        },
+      };
+    }
+
+    case 'member.archive':
+    case 'preference.set':
+    case 'group.leave':
+      return { command_id, ...intent };
+  }
+}
+
+/** Leaving deliberately stops authority, so it needs a server decision instead of queueing. */
+export function requiresServerDecision(type: GroupCommand['type']): boolean {
+  return type === 'group.leave';
+}
 
 export const commandReasons = {
   accessNotFound: 'access_not_found',

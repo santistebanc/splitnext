@@ -35,7 +35,7 @@ describe('realtime revision announcements', () => {
     const memberId = state.projected_snapshot?.members[0]?.id;
 
     if (!memberId) throw new Error('creator_member_missing');
-    await joiner.client.selectPreferredMember(groupId, memberId);
+    await joiner.client.submit(groupId, { type: 'preference.set', payload: { member_id: memberId } });
     const creatorId = state.session?.identity.id;
 
     const joinerId = (await joiner.client.inspect(groupId)).session?.identity
@@ -68,7 +68,7 @@ describe('realtime revision announcements', () => {
     await expect.poll(() => subscription.revisions).toEqual([3]);
 
     await joiner.client.syncGroup(groupId);
-    await joiner.client.addMember(groupId, 'Taylor');
+    await joiner.client.submit(groupId, { type: 'member.create', payload: { display_name: 'Taylor' } });
 
     await expect.poll(() => subscription.revisions).toEqual([3, 4]);
     subscription.close();
@@ -112,7 +112,7 @@ describe('realtime revision announcements', () => {
     const subscription = await subscribe(groupId, joiner.secret);
 
     await expect.poll(() => subscription.revisions).toEqual([3]);
-    await joiner.client.leaveGroup(groupId);
+    await joiner.client.submit(groupId, { type: 'group.leave', payload: {} });
 
     await expect.poll(() => subscription.closeCodes).toEqual([4403]);
     expect(
@@ -130,7 +130,7 @@ describe('realtime client synchronization', () => {
     });
 
     creator.client.watchGroup(groupId);
-    await joiner.client.renameGroup(groupId, 'Announced name');
+    await joiner.client.submit(groupId, { type: 'group.rename', payload: { name: 'Announced name' } });
 
     await expect
       .poll(async () => groupName(await creator.client.inspect(groupId)))
@@ -144,7 +144,7 @@ describe('realtime client synchronization', () => {
 
     creator.client.watchGroup(groupId);
     creator.client.setOnline(false);
-    await joiner.client.renameGroup(groupId, 'Missed name');
+    await joiner.client.submit(groupId, { type: 'group.rename', payload: { name: 'Missed name' } });
     creator.client.setOnline(true);
 
     await expect
@@ -186,7 +186,7 @@ describe('realtime client synchronization', () => {
       }),
     });
 
-    await joiner.client.addMember(groupId, 'Taylor');
+    await joiner.client.submit(groupId, { type: 'member.create', payload: { display_name: 'Taylor' } });
     creator.client.watchGroup(groupId);
 
     const socket = sockets[0];
@@ -210,7 +210,7 @@ describe('realtime client synchronization', () => {
     const { groupId, joiner } = await createSharedGroup();
 
     joiner.client.watchGroup(groupId);
-    await joiner.client.leaveGroup(groupId);
+    await joiner.client.submit(groupId, { type: 'group.leave', payload: {} });
 
     expect(joiner.client.isWatching(groupId)).toBe(false);
   });

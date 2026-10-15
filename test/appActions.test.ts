@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { commandFromIntent } from '../src/domain/commands';
 import {
   createDispatcher,
   type ActionHost,
@@ -58,15 +59,17 @@ function createHost(setup: Setup = {}) {
     showGroups: () => {
       calls.push('showGroups');
     },
-    renameGroup: (name, observed) => record(`renameGroup ${name} ${observed}`),
-    addPerson: (name) => record(`addPerson ${name}`),
-    renamePerson: (id, name, observed) =>
-      record(`renamePerson ${id} ${name} ${observed}`),
-    archivePerson: (id) => record(`archivePerson ${id}`),
-    selectPerson: (id) => record(`selectPerson ${id}`),
+    // Records the command the SDK would queue, without generated identifiers.
+    submit: (intent) => {
+      const snapshot = state.group?.projected_snapshot;
+
+      if (!snapshot) throw new Error('no_group_selected');
+      const command = commandFromIntent(intent, snapshot, () => 'generated');
+
+      return record([command.type, ...Object.values(command.payload).filter((value) => value !== 'generated')].join(' '));
+    },
     regenerateInvite: () => record('regenerateInvite'),
-    leaveGroup: () => record('leaveGroup'),
-    applyAgain: (id) => record(`applyAgain ${id}`),
+    retryNotice: (id) => record(`retryNotice ${id}`),
     dismissNotice: (id) => record(`dismissNotice ${id}`),
     client: {
       previewInvite: async (groupId) => {
@@ -108,7 +111,7 @@ describe('app actions', () => {
 
     const actions = createDispatcher({
       ...host,
-      renamePerson: (id, name, observed) => id === target ? request.promise : host.renamePerson(id, name, observed),
+      submit: (intent) => intent.type === 'member.rename' && intent.payload.member_id === target ? request.promise : host.submit(intent),
     });
 
     const updates: number[] = [];
@@ -121,14 +124,14 @@ describe('app actions', () => {
     expect(actions.state().executions).toMatchObject([{ name: 'saveMemberEdit', origin: 'ui' }]);
     expect(actions.availability('saveMemberEdit', {})).toMatchObject({ available: false, error: 'operation_busy' });
     expect(await actions.dispatchJson('saveMemberEdit', {}, { origin: 'devtools' })).toMatchObject({ status: 'failed', error: 'operation_busy' });
-    expect(await actions.dispatch('removeMember', { memberId: target })).toMatchObject({ status: 'failed', error: 'operation_busy' });
+    expect(await actions.dispatch('archiveMember', { memberId: target })).toMatchObject({ status: 'failed', error: 'operation_busy' });
     expect(await actions.dispatch('changeDraft', { field: 'member.name', value: 'Lost draft' })).toMatchObject({ status: 'failed', error: 'operation_busy' });
     expect(await actions.dispatch('cancelMemberEdit', {})).toMatchObject({ status: 'failed', error: 'operation_busy' });
     expect(await actions.dispatch('showGroups', {})).toMatchObject({ status: 'failed', error: 'operation_busy' });
     expect(await actions.dispatch('beginEditMember', { memberId: other })).toMatchObject({ status: 'failed', error: 'operation_busy' });
-    expect(await actions.dispatch('addMember', { name: 'Dev' })).toMatchObject({ status: 'done' });
+    expect(await actions.dispatch('createMember', { name: 'Dev' })).toMatchObject({ status: 'done' });
     expect(await actions.dispatch('renameMember', { memberId: other, name: 'Benjamin' })).toMatchObject({ status: 'done' });
-    expect(calls).toEqual(['addPerson Dev', `renamePerson ${other} Benjamin Ben`]);
+    expect(calls).toEqual(['member.create Dev', `member.rename ${other} Benjamin Ben`]);
     request.reject(new Error('request_failed'));
     expect(await save).toMatchObject({ status: 'failed', error: 'request_failed' });
     expect(actions.state().ui.memberEdit).toMatchObject({ memberId: target, name: 'Anita', expectedName: 'Ana' });
@@ -247,7 +250,7 @@ describe('app actions', () => {
     });
     expect(Object.hasOwn(actions.state().ui, 'requestId')).toBe(false);
     expect(actions.availability('submitCreateGroup').available).toBe(true);
-    expect(calls).toEqual(['renamePerson member-2______________ Benji Ben']);
+    expect(calls).toEqual(['member.rename member-2______________ Benji Ben']);
   });
 
   it('restores join choices on failure and blocks duplicate direct joins', async () => {
@@ -379,7 +382,7 @@ describe('app actions', () => {
 
     const actions = createDispatcher({
       ...host,
-      renameGroup: () => request.promise,
+      submit: (intent) => intent.type === 'group.rename' ? request.promise : host.submit(intent),
     });
 
     await actions.dispatch('showSettings', {});
@@ -395,7 +398,7 @@ describe('app actions', () => {
     );
     expect(actions.availability('saveGroupSettings').available).toBe(false);
     expect(actions.availability('closePanel').available).toBe(false);
-    expect(await actions.dispatch('addMember', { name: 'Dev' })).toMatchObject({
+    expect(await actions.dispatch('createMember', { name: 'Dev' })).toMatchObject({
       status: 'done',
     });
     request.reject(new Error('request_failed'));
@@ -406,7 +409,7 @@ describe('app actions', () => {
       settings: { name: 'Offline rename' },
     });
     expect(actions.availability('saveGroupSettings').available).toBe(true);
-    expect(calls).toEqual(['addPerson Dev']);
+    expect(calls).toEqual(['member.create Dev']);
   });
 
   it('suspends ordinary suggestions during direct creation and restores editor focus on failure', async () => {
@@ -526,19 +529,19 @@ describe('app actions', () => {
     expect(next(solo)).toEqual([
       'showInvite',
       'beginAddMember',
-      'selectYou',
+      'setPreferredMember',
       'showSettings',
       'beginEditMember',
-      'removeMember',
+      'archiveMember',
       'showGroups',
     ]);
     expect(next(joined)).toEqual([
       'beginAddMember',
       'showInvite',
-      'selectYou',
+      'setPreferredMember',
       'showSettings',
       'beginEditMember',
-      'removeMember',
+      'archiveMember',
       'showGroups',
     ]);
   });
@@ -556,25 +559,25 @@ describe('app actions', () => {
 
     if (!snapshot) throw new Error('missing_fixture');
 
-    expect(next()).toContain('removeMember');
+    expect(next()).toContain('archiveMember');
     expect(next()).toContain('beginEditMember');
     expect(next().length).toBeGreaterThan(4);
     expect(calls).toEqual([]);
     snapshot.members[1]!.status = 'archived';
-    expect(next()).toContain('removeMember');
+    expect(next()).toContain('archiveMember');
     expect(next()).toContain('beginEditMember');
     expect(
-      await actions.dispatch('removeMember', { memberId: 'member-1______________' }),
+      await actions.dispatch('archiveMember', { memberId: 'member-1______________' }),
     ).toMatchObject({ status: 'done' });
-    expect(calls).toEqual(['archivePerson member-1______________']);
+    expect(calls).toEqual(['member.archive member-1______________']);
     snapshot.members[1]!.status = 'active';
 
     await actions.dispatch('beginEditMember', { memberId: 'member-2______________' });
     expect(next()).toEqual(['cancelMemberEdit']);
     await actions.dispatch('cancelMemberEdit', {});
-    expect(next()).toContain('removeMember');
+    expect(next()).toContain('archiveMember');
     await actions.dispatch('showSettings', {});
-    expect(next()).not.toContain('removeMember');
+    expect(next()).not.toContain('archiveMember');
   });
 
   it('prioritizes choosing you when unassigned and omits it without an alternative', async () => {
@@ -596,17 +599,17 @@ describe('app actions', () => {
         (action) => action.name,
       );
 
-    expect(next()[0]).toBe('selectYou');
+    expect(next()[0]).toBe('setPreferredMember');
     self.preferred_member_id = 'member-1______________';
     snapshot.members[1]!.status = 'archived';
-    expect(next()).not.toContain('selectYou');
+    expect(next()).not.toContain('setPreferredMember');
     snapshot.members[1]!.status = 'active';
-    expect(next()).toContain('selectYou');
+    expect(next()).toContain('setPreferredMember');
     await actions.dispatch('showSettings', {});
-    expect(next()).not.toContain('selectYou');
+    expect(next()).not.toContain('setPreferredMember');
     await actions.dispatch('closePanel', {});
     await actions.dispatch('beginEditMember', { memberId: 'member-1______________' });
-    expect(next()).not.toContain('selectYou');
+    expect(next()).not.toContain('setPreferredMember');
   });
 
   it('changes suggestions with drafts and excludes unavailable platform actions', async () => {
@@ -636,7 +639,7 @@ describe('app actions', () => {
     expect(next()).toEqual(['closePanel']);
     await actions.dispatch('showInvite', {});
     expect(next()).toEqual(['copyInviteLink', 'closePanel']);
-    expect(next()).not.toContain('replaceInviteLink');
+    expect(next()).not.toContain('regenerateInvite');
     await actions.dispatch('closePanel', {});
     await actions.dispatch('beginAddMember', {});
     expect(next()).toEqual(['cancelMemberEdit']);
@@ -656,7 +659,7 @@ describe('app actions', () => {
         (action) => action.name,
       );
 
-    await actions.dispatch('replaceInviteLink', {});
+    await actions.dispatch('regenerateInvite', {});
     expect(next()).toEqual(['confirmAction', 'cancelConfirmation']);
     state.online = false;
     expect(next()).toEqual(['cancelConfirmation']);
@@ -666,10 +669,10 @@ describe('app actions', () => {
     expect(next()).toEqual([
       'showInvite',
       'beginAddMember',
-      'selectYou',
+      'setPreferredMember',
       'showSettings',
       'beginEditMember',
-      'removeMember',
+      'archiveMember',
       'showGroups',
     ]);
     expect(
@@ -714,10 +717,10 @@ describe('app actions', () => {
     expect(group('confirmAction')).toBe('UI');
     expect(group('saveMemberEdit')).toBe('Ledger changes');
     expect(group('saveGroupSettings')).toBe('Ledger changes');
-    expect(group('selectYou')).toBe('Ledger changes');
+    expect(group('setPreferredMember')).toBe('Ledger changes');
     expect(group('submitCreateGroup')).toBe('Access & sync');
     expect(group('submitJoin')).toBe('Access & sync');
-    expect(group('replaceInviteLink')).toBe('Access & sync');
+    expect(group('regenerateInvite')).toBe('Access & sync');
     expect(
       actions
         .filter((action) => action.group === 'Ledger changes')
@@ -844,15 +847,15 @@ describe('app actions', () => {
   it('keeps offline ledger edits available and rejects stale member choices', async () => {
     const { host, calls, state } = createHost({ connection: 'offline' });
     const actions = createDispatcher(host);
-    expect(actions.availability('addMember')).toEqual({ available: true });
-    expect(actions.availability('addMember', { name: '' })).toMatchObject({
+    expect(actions.availability('createMember')).toEqual({ available: true });
+    expect(actions.availability('createMember', { name: '' })).toMatchObject({
       available: false,
       error: 'invalid_input',
     });
-    expect(actions.availability('addMember', { name: 'Dev' })).toEqual({
+    expect(actions.availability('createMember', { name: 'Dev' })).toEqual({
       available: true,
     });
-    expect(actions.availability('replaceInviteLink')).toMatchObject({
+    expect(actions.availability('regenerateInvite')).toMatchObject({
       available: false,
       error: 'client_offline',
     });
@@ -861,11 +864,11 @@ describe('app actions', () => {
     if (!snapshot) throw new Error('missing_fixture');
     snapshot.members[1]!.status = 'archived';
     const input = { memberId: 'member-2______________' };
-    expect(actions.availability('selectYou', input)).toMatchObject({
+    expect(actions.availability('setPreferredMember', input)).toMatchObject({
       available: false,
       error: 'member_not_found',
     });
-    expect(await actions.dispatch('selectYou', input)).toMatchObject({
+    expect(await actions.dispatch('setPreferredMember', input)).toMatchObject({
       status: 'failed',
       error: 'member_not_found',
     });
@@ -942,7 +945,7 @@ describe('app actions', () => {
   it('fades approval when its original action becomes unavailable but still allows cancellation', async () => {
     const { host, state, calls } = createHost();
     const actions = createDispatcher(host);
-    await actions.dispatch('replaceInviteLink', {});
+    await actions.dispatch('regenerateInvite', {});
     const requestId = actions.state().ui.confirmation?.id ?? '';
     const input = { requestId };
     expect(actions.availability('confirmAction', input).available).toBe(true);
@@ -983,7 +986,7 @@ describe('app actions', () => {
     );
     expect(actions.state().ui.settings.name).toBe('New trip');
     await actions.dispatchJson('saveGroupSettings', {}, { origin: 'devtools' });
-    expect(calls).toEqual(['renameGroup New trip Workbench trip']);
+    expect(calls).toEqual(['group.rename New trip Workbench trip']);
     expect(actions.ui.snapshot().view).toBe('home');
     expect(views).toContain('settings');
     stop();
@@ -1009,7 +1012,7 @@ describe('app actions', () => {
     });
     await actions.dispatch('cancelMemberEdit', {});
     expect(actions.state().ui.memberEdit).toBeNull();
-    expect(calls).toEqual(['renamePerson member-2______________ Benjamin Ben']);
+    expect(calls).toEqual(['member.rename member-2______________ Benjamin Ben']);
   });
 
   it('protects the saving editor and permits another editor after completion', async () => {
@@ -1020,7 +1023,7 @@ describe('app actions', () => {
       release = resolve;
     });
 
-    const actions = createDispatcher({ ...host, renamePerson: () => saved });
+    const actions = createDispatcher({ ...host, submit: () => saved });
 
     await actions.dispatch('beginEditMember', { memberId: 'member-2______________' });
     await actions.dispatch('changeDraft', {
@@ -1087,9 +1090,9 @@ describe('app actions', () => {
     const { host, calls } = createHost();
     const actions = createDispatcher(host);
 
-    await actions.dispatch('replaceInviteLink', {}, { origin: 'ui' });
+    await actions.dispatch('regenerateInvite', {}, { origin: 'ui' });
     const first = actions.state().ui.confirmation;
-    expect(first?.name).toBe('replaceInviteLink');
+    expect(first?.name).toBe('regenerateInvite');
     await actions.dispatch(
       'cancelConfirmation',
       { requestId: first?.id ?? '' },
@@ -1097,7 +1100,7 @@ describe('app actions', () => {
     );
     expect(actions.state().ui.confirmation).toBeNull();
     expect(calls).toEqual([]);
-    await actions.dispatch('replaceInviteLink', {}, { origin: 'devtools' });
+    await actions.dispatch('regenerateInvite', {}, { origin: 'devtools' });
     const second = actions.state().ui.confirmation;
     expect(
       await actions.dispatch('confirmAction', { requestId: first?.id ?? '' }),
@@ -1152,7 +1155,7 @@ describe('app actions', () => {
   it('rechecks requirements when approving an action from another caller', async () => {
     const { host, state, calls } = createHost();
     const actions = createDispatcher(host);
-    await actions.dispatch('replaceInviteLink', {});
+    await actions.dispatch('regenerateInvite', {});
     const requestId = actions.state().ui.confirmation?.id ?? '';
     state.online = false;
     expect(
@@ -1165,11 +1168,11 @@ describe('app actions', () => {
     const { host, calls } = createHost({ others: ['Ben'] });
     const actions = createDispatcher(host);
     const input = { memberId: 'member-2______________' };
-    await actions.dispatch('selectYou', input);
+    await actions.dispatch('setPreferredMember', input);
     input.memberId = 'member-1______________';
     const requestId = actions.state().ui.confirmation?.id ?? '';
     await actions.dispatch('confirmAction', { requestId });
-    expect(calls).toEqual(['selectPerson member-2______________']);
+    expect(calls).toEqual(['preference.set member-2______________']);
   });
 
   it('cannot submit a draft after closing its form', async () => {
@@ -1236,18 +1239,18 @@ describe('app actions', () => {
     const { host, calls } = createHost();
     const actions = createDispatcher(host);
 
-    expect(await actions.dispatch('addMember', { name: '   ' })).toMatchObject({
+    expect(await actions.dispatch('createMember', { name: '   ' })).toMatchObject({
       status: 'failed',
       error: 'invalid_input',
     });
-    expect(await actions.dispatchJson('addMember', { name: 42 })).toMatchObject(
+    expect(await actions.dispatchJson('createMember', { name: 42 })).toMatchObject(
       { status: 'failed', error: 'invalid_input' },
     );
-    expect(await actions.dispatch('addMember', { name: ' Ben ' })).toEqual({
+    expect(await actions.dispatch('createMember', { name: ' Ben ' })).toEqual({
       status: 'done',
       value: undefined,
     });
-    expect(calls).toEqual(['addPerson Ben']);
+    expect(calls).toEqual(['member.create Ben']);
   });
 
   it('checks preconditions before running', async () => {
@@ -1255,10 +1258,10 @@ describe('app actions', () => {
     const closed = createHost({ open: false });
 
     expect(
-      await createDispatcher(offline.host).dispatch('replaceInviteLink', {}),
+      await createDispatcher(offline.host).dispatch('regenerateInvite', {}),
     ).toMatchObject({ status: 'failed', error: 'client_offline' });
     expect(
-      await createDispatcher(closed.host).dispatch('addMember', {
+      await createDispatcher(closed.host).dispatch('createMember', {
         name: 'Ben',
       }),
     ).toMatchObject({ status: 'failed', error: 'no_open_group' });
@@ -1269,13 +1272,13 @@ describe('app actions', () => {
     const { host, calls } = createHost();
     const actions = createDispatcher(host);
 
-    expect(await actions.dispatch('replaceInviteLink', {})).toMatchObject({
+    expect(await actions.dispatch('regenerateInvite', {})).toMatchObject({
       status: 'needs_confirmation',
       message: 'The current link will stop working.',
     });
     expect(calls).toEqual([]);
     expect(
-      await actions.dispatch('replaceInviteLink', {}, { confirmed: true }),
+      await actions.dispatch('regenerateInvite', {}, { confirmed: true }),
     ).toMatchObject({ status: 'done' });
     expect(calls).toEqual(['regenerateInvite']);
   });
@@ -1285,15 +1288,15 @@ describe('app actions', () => {
     const actions = createDispatcher(host);
 
     expect(
-      await actions.dispatch('selectYou', { memberId: 'member-2______________' }),
+      await actions.dispatch('setPreferredMember', { memberId: 'member-2______________' }),
     ).toMatchObject({
       status: 'needs_confirmation',
       message: 'Participant 1 already uses this name.',
     });
     expect(
-      await actions.dispatch('selectYou', { memberId: 'member-1______________' }),
+      await actions.dispatch('setPreferredMember', { memberId: 'member-1______________' }),
     ).toMatchObject({ status: 'done' });
-    expect(calls).toEqual(['selectPerson member-1______________']);
+    expect(calls).toEqual(['preference.set member-1______________']);
   });
 
   it('reports failures as outcomes instead of throwing', async () => {
@@ -1302,7 +1305,7 @@ describe('app actions', () => {
 
     fail('member_name_taken');
 
-    expect(await actions.dispatch('addMember', { name: 'Ben' })).toEqual({
+    expect(await actions.dispatch('createMember', { name: 'Ben' })).toEqual({
       status: 'failed',
       error: 'member_name_taken',
       issues: [],
@@ -1328,7 +1331,7 @@ describe('app actions', () => {
     });
 
     expect(calls).toEqual([
-      'renamePerson member-2______________ Benji Ben',
+      'member.rename member-2______________ Benji Ben',
       'joinGroup uy9ogmKJRD2VRfbN4PDsAw Dev t',
     ]);
   });
@@ -1372,6 +1375,6 @@ describe('app actions', () => {
       described
         .filter((action) => action.confirms)
         .map((action) => action.name),
-    ).toEqual(['selectYou', 'replaceInviteLink', 'leaveGroup']);
+    ).toEqual(['setPreferredMember', 'regenerateInvite', 'leaveGroup']);
   });
 });

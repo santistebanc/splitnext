@@ -89,7 +89,7 @@ export function InvitePanel(props: InvitePanelProps) {
             secondary={Boolean(link && canShare)}
             disabled={action.busy || replace.busy || !online}
             onPress={() => {
-              void replace.call('replaceInviteLink', {});
+              void replace.call('regenerateInvite', {});
             }}
           >
             {replace.busy ? 'Replacing…' : 'New link'}

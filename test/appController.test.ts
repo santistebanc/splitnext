@@ -104,7 +104,7 @@ describe('user-facing app flows', () => {
     app.client.knownGroups = readGroups;
     await app.openGroup(target.group_id);
 
-    await app.leaveGroup();
+    await app.submit({ type: 'group.leave', payload: {} });
     expect(await app.openJoinedGroup(target.group_id)).toBe(false);
     expect(app.snapshot().group).toBeNull();
     app.dispose();
@@ -122,7 +122,7 @@ describe('user-facing app flows', () => {
       creator_member_name: 'Santi',
     });
     await first.setOnline(false);
-    await first.addPerson('Robin');
+    await first.submit({ type: 'member.create', payload: { display_name: 'Robin' } });
     first.dispose();
 
     const saved = parseClientDocument(await storage.read());
@@ -230,7 +230,7 @@ describe('user-facing app flows', () => {
     });
     await second.start(true);
     await first.setOnline(false);
-    await first.addPerson('Alex');
+    await first.submit({ type: 'member.create', payload: { display_name: 'Alex' } });
     await second.readStorage();
 
     expect(second.snapshot().group?.projected_snapshot?.members).toHaveLength(
@@ -269,8 +269,8 @@ describe('user-facing app flows', () => {
     await first.setOnline(false);
     await second.setOnline(false);
 
-    await first.renameGroup('Rome', 'Trip');
-    await second.renameGroup('Berlin', 'Trip');
+    await first.submit({ type: 'group.rename', payload: { name: 'Rome', expected_name: 'Trip' } });
+    await second.submit({ type: 'group.rename', payload: { name: 'Berlin', expected_name: 'Trip' } });
 
     await second.setOnline(true);
     await first.setOnline(true);
@@ -281,7 +281,7 @@ describe('user-facing app flows', () => {
 
     if (!notice) throw new Error('Expected a conflict notice');
 
-    await first.applyAgain(notice.command.command_id);
+    await first.retryNotice(notice.command.command_id);
     const result = first.snapshot().group?.projected_snapshot?.group;
 
     expect(result?.name).toBe('Rome');
@@ -330,7 +330,7 @@ describe('user-facing app flows', () => {
       creator_member_name: 'Santi',
     });
     await app.setOnline(false);
-    await app.addPerson('Alex');
+    await app.submit({ type: 'member.create', payload: { display_name: 'Alex' } });
 
     expect(app.snapshot().group?.outbox).toHaveLength(1);
     expect(app.snapshot().group?.projected_snapshot?.members).toHaveLength(2);
@@ -353,7 +353,7 @@ describe('user-facing app flows', () => {
     expect(
       creator.snapshot().group?.projected_snapshot?.invite.token,
     ).toBeTruthy();
-    await creator.addPerson('Alex');
+    await creator.submit({ type: 'member.create', payload: { display_name: 'Alex' } });
 
     const group = creator.snapshot().group;
 
@@ -405,7 +405,7 @@ describe('user-facing app flows', () => {
 
     if (!group || !person) throw new Error('Expected a created group');
 
-    await app.leaveGroup();
+    await app.submit({ type: 'group.leave', payload: {} });
     expect(app.snapshot().group).toBeNull();
     expect(app.snapshot().groups[0]?.status).toBe('left');
     await app.openGroup(group.group_id);

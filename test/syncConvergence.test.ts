@@ -7,9 +7,11 @@ import {
   SplitnextSyncClient,
   activeMembers,
   type ClientPreferredMemberChoice,
+  type CommandIntent,
   type SyncDeviceTransport,
   type SyncTransport,
 } from '../src/client';
+import { requiresServerDecision } from '../src/domain/commands';
 import { createIdentifier } from '../src/domain/ids';
 import { memberNameKey } from '../src/domain/members';
 import { groupSnapshotSchema, type GroupSnapshot } from '../src/domain/sync';
@@ -23,7 +25,7 @@ import { randomDeviceSecret } from './harness';
  * prints the shrunk list of steps that breaks it; pass the printed seed and
  * path to `fc.assert` to replay it.
  *
- * To cover a new command, add an action that issues it.
+ * To cover a new command, add a generator for it to `commandArbitrary`.
  */
 
 const deviceCount = 3;
@@ -43,22 +45,56 @@ const faultArbitrary = fc.oneof(
 
 const pick = fc.nat({ max: 9 });
 
+/** One generator per group command; members are picked from the sender's projection. */
+const commandArbitrary = fc.oneof(
+  fc.record({ type: fc.constant('group.rename' as const), name: fc.constantFrom(...groupNames) }),
+  fc.record({ type: fc.constant('member.create' as const), name: fc.constantFrom(...memberNames) }),
+  fc.record({ type: fc.constant('member.rename' as const), member: pick, name: fc.constantFrom(...memberNames) }),
+  fc.record({ type: fc.constant('member.archive' as const), member: pick }),
+  fc.record({ type: fc.constant('preference.set' as const), member: pick }),
+  fc.record({ type: fc.constant('group.leave' as const) }),
+);
+
+type CommandStep = typeof commandArbitrary extends fc.Arbitrary<infer T> ? T : never;
+
 const actionArbitrary = fc.oneof(
+  { arbitrary: fc.record({ kind: fc.constant('submit' as const), command: commandArbitrary }), weight: 6 },
   fc.record({ kind: fc.constant('goOffline' as const) }),
   fc.record({ kind: fc.constant('goOnline' as const) }),
   fc.record({ kind: fc.constant('open' as const) }),
   fc.record({ kind: fc.constant('reload' as const) }),
-  fc.record({ kind: fc.constant('renameGroup' as const), name: fc.constantFrom(...groupNames) }),
-  fc.record({ kind: fc.constant('addMember' as const), name: fc.constantFrom(...memberNames) }),
-  fc.record({ kind: fc.constant('renameMember' as const), member: pick, name: fc.constantFrom(...memberNames) }),
-  fc.record({ kind: fc.constant('archiveMember' as const), member: pick }),
-  fc.record({ kind: fc.constant('choosePreferred' as const), member: pick }),
-  fc.record({ kind: fc.constant('leave' as const) }),
   fc.record({ kind: fc.constant('rejoin' as const), member: fc.option(pick), name: fc.constantFrom(...memberNames) }),
-  fc.record({ kind: fc.constant('replaceInvite' as const) }),
+  fc.record({ kind: fc.constant('regenerateInvite' as const) }),
   fc.record({ kind: fc.constant('retryNotice' as const), notice: pick }),
   fc.record({ kind: fc.constant('dismissNotice' as const), notice: pick }),
 );
+
+/** The intent a person would submit for a generated command, if its member exists. */
+function intentFor(command: CommandStep, snapshot: GroupSnapshot): CommandIntent | null {
+  const member = (index: number) => snapshot.members[index % snapshot.members.length]?.id;
+
+  switch (command.type) {
+    case 'group.rename':
+      return { type: command.type, payload: { name: command.name } };
+    case 'member.create':
+      return { type: command.type, payload: { display_name: command.name } };
+    case 'member.rename': {
+      const memberId = member(command.member);
+
+      return memberId ? { type: command.type, payload: { member_id: memberId, display_name: command.name } } : null;
+    }
+
+    case 'member.archive':
+    case 'preference.set': {
+      const memberId = member(command.member);
+
+      return memberId ? { type: command.type, payload: { member_id: memberId } } : null;
+    }
+
+    case 'group.leave':
+      return { type: command.type, payload: {} };
+  }
+}
 
 const stepArbitrary = fc.record({
   device: fc.nat({ max: deviceCount - 1 }),
@@ -248,8 +284,7 @@ async function perform(simulation: Simulation, device: Device, step: Step): Prom
   const online = client.isOnline();
 
   if (!snapshot) throw new Error('missing_replica');
-  const member = (index: number) => snapshot.members[index % snapshot.members.length];
-  const notice = (index: number) => state.notices[index % Math.max(state.notices.length, 1)];
+  const notice =(index: number) => state.notices[index % Math.max(state.notices.length, 1)];
 
   faults.set(device.secret, fault);
 
@@ -313,54 +348,19 @@ async function perform(simulation: Simulation, device: Device, step: Step): Prom
         return;
       }
 
-      default:
-        break;
-    }
-
-    // The app offers ledger changes only for a group this installation shows.
-    if (state.hidden) return;
-
-    switch (action.kind) {
-      case 'renameGroup':
-        await attempt(fault, () => client.renameGroup(groupId, action.name));
+      case 'regenerateInvite':
+        if (online && !state.hidden) await attempt(fault, () => client.regenerateInvite(groupId));
 
         return;
-      case 'addMember':
-        await attempt(fault, () => client.addMember(groupId, action.name));
+      case 'submit': {
+        const intent = intentFor(action.command, snapshot);
 
-        return;
-      case 'renameMember': {
-        const renamed = member(action.member);
-
-        if (renamed) await attempt(fault, () => client.renameMember(groupId, renamed.id, action.name));
+        // The app offers commands only for a group it shows, and leaving only online.
+        if (!intent || state.hidden || (requiresServerDecision(intent.type) && !online)) return;
+        await attempt(fault, () => client.submit(groupId, intent));
 
         return;
       }
-
-      case 'archiveMember': {
-        const archived = member(action.member);
-
-        if (archived) await attempt(fault, () => client.removeMember(groupId, archived.id));
-
-        return;
-      }
-
-      case 'choosePreferred': {
-        const chosen = member(action.member);
-
-        if (chosen) await attempt(fault, () => client.selectPreferredMember(groupId, chosen.id));
-
-        return;
-      }
-
-      case 'leave':
-        if (online) await attempt(fault, () => client.leaveGroup(groupId));
-
-        return;
-      case 'replaceInvite':
-        if (online) await attempt(fault, () => client.regenerateInvite(groupId));
-
-        return;
     }
   } finally {
     faults.delete(device.secret);
@@ -412,19 +412,21 @@ function expectValidSnapshot(snapshot: GroupSnapshot): void {
   }
 }
 
+const leave = { kind: 'submit', command: { type: 'group.leave' } } as const;
+
 /** Rare sequences worth checking on every run; each found a bug once. */
 const examples: [Step[]][] = [
   // A rejoin whose response was lost must not be replayed after leaving again.
   [[
-    { device: 1, fault: 'none', action: { kind: 'leave' } },
+    { device: 1, fault: 'none', action: leave },
     { device: 1, fault: 'lose_response', action: { kind: 'rejoin', member: null, name: 'Dee' } },
     { device: 1, fault: 'none', action: { kind: 'open' } },
-    { device: 1, fault: 'none', action: { kind: 'leave' } },
+    { device: 1, fault: 'none', action: leave },
     { device: 1, fault: 'none', action: { kind: 'rejoin', member: 0, name: 'Dee' } },
   ]],
   // A leave whose request was lost reaches the server before a rejoin.
   [[
-    { device: 0, fault: 'lose_request', action: { kind: 'leave' } },
+    { device: 0, fault: 'lose_request', action: leave },
     { device: 0, fault: 'none', action: { kind: 'rejoin', member: null, name: 'Ana' } },
   ]],
 ];

@@ -73,7 +73,7 @@ for (const [name, createApi] of Object.entries(transports)) {
       const created = await client.createGroup({ name: 'Retry', creator_member_name: 'Ana' });
 
       lose = true;
-      const pending = await client.addMember(created.group_id, 'Ben');
+      const pending = await client.submit(created.group_id, { type: 'member.create', payload: { display_name: 'Ben' } });
 
       expect(pending.outbox).toHaveLength(1);
       const settled = await client.syncGroup(created.group_id);

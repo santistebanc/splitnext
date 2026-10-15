@@ -243,11 +243,11 @@ function MemberRow(props: MemberRowProps) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${isYou ? 'You' : 'This is me'}: ${member.display_name}, ${participantLabels || 'unclaimed'}`}
-          accessibilityState={{ selected: isYou, disabled: busy || !actions.availability('selectYou', { memberId: member.id }).available }}
+          accessibilityState={{ selected: isYou, disabled: busy || !actions.availability('setPreferredMember', { memberId: member.id }).available }}
           aria-pressed={isYou}
-          disabled={busy || !actions.availability('selectYou', { memberId: member.id }).available}
+          disabled={busy || !actions.availability('setPreferredMember', { memberId: member.id }).available}
           onPress={() => {
-            if (!isYou) void select.call('selectYou', { memberId: member.id });
+            if (!isYou) void select.call('setPreferredMember', { memberId: member.id });
           }}
           style={({ pressed }) => [
             s.memberSelectButton,
@@ -306,10 +306,10 @@ function MemberRow(props: MemberRowProps) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Remove ${member.display_name}`}
-          accessibilityState={{ disabled: busy || !actions.availability('removeMember', { memberId: member.id }).available }}
-          disabled={busy || !actions.availability('removeMember', { memberId: member.id }).available}
+          accessibilityState={{ disabled: busy || !actions.availability('archiveMember', { memberId: member.id }).available }}
+          disabled={busy || !actions.availability('archiveMember', { memberId: member.id }).available}
           onPress={() => {
-            void remove.call('removeMember', { memberId: member.id });
+            void remove.call('archiveMember', { memberId: member.id });
           }}
           style={s.memberActionsButton}
         >

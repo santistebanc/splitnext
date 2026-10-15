@@ -381,13 +381,27 @@ const group = await client.createGroup({
 });
 
 client.setOnline(false);
-await client.addMember(group.group_id, 'Robin');
+await client.submit(group.group_id, {
+  type: 'member.create',
+  payload: { display_name: 'Robin' },
+});
 client.setOnline(true);
 await client.syncGroup(group.group_id);
 
 // Receive other devices' changes as they happen.
 client.watchGroup(group.group_id);
 ```
+
+Every group command goes through `submit(groupId, intent)`. An intent is the
+command without its identifiers; omitted preconditions, such as the name a
+rename expects to replace, default to what the local projection shows. The app
+controller and app actions use the same path. A new command is its schema,
+rule and intent completion in `src/domain/commands.ts`, its audit change, its
+retry intent and notice wording, and one app action; each of those places is
+an exhaustive switch, so the compiler lists any it misses. Each command keeps
+one name everywhere: the `groupCommandTypes` key, such as `archiveMember`,
+names its app action, and its value, such as `member.archive`, is the wire
+type.
 
 `MemoryClientStorage` is useful for tests. `IndexedDbClientStorage` is the atomic
 browser adapter used by the app. React Native can provide a SQLite

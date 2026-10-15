@@ -51,7 +51,7 @@ export function NoticesPanel(props: NoticesPanelProps) {
 
   function act(
     commandId: string,
-    name: 'applyChangeAgain' | 'dismissNotice',
+    name: 'retryNotice' | 'dismissNotice',
   ): void {
     setTarget(commandId);
     void action.call(name, { commandId });
@@ -93,7 +93,7 @@ export function NoticesPanel(props: NoticesPanelProps) {
               <Button
                 secondary
                 disabled={action.busy}
-                onPress={() => act(commandId, 'applyChangeAgain')}
+                onPress={() => act(commandId, 'retryNotice')}
               >
                 Apply again
               </Button>

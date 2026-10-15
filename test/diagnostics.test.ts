@@ -26,7 +26,7 @@ describe('action and SDK diagnostics', () => {
 
     const results = await Promise.all([
       actions.dispatch('renameGroup', { name: 'New name' }),
-      actions.dispatch('addMember', { name: 'Ben' }),
+      actions.dispatch('createMember', { name: 'Ben' }),
     ]);
 
     expect(results.map((result) => result.status)).toEqual(['done', 'done']);
@@ -40,13 +40,13 @@ describe('action and SDK diagnostics', () => {
       expect(events.some((event) => event.kind === 'request' && event.command_ids.includes(queuedEvent.command_id) && event.invocation_ids.includes(queuedEvent.invocation_id ?? 'missing'))).toBe(true);
     }
 
-    const pending = await actions.dispatch('replaceInviteLink', {});
+    const pending = await actions.dispatch('regenerateInvite', {});
 
     if (pending.status !== 'needs_confirmation' || !pending.requestId) throw new Error('missing confirmation');
     const parent = records.at(-1)?.invocationId;
 
     expect((await actions.dispatch('confirmAction', { requestId: pending.requestId })).status).toBe('done');
-    expect(records.find((record) => record.name === 'replaceInviteLink' && record.status === 'done')?.parentInvocationId).toBe(parent);
+    expect(records.find((record) => record.name === 'regenerateInvite' && record.status === 'done')?.parentInvocationId).toBe(parent);
     await actions.dispatch('showCreateGroup', {});
     expect(records.at(-1)).toMatchObject({ before: { view: 'home' }, after: { view: 'create' }, durationMs: expect.any(Number) });
     app.dispose();
@@ -78,7 +78,7 @@ describe('action and SDK diagnostics', () => {
     const records: DispatchRecord[] = [];
 
     actions.observe((record) => records.push(record));
-    await actions.dispatch('addMember', { name: 'Private draft text' });
+    await actions.dispatch('createMember', { name: 'Private draft text' });
     const replica = app.snapshot().group;
     const pending = replica?.outbox[0];
     const invocation = records[0]?.invocationId;

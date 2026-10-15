@@ -35,7 +35,7 @@ describe('stateful offline client SDK', () => {
     const created = await client.createGroup({ name: 'Batch read', creator_member_name: 'Ana' });
 
     client.setOnline(false);
-    await client.renameGroup(created.group_id, 'Offline name');
+    await client.submit(created.group_id, { type: 'group.rename', payload: { name: 'Offline name' } });
     const read = vi.spyOn(storage, 'read');
     const installation = await client.installationState([created.group_id, created.group_id]);
 
@@ -58,13 +58,13 @@ describe('stateful offline client SDK', () => {
     await joinThroughInvite(editor, other, created.group_id, { kind: 'new', display_name: 'Visitor' });
     await editor.syncGroup(created.group_id);
     editor.setOnline(false);
-    const local = await editor.addMember(created.group_id, 'Shared');
+    const local = await editor.submit(created.group_id, { type: 'member.create', payload: { display_name: 'Shared' } });
     const alias = local.projected_snapshot?.members.find((member) => member.display_name === 'Shared');
 
     if (!alias) throw new Error('missing alias');
-    await editor.renameMember(created.group_id, alias.id, 'Taken');
-    await other.addMember(created.group_id, 'Shared');
-    const competing = await other.addMember(created.group_id, 'Taken');
+    await editor.submit(created.group_id, { type: 'member.rename', payload: { member_id: alias.id, display_name: 'Taken' } });
+    await other.submit(created.group_id, { type: 'member.create', payload: { display_name: 'Shared' } });
+    const competing = await other.submit(created.group_id, { type: 'member.create', payload: { display_name: 'Taken' } });
     const taken = competing.projected_snapshot?.members.find((member) => member.display_name === 'Taken');
 
     if (!taken) throw new Error('missing competing member');
@@ -75,7 +75,7 @@ describe('stateful offline client SDK', () => {
     if (!notice) throw new Error('missing notice');
     expect(notice.command).toMatchObject({ type: 'member.rename', payload: { member_id: alias.id } });
     expect(conflict.projected_snapshot?.members.some((member) => member.id === alias.id)).toBe(false);
-    await other.removeMember(created.group_id, taken.id);
+    await other.submit(created.group_id, { type: 'member.archive', payload: { member_id: taken.id } });
     await editor.syncGroup(created.group_id);
     const retried = await editor.retryNotice(created.group_id, notice.command.command_id);
 
@@ -103,8 +103,8 @@ describe('stateful offline client SDK', () => {
     const created = await editor.createGroup({ name: 'Original', creator_member_name: 'Ana' });
 
     await joinThroughInvite(editor, other, created.group_id, { kind: 'new', display_name: 'Ben' });
-    await other.renameGroup(created.group_id, 'Their name');
-    const conflict = await editor.renameGroup(created.group_id, 'My name', 'Original');
+    await other.submit(created.group_id, { type: 'group.rename', payload: { name: 'Their name' } });
+    const conflict = await editor.submit(created.group_id, { type: 'group.rename', payload: { name: 'My name', expected_name: 'Original' } });
     const notice = conflict.notices[0];
 
     if (!notice) throw new Error('missing notice');
@@ -152,7 +152,7 @@ describe('stateful offline client SDK', () => {
     });
 
     client.setOnline(false);
-    const offline = await client.addMember(created.group_id, 'Robin');
+    const offline = await client.submit(created.group_id, { type: 'member.create', payload: { display_name: 'Robin' } });
 
     expect(offline.revision).toBe(1);
     expect(offline.outbox).toHaveLength(1);
@@ -232,8 +232,8 @@ describe('stateful offline client SDK', () => {
     client.setOnline(false);
 
     await Promise.all([
-      client.addMember(created.group_id, 'Robin'),
-      client.addMember(created.group_id, 'Taylor'),
+      client.submit(created.group_id, { type: 'member.create', payload: { display_name: 'Robin' } }),
+      client.submit(created.group_id, { type: 'member.create', payload: { display_name: 'Taylor' } }),
     ]);
 
     const replica = await client.inspect(created.group_id);
@@ -291,7 +291,7 @@ describe('stateful offline client SDK', () => {
 
     await responseStarted;
     client.setOnline(false);
-    await client.addMember(created.group_id, 'Robin');
+    await client.submit(created.group_id, { type: 'member.create', payload: { display_name: 'Robin' } });
     releaseResponse();
     await synchronization;
 
@@ -323,10 +323,10 @@ describe('stateful offline client SDK', () => {
 
     const seen = created.projected_snapshot?.group.name;
 
-    await other.renameGroup(created.group_id, 'Their name');
+    await other.submit(created.group_id, { type: 'group.rename', payload: { name: 'Their name' } });
     await editor.syncGroup(created.group_id);
 
-    const renamed = await editor.renameGroup(created.group_id, 'My name', seen);
+    const renamed = await editor.submit(created.group_id, { type: 'group.rename', payload: { name: 'My name', expected_name: seen } });
 
     expect(renamed.projected_snapshot?.group.name).toBe('Their name');
     expect(renamed.notices).toMatchObject([
@@ -353,8 +353,8 @@ describe('stateful offline client SDK', () => {
 
     first.setOnline(false);
     second.setOnline(false);
-    await first.renameGroup(created.group_id, 'Summer trip');
-    await second.renameGroup(created.group_id, 'Winter trip');
+    await first.submit(created.group_id, { type: 'group.rename', payload: { name: 'Summer trip' } });
+    await second.submit(created.group_id, { type: 'group.rename', payload: { name: 'Winter trip' } });
 
     first.setOnline(true);
     await first.syncGroup(created.group_id);
@@ -391,7 +391,7 @@ describe('stateful offline client SDK', () => {
       creator_member_name: 'Santi',
     });
 
-    const withRobin = await client.addMember(created.group_id, 'Robin');
+    const withRobin = await client.submit(created.group_id, { type: 'member.create', payload: { display_name: 'Robin' } });
 
     const robin = withRobin.projected_snapshot?.members.find(
       (member) => member.display_name === 'Robin',
@@ -406,16 +406,16 @@ describe('stateful offline client SDK', () => {
 
     if (!robin || !santi) throw new Error('expected_members_missing');
 
-    const preferred = await client.selectPreferredMember(
-      created.group_id,
-      robin.id,
-    );
+    const preferred = await client.submit(created.group_id, {
+      type: 'preference.set',
+      payload: { member_id: robin.id },
+    });
 
     expect(preferred.projected_snapshot?.access_grants[0]).toMatchObject({
       preferred_member_id: robin.id,
     });
 
-    const removed = await client.removeMember(created.group_id, robin.id);
+    const removed = await client.submit(created.group_id, { type: 'member.archive', payload: { member_id: robin.id } });
 
     expect(
       removed.projected_snapshot?.members.find(
@@ -426,7 +426,7 @@ describe('stateful offline client SDK', () => {
       preferred_member_id: null,
     });
 
-    const left = await client.leaveGroup(created.group_id);
+    const left = await client.submit(created.group_id, { type: 'group.leave', payload: {} });
 
     expect(left.hidden).toBe(true);
 
@@ -474,7 +474,7 @@ describe('stateful offline client SDK', () => {
 
     loseNextSyncResponse = true;
 
-    const queued = await client.addMember(created.group_id, 'Robin');
+    const queued = await client.submit(created.group_id, { type: 'member.create', payload: { display_name: 'Robin' } });
 
     expect(queued.outbox).toHaveLength(1);
     expect(queued.projected_snapshot?.members).toHaveLength(2);
@@ -589,8 +589,8 @@ describe('stateful offline client SDK', () => {
     second.setOnline(false);
 
     await Promise.all([
-      first.addMember(created.group_id, 'Robin'),
-      second.addMember(created.group_id, 'Taylor'),
+      first.submit(created.group_id, { type: 'member.create', payload: { display_name: 'Robin' } }),
+      second.submit(created.group_id, { type: 'member.create', payload: { display_name: 'Taylor' } }),
     ]);
 
     const replica = await first.inspect(created.group_id);

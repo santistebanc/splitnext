@@ -23,12 +23,12 @@ describe('merging members added concurrently with the same name', () => {
 
     offline.client.setOnline(false);
 
-    const queued = await offline.client.addMember(groupId, 'Juan');
+    const queued = await offline.client.submit(groupId, { type: 'member.create', payload: { display_name: 'Juan' } });
     const localJuan = memberNamed(queued, 'Juan');
 
-    await offline.client.selectPreferredMember(groupId, localJuan);
+    await offline.client.submit(groupId, { type: 'preference.set', payload: { member_id: localJuan } });
 
-    const current = await online.client.addMember(groupId, 'juan');
+    const current = await online.client.submit(groupId, { type: 'member.create', payload: { display_name: 'juan' } });
     const serverJuan = memberNamed(current, 'juan');
 
     offline.client.setOnline(true);
@@ -45,7 +45,7 @@ describe('merging members added concurrently with the same name', () => {
 
   it('resolves the merged id in later synchronizations', async () => {
     const { groupId, offline, online, api } = await createSharedGroup();
-    const current = await online.client.addMember(groupId, 'Juan');
+    const current = await online.client.submit(groupId, { type: 'member.create', payload: { display_name: 'Juan' } });
     const serverJuan = memberNamed(current, 'Juan');
     const device = api.forDevice(offline.secret);
     const aliasId = createIdentifier();
@@ -132,12 +132,12 @@ describe('merging members added concurrently with the same name', () => {
     offline.client.setOnline(false);
 
     const localJuan = memberNamed(
-      await offline.client.addMember(groupId, 'Juan'),
+      await offline.client.submit(groupId, { type: 'member.create', payload: { display_name: 'Juan' } }),
       'Juan',
     );
 
     const serverJuan = memberNamed(
-      await online.client.addMember(groupId, 'Juan'),
+      await online.client.submit(groupId, { type: 'member.create', payload: { display_name: 'Juan' } }),
       'Juan',
     );
 
@@ -148,7 +148,7 @@ describe('merging members added concurrently with the same name', () => {
 
     await responseStarted;
     offline.client.setOnline(false);
-    await offline.client.selectPreferredMember(groupId, localJuan);
+    await offline.client.submit(groupId, { type: 'preference.set', payload: { member_id: localJuan } });
     releaseResponse();
     await synchronization;
 
