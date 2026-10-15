@@ -106,6 +106,15 @@ Browser app replicas use IndexedDB; the installation credential and last group a
 localStorage. Losing that credential loses this installation's access. On a
 fresh installation, use a current invite link to join each group again.
 
+All of an installation's replicas live in one document, which every local
+operation reads, validates, and rewrites whole. `test/storageBudget.test.ts`
+keeps that affordable: for 12 groups of 40 members with notices and a queued
+offline session, the document must stay under 128 KiB (88 KiB today), local
+operations under 20 ms each (2 to 3 ms on a development machine), and each
+operation within a fixed number of storage round trips. Expenses will grow the
+document; when a budget fails, split storage per group rather than raising it
+blindly.
+
 After an online visit has cached the app shell, `/app` can reload without a
 connection. The service worker caches public entry HTML and build assets only;
 API responses and invite previews are not cached. Saved
