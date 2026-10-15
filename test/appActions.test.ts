@@ -1093,13 +1093,20 @@ describe('app actions', () => {
     await actions.dispatch('joinGroup', {
       groupId: 'uy9ogmKJRD2VRfbN4PDsAw',
       as: { kind: 'new', name: 'Dev' },
-      token: 't',
+      token: 't'.repeat(43),
     });
 
     expect(calls).toEqual([
       'member.rename member-2______________ Benji Ben',
-      'joinGroup uy9ogmKJRD2VRfbN4PDsAw Dev t',
+      `joinGroup uy9ogmKJRD2VRfbN4PDsAw Dev ${'t'.repeat(43)}`,
     ]);
+
+    // A malformed token is rejected before anything is stored.
+    expect(await actions.dispatch('joinGroup', {
+      groupId: 'uy9ogmKJRD2VRfbN4PDsAw',
+      as: { kind: 'new', name: 'Dev' },
+      token: 'Trip',
+    })).toMatchObject({ status: 'failed', error: 'invalid_input' });
   });
 
   it('tells observers what ran and who asked, without changing behaviour', async () => {

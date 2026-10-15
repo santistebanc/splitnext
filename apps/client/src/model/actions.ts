@@ -6,6 +6,7 @@ import {
   participantsForMember,
   groupNameSchema,
   identifierSchema,
+  inviteTokenSchema,
   memberNameSchema,
   parseInviteLink,
   formatInviteLink,
@@ -15,7 +16,7 @@ import {
   type JsonValue,
 } from '@splitnext/client';
 import type { ActionInvocation, AppController, AppState } from './controller';
-import { AppUiState, viewNames, type UiState } from './uiState';
+import { AppUiState, viewNames, type UiState, type ViewName } from './uiState';
 import { sourceOptions, type ValueSource } from './actionInputs';
 import {
   isSubmission,
@@ -236,14 +237,17 @@ function defineAction<S extends z.ZodType, O>(spec: ActionSpec<S, O>) {
       executions: ActionExecutions,
       name: string,
     ): Promise<Outcome<O>> {
-      const parsed = validate(raw);
+      const state = host.snapshot();
+
+      const context: ActionContext = { state, ui: ui.snapshot(), platform, pendingConfirmation, executions: executions.snapshot() };
+
+      // The same checks, in the same order, as availability().
+      const base = check(context);
+      const parsed = base.available ? validate(raw) : base;
 
       if ('available' in parsed)
         return { status: 'failed', error: parsed.error, issues: parsed.issues };
 
-      const state = host.snapshot();
-
-      const context: ActionContext = { state, ui: ui.snapshot(), platform, pendingConfirmation, executions: executions.snapshot() };
       const availability = check(context, parsed.data);
 
       if (!availability.available)
@@ -288,6 +292,34 @@ function meets(requirement: Requirement, state: AppState): boolean {
       return Boolean(state.group?.projected_snapshot && !state.group.hidden);
     case 'selectedGroup':
       return Boolean(state.group?.projected_snapshot);
+  }
+}
+
+/** One of this installation's groups, with a local copy unless online. */
+function requireOpenable(state: AppState, groupId?: string): BlockedAction | null {
+  const current = state.group && (groupId === undefined || state.group.group_id === groupId);
+  const saved = state.groups.find((group) => groupId === undefined || group.group_id === groupId);
+
+  if (!current && !saved) return unavailable('group_not_found', 'Choose a saved group.');
+
+  if (!current && saved && !saved.stored_locally && !state.online)
+    return unavailable('client_offline', 'Go online to open this group.');
+
+  return null;
+}
+
+/** Whether the group a view shows is there: panels need it open, rejoining needs it left. */
+function viewFits(view: ViewName, state: AppState): boolean {
+  switch (view) {
+    case 'settings':
+    case 'invite':
+      return meets('openGroup', state);
+    case 'notices':
+      return meets('selectedGroup', state);
+    case 'rejoin':
+      return Boolean(state.group?.hidden);
+    default:
+      return true;
   }
 }
 
@@ -515,11 +547,15 @@ export const appActions = {
       ).optional(),
     }),
     example: { view: 'home' },
+    unavailable: ({ state }, input) => (input?.groupId ? requireOpenable(state, input.groupId) : null),
     run: async (host, input, ui) => {
       if (input.groupId && input.groupId !== host.snapshot().group?.group_id)
         await host.openGroup(input.groupId);
       else if (!input.groupId) host.showGroups();
-      ui.show(input.view, 'restore');
+
+      // History can outlive a group's state, such as an invite sheet for a
+      // group since left; a panel without its group restores the group view.
+      ui.show(viewFits(input.view, host.snapshot()) ? input.view : 'home', 'restore');
     },
   }),
   changeDraft: defineAction({
@@ -935,8 +971,7 @@ export const appActions = {
         'The group to join, from the invite link or a left group.',
       ),
       as: memberChoiceSchema,
-      token: z
-        .string()
+      token: inviteTokenSchema
         .optional()
         .meta({ description: 'The invite token; not needed to rejoin.' }),
     }),
@@ -965,13 +1000,7 @@ export const appActions = {
       groupId: choice('group', "One of this installation's groups."),
     }),
     example: { groupId: 'uy9ogmKJRD2VRfbN4PDsAw' },
-    unavailable: ({ state }, input) =>
-      state.groups.some(
-        (group) => !input || group.group_id === input.groupId,
-      ) ||
-      (state.group && (!input || state.group.group_id === input.groupId))
-        ? null
-        : unavailable('group_not_found', 'Choose a saved group.'),
+    unavailable: ({ state }, input) => requireOpenable(state, input?.groupId),
     run: async (host, input, ui) => {
       await host.openGroup(input.groupId);
 

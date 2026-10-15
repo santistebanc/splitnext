@@ -15,7 +15,9 @@ If a decision changes, update the relevant document in the same slice.
 
 - Build small, reviewable vertical slices, each small enough to be its own
   commit.
-- Cover user-visible flows and UI bugs in `e2e/app.spec.ts`.
+- Cover user-visible flows and UI bugs in `e2e/app.spec.ts`. New app actions are
+  exercised by `test/actionModel.test.ts` automatically; give inputs that need
+  state-backed values a `choices` or `suggestions` source.
 - Give every new group command an action in `test/syncConvergence.test.ts` and a
   row per outcome in `test/groupCommandRules.test.ts`. When the generated test
   finds a failure, keep its shrunk steps in that file's `examples`.
