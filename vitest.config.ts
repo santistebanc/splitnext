@@ -50,6 +50,7 @@ export default defineConfig({
         serviceBindings: { APP_RENDERING: 'app-rendering' },
         bindings: {
           ENABLE_DEBUG_INSPECTION: 'true',
+          LOG_REQUESTS: 'false',
           TEST_MIGRATIONS: migrations,
         },
       },

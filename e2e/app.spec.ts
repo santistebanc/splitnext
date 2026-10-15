@@ -151,6 +151,20 @@ test('keeps offline edits pending and delivers them on reconnect', async ({ page
   await expect(button(page, 'Edit Benjamin')).toBeVisible();
 });
 
+test('copies a diagnostics report with request ids but no names', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await createGroup(page, 'Private trip', 'Private Ana');
+  await button(page, 'Groups').click();
+  await button(page, 'Copy diagnostics').click();
+  await expect(button(page, 'Diagnostics copied')).toBeVisible();
+
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+
+  expect(copied).toContain('"request_id"');
+  expect(copied).toContain('"name": "submitCreateGroup"');
+  expect(copied).not.toContain('Private');
+});
+
 test('leaves after confirming and rejoins as an existing member', async ({ page }) => {
   await createGroup(page, 'Lisbon', 'Ana');
   await button(page, 'Group settings').click();

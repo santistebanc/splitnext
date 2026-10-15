@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { commandFromIntent } from '../src/domain/commands';
 import {
   createDispatcher,
@@ -673,7 +674,7 @@ describe('app actions', () => {
 
     const supported = createDispatcher(host, {
       appUrl: 'https://splitnext.test',
-      copyLink: async () => undefined,
+      copyText: async () => undefined,
     });
 
     expect(supported.availability('copyInviteLink').available).toBe(true);
@@ -961,6 +962,35 @@ describe('app actions', () => {
     expect(calls).toEqual([]);
   });
 
+  it('copies a diagnostics report of recent actions without names, links, or inputs', async () => {
+    const { host } = createHost();
+    let copied = '';
+
+    const actions = createDispatcher(host, {
+      appUrl: 'https://splitnext.test',
+      copyText: async (text) => {
+        copied = text;
+      },
+    });
+
+    await actions.dispatch('createMember', { name: 'Private Name' });
+    await actions.dispatch('renameMember', { memberId: 'member-404____________', name: 'Other' });
+    expect(await actions.dispatch('copyDiagnostics', {})).toMatchObject({ status: 'done' });
+
+    const report = z.object({
+      open_group: z.object({ group_id: z.string() }),
+      dispatches: z.array(z.object({ name: z.string(), status: z.string(), detail: z.string().nullable(), invocationId: z.string() })),
+    }).parse(JSON.parse(copied));
+
+    expect(report.dispatches.map((entry) => [entry.name, entry.status, entry.detail])).toEqual([
+      ['renameMember', 'failed', 'member_not_found'],
+      ['createMember', 'done', null],
+    ]);
+
+    for (const hidden of ['Private Name', 'Workbench trip', 'Ana', 'w'.repeat(43)]) expect(copied).not.toContain(hidden);
+    expect(actions.diagnostics.snapshot().dispatches[0]).toMatchObject({ name: 'copyDiagnostics', status: 'done' });
+  });
+
   it('uses platform adapters for copy and share while reporting copied state', async () => {
     const { host } = createHost();
     const copied: string[] = [];
@@ -968,7 +998,7 @@ describe('app actions', () => {
 
     const actions = createDispatcher(host, {
       appUrl: 'https://splitnext.test',
-      copyLink: async (link) => {
+      copyText: async (link) => {
         copied.push(link);
       },
       shareLink: async (link) => {

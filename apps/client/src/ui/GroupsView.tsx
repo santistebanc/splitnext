@@ -19,6 +19,9 @@ export function GroupsView(props: GroupsViewProps) {
   // The row last pressed, so a failure to open it appears beside that row.
   const [target, setTarget] = useState<string | null>(null);
   const action = useActionCall();
+  // A support report of recent activity, as ids and codes only.
+  const report = useActionCall();
+  const [copied, setCopied] = useState(false);
   const active = state.groups.filter((group) => group.status === 'active');
   const left = state.groups.filter((group) => group.status === 'left');
 
@@ -130,6 +133,18 @@ export function GroupsView(props: GroupsViewProps) {
           ) : null}
         </>
       ) : null}
+      {report.can('copyDiagnostics') || copied ? (
+        <Button
+          quiet
+          disabled={!report.can('copyDiagnostics')}
+          onPress={() => {
+            void report.call('copyDiagnostics', {}, () => setCopied(true));
+          }}
+        >
+          {copied ? 'Diagnostics copied' : 'Copy diagnostics'}
+        </Button>
+      ) : null}
+      <ErrorMessage message={report.error} />
     </View>
   );
 }

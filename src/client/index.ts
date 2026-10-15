@@ -259,7 +259,8 @@ class Transport {
 
     notify(() => this.observer({ kind: 'request', ...exchange }));
 
-    const headers = new Headers({ accept: 'application/json' });
+    // The Worker logs requests under this id, so client diagnostics match its logs.
+    const headers = new Headers({ accept: 'application/json', 'x-request-id': exchange.request_id });
 
     if (options.body !== undefined) {
       headers.set('content-type', 'application/json');

@@ -1,6 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { Scalar } from '@scalar/hono-api-reference';
 import { cors } from 'hono/cors';
+import { requestIdOf, requestLogging } from './requestLog';
 import { debugRoutes } from './routes/debug';
 import { groupRoutes } from './routes/groups';
 import { identityRoutes } from './routes/identities';
@@ -17,10 +18,13 @@ app.use(
   '*',
   cors({
     origin: '*',
-    allowHeaders: ['Authorization', 'Content-Type'],
+    allowHeaders: ['Authorization', 'Content-Type', 'X-Request-Id'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    exposeHeaders: ['X-Request-Id'],
   }),
 );
+
+app.use('*', requestLogging);
 
 const routedApp = app
   .route('/', systemRoutes)
@@ -50,7 +54,7 @@ routedApp.notFound((context) => context.json({ error: 'not_found' }, 404));
 routedApp.onError((error, context) => {
   // The group names its invariant failures precisely. Keep those names, and the
   // request that provoked them, in the log; the client still learns nothing.
-  console.error('unhandled_error', context.req.method, context.req.path, error);
+  console.error('unhandled_error', requestIdOf(context.req.raw), context.req.method, context.req.path, error);
 
   return context.json({ error: 'internal_error' }, 500);
 });

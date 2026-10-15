@@ -17,7 +17,8 @@
   },
   "vars": {
     "DEPLOY_SHA": "local",
-    "ENABLE_DEBUG_INSPECTION": "false"
+    "ENABLE_DEBUG_INSPECTION": "false",
+    "LOG_REQUESTS": "true"
   },
   "durable_objects": {
     "bindings": [

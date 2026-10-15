@@ -270,15 +270,15 @@ export const uiActions = {
     input: empty,
     example: {},
     requires: ['openGroup'],
-    unavailable: (context) => requireInvite(context, 'copyLink'),
+    unavailable: (context) => requireInvite(context, 'copyText'),
     run: async (host, input, ui, platform) => {
-      if (!platform.copyLink) throw new Error('platform_unavailable');
+      if (!platform.copyText) throw new Error('platform_unavailable');
       const group = host.snapshot().group;
       const invite = group?.projected_snapshot?.invite;
 
       if (!group || !invite || !platform.appUrl)
         throw new Error('invite_invalid');
-      await platform.copyLink(
+      await platform.copyText(
         formatInviteLink(platform.appUrl, group.group_id, invite.token),
       );
       ui.update({ copiedInviteId: invite.id });
@@ -307,6 +307,22 @@ export const uiActions = {
         ),
         `Join ${snapshot.group.name}`,
       );
+    },
+  }),
+  copyDiagnostics: defineAction({
+    group: 'UI',
+    description:
+      'Copy a diagnostics report for support: recent actions and requests ' +
+      'as ids and codes, without names, links, or inputs.',
+    input: empty,
+    example: {},
+    unavailable: ({ platform }) =>
+      platform.copyText && platform.diagnosticsReport
+        ? null
+        : unavailable('platform_unavailable', 'Clipboard is unavailable on this device.'),
+    run: async (host, input, ui, platform) => {
+      if (!platform.copyText || !platform.diagnosticsReport) throw new Error('platform_unavailable');
+      await platform.copyText(platform.diagnosticsReport());
     },
   }),
   confirmAction: defineAction({

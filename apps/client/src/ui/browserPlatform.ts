@@ -9,7 +9,7 @@ export function browserActionPlatform(): ActionPlatform {
   };
 
   if (navigator.clipboard)
-    platform.copyLink = (link) => navigator.clipboard.writeText(link);
+    platform.copyText = (text) => navigator.clipboard.writeText(text);
 
   if (navigator.share)
     platform.shareLink = async (url, title) => {

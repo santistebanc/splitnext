@@ -17,6 +17,7 @@ import {
 } from '../domain/sync';
 import { realtimeIdentityHeader } from '../groupObject';
 import { GroupIndex } from '../groupIndex';
+import { annotateRequest } from '../requestLog';
 import {
   authenticateDevice,
   type AuthenticatedRequestEnvironment,
@@ -204,10 +205,19 @@ authenticatedGroupRoutes.use('/groups', authenticateDevice);
 
 authenticatedGroupRoutes.use('/groups/*', authenticateDevice);
 
+authenticatedGroupRoutes.use('/groups/:groupId/*', async (context, next) => {
+  const groupId = identifierSchema.safeParse(context.req.param('groupId'));
+
+  if (groupId.success) annotateRequest(context.req.raw, { group_id: groupId.data });
+  await next();
+});
+
 export const groupRoutes = authenticatedGroupRoutes
   .openapi(createGroupRoute, async (context) => {
     const input = context.req.valid('json');
     const session = context.get('identitySession');
+
+    annotateRequest(context.req.raw, { group_id: input.group_id });
 
     const group = context.env.GROUPS.get(
       context.env.GROUPS.idFromName(input.group_id),
@@ -293,6 +303,17 @@ export const groupRoutes = authenticatedGroupRoutes
     if (!result.ok) {
       return context.json({ error: result.error }, groupFailureStatus.sync(result.error));
     }
+
+    annotateRequest(context.req.raw, {
+      known_revision: input.known_revision,
+      revision: result.response.revision,
+      outcomes: result.response.outcomes.map((outcome) => ({
+        command_id: outcome.command_id,
+        type: outcome.command_type,
+        status: outcome.status,
+        reason: outcome.reason,
+      })),
+    });
 
     if (result.response.state.kind === 'snapshot') {
       await new GroupIndex(context.env.INDEX).refreshFromSnapshot(
