@@ -277,6 +277,8 @@ operations remain available without opening an editor, including offline.
   group, managing invites, and revoking a device credential.
 - Reconnecting sends the ordered outbox as one synchronization batch. Transport
   failure leaves the outbox intact for retry.
+- Joining or rejoining first delivers the group's outbox, so intent reaches the
+  server in the order it was made. Rejoining keeps unreviewed notices.
 - An unreachable server is treated like being offline: ordinary edits still
   queue and project locally, and are delivered once the server responds.
 - Local storage implementations and Cloudflare persistence are adapters; their

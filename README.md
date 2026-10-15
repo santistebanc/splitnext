@@ -293,6 +293,21 @@ stored outcome without applying the change twice. Concurrent intent conflicts
 are returned as `superseded` or `rejected`; the SDK replaces its confirmed
 snapshot and preserves those outcomes as local notices.
 
+Joining or rejoining a group first delivers its queued commands, so a leave
+whose response was lost reaches the server before the rejoin. Rejoining keeps
+unreviewed notices. Once a synchronized snapshot shows this identity's access
+is active, the SDK drops any join it was still retrying.
+
+`test/syncConvergence.test.ts` checks this contract with generated scenarios:
+three devices go offline, reload, lose requests or responses, and issue every
+command, leave, rejoin, notice retry and dismissal. After everyone reconnects,
+each device must match the server snapshot, and every queued command must have
+exactly one stored outcome and one audit event per revision. Unresolved
+rejections must still be visible as notices. A failure prints the shortest
+failing sequence of steps. Add new commands to its action list, and add
+sequences that once failed to its `examples`. `test/groupCommandRules.test.ts`
+lists the outcome of every command rule as a table.
+
 ## Group lists
 
 `GET /identity/groups` lists the groups an identity can access, active ones

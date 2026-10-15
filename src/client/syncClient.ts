@@ -263,26 +263,33 @@ export class SplitnextSyncClient {
   ): Promise<ClientReplicaState> {
     this.requireOnline();
 
-    const request = await this.replicas.prepareJoin(
-      groupId,
-      preferredMember,
-      this.createId,
-      inviteToken,
-    );
+    return this.serialize(groupId, async () => {
+      // Deliver earlier intent first, such as a leave whose response was
+      // lost, so leaving and rejoining reach the server in the order made.
+      if ((await this.replicas.state(groupId, this.online)).outbox.length > 0)
+        await this.synchronize(groupId, true, invocationId);
 
-    try {
-      const joined = await this.exchange(this.requestContext('joinGroup', groupId, invocationId), (context) => this.deviceApi.joinGroup(groupId, request, context));
+      const request = await this.replicas.prepareJoin(
+        groupId,
+        preferredMember,
+        this.createId,
+        inviteToken,
+      );
 
-      await this.replicas.confirmJoin(groupId, joined);
+      try {
+        const joined = await this.exchange(this.requestContext('joinGroup', groupId, invocationId), (context) => this.deviceApi.joinGroup(groupId, request, context));
 
-      return this.replicas.state(groupId, this.online);
-    } catch (error) {
-      if (error instanceof Error && isServerRejection(error)) {
-        await this.replicas.rejectJoin(groupId, request.join_id);
+        await this.replicas.confirmJoin(groupId, joined);
+
+        return this.replicas.state(groupId, this.online);
+      } catch (error) {
+        if (error instanceof Error && isServerRejection(error)) {
+          await this.replicas.rejectJoin(groupId, request.join_id);
+        }
+
+        throw error;
       }
-
-      throw error;
-    }
+    });
   }
 
   /**
