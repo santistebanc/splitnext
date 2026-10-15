@@ -148,8 +148,8 @@ Everything a person can do in the app is an app action in
 - `dispatchJson(name, json)` does the same for callers holding only names and
   JSON, such as RPC or an assistant.
 - `describe()` lists every action with its description, preconditions,
-  group, current availability, contextual suggestion rank, whether it needs
-  confirmation, an example input, and a JSON Schema.
+  group, current availability, whether it needs confirmation, an example
+  input, and a JSON Schema.
 - `inputOptions(source)` resolves state-backed choices and suggestions for any caller.
 - `availability(name, input?)` checks current state and platform support
   without running anything; with input, it also validates the proposed values.
@@ -174,24 +174,28 @@ startup, background refresh, and online tracking stay on the controller.
 
 `model/workflow.ts` defines the local view/phase state machine and pure
 transitions. The catalog declares each workflow intent and uses the same rules
-for availability and execution. The current phase and local focus also
-determine Suggested candidates and base priorities. The catalog
-maps actions to these steps, applies availability checks, and adjusts priorities
-using drafts and domain context, rather than duplicating view/phase checks.
-Shared checking, creating, joining, and saving
+for availability and execution. Shared checking, creating, joining, and saving
 phases work across callers; repeated submissions are blocked, failed requests
 retain their draft, and obsolete invite responses are ignored. Direct ledger
 operations still work from any view and can queue offline. No state-machine
 library is required.
 
-Pending action executions are observable and shared across callers. The
-catalog declares affected resources so direct mutations and draft submissions
-use the same busy guards. Member saves protect the editor and target while
-unrelated ledger edits remain available, including offline. Resource guards
-release after success or failure. `stateActionMap()` exposes the current
-workflow, evaluated completion edges, action metadata and availability,
-suggestion ranks, and pending executions. Devtools renders it in the Map tab;
+Pending action executions are observable and shared across callers. Each
+action declares the locks it `holds` while running and the locks it
+`waitsFor`, so direct mutations and draft submissions use the same guards.
+Member saves protect the editor and target while unrelated ledger edits remain
+available, including offline; navigation always waits for a running member
+save. Locks release after success or failure. `stateActionMap()` exposes the
+current workflow, evaluated completion edges, action metadata and
+availability, and pending executions. Devtools renders it in the Map tab;
 there is no separate transition table to maintain.
+
+`availability()` is the only thing that decides whether a control is enabled.
+Screens disable a control when its action is unavailable or when that
+control's own call is still running, through `useActionCall().can(name,
+input)`; they add no busy rules of their own. A dependency a screen needs,
+such as not choosing a member who is being removed, is declared on the action,
+so devtools and every other caller see the same reason.
 
 ### Devtools
 
@@ -204,19 +208,14 @@ Escape inside devtools closes its panel without closing the app dialog.
 The tabs are:
 
 - **Map** shows the current workflow, completion transitions, action availability,
-  requirements, input fields, suggestion ranks, and pending operations, generated
-  from the catalog and transition evaluator.
+  requirements, input fields, and pending operations, generated from the catalog
+  and transition evaluator.
 - **Actions** calls any app action against the real open group, through the
   same dispatcher as the screens (origin `devtools`). Actions are grouped into
   **UI**, **Ledger changes**, and **Access & sync**, according to their main
-  purpose. **Suggested** opens first and lists all available contextual
-  next steps derived from the workflow phase and focus, filtered and ranked
-  by the catalog using drafts, selections, connection, and group data.
-  Steps appear in priority order, including edit/remove member actions in a group;
-  removal is suggested whenever an active member exists, including you. Its
-  selector defaults to another member when available and includes you.
-  Browse actions through these
-  tabs, without a search field, secondary categories, or an All tab.
+  purpose; UI opens first. Member selectors default to another member when
+  available and include you. Browse actions through these tabs, without a
+  search field, secondary categories, or an All tab.
   Available actions come first; unavailable actions are faded at the bottom
   and remain selectable for inspection. Dispatch
   is disabled with a short reason until state and inputs permit the action;

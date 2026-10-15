@@ -2,7 +2,6 @@ import { previewFromSnapshot } from '@splitnext/client';
 import { useEffect } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import type { AppController } from '../model/controller';
-import { workflowBusy } from '../model/workflow';
 import { Button, ErrorMessage, Field, s } from './components';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 import { useCompactLayout } from './useVisibleViewport';
@@ -22,9 +21,9 @@ export function JoinGroup(props: JoinGroupProps) {
   const ui = useUiState();
   const { link, preview, chosen, name } = ui.join;
   const actions = useActions();
+  const back = useActionCall();
   const previewing = useActionCall();
   const joining = useActionCall();
-  const busy = previewing.busy || joining.busy || workflowBusy(ui);
   const checking = ui.phase === 'checking';
   const online = props.app.snapshot().online;
   const replica = props.app.snapshot().group;
@@ -65,9 +64,7 @@ export function JoinGroup(props: JoinGroupProps) {
           {group && !props.rejoining ? (
             <Button
               quiet
-              disabled={
-                !actions.availability('clearInvitePreview', {}).available
-              }
+              disabled={!previewing.can('clearInvitePreview')}
               onPress={() => {
                 void previewing.call('clearInvitePreview', {});
               }}
@@ -77,15 +74,16 @@ export function JoinGroup(props: JoinGroupProps) {
           ) : null}
           <Button
             quiet
-            disabled={!actions.availability('closePanel', {}).available}
+            disabled={!back.can('closePanel')}
             onPress={() => {
-              void previewing.call('closePanel', {}, props.close);
+              void back.call('closePanel', {}, props.close);
             }}
           >
             ← Back
           </Button>
         </View>
       </View>
+      <ErrorMessage message={back.error} />
       <Text
         accessibilityRole="header"
         style={[s.title, mobile && s.mobileTitle]}
@@ -98,7 +96,7 @@ export function JoinGroup(props: JoinGroupProps) {
             <Field
               label="Invite link"
               value={link}
-              editable={!workflowBusy(ui)}
+              editable={actions.availability('changeDraft', { field: 'join.link', value: link }).available}
               onChangeText={(text) => {
                 void actions.dispatch(
                   'changeDraft',
@@ -112,12 +110,7 @@ export function JoinGroup(props: JoinGroupProps) {
             />
             <Button
               secondary
-              disabled={
-                busy ||
-                !actions.availability('checkInvite', {
-                  link: link || props.initialLink,
-                }).available
-              }
+              disabled={!previewing.can('checkInvite', { link: link || props.initialLink })}
               onPress={loadPreview}
             >
               {checking || previewing.busy ? 'Checking…' : 'Preview group'}
@@ -135,7 +128,6 @@ export function JoinGroup(props: JoinGroupProps) {
                 accessibilityState={{ checked: chosen === person.id }}
                 aria-checked={chosen === person.id}
                 disabled={
-                  busy ||
                   !actions.availability('chooseJoinMember', {
                     as: { kind: 'existing', memberId: person.id },
                   }).available
@@ -164,7 +156,6 @@ export function JoinGroup(props: JoinGroupProps) {
               accessibilityState={{ checked: chosen === 'new' }}
               aria-checked={chosen === 'new'}
               disabled={
-                busy ||
                 !actions.availability('chooseJoinMember', {
                   as: { kind: 'new' },
                 }).available
@@ -184,7 +175,7 @@ export function JoinGroup(props: JoinGroupProps) {
               <Field
                 label="Your name"
                 value={name}
-                editable={!busy}
+                editable={actions.availability('changeDraft', { field: 'join.name', value: name }).available}
                 onChangeText={(value) => {
                   void actions.dispatch(
                     'changeDraft',
@@ -197,9 +188,7 @@ export function JoinGroup(props: JoinGroupProps) {
               />
             ) : null}
             <Button
-              disabled={
-                busy || !actions.availability('submitJoin', {}).available
-              }
+              disabled={!joining.can('submitJoin')}
               onPress={() => {
                 if (!chosen) return;
                 void joining.call('submitJoin', {}, props.close);

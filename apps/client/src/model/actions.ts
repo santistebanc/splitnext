@@ -3,9 +3,7 @@ import { createGroupInputSchema, memberChoiceSchema, performCreate, performJoin 
 import { z } from 'zod';
 import {
   activeMembers,
-  joinedParticipants,
   participantsForMember,
-  preferredMember,
   groupNameSchema,
   identifierSchema,
   memberNameSchema,
@@ -20,13 +18,11 @@ import type { ActionInvocation, AppController, AppState } from './controller';
 import { AppUiState, viewNames, type UiState } from './uiState';
 import { sourceOptions, type ValueSource } from './actionInputs';
 import {
-  nextSteps,
   isSubmission,
   workflowGuard,
   workflowEffect,
   workflowCompletions,
   type WorkflowIntent,
-  type WorkflowStep,
 } from './workflow';
 
 /**
@@ -110,17 +106,15 @@ type ActionSpec<S extends z.ZodType, O> = {
   input: S;
   /** A valid input, for documentation, assistants, and the workbench. */
   example: z.input<S>;
+  /** Connection and group conditions. */
   requires?: readonly Requirement[];
+  /** The workflow step this action takes; its transition must be allowed. */
   workflow?: WorkflowIntent;
-  /** Shared resources protected while this action runs. */
-  resources?: (context: ActionContext, input: z.output<S> | undefined) => readonly string[];
-  /** Guard-only dependencies; reading/changing a draft need not hold a write resource. */
-  waitFor?: (context: ActionContext, input: z.output<S> | undefined) => readonly string[];
-  /** A next step offered by the workflow, independent of caller. */
-  nextStep?: WorkflowStep;
-  /** Domain/draft eligibility and optional priority within that next step. */
-  suggest?: (context: ActionContext) => number | null;
-  /** Read-only preflight; omitted input checks whether any input can run. */
+  /** Locks held while this action runs; actions needing them are unavailable. */
+  holds?: Locks<S>;
+  /** Locks that must be free without being held, such as a draft a save is finishing. */
+  waitsFor?: Locks<S>;
+  /** Any other reason it cannot run; omitted input checks whether any input can. */
   unavailable?: (
     context: ActionContext,
     input: z.output<S> | undefined,
@@ -135,11 +129,24 @@ type ActionSpec<S extends z.ZodType, O> = {
   ) => Promise<O>;
 };
 
+type Locks<S extends z.ZodType> = (
+  context: ActionContext,
+  input: z.output<S> | undefined,
+) => readonly string[];
+
+/** The member row editor, locked while a member save finishes it. */
+const editorLock = 'memberEditor';
+
 function defineAction<S extends z.ZodType, O>(spec: ActionSpec<S, O>) {
-  function resources(context: ActionContext, input?: z.output<S>): readonly string[] {
-    return spec.resources?.(context, input) ?? [];
+  function holds(context: ActionContext, input?: z.output<S>): readonly string[] {
+    return spec.holds?.(context, input) ?? [];
   }
 
+  /**
+   * The one answer to whether this action can run, for every caller and the
+   * UI alike, checked in order: its workflow step, locks held by running
+   * actions, requirements, then its own conditions.
+   */
   function check(
     context: ActionContext,
     input?: z.output<S>,
@@ -150,8 +157,14 @@ function defineAction<S extends z.ZodType, O>(spec: ActionSpec<S, O>) {
 
     if (workflow) return unavailable(workflow.error, workflow.reason);
 
-    const targets = [...resources(context, input), ...(spec.waitFor?.(context, input) ?? (spec.workflow === 'navigate' ? ['memberEditor'] : []))];
-    const pending = context.executions?.find((entry) => entry.resources.some((resource) => targets.includes(resource)));
+    const needed = [
+      ...holds(context, input),
+      ...(spec.waitsFor?.(context, input) ?? []),
+      // Navigating away would discard the editor a running save finishes.
+      ...(spec.workflow === 'navigate' ? [editorLock] : []),
+    ];
+
+    const pending = context.executions?.find((entry) => entry.resources.some((resource) => needed.includes(resource)));
 
     if (pending) return unavailable('operation_busy', `Wait for ${pending.name} to finish.`);
 
@@ -201,25 +214,7 @@ function defineAction<S extends z.ZodType, O>(spec: ActionSpec<S, O>) {
     example: spec.example,
     requires: spec.requires ?? [],
     workflow: spec.workflow ?? null,
-    nextStep: spec.nextStep ?? null,
     confirms: Boolean(spec.confirm),
-    suggestion(context: ActionContext): number | null {
-      if (!spec.nextStep || !check(context).available) return null;
-
-      const rank = nextSteps(context.ui, {
-        confirmationPending: Boolean(context.ui.confirmation),
-        memberEditing: Boolean(context.ui.memberEdit),
-        home: !context.state.group
-          ? 'groups'
-          : context.state.group.hidden
-            ? 'leftGroup'
-            : 'group',
-      })[spec.nextStep];
-
-      if (rank === undefined) return null;
-
-      return spec.suggest ? spec.suggest(context) : rank;
-    },
     availability(
       context: ActionContext,
       raw?: z.input<S> | JsonValue,
@@ -263,7 +258,7 @@ function defineAction<S extends z.ZodType, O>(spec: ActionSpec<S, O>) {
       if (message && !options.confirmed)
         return { status: 'needs_confirmation', message };
 
-      const execution = executions.start(name, options.origin ?? 'unspecified', resources(context, parsed.data), options.invocationId);
+      const execution = executions.start(name, options.origin ?? 'unspecified', holds(context, parsed.data), options.invocationId);
 
       try {
         const run = () => spec.run(host, parsed.data, ui, platform);
@@ -427,7 +422,6 @@ export const appActions = {
     description: 'Open the create-group form.',
     input: empty,
     example: {},
-    nextStep: 'create',
     run: async (host, input, ui) => ui.show('create'),
   }),
   showJoinGroup: defineAction({
@@ -436,7 +430,6 @@ export const appActions = {
     description: 'Open the join form, optionally with an invite link.',
     input: z.object({ link: z.string().optional() }),
     example: {},
-    nextStep: 'join',
     run: async (host, input, ui) => ui.showJoin(input.link),
   }),
   showSettings: defineAction({
@@ -446,7 +439,6 @@ export const appActions = {
     input: empty,
     example: {},
     requires: ['openGroup'],
-    nextStep: 'settings',
     run: async (host, input, ui) => ui.show('settings'),
   }),
   showInvite: defineAction({
@@ -456,11 +448,6 @@ export const appActions = {
     input: empty,
     example: {},
     requires: ['openGroup'],
-    nextStep: 'invite',
-    suggest: ({ state }) =>
-      joinedParticipants(openSnapshot(state)).length <= 1
-        ? 10
-        : 20,
     run: async (host, input, ui) => ui.show('invite'),
   }),
   showNotices: defineAction({
@@ -470,7 +457,6 @@ export const appActions = {
     input: empty,
     example: {},
     requires: ['selectedGroup'],
-    nextStep: 'notices',
     unavailable: ({ state }) => requireNotice(state),
     run: async (host, input, ui) => ui.show('notices'),
   }),
@@ -481,7 +467,6 @@ export const appActions = {
     input: empty,
     example: {},
     requires: ['selectedGroup'],
-    nextStep: 'rejoin',
     unavailable: ({ state }) =>
       state.group?.hidden
         ? null
@@ -494,7 +479,6 @@ export const appActions = {
     description: 'Return from a form or panel to the group or groups list.',
     input: empty,
     example: {},
-    nextStep: 'close',
     unavailable: ({ ui }) =>
       ui.view !== 'home'
         ? null
@@ -539,7 +523,7 @@ export const appActions = {
     },
   }),
   changeDraft: defineAction({
-    waitFor: ({ ui }, input) => (!input ? ui.memberEdit : input.field === 'member.name') ? ['memberEditor'] : [],
+    waitsFor: ({ ui }, input) => (!input ? ui.memberEdit : input.field === 'member.name') ? [editorLock] : [],
     group: 'UI',
     description: 'Change a form field without submitting it.',
     input: z.object({
@@ -600,8 +584,6 @@ export const appActions = {
       ]),
     }),
     example: { as: { kind: 'new' } },
-    nextStep: 'chooseMember',
-    suggest: ({ ui }) => (ui.join.chosen ? 20 : 10),
     unavailable: (context, input) => {
       const choice = input?.as;
 
@@ -655,39 +637,33 @@ export const appActions = {
       ui.update({ showNoticeSummary: input.visible }),
   }),
   beginAddMember: defineAction({
-    waitFor: () => ['memberEditor'],
+    waitsFor: () => [editorLock],
     workflow: 'groupEditor',
     group: 'UI',
     description: 'Insert a member row in edit mode.',
     input: empty,
     example: {},
     requires: ['openGroup'],
-    nextStep: 'addMember',
-    suggest: ({ state }) =>
-      joinedParticipants(openSnapshot(state)).length <= 1
-        ? 20
-        : 10,
     run: async (host, input, ui) => ui.beginMemberEdit(null),
   }),
   beginEditMember: defineAction({
-    waitFor: () => ['memberEditor'],
+    // A member being renamed or removed cannot be edited until that finishes.
+    waitsFor: ({ state }, input) => [editorLock, ...memberResource(state, input?.memberId)],
     workflow: 'groupEditor',
     group: 'UI',
     description: 'Edit a member name in its row.',
     input: z.object({ memberId: choice('member', 'The member to edit.') }),
     example: { memberId: 'member-2' },
     requires: ['openGroup'],
-    nextStep: 'editMember',
     unavailable: ({ state }, input) => requireMember(state, input?.memberId),
     run: async (host, input, ui) => ui.beginMemberEdit(input.memberId),
   }),
   cancelMemberEdit: defineAction({
-    waitFor: () => ['memberEditor'],
+    waitsFor: () => [editorLock],
     group: 'UI',
     description: 'Discard the current member-name draft.',
     input: empty,
     example: {},
-    nextStep: 'cancelMember',
     unavailable: ({ ui }) =>
       ui.memberEdit
         ? null
@@ -695,18 +671,12 @@ export const appActions = {
     run: async (host, input, ui) => ui.finishMemberEdit(),
   }),
   saveMemberEdit: defineAction({
-    resources: ({ state, ui }) => ['memberEditor', ...memberResource(state, ui.memberEdit?.memberId)],
+    holds: ({ state, ui }) => [editorLock, ...memberResource(state, ui.memberEdit?.memberId)],
     group: 'Ledger changes',
     description: 'Commit the current member-name draft.',
     input: empty,
     example: {},
     requires: ['openGroup'],
-    nextStep: 'saveMember',
-    suggest: ({ ui }) =>
-      ui.memberEdit?.name.trim() &&
-      ui.memberEdit.name.trim() !== ui.memberEdit.expectedName
-        ? 10
-        : null,
     unavailable: ({ ui, state }) =>
       !ui.memberEdit
         ? unavailable('no_member_edit', 'Edit a member first.')
@@ -733,14 +703,13 @@ export const appActions = {
     },
   }),
   saveGroupSettings: defineAction({
-    resources: ({ state }) => [`groupName:${state.group?.group_id}`],
+    holds: ({ state }) => [`groupName:${state.group?.group_id}`],
     workflow: 'saveSettings',
     group: 'Ledger changes',
     description: 'Save the group-name draft and return to the group.',
     input: empty,
     example: {},
     requires: ['openGroup'],
-    nextStep: 'saveSettings',
     unavailable: ({ ui }) =>
       requireName(groupNameSchema, ui.settings.name, 'group name') ??
       (ui.settings.name.trim() === ui.settings.expectedName
@@ -754,14 +723,13 @@ export const appActions = {
     },
   }),
   submitCreateGroup: defineAction({
-    waitFor: () => ['memberEditor'],
+    waitsFor: () => [editorLock],
     workflow: 'submitCreate',
     group: 'Access & sync',
     description: 'Create the group using the current form draft.',
     input: empty,
     example: {},
     requires: ['reachable'],
-    nextStep: 'submitCreate',
     unavailable: ({ ui }) =>
       requireName(groupNameSchema, ui.create.name, 'group name') ??
       requireName(memberNameSchema, ui.create.yourName, 'your name'),
@@ -771,7 +739,7 @@ export const appActions = {
     },
   }),
   submitJoin: defineAction({
-    waitFor: () => ['memberEditor'],
+    waitsFor: () => [editorLock],
     workflow: 'submitJoin',
     group: 'Access & sync',
     description:
@@ -779,7 +747,6 @@ export const appActions = {
     input: empty,
     example: {},
     requires: ['online'],
-    nextStep: 'submitJoin',
     unavailable: (context) =>
       requireJoin(context) ??
       (!context.ui.join.chosen
@@ -815,8 +782,6 @@ export const appActions = {
     input: empty,
     example: {},
     requires: ['online'],
-    nextStep: 'refresh',
-    suggest: ({ state }) => (!state.reachable || state.syncError ? 1 : null),
     run: (host) => host.refresh(),
   }),
   copyInviteLink: defineAction({
@@ -825,7 +790,6 @@ export const appActions = {
     input: empty,
     example: {},
     requires: ['openGroup'],
-    nextStep: 'copyInvite',
     unavailable: (context) => requireInvite(context, 'copyLink'),
     run: async (host, input, ui, platform) => {
       if (!platform.copyLink) throw new Error('platform_unavailable');
@@ -847,7 +811,6 @@ export const appActions = {
     input: empty,
     example: {},
     requires: ['openGroup'],
-    nextStep: 'shareInvite',
     unavailable: (context) => requireInvite(context, 'shareLink'),
     run: async (host, input, ui, platform) => {
       if (!platform.shareLink) throw new Error('platform_unavailable');
@@ -873,7 +836,6 @@ export const appActions = {
       requestId: choice('confirmation', 'The pending confirmation to approve.'),
     }),
     example: { requestId: 'confirmation-1' },
-    nextStep: 'confirm',
     unavailable: ({ ui, pendingConfirmation }, input) =>
       requireConfirmation(ui, input?.requestId) ??
       (pendingConfirmation && !pendingConfirmation.available
@@ -888,12 +850,11 @@ export const appActions = {
       requestId: choice('confirmation', 'The pending confirmation to cancel.'),
     }),
     example: { requestId: 'confirmation-1' },
-    nextStep: 'cancelConfirmation',
     unavailable: ({ ui }, input) => requireConfirmation(ui, input?.requestId),
     run: async (host, input, ui) => ui.cancelConfirmation(input.requestId),
   }),
   createGroup: defineAction({
-    waitFor: () => ['memberEditor'],
+    waitsFor: () => [editorLock],
     workflow: 'createDirect',
     group: 'Access & sync',
     description:
@@ -904,7 +865,7 @@ export const appActions = {
     run: (host, input) => performCreate(host, input),
   }),
   checkInvite: defineAction({
-    waitFor: () => ['memberEditor'],
+    waitsFor: () => [editorLock],
     workflow: 'checkInvite',
     group: 'Access & sync',
     description:
@@ -919,8 +880,6 @@ export const appActions = {
     }),
     example: { link: 'https://splitnext.app/join/uy9ogmKJRD2VRfbN4PDsAw#…' },
     requires: ['online'],
-    nextStep: 'checkInvite',
-    suggest: ({ ui }) => (parseInviteLink(ui.join.link) ? 10 : null),
     unavailable: (context, input) =>
       input && !parseInviteLink(input.link)
         ? unavailable('invite_invalid', 'Enter a valid invite link.')
@@ -963,7 +922,7 @@ export const appActions = {
     },
   }),
   joinGroup: defineAction({
-    waitFor: () => ['memberEditor'],
+    waitsFor: () => [editorLock],
     workflow: 'joinDirect',
     group: 'Access & sync',
     description:
@@ -1006,7 +965,6 @@ export const appActions = {
       groupId: choice('group', "One of this installation's groups."),
     }),
     example: { groupId: 'uy9ogmKJRD2VRfbN4PDsAw' },
-    nextStep: 'openGroup',
     unavailable: ({ state }, input) =>
       state.groups.some(
         (group) => !input || group.group_id === input.groupId,
@@ -1027,14 +985,13 @@ export const appActions = {
     description: 'Return to the groups list.',
     input: empty,
     example: {},
-    nextStep: 'groups',
     run: async (host, input, ui) => {
       host.showGroups();
       ui.show('home');
     },
   }),
   renameGroup: defineAction({
-    resources: ({ state }) => [`groupName:${state.group?.group_id}`],
+    holds: ({ state }) => [`groupName:${state.group?.group_id}`],
     group: 'Ledger changes',
     description: 'Rename the open group.',
     input: z.object({
@@ -1061,7 +1018,7 @@ export const appActions = {
     run: (host, input) => host.submit({ type: 'member.create', payload: { display_name: input.name } }),
   }),
   renameMember: defineAction({
-    resources: ({ state }, input) => memberResource(state, input?.memberId),
+    holds: ({ state }, input) => memberResource(state, input?.memberId),
     group: 'Ledger changes',
     description: 'Rename a member of the open group.',
     input: z.object({
@@ -1083,7 +1040,7 @@ export const appActions = {
       }),
   }),
   archiveMember: defineAction({
-    resources: ({ state }, input) => memberResource(state, input?.memberId),
+    holds: ({ state }, input) => memberResource(state, input?.memberId),
     group: 'Ledger changes',
     description:
       'Remove a member from the open group. Their name stays in history.',
@@ -1092,7 +1049,6 @@ export const appActions = {
     }),
     example: { memberId: 'member-2' },
     requires: ['openGroup'],
-    nextStep: 'archiveMember',
     unavailable: ({ state }, input) => requireMember(state, input?.memberId),
     run: async (host, input, ui) => {
       await host.submit({ type: 'member.archive', payload: { member_id: input.memberId } });
@@ -1102,7 +1058,9 @@ export const appActions = {
     },
   }),
   setPreferredMember: defineAction({
-    resources: ({ state }) => [`preference:${state.group?.group_id}`],
+    holds: ({ state }) => [`preference:${state.group?.group_id}`],
+    // Choosing a member that is being removed would only produce a rejection.
+    waitsFor: ({ state }, input) => memberResource(state, input?.memberId),
     group: 'Ledger changes',
     description:
       'Choose which member is you on this installation. Asks first when ' +
@@ -1115,21 +1073,6 @@ export const appActions = {
     }),
     example: { memberId: 'member-1' },
     requires: ['openGroup'],
-    nextStep: 'setPreferredMember',
-    suggest: (context) => {
-      const snapshot = openSnapshot(context.state);
-      const self = context.state.group?.session?.identity.id;
-
-      const you = preferredMember(snapshot, self)?.id;
-
-      return snapshot?.members.some(
-        (member) => member.status === 'active' && member.id !== you,
-      )
-        ? you
-          ? 25
-          : 1
-        : null;
-    },
     unavailable: ({ state }, input) => requireMember(state, input?.memberId),
     confirm: (input, state) => {
       const self = state.group?.session?.identity.id;
@@ -1145,7 +1088,7 @@ export const appActions = {
     run: (host, input) => host.submit({ type: 'preference.set', payload: { member_id: input.memberId } }),
   }),
   regenerateInvite: defineAction({
-    resources: ({ state }) => [`invite:${state.group?.group_id}`],
+    holds: ({ state }) => [`invite:${state.group?.group_id}`],
     group: 'Access & sync',
     description:
       'Replace the open group’s invite link with a new one for everyone.',
@@ -1156,8 +1099,8 @@ export const appActions = {
     run: (host) => host.regenerateInvite(),
   }),
   leaveGroup: defineAction({
-    waitFor: () => ['memberEditor'],
-    resources: ({ state }) => [`access:${state.group?.group_id}`],
+    waitsFor: () => [editorLock],
+    holds: ({ state }) => [`access:${state.group?.group_id}`],
     group: 'Access & sync',
     description:
       'Leave the open group on this installation. It can be rejoined later.',
@@ -1174,8 +1117,8 @@ export const appActions = {
     },
   }),
   retryNotice: defineAction({
-    waitFor: ({ state }, input) => state.group?.notices.some((entry) => entry.command.command_id === input?.commandId && entry.command.type === 'group.leave') ? ['memberEditor'] : [],
-    resources: ({ state }, input) => noticeResources(state, input?.commandId),
+    waitsFor: ({ state }, input) => state.group?.notices.some((entry) => entry.command.command_id === input?.commandId && entry.command.type === 'group.leave') ? [editorLock] : [],
+    holds: ({ state }, input) => noticeResources(state, input?.commandId),
     group: 'Ledger changes',
     description: 'Retry a rejected or superseded change from its notice.',
     input: z.object({
@@ -1183,7 +1126,6 @@ export const appActions = {
     }),
     example: { commandId: 'notice-command-id' },
     requires: ['openGroup'],
-    nextStep: 'retryNotice',
     unavailable: ({ state }, input) => {
       const absent = requireNotice(state, input?.commandId);
 
@@ -1196,7 +1138,7 @@ export const appActions = {
     run: (host, input) => host.retryNotice(input.commandId),
   }),
   dismissNotice: defineAction({
-    resources: ({ state }, input) => noticeResources(state, input?.commandId),
+    holds: ({ state }, input) => noticeResources(state, input?.commandId),
     group: 'UI',
     description: 'Dismiss a rejected or superseded change notice.',
     input: z.object({
@@ -1204,7 +1146,6 @@ export const appActions = {
     }),
     example: { commandId: 'notice-command-id' },
     requires: ['openGroup'],
-    nextStep: 'dismissNotice',
     unavailable: ({ state }, input) => requireNotice(state, input?.commandId),
     run: (host, input) => host.dismissNotice(input.commandId),
   }),
@@ -1462,7 +1403,6 @@ export function createDispatcher(
       ...action,
       running: context.executions?.filter((entry) => entry.name === action.name) ?? [],
       availability: appActions[action.name].availability(context),
-      suggested: appActions[action.name].suggestion(context),
       workflowEffect: action.workflow ? workflowEffect(context.ui, action.workflow) : null,
     }));
   }
@@ -1508,7 +1448,6 @@ export function describeActions() {
             description: action.description,
             requires: action.requires,
             workflow: action.workflow,
-            nextStep: action.nextStep,
             confirms: action.confirms,
             // SAFETY: examples are literal inputs of their own schemas,
             // which accept only JSON-compatible values.

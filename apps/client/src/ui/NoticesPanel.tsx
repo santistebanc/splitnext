@@ -45,6 +45,7 @@ function currentResult(notice: Notice): string {
 /** Rejected or superseded local changes, each to apply again or dismiss. */
 export function NoticesPanel(props: NoticesPanelProps) {
   const notices = props.app.snapshot().group?.notices ?? [];
+  const back = useActionCall();
   const action = useActionCall();
   // The notice last acted on, so a failure appears beside that notice.
   const [target, setTarget] = useState<string | null>(null);
@@ -65,8 +66,9 @@ export function NoticesPanel(props: NoticesPanelProps) {
         </Text>
         <Button
           quiet
+          disabled={!back.can('closePanel')}
           onPress={() => {
-            void action.call('closePanel', {}, props.close);
+            void back.call('closePanel', {}, props.close);
           }}
         >
           Done
@@ -92,14 +94,14 @@ export function NoticesPanel(props: NoticesPanelProps) {
             <View style={s.row}>
               <Button
                 secondary
-                disabled={action.busy}
+                disabled={!action.can('retryNotice', { commandId })}
                 onPress={() => act(commandId, 'retryNotice')}
               >
                 Apply again
               </Button>
               <Button
                 quiet
-                disabled={action.busy}
+                disabled={!action.can('dismissNotice', { commandId })}
                 onPress={() => act(commandId, 'dismissNotice')}
               >
                 Dismiss
@@ -112,6 +114,7 @@ export function NoticesPanel(props: NoticesPanelProps) {
           </View>
         );
       })}
+      <ErrorMessage message={back.error} />
     </>
   );
 }

@@ -36,7 +36,6 @@ export function MemberList(props: MemberListProps) {
   const edit = useUiState().memberEdit;
   const adding = edit !== null && edit.memberId === null;
   const action = useActionCall();
-  const actions = useActions();
   const [reducedMotion, setReducedMotion] = useState(true);
 
   useEffect(() => {
@@ -77,7 +76,7 @@ export function MemberList(props: MemberListProps) {
       ) : (
         <Button
           quiet
-          disabled={!actions.availability('beginAddMember', {}).available}
+          disabled={!action.can('beginAddMember')}
           onPress={() => {
             void action.call('beginAddMember', {});
           }}
@@ -183,7 +182,7 @@ function NewMemberRow() {
                 { origin: 'ui' },
               );
             }}
-            editable={!action.busy && actions.availability('changeDraft', { field: 'member.name', value: name }).available}
+            editable={actions.availability('changeDraft', { field: 'member.name', value: name }).available}
             autoFocus
             maxLength={100}
             style={[s.name, s.memberNameInput]}
@@ -211,8 +210,9 @@ function MemberRow(props: MemberRowProps) {
   const actions = useActions();
   const select = useActionCall();
   const remove = useActionCall();
-  const busy = select.busy || remove.busy;
   const editAction = useActionCall();
+  const canSelect = select.can('setPreferredMember', { memberId: member.id });
+  const canRemove = remove.can('archiveMember', { memberId: member.id });
   const input = useRef<TextInput>(null);
 
   const state = props.app.snapshot();
@@ -243,15 +243,15 @@ function MemberRow(props: MemberRowProps) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${isYou ? 'You' : 'This is me'}: ${member.display_name}, ${participantLabels || 'unclaimed'}`}
-          accessibilityState={{ selected: isYou, disabled: busy || !actions.availability('setPreferredMember', { memberId: member.id }).available }}
+          accessibilityState={{ selected: isYou, disabled: !canSelect }}
           aria-pressed={isYou}
-          disabled={busy || !actions.availability('setPreferredMember', { memberId: member.id }).available}
+          disabled={!canSelect}
           onPress={() => {
             if (!isYou) void select.call('setPreferredMember', { memberId: member.id });
           }}
           style={({ pressed }) => [
             s.memberSelectButton,
-            (pressed || busy) && s.dim,
+            (pressed || select.busy) && s.dim,
           ]}
         >
           <MemberIcon joined={participants.length > 0} participants={participants} />
@@ -269,7 +269,7 @@ function MemberRow(props: MemberRowProps) {
                   { origin: 'ui' },
                 );
               }}
-              editable={!editAction.busy && !busy && actions.availability('changeDraft', { field: 'member.name', value: name }).available}
+              editable={actions.availability('changeDraft', { field: 'member.name', value: name }).available}
               maxLength={100}
               autoFocus
               style={[s.name, s.memberNameInput]}
@@ -287,13 +287,7 @@ function MemberRow(props: MemberRowProps) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Edit ${member.display_name}`}
-              disabled={
-                busy ||
-                editAction.busy ||
-                !actions.availability('beginEditMember', {
-                  memberId: member.id,
-                }).available
-              }
+              disabled={!editAction.can('beginEditMember', { memberId: member.id })}
               onPress={edit}
               style={s.editableMemberName}
             >
@@ -306,8 +300,8 @@ function MemberRow(props: MemberRowProps) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Remove ${member.display_name}`}
-          accessibilityState={{ disabled: busy || !actions.availability('archiveMember', { memberId: member.id }).available }}
-          disabled={busy || !actions.availability('archiveMember', { memberId: member.id }).available}
+          accessibilityState={{ disabled: !canRemove }}
+          disabled={!canRemove}
           onPress={() => {
             void remove.call('archiveMember', { memberId: member.id });
           }}
@@ -320,10 +314,10 @@ function MemberRow(props: MemberRowProps) {
         <View style={s.stack}>
           <Text style={s.caption}>{select.confirmation.message}</Text>
           <View style={s.row}>
-            <Button quiet disabled={busy} onPress={select.cancel}>
+            <Button quiet disabled={select.busy} onPress={select.cancel}>
               Cancel
             </Button>
-            <Button quiet disabled={busy} onPress={select.confirmation.confirm}>
+            <Button quiet disabled={select.busy} onPress={select.confirmation.confirm}>
               Use anyway
             </Button>
           </View>

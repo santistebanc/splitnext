@@ -15,6 +15,7 @@ export function InvitePanel(props: InvitePanelProps) {
   const invite = replica?.projected_snapshot?.invite;
   const copied = useUiState().copiedInviteId === invite?.id;
   const canShare = useActions().capabilities.shareLink;
+  const back = useActionCall();
   const action = useActionCall();
   const replace = useActionCall();
   const online = props.app.snapshot().online;
@@ -32,8 +33,9 @@ export function InvitePanel(props: InvitePanelProps) {
         </Text>
         <Button
           quiet
+          disabled={!back.can('closePanel')}
           onPress={() => {
-            void action.call('closePanel', {}, props.close);
+            void back.call('closePanel', {}, props.close);
           }}
         >
           Done
@@ -49,8 +51,8 @@ export function InvitePanel(props: InvitePanelProps) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={copied ? 'Link copied' : 'Copy link'}
-              accessibilityState={{ disabled: action.busy }}
-              disabled={action.busy}
+              accessibilityState={{ disabled: !action.can('copyInviteLink') }}
+              disabled={!action.can('copyInviteLink')}
               onPress={() => {
                 void action.call('copyInviteLink', {});
               }}
@@ -76,7 +78,7 @@ export function InvitePanel(props: InvitePanelProps) {
       <View style={s.row}>
         {link && canShare ? (
           <Button
-            disabled={action.busy}
+            disabled={!action.can('shareInviteLink')}
             onPress={() => {
               void action.call('shareInviteLink', {});
             }}
@@ -87,7 +89,7 @@ export function InvitePanel(props: InvitePanelProps) {
         {!replace.confirmation ? (
           <Button
             secondary={Boolean(link && canShare)}
-            disabled={action.busy || replace.busy || !online}
+            disabled={!replace.can('regenerateInvite')}
             onPress={() => {
               void replace.call('regenerateInvite', {});
             }}
@@ -110,7 +112,7 @@ export function InvitePanel(props: InvitePanelProps) {
       {!online ? (
         <Text style={s.caption}>Offline · connect to make a new link</Text>
       ) : null}
-      <ErrorMessage message={action.error} />
+      <ErrorMessage message={action.error ?? back.error} />
     </>
   );
 }

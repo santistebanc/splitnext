@@ -1,6 +1,5 @@
 import { Text, View } from 'react-native';
 import type { AppController } from '../model/controller';
-import { workflowBusy } from '../model/workflow';
 import { ConfirmBanner } from './ConfirmBanner';
 import { Button, ErrorMessage, Field, s } from './components';
 import { useActionCall, useActions, useUiState } from './useActionCall';
@@ -15,18 +14,17 @@ type GroupSettingsProps = {
 
 /** Renaming and leaving the group, as a sheet or a full page on touch. */
 export function GroupSettings(props: GroupSettingsProps) {
-  const replica = props.app.snapshot().group;
   const online = props.app.snapshot().online;
 
   const ui = useUiState();
   const { name, expectedName: observedName } = ui.settings;
   const actions = useActions();
+  const back = useActionCall();
   const rename = useActionCall();
   const leave = useActionCall();
-  const busy = rename.busy || leave.busy || workflowBusy(ui);
 
   function saveName(): void {
-    if (!actions.availability('saveGroupSettings', {}).available) return;
+    if (!rename.can('saveGroupSettings')) return;
 
     void rename.call('saveGroupSettings', {}, props.close);
   }
@@ -40,9 +38,9 @@ export function GroupSettings(props: GroupSettingsProps) {
         <Button
           quiet
           onPress={() => {
-            void rename.call('closePanel', {}, props.close);
+            void back.call('closePanel', {}, props.close);
           }}
-          disabled={busy}
+          disabled={!back.can('closePanel')}
         >
           {props.fullPage ? 'Back to group' : 'Done'}
         </Button>
@@ -50,7 +48,7 @@ export function GroupSettings(props: GroupSettingsProps) {
       <Field
         label="Group name"
         value={name}
-        editable={!busy}
+        editable={actions.availability('changeDraft', { field: 'settings.name', value: name }).available}
         onChangeText={(value) => {
           void actions.dispatch(
             'changeDraft',
@@ -63,30 +61,25 @@ export function GroupSettings(props: GroupSettingsProps) {
         onSubmitEditing={saveName}
       />
       {name.trim() !== observedName ? (
-        <Button
-          disabled={
-            busy || !actions.availability('saveGroupSettings', {}).available
-          }
-          onPress={saveName}
-        >
+        <Button disabled={!rename.can('saveGroupSettings')} onPress={saveName}>
           Save group name
         </Button>
       ) : null}
-      <ErrorMessage message={rename.error} />
+      <ErrorMessage message={rename.error ?? back.error} />
       <View style={s.divider} />
       {leave.confirmation ? (
         <ConfirmBanner
           message={leave.confirmation.message}
           confirmLabel="Confirm leave"
           danger
-          busy={busy}
+          busy={leave.busy}
           onConfirm={leave.confirmation.confirm}
           onCancel={leave.cancel}
         />
       ) : (
         <Button
           danger
-          disabled={busy || !online || Boolean(replica?.hidden)}
+          disabled={!leave.can('leaveGroup')}
           onPress={() => {
             void leave.call('leaveGroup', {}, props.close);
           }}

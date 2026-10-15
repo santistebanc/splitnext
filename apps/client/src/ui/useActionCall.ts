@@ -5,6 +5,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
+import type { JsonValue } from '@splitnext/client';
 import type {
   ActionInput,
   ActionOutput,
@@ -120,6 +121,12 @@ export function useActionCall() {
   return {
     call,
     busy,
+    /**
+     * Whether this control can run an action: the catalog allows it, the same
+     * answer every caller gets, and this control's own call has finished.
+     */
+    can: (name: AppActionName, input: JsonValue = {}) =>
+      !busy && actions.availability(name, input).available,
     error,
     confirmation: pending
       ? {
