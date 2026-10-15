@@ -95,14 +95,6 @@ export class IdentityDirectory {
     return stored?.revokedAt === null ? stored.session : null;
   }
 
-  /** Development only: forgets every identity and device credential. */
-  async clear(): Promise<void> {
-    await this.database.batch([
-      this.database.prepare('DELETE FROM identity_devices'),
-      this.database.prepare('DELETE FROM access_identities'),
-    ]);
-  }
-
   async inspect(): Promise<IdentityDirectoryInspection> {
     const { results } = await this.database
       .prepare(

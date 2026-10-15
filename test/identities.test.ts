@@ -96,13 +96,13 @@ describe('anonymous identities API', () => {
     expect(JSON.stringify(body)).not.toContain('credential_hash');
   });
 
-  it('does not expose inspection or reset when the development flag is disabled', async () => {
+  it('does not expose inspection when the development flag is disabled', async () => {
     const disabledEnv: Env = {
       ...env,
       ENABLE_DEBUG_INSPECTION: 'false',
     };
 
-    const [identityResponse, groupResponse, resetResponse] = await Promise.all([
+    const [identityResponse, groupResponse] = await Promise.all([
       app.fetch(
         new Request('https://splitnext.test/debug/identity-directory'),
         disabledEnv,
@@ -113,20 +113,12 @@ describe('anonymous identities API', () => {
         ),
         disabledEnv,
       ),
-      app.fetch(
-        new Request('https://splitnext.test/debug/reset', {
-          method: 'POST',
-          body: JSON.stringify({ group_ids: [] }),
-        }),
-        disabledEnv,
-      ),
     ]);
 
     expect(identityResponse.status).toBe(404);
     expect(await identityResponse.json()).toEqual({ error: 'not_found' });
     expect(groupResponse.status).toBe(404);
     expect(await groupResponse.json()).toEqual({ error: 'not_found' });
-    expect(resetResponse.status).toBe(404);
   });
 
   it('reports whether inspection is enabled for development tools', async () => {

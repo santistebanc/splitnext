@@ -13,8 +13,8 @@ experience chosen for the app. Web entry pages are planned to render on a
 Cloudflare Worker.
 
 Expo SDK 57 requires its server-rendering opt-in. Export its renderer and route
-manifest as separate Worker modules and combine client assets with the existing
-dashboard assets. Keep the API Worker name, bindings, and local database state.
+manifest as separate Worker modules and serve client assets as Worker static
+assets. Keep the API Worker name, bindings, and local database state.
 Use the Workerd adapter under `nodejs_compat`; verify rendering against the
 bundled Worker because its dynamic module imports differ from Vite's source
 module evaluation. Keep React and React Native aligned with Expo's SDK versions.

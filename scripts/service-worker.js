@@ -50,7 +50,7 @@ self.addEventListener('fetch', (event) => {
   ) {
     event.respondWith(asset(request));
   }
-  // API requests, invitation previews, and dashboard traffic are never cached.
+  // API requests and invitation previews are never cached.
 });
 
 async function navigate(request, path) {

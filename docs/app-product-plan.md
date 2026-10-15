@@ -209,10 +209,8 @@ values when a request fails.
 
 The current product specification remains authoritative for group rename,
 member add/rename/archive, preferred-member selection, duplicate-selection
-warnings, leaving/rejoining, and invite regeneration. The app and dashboard
-use the singular invite API through the shared SDK; the identity model stays
-the same.
-The dashboard remains the synchronization lab.
+warnings, leaving/rejoining, and invite regeneration. The app uses the
+singular invite API through the shared SDK; the identity model stays the same.
 
 ## Implementation sequence
 

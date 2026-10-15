@@ -116,7 +116,7 @@ The SDK owns notice retries through `retryNotice(groupId, commandId)`. It
 creates fresh command identifiers and rename preconditions from the current
 projection, retaining that intent and retiring the old notice in one atomic
 storage update. Ordinary retries work offline; leaving still needs a server
-decision. The app and dashboard use the same SDK operation.
+decision. The app uses this SDK operation.
 
 The workbench replaces handwritten command projections with the real
 controller and SDK over a memory transport backed by `GroupStore` and
@@ -165,7 +165,7 @@ same request ID as its HTTP transport. Command outbox entries retain optional
 invocation IDs locally through offline reload and delivery; metadata is never
 sent as part of a domain command or recorded in the server audit. Diagnostics
 omit credentials, links, request inputs and server-state contents. Devtools
-Log shows action and SDK records; dashboard exchanges show matching request,
-command and invocation IDs. Each devtools stream retains at most 100 entries,
+Log shows action and SDK records with matching request, command and
+invocation IDs. Each devtools stream retains at most 100 entries,
 and Clear removes both streams. Coalesced refresh callers share refresh work;
 request attribution identifies the callers present when that work began.

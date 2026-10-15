@@ -36,7 +36,7 @@ const subscriptionFailureStatus = {
 
 /** Cloudflare will later instantiate one of these consistency boundaries per group. */
 export class GroupObject extends DurableObject<Env> {
-  private store = this.createStore();
+  private readonly store = this.createStore();
 
   async health(): Promise<boolean> {
     const probe = this.ctx.storage.sql
@@ -176,20 +176,6 @@ export class GroupObject extends DurableObject<Env> {
             .flatMap((socket) => this.ctx.getTags(socket)),
         }
       : null;
-  }
-
-  /** Development only: erases this group and disconnects its subscribers. */
-  async resetGroup(groupId: string): Promise<boolean> {
-    if (this.ctx.id.name !== groupId) return false;
-
-    for (const socket of this.ctx.getWebSockets()) {
-      socket.close(1012, 'group_reset');
-    }
-
-    await this.ctx.storage.deleteAll();
-    this.store = this.createStore();
-
-    return true;
   }
 
   private createStore(): GroupStore {

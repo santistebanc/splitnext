@@ -75,55 +75,6 @@ describe('Cloudflare foundation', () => {
     expect(html).toContain('/openapi.json');
   });
 
-  it('serves the API test dashboard as a static asset', async () => {
-    const response = await env.ASSETS.fetch(
-      'https://splitnext.test/dashboard/',
-    );
-
-    const html = await response.text();
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toContain('text/html');
-    expect(html).toContain('Splitnext tester');
-    expect(html).toContain('Add device');
-    expect(html).toContain('id="device-template"');
-    expect(html).toContain('+ New');
-    expect(html).toContain('Server');
-    expect(html).toContain('Revision');
-    expect(html).toContain('Add member');
-    expect(html).toContain('Requests');
-    expect(html).toContain('Local data');
-    expect(html).toContain('Server data');
-    expect(html).toContain('/dashboard/app.js');
-  });
-
-  it('serves the browser client SDK used by the dashboard', async () => {
-    const response = await env.ASSETS.fetch(
-      'https://splitnext.test/sdk/splitnext-client.js',
-    );
-
-    const javascript = await response.text();
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toContain('javascript');
-    expect(javascript).toContain('SplitnextClient');
-    expect(javascript).toContain('SplitnextSyncClient');
-    expect(javascript).toContain('MemoryClientStorage');
-    expect(javascript).toContain('SplitnextRequestError');
-  });
-
-  it('serves the browser synchronization lab model', async () => {
-    const response = await env.ASSETS.fetch(
-      'https://splitnext.test/sdk/splitnext-lab.js',
-    );
-
-    const javascript = await response.text();
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toContain('javascript');
-    expect(javascript).toContain('SyncLab');
-  });
-
   it('renders the public beta homepage on the Worker', async () => {
     const response = await env.APP_RENDERING.fetch('https://splitnext.test/', {
       redirect: 'manual',
