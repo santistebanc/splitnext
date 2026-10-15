@@ -15,7 +15,7 @@ import { requiresServerDecision } from '../src/domain/commands';
 import { createIdentifier } from '../src/domain/ids';
 import { memberNameKey } from '../src/domain/members';
 import { groupSnapshotSchema, type GroupSnapshot } from '../src/domain/sync';
-import { memoryTransport } from '../apps/client/src/workbench/memoryTransport';
+import { memoryTransport } from '../src/memoryTransport';
 import { randomDeviceSecret } from './harness';
 
 /**

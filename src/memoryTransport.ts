@@ -1,27 +1,22 @@
-import { groupFailureStatus } from '../../../../src/groupTransport';
-import { deviceSecretSchema } from '../../../../src/domain/identities';
-import { joinGroupRequestSchema } from '../../../../src/domain/access';
-import { syncGroupRequestSchema } from '../../../../src/domain/sync';
-import type { IdentitySession } from '../../../../src/domain/identities';
-import {
-  SplitnextRequestError,
-  SplitnextNetworkError,
-  type ClientReplicaState,
-  type SyncTransport,
-  type SyncDeviceTransport,
-} from '@splitnext/client';
-import { createGroupRequestSchema, initializeGroup } from '../../../../src/domain/groups';
-import { createIdentifier } from '../../../../src/domain/ids';
-import { hashInviteToken, inviteLinkInputSchema, previewInviteRequestSchema } from '../../../../src/domain/invites';
-import { MemoryGroupRepository } from '../../../../src/memoryGroupRepository';
-import { GroupStore } from '../../../../src/groupStore';
-import type { Log } from './stories';
+import { groupFailureStatus } from './groupTransport';
+import { deviceSecretSchema } from './domain/identities';
+import { joinGroupRequestSchema } from './domain/access';
+import { syncGroupRequestSchema } from './domain/sync';
+import type { IdentitySession } from './domain/identities';
+import { SplitnextRequestError, SplitnextNetworkError } from './client/errors';
+import type { ClientReplicaState } from './client/replicaStore';
+import type { SyncTransport, SyncDeviceTransport } from './client/syncClient';
+import { createGroupRequestSchema, initializeGroup } from './domain/groups';
+import { createIdentifier } from './domain/ids';
+import { hashInviteToken, inviteLinkInputSchema, previewInviteRequestSchema } from './domain/invites';
+import { MemoryGroupRepository } from './memoryGroupRepository';
+import { GroupStore } from './groupStore';
 
 export type TransportControls = {
   latency: number;
   failure: string;
   connection: 'online' | 'offline' | 'unreachable';
-  log: Log;
+  log: (event: string, detail?: string) => void;
 };
 
 /** The production group engine behind an isolated transport; no network or browser storage. */
