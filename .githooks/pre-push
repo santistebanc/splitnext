@@ -1,0 +1,16 @@
+#!/bin/sh
+# Runs the checks that need no browser or app build before commits leave this
+# machine; `npm run check` and CI run everything. Skip once with
+# `git push --no-verify`.
+set -e
+
+case "$PWD" in
+  # Git for Windows pushing a checkout inside WSL: node_modules hold Linux
+  # binaries, so the checks run inside that distribution.
+  //wsl.localhost/* | //wsl\$/*)
+    rest="${PWD#//wsl*/}"
+    MSYS_NO_PATHCONV=1 exec wsl.exe -d "${rest%%/*}" --cd "/${rest#*/}" -- bash -lc 'npm run check:fast'
+    ;;
+esac
+
+exec npm run check:fast
