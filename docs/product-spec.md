@@ -211,7 +211,8 @@ operations remain available without opening an editor, including offline.
   expense is added; there is no installation-wide currency preference.
 - Leaving a group clears the identity's preferred member, hides the group from
   that identity, and stops its synchronization and realtime notifications.
-  It does not revoke access or alter any ledger member.
+  It does not revoke access or alter any ledger member. A preferred-member
+  choice that reaches the server after leaving is rejected (`group_left`).
 - Rejoining unhides the group and selects or creates a preferred member.
 - Any identity can create groups and join others' groups. Each identity has a
   list of the groups it can access that distinguishes joined groups from ones

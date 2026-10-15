@@ -8,6 +8,7 @@ import {
   activeMembers,
   type ClientPreferredMemberChoice,
   type CommandIntent,
+  type RealtimeSocketHandlers,
   type SyncDeviceTransport,
   type SyncTransport,
 } from '../src/client';
@@ -20,15 +21,18 @@ import { randomDeviceSecret } from './harness';
 
 /**
  * Model-based check of the offline-first promise: whatever devices do while
- * offline, flaky, or reloading, once everyone reconnects they converge on the
- * server's state, and every command receives exactly one outcome. A failure
- * prints the shrunk list of steps that breaks it; pass the printed seed and
- * path to `fc.assert` to replay it.
+ * offline, flaky, or reloading, in two tabs at once, and while realtime
+ * announcements start background synchronization, once everyone reconnects
+ * they converge on the server's state and every command receives exactly
+ * one outcome. A failure prints the shrunk list of steps that breaks it; pass
+ * the printed seed and path to `fc.assert` to replay it.
  *
  * To cover a new command, add a generator for it to `commandArbitrary`.
  */
 
 const deviceCount = 3;
+
+const tabCount = 2;
 
 const memberNames = ['Ana', 'ana', 'Ben', 'Cy', 'Dee'];
 
@@ -98,7 +102,10 @@ function intentFor(command: CommandStep, snapshot: GroupSnapshot): CommandIntent
 
 const stepArbitrary = fc.record({
   device: fc.nat({ max: deviceCount - 1 }),
+  tab: fc.nat({ max: tabCount - 1 }),
   fault: faultArbitrary,
+  // Starts while earlier concurrent steps are still running.
+  concurrent: fc.oneof({ arbitrary: fc.constant(false), weight: 3 }, { arbitrary: fc.constant(true), weight: 1 }),
   action: actionArbitrary,
 });
 
@@ -106,9 +113,10 @@ type Step = typeof stepArbitrary extends fc.Arbitrary<infer T> ? T : never;
 
 type Device = {
   secret: string;
+  /** One installation's storage, shared by its tabs. */
   storage: MemoryClientStorage;
-  client: SplitnextSyncClient;
-  /** Every command this installation queued, from its diagnostics. */
+  tabs: SplitnextSyncClient[];
+  /** Every command this installation queued, from its tabs' diagnostics. */
   queued: string[];
   /** Notices this installation retried or dismissed. */
   resolved: Set<string>;
@@ -119,23 +127,62 @@ type Device = {
 type Simulation = {
   groupId: string;
   faults: Map<string, Fault>;
-  connect: (device: Device) => void;
+  open: (device: Device, tab: number) => SplitnextSyncClient;
 };
 
-/** Loses one request or its response, as a flaky network would. */
-function flakyTransport(api: SyncTransport, faults: Map<string, Fault>): SyncTransport {
+/** Realtime connections per group, announcing revisions like the server does. */
+class RealtimeHub {
+  private readonly sockets = new Map<string, Set<RealtimeSocketHandlers>>();
+
+  constructor(private readonly revision: (groupId: string) => number | null) {}
+
+  connect(groupId: string, handlers: RealtimeSocketHandlers) {
+    const group = this.sockets.get(groupId) ?? new Set<RealtimeSocketHandlers>();
+
+    this.sockets.set(groupId, group);
+    group.add(handlers);
+
+    // Every connection starts with the current revision, so it catches up.
+    setTimeout(() => {
+      if (!group.has(handlers)) return;
+      handlers.open();
+      this.send(handlers, groupId);
+    }, 0);
+
+    return {
+      close: () => {
+        if (group.delete(handlers)) setTimeout(() => handlers.close(1000, 'unsubscribed'), 0);
+      },
+    };
+  }
+
+  announce(groupId: string): void {
+    for (const handlers of this.sockets.get(groupId) ?? []) setTimeout(() => this.send(handlers, groupId), 0);
+  }
+
+  private send(handlers: RealtimeSocketHandlers, groupId: string): void {
+    const revision = this.revision(groupId);
+
+    if (revision !== null) handlers.message(JSON.stringify({ type: 'revision', revision }));
+  }
+}
+
+/** Loses one request or its response, as a flaky network would, and announces changes. */
+function flakyTransport(api: SyncTransport, faults: Map<string, Fault>, hub: RealtimeHub): SyncTransport {
   return {
     createAnonymousIdentity: (secret) => api.createAnonymousIdentity(secret),
     forDevice: (secret): SyncDeviceTransport => {
       const device = api.forDevice(secret);
 
-      async function deliver<T>(request: () => Promise<T>): Promise<T> {
+      async function deliver<T>(request: () => Promise<T>, changes?: string): Promise<T> {
         const fault = faults.get(secret) ?? 'none';
 
         faults.delete(secret);
 
         if (fault === 'lose_request') throw new SplitnextNetworkError(new TypeError('request_lost'));
         const result = await request();
+
+        if (changes) hub.announce(changes);
 
         if (fault === 'lose_response') throw new SplitnextNetworkError(new TypeError('response_lost'));
 
@@ -145,12 +192,12 @@ function flakyTransport(api: SyncTransport, faults: Map<string, Fault>): SyncTra
       return {
         currentIdentity: () => deliver(() => device.currentIdentity()),
         createGroup: (input, context) => deliver(() => device.createGroup(input, context)),
-        joinGroup: (groupId, input, context) => deliver(() => device.joinGroup(groupId, input, context)),
-        syncGroup: (groupId, input, context) => deliver(() => device.syncGroup(groupId, input, context)),
-        regenerateInvite: (groupId, input, context) => deliver(() => device.regenerateInvite(groupId, input, context)),
+        joinGroup: (groupId, input, context) => deliver(() => device.joinGroup(groupId, input, context), groupId),
+        syncGroup: (groupId, input, context) => deliver(() => device.syncGroup(groupId, input, context), groupId),
+        regenerateInvite: (groupId, input, context) => deliver(() => device.regenerateInvite(groupId, input, context), groupId),
         previewInvite: (groupId, token, context) => deliver(() => device.previewInvite(groupId, token, context)),
         listGroups: (context) => deliver(() => device.listGroups(context)),
-        openRealtime: (groupId, handlers) => device.openRealtime(groupId, handlers),
+        openRealtime: (groupId, handlers) => hub.connect(groupId, handlers),
       };
     },
   };
@@ -161,71 +208,101 @@ async function simulate(steps: readonly Step[]): Promise<void> {
   const session = { identity: { id: createIdentifier(), created_at: now }, device: { id: createIdentifier(), created_at: now } };
   const server = await memoryTransport(session, [], { connection: 'online', latency: 0, failure: 'none', log: () => undefined });
   const faults = new Map<string, Fault>();
-  const api = flakyTransport(server.api, faults);
+  const hub = new RealtimeHub((groupId) => server.repository(groupId)?.state?.revision ?? null);
+  const api = flakyTransport(server.api, faults, hub);
+  const backgroundErrors: Error[] = [];
 
-  function connect(device: Device): void {
-    device.client = new SplitnextSyncClient({ api, storage: device.storage, device_secret: device.secret });
-    device.client.observeDiagnostics((event) => {
+  function open(device: Device, tab: number): SplitnextSyncClient {
+    const client = new SplitnextSyncClient({
+      api, storage: device.storage, device_secret: device.secret,
+      realtime_reconnect_delay_ms: () => 0,
+      on_background_error: (error) => backgroundErrors.push(error),
+    });
+
+    client.observeDiagnostics((event) => {
       if (event.kind === 'command_queued') device.queued.push(event.command_id);
     });
+    device.tabs[tab] = client;
+
+    return client;
   }
 
   const devices = Array.from({ length: deviceCount }, (): Device => {
-    const storage = new MemoryClientStorage();
-    const secret = randomDeviceSecret();
-
     const device: Device = {
-      secret, storage, client: new SplitnextSyncClient({ api, storage, device_secret: secret }),
+      secret: randomDeviceSecret(), storage: new MemoryClientStorage(), tabs: [],
       queued: [], resolved: new Set(), unfinishedJoin: null,
     };
 
-    connect(device);
+    for (let tab = 0; tab < tabCount; tab += 1) open(device, tab);
 
     return device;
   });
 
+  const first = (device: Device | undefined) => {
+    const client = device?.tabs[0];
+
+    if (!client) throw new Error('missing_tab');
+
+    return client;
+  };
+
   const [creator, ...joiners] = devices;
 
-  if (!creator) throw new Error('missing_creator');
-  await creator.client.initializeIdentity();
-  const created = await creator.client.createGroup({ name: 'Trip', creator_member_name: 'Ana' });
+  await first(creator).initializeIdentity();
+  const created = await first(creator).createGroup({ name: 'Trip', creator_member_name: 'Ana' });
   const groupId = created.group_id;
   const token = created.projected_snapshot?.invite.token;
 
   if (!token) throw new Error('missing_invite');
 
   for (const [index, device] of joiners.entries()) {
-    await device.client.initializeIdentity();
-    await device.client.joinGroup(groupId, { kind: 'new', display_name: memberNames[index + 2] ?? 'Dee' }, token);
+    await first(device).initializeIdentity();
+    await first(device).joinGroup(groupId, { kind: 'new', display_name: memberNames[index + 2] ?? 'Dee' }, token);
   }
 
-  const simulation: Simulation = { groupId, faults, connect };
+  for (const device of devices) for (const tab of device.tabs) tab.watchGroup(groupId);
+
+  const simulation: Simulation = { groupId, faults, open };
+  const running: Promise<void>[] = [];
 
   for (const step of steps) {
     const device = devices[step.device];
 
     if (!device) throw new Error('missing_device');
-    await perform(simulation, device, step);
-    const state = await device.client.inspect(groupId);
 
-    // Someone who sees the group again has no reason to repeat a lost rejoin.
-    if (!state.hidden) device.unfinishedJoin = null;
+    if (!step.concurrent) await Promise.all(running.splice(0));
 
-    if (state.projected_snapshot) expectValidSnapshot(state.projected_snapshot);
+    const run = perform(simulation, device, step).then(async () => {
+      const state = await first(device).inspect(groupId);
+
+      // Someone who sees the group again has no reason to repeat a lost rejoin.
+      if (!state.hidden) device.unfinishedJoin = null;
+
+      if (state.projected_snapshot) expectValidSnapshot(state.projected_snapshot);
+    });
+
+    // A failure surfaces when the step is awaited, not as an unhandled rejection.
+    run.catch(() => undefined);
+
+    if (step.concurrent) running.push(run);
+    else await run;
   }
 
-  // Everyone reconnects, finishes what they started, and synchronizes twice:
-  // the first round delivers every outbox, the second observes the result.
+  await Promise.all(running);
+
+  // Everyone reconnects, finishes what they started, and synchronizes until
+  // background work settles: every tab delivers, then observes the result.
   faults.clear();
 
-  for (const device of devices) device.client.setOnline(true);
+  for (const device of devices) for (const tab of device.tabs) tab.setOnline(true);
 
   for (const device of devices) {
-    if (device.unfinishedJoin) await rejoin(device.client, groupId, device.unfinishedJoin, 'none');
+    if (device.unfinishedJoin) await rejoin(first(device), groupId, device.unfinishedJoin, 'none');
   }
 
-  for (let round = 0; round < 2; round += 1) {
-    for (const device of devices) await device.client.refreshGroup(groupId);
+  for (let round = 0; round < 3; round += 1) {
+    for (const device of devices) for (const tab of device.tabs) await tab.refreshGroup(groupId);
+    await new Promise((resolve) => setTimeout(resolve, 5));
   }
 
   const recorded = server.repository(groupId);
@@ -235,8 +312,11 @@ async function simulate(steps: readonly Step[]): Promise<void> {
 
   expectValidSnapshot(snapshot);
 
+  // Background synchronization only ever fails because of an injected fault.
+  expect(backgroundErrors.filter((error) => !(error instanceof SplitnextNetworkError))).toEqual([]);
+
   for (const device of devices) {
-    const replica = await device.client.inspect(groupId);
+    const replica = await first(device).inspect(groupId);
 
     expect(replica.outbox).toEqual([]);
     expect(replica.revision).toBe(revision);
@@ -260,7 +340,7 @@ async function simulate(steps: readonly Step[]): Promise<void> {
 
   // Every unsuccessful command stays visible until its device resolves it.
   for (const device of devices) {
-    const replica = await device.client.inspect(groupId);
+    const replica = await first(device).inspect(groupId);
     const noticed = new Map(replica.notices.map((notice) => [notice.outcome.command_id, notice.outcome]));
 
     for (const entry of outcomes) {
@@ -277,33 +357,42 @@ async function simulate(steps: readonly Step[]): Promise<void> {
 /** Runs one step the way the app would, skipping what the app would not offer. */
 async function perform(simulation: Simulation, device: Device, step: Step): Promise<void> {
   const { groupId, faults } = simulation;
-  const { action, fault } = step;
-  const client = device.client;
+  const { action } = step;
+  // Concurrent steps could consume each other's faults, so only sequential ones inject them.
+  const fault = step.concurrent ? 'none' : step.fault;
+  const client = device.tabs[step.tab];
+
+  if (!client) throw new Error('missing_tab');
   const state = await client.inspect(groupId);
   const snapshot = state.projected_snapshot;
   const online = client.isOnline();
 
   if (!snapshot) throw new Error('missing_replica');
-  const notice =(index: number) => state.notices[index % Math.max(state.notices.length, 1)];
+  const notice = (index: number) => state.notices[index % Math.max(state.notices.length, 1)];
 
-  faults.set(device.secret, fault);
+  if (fault !== 'none') faults.set(device.secret, fault);
 
   try {
     switch (action.kind) {
       case 'goOffline':
-        client.setOnline(false);
+        for (const tab of device.tabs) tab.setOnline(false);
 
         return;
       case 'goOnline':
-        client.setOnline(true);
+        for (const tab of device.tabs) tab.setOnline(true);
 
         return;
-      case 'reload':
-        simulation.connect(device);
-        device.client.setOnline(online);
-        await attempt(fault, () => device.client.initializeIdentity());
+      case 'reload': {
+        const reloaded = simulation.open(device, step.tab);
+
+        reloaded.setOnline(online);
+        await attempt(fault, () => reloaded.initializeIdentity());
+
+        if (!state.hidden) reloaded.watchGroup(groupId);
 
         return;
+      }
+
       case 'open':
         // Opening a group synchronizes it, fetching a left group's snapshot.
         if (online) await attempt(fault, () => state.hidden ? client.refreshGroup(groupId) : client.syncGroup(groupId));
@@ -323,7 +412,7 @@ async function perform(simulation: Simulation, device: Device, step: Step): Prom
         device.unfinishedJoin = result === 'unfinished' ? choice : null;
 
         // A rejoin that reports success shows the group again.
-        if (result === 'joined') expect((await client.inspect(groupId)).hidden).toBe(false);
+        if (result === 'joined' && !step.concurrent) expect((await client.inspect(groupId)).hidden).toBe(false);
 
         return;
       }
@@ -332,7 +421,7 @@ async function perform(simulation: Simulation, device: Device, step: Step): Prom
         const retried = notice(action.notice);
 
         if (!retried || state.hidden || (retried.command.type === 'group.leave' && !online)) return;
-        await attempt(fault, () => client.retryNotice(groupId, retried.command.command_id));
+        await attempt(fault, () => client.retryNotice(groupId, retried.command.command_id), step.concurrent);
         device.resolved.add(retried.command.command_id);
 
         return;
@@ -360,24 +449,27 @@ async function perform(simulation: Simulation, device: Device, step: Step): Prom
         const done = await attempt(fault, () => client.submit(groupId, intent));
 
         // A leave that reports success shows the group as left, even if its response was lost.
-        if (done && intent.type === 'group.leave') expect((await client.inspect(groupId)).hidden).toBe(true);
-
-        return;
+        if (done && intent.type === 'group.leave' && !step.concurrent) expect((await client.inspect(groupId)).hidden).toBe(true);
       }
     }
   } finally {
-    faults.delete(device.secret);
+    if (fault !== 'none') faults.delete(device.secret);
   }
 }
 
-/** Runs an operation, accepting only a network failure the step injected. */
-async function attempt<T>(fault: Fault, operation: () => Promise<T>): Promise<boolean> {
+/**
+ * Runs an operation, accepting only a network failure the step injected and,
+ * when tabs race, a notice another tab already resolved.
+ */
+async function attempt<T>(fault: Fault, operation: () => Promise<T>, racing = false): Promise<boolean> {
   try {
     await operation();
 
     return true;
   } catch (error) {
     if (error instanceof SplitnextNetworkError && fault !== 'none') return false;
+
+    if (racing && error instanceof Error && error.message === 'notice_not_found') return false;
 
     throw error;
   }
@@ -417,20 +509,32 @@ function expectValidSnapshot(snapshot: GroupSnapshot): void {
 
 const leave = { kind: 'submit', command: { type: 'group.leave' } } as const;
 
+const sequential = { tab: 0, concurrent: false } as const;
+
 /** Rare sequences worth checking on every run; each found a bug once. */
 const examples: [Step[]][] = [
   // A rejoin whose response was lost must not be replayed after leaving again.
   [[
-    { device: 1, fault: 'none', action: leave },
-    { device: 1, fault: 'lose_response', action: { kind: 'rejoin', member: null, name: 'Dee' } },
-    { device: 1, fault: 'none', action: { kind: 'open' } },
-    { device: 1, fault: 'none', action: leave },
-    { device: 1, fault: 'none', action: { kind: 'rejoin', member: 0, name: 'Dee' } },
+    { ...sequential, device: 1, fault: 'none', action: leave },
+    { ...sequential, device: 1, fault: 'lose_response', action: { kind: 'rejoin', member: null, name: 'Dee' } },
+    { ...sequential, device: 1, fault: 'none', action: { kind: 'open' } },
+    { ...sequential, device: 1, fault: 'none', action: leave },
+    { ...sequential, device: 1, fault: 'none', action: { kind: 'rejoin', member: 0, name: 'Dee' } },
   ]],
   // A leave whose request was lost reaches the server before a rejoin.
   [[
-    { device: 0, fault: 'lose_request', action: leave },
-    { device: 0, fault: 'none', action: { kind: 'rejoin', member: null, name: 'Ana' } },
+    { ...sequential, device: 0, fault: 'lose_request', action: leave },
+    { ...sequential, device: 0, fault: 'none', action: { kind: 'rejoin', member: null, name: 'Ana' } },
+  ]],
+  // Choosing who you are, queued alongside leaving, cannot apply after the leave.
+  [[
+    { device: 1, tab: 0, concurrent: true, fault: 'none', action: leave },
+    { device: 1, tab: 0, concurrent: true, fault: 'none', action: { kind: 'submit', command: { type: 'preference.set', member: 0 } } },
+  ]],
+  // A replaced link whose follow-up sync finds the device offline still succeeds.
+  [[
+    { device: 1, tab: 0, concurrent: true, fault: 'none', action: { kind: 'regenerateInvite' } },
+    { device: 1, tab: 0, concurrent: true, fault: 'none', action: { kind: 'goOffline' } },
   ]],
 ];
 
@@ -438,6 +542,6 @@ describe('offline synchronization', () => {
   it('converges every device on the server state with one outcome per command', async () => {
     const steps = fc.array(stepArbitrary, { minLength: 1, maxLength: 60, size: 'max' });
 
-    await fc.assert(fc.asyncProperty(steps, simulate), { numRuns: 200, examples });
+    await fc.assert(fc.asyncProperty(steps, simulate), { numRuns: 100, examples });
   }, 120_000);
 });

@@ -180,6 +180,7 @@ export function requiresServerDecision(type: GroupCommand['type']): boolean {
 export const commandReasons = {
   accessNotFound: 'access_not_found',
   groupChanged: 'group_changed',
+  groupLeft: 'group_left',
   idempotencyConflict: 'idempotency_conflict',
   memberArchived: 'member_archived',
   memberChanged: 'member_changed',
@@ -660,6 +661,9 @@ function applyPreferredMember(
   );
 
   if (!access) return rejected(snapshot, target, 'access_not_found');
+
+  // A left identity has no "you"; rejoining chooses one again.
+  if (access.hidden_at) return rejected(snapshot, target, 'group_left');
 
   const member = snapshot.members.find(
     (candidate) => candidate.id === memberId,

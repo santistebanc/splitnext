@@ -292,14 +292,21 @@ unreviewed notices. Once a synchronized snapshot shows this identity's access
 is active, the SDK drops any join it was still retrying.
 
 `test/syncConvergence.test.ts` checks this contract with generated scenarios:
-three devices go offline, reload, lose requests or responses, and issue every
-command, leave, rejoin, notice retry and dismissal. After everyone reconnects,
-each device must match the server snapshot, and every queued command must have
-exactly one stored outcome and one audit event per revision. Unresolved
-rejections must still be visible as notices. A failure prints the shortest
-failing sequence of steps. Add new commands to its action list, and add
-sequences that once failed to its `examples`. `test/groupCommandRules.test.ts`
-lists the outcome of every command rule as a table.
+three devices, each with two tabs sharing one installation's storage, go
+offline, reload, lose requests or responses, and issue every command, leave,
+rejoin, notice retry and dismissal, some of them concurrently. Realtime
+announcements reach every tab and start background synchronization while
+steps run. After everyone reconnects, each device must match the server
+snapshot, and every queued command must have exactly one stored outcome and
+one audit event per revision. Unresolved rejections must still be visible as
+notices, and background synchronization may fail only from injected network
+faults. A failure prints the shortest failing sequence of steps. Add new
+commands to its `commandArbitrary`, and add sequences that once failed to its
+`examples`. `test/groupCommandRules.test.ts` lists the outcome of every
+command rule as a table.
+
+A successful link replacement shows its new link locally even if the device
+goes offline before the follow-up synchronization.
 
 ## Group lists
 

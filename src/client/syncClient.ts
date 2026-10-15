@@ -305,8 +305,10 @@ export class SplitnextSyncClient {
       createInviteToken,
     );
 
+    let replaced: { revision: number; invite: GroupInvite };
+
     try {
-      await this.exchange(this.requestContext('regenerateInvite', groupId, invocationId), (context) => this.deviceApi.regenerateInvite(groupId, {
+      replaced = await this.exchange(this.requestContext('regenerateInvite', groupId, invocationId), (context) => this.deviceApi.regenerateInvite(groupId, {
         invite_id: invite.invite_id,
         token: invite.token,
       }, context));
@@ -318,9 +320,11 @@ export class SplitnextSyncClient {
       throw error;
     }
 
-    await this.replicas.settleInvite(groupId, invite.invite_id);
+    // The replacement succeeded: show its link even if the follow-up
+    // synchronization cannot run because the connection dropped meanwhile.
+    await this.replicas.settleInvite(groupId, invite.invite_id, replaced);
 
-    return this.syncGroup(groupId, invocationId);
+    return this.deliverQueued(groupId, invocationId);
   }
 
   /**

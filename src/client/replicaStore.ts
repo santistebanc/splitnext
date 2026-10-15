@@ -14,7 +14,7 @@ import type {
   CreateGroupRequest,
 } from '../domain/groups';
 import type { IdentitySession } from '../domain/identities';
-import { createInviteToken } from '../domain/invites';
+import { createInviteToken, type GroupInvite } from '../domain/invites';
 import { upgradeClientStorage } from './storageUpgrade';
 import type {
   GroupSession,
@@ -329,12 +329,26 @@ export class ClientReplicaStore {
     });
   }
 
-  settleInvite(groupId: string, inviteId: string): Promise<void> {
+  /**
+   * Retires a pending replacement. A confirmed one becomes the local link
+   * until the next synchronization replaces the whole snapshot, unless that
+   * already happened.
+   */
+  settleInvite(
+    groupId: string,
+    inviteId: string,
+    confirmed?: { revision: number; invite: GroupInvite },
+  ): Promise<void> {
     return this.change((document) => {
       document.pending_invites = document.pending_invites.filter(
         (candidate) =>
           candidate.group_id !== groupId || candidate.invite_id !== inviteId,
       );
+
+      const replica = document.groups.find((candidate) => candidate.group_id === groupId);
+
+      if (confirmed && replica && replica.revision < confirmed.revision)
+        replica.snapshot = { ...replica.snapshot, invite: confirmed.invite };
     });
   }
 
