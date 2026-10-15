@@ -1,0 +1,35 @@
+# Runs everything `npm run check` runs on a fresh checkout: text, build,
+# generated types, lint, type checks, a deploy dry run, Worker tests, and the
+# browser tests against a local Worker. No Cloudflare account is needed.
+name: Check
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps --only-shell chromium
+      - run: npm run check
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          if-no-files-found: ignore

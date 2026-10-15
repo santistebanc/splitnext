@@ -24,6 +24,7 @@ If a decision changes, update the relevant document in the same slice.
   `test/groupCommandRules.test.ts`. When a generated test finds a failure, keep
   its shrunk steps in that file's `examples`.
 - Run `npm run check` after each slice and leave it uncommitted for inspection.
-  Commit only when asked.
+  Commit only when asked. Pushes run `npm run check:fast` through the tracked
+  pre-push hook; CI runs the full check.
 - Do not add compatibility code for discarded pre-production designs or erase
   remote data without explicit permission.

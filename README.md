@@ -286,6 +286,14 @@ This also exports the app, checks its TypeScript, and tests frontend rendering
 against the actual bundled Worker. Run `npm test` after a build/check has
 prepared `.wrangler/dry-run`; the renderer tests load that bundle.
 
+`npm run check:fast` runs everything except the app build and the browser
+tests, against the last app build, in about a minute. `npm install` points git
+at `.githooks/`, whose pre-push hook runs it; when Git for Windows pushes a
+checkout inside WSL, the hook runs the checks inside that distribution. Skip it
+once with `git push --no-verify`. `.github/workflows/check.yml` runs the full
+`npm run check` on a fresh checkout for every push to `main` or `master` and
+every pull request, and keeps Playwright traces when it fails.
+
 `npm run test:e2e` drives the built app in headless Chromium through
 `e2e/app.spec.ts`: creating groups, member edits, settings, invite
 replacement, joining from a second device with realtime updates, offline

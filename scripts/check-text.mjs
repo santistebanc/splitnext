@@ -17,7 +17,7 @@ const garbled = new RegExp(
 
 const files = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
   .split('\0')
-  .filter((file) => /\.(ts|tsx|js|mjs|cjs|json|jsonc|md|html|css|sql)$/.test(file))
+  .filter((file) => /\.(ts|tsx|js|mjs|cjs|json|jsonc|md|html|css|sql|yml)$/.test(file))
   .filter((file) => file !== 'package-lock.json');
 
 const findings = files.flatMap((file) => {
