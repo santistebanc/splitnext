@@ -7,7 +7,10 @@ Read these before changing behavior:
   behavior and separates the current MVP from deferred work.
 - [docs/adr/](./docs/adr/) records consequential architectural decisions and
   their rationale.
-- [README.md](./README.md) describes what is implemented and how to run it.
+- [README.md](./README.md) describes what is implemented, how to run and
+  check it, and how it is tested.
+- [docs/architecture.md](./docs/architecture.md) describes how the parts fit
+  together and the rules each keeps.
 
 If a decision changes, update the relevant document in the same slice.
 
