@@ -45,6 +45,25 @@ type UiContext = {
 
 export type UiState = UiContext & Workflow;
 
+function groupIsOpen(app: AppState): boolean {
+  return Boolean(app.group?.projected_snapshot && !app.group.hidden);
+}
+
+/** Whether the group a view shows is there: panels need it open, rejoining needs it left. */
+export function viewFits(view: ViewName, app: AppState): boolean {
+  switch (view) {
+    case 'settings':
+    case 'invite':
+      return groupIsOpen(app);
+    case 'notices':
+      return Boolean(app.group?.projected_snapshot);
+    case 'rejoin':
+      return Boolean(app.group?.hidden);
+    default:
+      return true;
+  }
+}
+
 /** Local screen state shared by every action caller, independent of replicas. */
 export class AppUiState {
   private state: UiState;
@@ -168,6 +187,29 @@ export class AppUiState {
   showGroup(mode: UiState['navigation']['mode'] = 'push'): void {
     this.show('home', mode);
     this.patch({ memberEdit: null });
+  }
+
+  /**
+   * Shows a view once a step that took a while has finished, unless the
+   * person moved on since `revision` or another step running now will
+   * decide the view.
+   */
+  showAfter(revision: number, view: ViewName): void {
+    if (this.state.navigation.revision === revision && !('requestId' in this.workflow)) this.show(view);
+  }
+
+  /**
+   * Leaves a view whose group went away, such as settings for a group left
+   * meanwhile in this tab or another, for the groups list in its place. A
+   * running step finishes first and is checked again when it fails.
+   */
+  fitToApp(): void {
+    const app = this.readApp();
+
+    if (this.state.memberEdit && !groupIsOpen(app)) this.patch({ memberEdit: null });
+
+    if ('requestId' in this.workflow || viewFits(this.state.view, app)) return;
+    this.show('home', 'replace');
   }
 
   changeDraft(field: DraftField, value: string): void {
@@ -308,6 +350,7 @@ export class AppUiState {
       result = await work();
     } catch (cause) {
       this.move({ type: 'failed', requestId });
+      this.fitToApp();
       throw cause;
     }
 

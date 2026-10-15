@@ -77,12 +77,25 @@ export type PreparedSync = {
   commands: PendingCommand[];
 };
 
+/** Intent saved to the outbox, with the replica as that same update left it. */
+export type QueuedCommand = {
+  pending: PendingCommand;
+  state: ClientReplicaState;
+};
+
+/**
+ * The device's durable local state. Each operation's last write also returns
+ * the replica it produced, so a caller never reads again after its commit
+ * point: an operation that fails locally has changed nothing, and one whose
+ * write succeeded cannot be reported as failed.
+ */
 export class ClientReplicaStore {
   private readonly storage: ClientStorageAdapter;
 
   constructor(
     storage: ClientStorageAdapter,
     private readonly now: () => string,
+    private readonly online: () => boolean,
   ) {
     this.storage = withStorageErrors(storage);
   }
@@ -156,7 +169,7 @@ export class ClientReplicaStore {
     });
   }
 
-  confirmGroupCreation(created: CreatedGroup): Promise<void> {
+  confirmGroupCreation(created: CreatedGroup): Promise<ClientReplicaState> {
     return this.change((document) => {
       const pending = document.pending_group_creations.find(
         (candidate) => candidate.request.group_id === created.group.id,
@@ -198,6 +211,8 @@ export class ClientReplicaStore {
         document.pending_group_creations.filter(
           (candidate) => candidate.request.group_id !== created.group.id,
         );
+
+      return stateFrom(document, created.group.id, this.online());
     });
   }
 
@@ -216,7 +231,13 @@ export class ClientReplicaStore {
         (candidate) => candidate.group_id === groupId,
       );
 
-      if (existing) return existing.request;
+      // A retry keeps its join id, so the server answers it at most once, but
+      // carries the newest link: the one a lost request held may be replaced.
+      if (existing) {
+        if (inviteToken) existing.request.invite_token = inviteToken;
+
+        return existing.request;
+      }
 
       const preferred: PreferredMemberChoice =
         preferredMember.kind === 'existing'
@@ -249,7 +270,7 @@ export class ClientReplicaStore {
     });
   }
 
-  confirmJoin(groupId: string, joined: GroupSession): Promise<void> {
+  confirmJoin(groupId: string, joined: GroupSession): Promise<ClientReplicaState> {
     return this.change((document) => {
       const existing = document.groups.find(
         (candidate) => candidate.group_id === groupId,
@@ -269,6 +290,8 @@ export class ClientReplicaStore {
       document.pending_joins = document.pending_joins.filter(
         (candidate) => candidate.group_id !== groupId,
       );
+
+      return stateFrom(document, groupId, this.online());
     });
   }
 
@@ -287,11 +310,11 @@ export class ClientReplicaStore {
     return this.read(summariesFrom);
   }
 
-  installationState(groupIds: readonly string[], online: boolean): Promise<ClientInstallationState> {
+  installationState(groupIds: readonly string[]): Promise<ClientInstallationState> {
     return this.read((document) => ({
       groups: summariesFrom(document),
       notice_counts: Object.fromEntries(document.groups.map((replica) => [replica.group_id, replica.notices.length])),
-      replicas: [...new Set(groupIds)].map((groupId) => stateFrom(document, groupId, online)),
+      replicas: [...new Set(groupIds)].map((groupId) => stateFrom(document, groupId, this.online())),
     }));
   }
 
@@ -338,7 +361,7 @@ export class ClientReplicaStore {
     groupId: string,
     inviteId: string,
     confirmed?: { revision: number; invite: GroupInvite },
-  ): Promise<void> {
+  ): Promise<ClientReplicaState> {
     return this.change((document) => {
       document.pending_invites = document.pending_invites.filter(
         (candidate) =>
@@ -349,6 +372,8 @@ export class ClientReplicaStore {
 
       if (confirmed && replica && replica.revision < confirmed.revision)
         replica.snapshot = { ...replica.snapshot, invite: confirmed.invite };
+
+      return stateFrom(document, groupId, this.online());
     });
   }
 
@@ -359,7 +384,7 @@ export class ClientReplicaStore {
       identityId: string,
     ) => GroupCommand,
     invocationId?: string,
-  ): Promise<PendingCommand> {
+  ): Promise<QueuedCommand> {
     return this.change((document) => {
       const session = requireIdentity(document);
       const replica = requireReplica(document, groupId);
@@ -373,7 +398,7 @@ export class ClientReplicaStore {
       if (invocationId) pending.invocation_id = invocationId;
       replica.outbox.push(pending);
 
-      return pending;
+      return { pending, state: stateFrom(document, groupId, this.online()) };
     });
   }
 
@@ -421,7 +446,7 @@ export class ClientReplicaStore {
     groupId: string,
     sentCommands: readonly PendingCommand[],
     response: SyncGroupResponse,
-  ): Promise<void> {
+  ): Promise<ClientReplicaState> {
     return this.change((document) => {
       const replica = document.groups.find(
         (candidate) => candidate.group_id === groupId,
@@ -440,7 +465,7 @@ export class ClientReplicaStore {
           settleJoins(document, groupId, response.state.snapshot);
         }
 
-        return;
+        return stateFrom(document, groupId, this.online());
       }
 
       const acknowledged = new Set(
@@ -454,18 +479,19 @@ export class ClientReplicaStore {
         ]),
       );
 
+      // An outcome is recorded once, by the update that takes its command out
+      // of the outbox. Another tab's synchronization may have done so first,
+      // and the person may since have retried or dismissed its notice.
+      const queued = new Set(
+        replica.outbox.map((pending) => pending.command.command_id),
+      );
+
       for (const outcome of response.outcomes) {
         if (outcome.status !== 'rejected' && outcome.status !== 'superseded') {
           continue;
         }
 
-        if (
-          replica.notices.some(
-            (notice) => notice.outcome.command_id === outcome.command_id,
-          )
-        ) {
-          continue;
-        }
+        if (!queued.has(outcome.command_id)) continue;
 
         const command = sentById.get(outcome.command_id);
 
@@ -499,11 +525,13 @@ export class ClientReplicaStore {
 
       replica.last_synced_at = this.now();
       settleJoins(document, groupId, replica.snapshot);
+
+      return stateFrom(document, groupId, this.online());
     });
   }
 
-  state(groupId: string, online: boolean): Promise<ClientReplicaState> {
-    return this.read((document) => stateFrom(document, groupId, online));
+  state(groupId: string): Promise<ClientReplicaState> {
+    return this.read((document) => stateFrom(document, groupId, this.online()));
   }
 
   /** Queue fresh intent and retire its notice in one atomic local update. */
@@ -513,7 +541,7 @@ export class ClientReplicaStore {
     createId: () => string,
     requireOnline: () => void,
     invocationId?: string,
-  ): Promise<PendingCommand> {
+  ): Promise<QueuedCommand> {
     return this.change((document) => {
       const session = requireIdentity(document);
       const replica = requireReplica(document, groupId);
@@ -530,17 +558,19 @@ export class ClientReplicaStore {
       replica.outbox.push(pending);
       replica.notices = replica.notices.filter((entry) => entry !== notice);
 
-      return pending;
+      return { pending, state: stateFrom(document, groupId, this.online()) };
     });
   }
 
-  dismissNotice(groupId: string, commandId: string): Promise<void> {
+  dismissNotice(groupId: string, commandId: string): Promise<ClientReplicaState> {
     return this.change((document) => {
       const replica = requireReplica(document, groupId);
 
       replica.notices = replica.notices.filter(
         (notice) => notice.outcome.command_id !== commandId,
       );
+
+      return stateFrom(document, groupId, this.online());
     });
   }
 

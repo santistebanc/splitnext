@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { formatInviteLink } from '@splitnext/client';
-import { viewNames } from '../uiState';
+import { viewFits, viewNames } from '../uiState';
 import { workflowGuard, type WorkflowIntent } from '../workflow';
-import { unavailable, editorLock, defineAction, requireOpenable, viewFits, requireMember, requireNotice, requireJoin, joinMembers, requireConfirmation, requireInvite, memberResource, noticeResources, empty, choice } from './define';
+import { unavailable, editorLock, navigationLock, defineAction, requireOpenable, requireMember, requireNotice, requireJoin, joinMembers, requireConfirmation, requireInvite, memberResource, noticeResources, empty, choice } from './define';
 
 /** Navigation, drafts, local review state, device copy and share, and confirmation decisions. */
 export const uiActions = {
@@ -95,6 +95,7 @@ export const uiActions = {
   }),
   restoreNavigation: defineAction({
     workflow: 'navigate',
+    holds: ({ state }, input) => (input && input.groupId !== state.group?.group_id ? [navigationLock] : []),
     group: 'UI',
     description: 'Restore a view when using Back or Forward.',
     input: z.object({
@@ -351,6 +352,7 @@ export const uiActions = {
   }),
   openGroup: defineAction({
     workflow: 'navigate',
+    holds: () => [navigationLock],
     group: 'UI',
     description: 'Open one of this installation’s groups.',
     input: z.object({
@@ -367,6 +369,7 @@ export const uiActions = {
   }),
   showGroups: defineAction({
     workflow: 'navigate',
+    holds: () => [navigationLock],
     group: 'UI',
     description: 'Return to the groups list.',
     input: empty,

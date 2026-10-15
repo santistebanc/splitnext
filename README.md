@@ -169,9 +169,11 @@ catalog. `createDispatcher(controller)` returns one caller-agnostic surface:
   Unavailable results include a short reason and the same failure code dispatch
   enforces. This is a local preflight, not a guarantee of server success.
   `test/actionModel.test.ts` checks this for generated sequences of every
-  action: dispatch fails exactly when and why availability says, available
-  actions fail only for server decisions about someone else's group, nothing
-  stays running, and every view keeps the group it shows.
+  action, some dispatched twice or alongside another before the first
+  finishes, as a double click would: dispatch fails exactly when and why
+  availability said when it was called, available actions fail only for
+  server decisions about someone else's group, nothing stays running, and
+  every view keeps the group it shows.
 - `stateActionMap()` returns the live state/action map.
 - `executions.snapshot()` and `executions.subscribe()` expose shared pending work.
 - `observe(listener)` reports each dispatch with its origin and status.
@@ -202,7 +204,11 @@ action declares the locks it `holds` while running and the locks it
 `waitsFor`, so direct mutations and draft submissions use the same guards.
 Member saves protect the editor and target while unrelated ledger edits remain
 available, including offline; navigation always waits for a running member
-save. Locks release after success or failure. `stateActionMap()` exposes the
+save, and other workflow steps wait for a navigation still loading its group.
+Locks release after success or failure. A panel or member editor whose group
+goes away, for example because another tab left it, returns to the groups
+list, and a leave that finishes while another step runs leaves the view to
+that step. `stateActionMap()` exposes the
 current workflow, evaluated completion edges, action metadata and
 availability, and pending executions. Devtools renders it in the Map tab;
 there is no separate transition table to maintain.
@@ -326,18 +332,32 @@ unreviewed notices. Once a synchronized snapshot shows this identity's access
 is active, the SDK drops any join it was still retrying.
 
 `test/syncConvergence.test.ts` checks this contract with generated scenarios:
-three devices, each with two tabs sharing one installation's storage, go
-offline, reload, lose requests or responses, and issue every command, leave,
-rejoin, notice retry and dismissal, some of them concurrently. Realtime
-announcements reach every tab and start background synchronization while
-steps run. After everyone reconnects, each device must match the server
-snapshot, and every queued command must have exactly one stored outcome and
-one audit event per revision. Unresolved rejections must still be visible as
-notices, and background synchronization may fail only from injected network
-faults. A failure prints the shortest failing sequence of steps. Add new
-commands to its `commandArbitrary`, and add sequences that once failed to its
-`examples`. `test/groupCommandRules.test.ts` lists the outcome of every
-command rule as a table.
+three devices, each with two tabs sharing one installation's storage, work in
+two groups, one of which a device joins through its link. They go offline,
+reload, lose requests or responses, fail to read or save local storage, list
+their groups, and issue every command, join, leave, rejoin, notice retry and
+dismissal, some of them concurrently. Realtime announcements reach every tab
+and start background synchronization while steps run. After everyone
+reconnects, each device must match the server snapshot of every group it can
+access and list exactly those groups, and every queued command must have
+exactly one stored outcome and one audit event per revision. Unresolved
+rejections must still be visible as notices, resolved ones must never return,
+and background synchronization may fail only from injected faults. A failure
+prints the shortest failing sequence of steps. Add new commands to its
+`commandArbitrary`, and add sequences that once failed to its `examples`.
+`test/groupCommandRules.test.ts` lists the outcome of every command rule as a
+table.
+
+Each local operation's last write also returns the replica it produced, so an
+operation that fails to save has changed nothing and one that saved is never
+reported as failed. Once a command or retry is in the outbox, its call has
+succeeded: if delivery then finds the server unreachable or storage failing,
+the next synchronization delivers it, and a storage failure is reported like
+a failed background synchronization. An outcome becomes a notice only through
+the update that removes its command from the outbox, so another tab's late
+response cannot bring back a notice already retried or dismissed. A join
+retried after a lost request carries the newest link, since the old one may
+have been replaced meanwhile.
 
 A successful link replacement shows its new link locally even if the device
 goes offline before the follow-up synchronization.

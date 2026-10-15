@@ -1,17 +1,20 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
+  ClientStorageError,
   MemoryClientStorage,
   SplitnextNetworkError,
   SplitnextRequestError,
   SplitnextSyncClient,
   activeMembers,
   type ClientPreferredMemberChoice,
+  type ClientStorageAdapter,
   type CommandIntent,
   type RealtimeSocketHandlers,
   type SyncDeviceTransport,
   type SyncTransport,
 } from '../src/client';
+import type { ClientStorageUpdate } from '../src/client/storage';
 import { requiresServerDecision } from '../src/domain/commands';
 import { createIdentifier } from '../src/domain/ids';
 import { memberNameKey } from '../src/domain/members';
@@ -20,10 +23,11 @@ import { memoryTransport } from '../src/memoryTransport';
 import { randomDeviceSecret } from './harness';
 
 /**
- * Model-based check of the offline-first promise: whatever devices do while
- * offline, flaky, or reloading, in two tabs at once, and while realtime
- * announcements start background synchronization, once everyone reconnects
- * they converge on the server's state and every command receives exactly
+ * Model-based check of the offline-first promise: whatever devices do in two
+ * groups while offline, flaky, reloading, or failing to save, in two tabs at
+ * once, and while realtime announcements start background synchronization,
+ * once everyone reconnects they converge on the server's state, list exactly
+ * the groups the server lets them access, and every command receives exactly
  * one outcome. A failure prints the shrunk list of steps that breaks it; pass
  * the printed seed and path to `fc.assert` to replay it.
  *
@@ -33,6 +37,9 @@ import { randomDeviceSecret } from './harness';
 const deviceCount = 3;
 
 const tabCount = 2;
+
+/** Device 0 creates the first group and device 1 the second, which device 0 can join through its link. */
+const groupCount = 2;
 
 const memberNames = ['Ana', 'ana', 'Ben', 'Cy', 'Dee'];
 
@@ -46,6 +53,16 @@ const faultArbitrary = fc.oneof(
   { arbitrary: fc.constant<Fault>('lose_request'), weight: 1 },
   { arbitrary: fc.constant<Fault>('lose_response'), weight: 1 },
 );
+
+/** Which storage operation of a device fails during one step, as with a full disk; null for none. */
+const storageFaultArbitrary = fc.oneof(
+  { arbitrary: fc.constant(null), weight: 5 },
+  { arbitrary: fc.nat({ max: 3 }), weight: 1 },
+);
+
+type Injected = { network: Fault; storage: number | null };
+
+const noFaults: Injected = { network: 'none', storage: null };
 
 const pick = fc.nat({ max: 9 });
 
@@ -67,7 +84,8 @@ const actionArbitrary = fc.oneof(
   fc.record({ kind: fc.constant('goOnline' as const) }),
   fc.record({ kind: fc.constant('open' as const) }),
   fc.record({ kind: fc.constant('reload' as const) }),
-  fc.record({ kind: fc.constant('rejoin' as const), member: fc.option(pick), name: fc.constantFrom(...memberNames) }),
+  fc.record({ kind: fc.constant('listGroups' as const) }),
+  fc.record({ kind: fc.constant('join' as const), member: fc.option(pick), name: fc.constantFrom(...memberNames) }),
   fc.record({ kind: fc.constant('regenerateInvite' as const) }),
   fc.record({ kind: fc.constant('retryNotice' as const), notice: pick }),
   fc.record({ kind: fc.constant('dismissNotice' as const), notice: pick }),
@@ -103,7 +121,9 @@ function intentFor(command: CommandStep, snapshot: GroupSnapshot): CommandIntent
 const stepArbitrary = fc.record({
   device: fc.nat({ max: deviceCount - 1 }),
   tab: fc.nat({ max: tabCount - 1 }),
+  group: fc.nat({ max: groupCount - 1 }),
   fault: faultArbitrary,
+  storage: storageFaultArbitrary,
   // Starts while earlier concurrent steps are still running.
   concurrent: fc.oneof({ arbitrary: fc.constant(false), weight: 3 }, { arbitrary: fc.constant(true), weight: 1 }),
   action: actionArbitrary,
@@ -111,24 +131,79 @@ const stepArbitrary = fc.record({
 
 type Step = typeof stepArbitrary extends fc.Arbitrary<infer T> ? T : never;
 
+/** A join the person started but never saw finish; they try it again. */
+type UnfinishedJoin = { choice: ClientPreferredMemberChoice; invited: boolean };
+
 type Device = {
   secret: string;
+  identityId: string;
   /** One installation's storage, shared by its tabs. */
-  storage: MemoryClientStorage;
+  storage: FlakyStorage;
   tabs: SplitnextSyncClient[];
   /** Every command this installation queued, from its tabs' diagnostics. */
-  queued: string[];
+  queued: { group_id: string; command_id: string }[];
   /** Notices this installation retried or dismissed. */
   resolved: Set<string>;
-  /** A rejoin the person started but never saw finish; they try it again. */
-  unfinishedJoin: ClientPreferredMemberChoice | null;
+  unfinishedJoins: Map<string, UnfinishedJoin>;
 };
 
 type Simulation = {
-  groupId: string;
+  groupIds: string[];
   faults: Map<string, Fault>;
   open: (device: Device, tab: number) => SplitnextSyncClient;
+  /** The group as the server holds it, for what a shared link's preview shows. */
+  serverSnapshot: (groupId: string) => GroupSnapshot;
 };
+
+/** What a step that reports success promises about its group afterwards. */
+type Promised = 'shown' | 'hidden' | null;
+
+/**
+ * One installation's storage. A chosen operation fails without saving, as
+ * when the disk is full or the browser closes the database; an update still
+ * runs its change first, as it does before a failed commit.
+ */
+class FlakyStorage implements ClientStorageAdapter {
+  private readonly saved = new MemoryClientStorage();
+  /** Operations that succeed before the next one fails; null when none will. */
+  private remaining: number | null = null;
+
+  failAfter(operations: number | null): void {
+    this.remaining = operations;
+  }
+
+  async read(): Promise<string | null> {
+    if (this.fails()) throw storageFailure();
+
+    return this.saved.read();
+  }
+
+  async update<T>(change: (current: string | null) => ClientStorageUpdate<T>): Promise<T> {
+    if (!this.fails()) return this.saved.update(change);
+
+    change(await this.saved.read());
+
+    throw storageFailure();
+  }
+
+  private fails(): boolean {
+    if (this.remaining === null) return false;
+
+    if (this.remaining > 0) {
+      this.remaining -= 1;
+
+      return false;
+    }
+
+    this.remaining = null;
+
+    return true;
+  }
+}
+
+function storageFailure(): Error {
+  return new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+}
 
 /** Realtime connections per group, announcing revisions like the server does. */
 class RealtimeHub {
@@ -220,17 +295,28 @@ async function simulate(steps: readonly Step[]): Promise<void> {
     });
 
     client.observeDiagnostics((event) => {
-      if (event.kind === 'command_queued') device.queued.push(event.command_id);
+      if (event.kind === 'command_queued') device.queued.push({ group_id: event.group_id, command_id: event.command_id });
     });
     device.tabs[tab] = client;
 
     return client;
   }
 
+  function serverSnapshot(groupId: string): GroupSnapshot {
+    const snapshot = server.repository(groupId)?.state?.snapshot;
+
+    if (!snapshot) throw new Error('missing_server_group');
+
+    return snapshot;
+  }
+
+  const hasAccess = (device: Device, groupId: string) =>
+    serverSnapshot(groupId).access_grants.some((grant) => grant.identity_id === device.identityId);
+
   const devices = Array.from({ length: deviceCount }, (): Device => {
     const device: Device = {
-      secret: randomDeviceSecret(), storage: new MemoryClientStorage(), tabs: [],
-      queued: [], resolved: new Set(), unfinishedJoin: null,
+      secret: randomDeviceSecret(), identityId: '', storage: new FlakyStorage(), tabs: [],
+      queued: [], resolved: new Set(), unfinishedJoins: new Map(),
     };
 
     for (let tab = 0; tab < tabCount; tab += 1) open(device, tab);
@@ -246,37 +332,50 @@ async function simulate(steps: readonly Step[]): Promise<void> {
     return client;
   };
 
-  const [creator, ...joiners] = devices;
+  for (const device of devices) device.identityId = (await first(device).initializeIdentity()).identity.id;
 
-  await first(creator).initializeIdentity();
-  const created = await first(creator).createGroup({ name: 'Trip', creator_member_name: 'Ana' });
-  const groupId = created.group_id;
-  const token = created.projected_snapshot?.invite.token;
-
-  if (!token) throw new Error('missing_invite');
-
-  for (const [index, device] of joiners.entries()) {
-    await first(device).initializeIdentity();
-    await first(device).joinGroup(groupId, { kind: 'new', display_name: memberNames[index + 2] ?? 'Dee' }, token);
+  async function createGroup(device: Device | undefined, name: string, creatorName: string): Promise<string> {
+    return (await first(device).createGroup({ name, creator_member_name: creatorName })).group_id;
   }
 
-  for (const device of devices) for (const tab of device.tabs) tab.watchGroup(groupId);
+  async function joinThroughLink(device: Device | undefined, groupId: string, name: string): Promise<void> {
+    await first(device).joinGroup(groupId, { kind: 'new', display_name: name }, serverSnapshot(groupId).invite.token);
+  }
 
-  const simulation: Simulation = { groupId, faults, open };
+  const [ana, ben, cy] = devices;
+  const trip = await createGroup(ana, 'Trip', 'Ana');
+
+  await joinThroughLink(ben, trip, 'Ben');
+  await joinThroughLink(cy, trip, 'Cy');
+  const ski = await createGroup(ben, 'Ski', 'Ben');
+
+  await joinThroughLink(cy, ski, 'Dee');
+  const groupIds = [trip, ski];
+
+  for (const device of devices) {
+    for (const groupId of groupIds) {
+      if (hasAccess(device, groupId)) for (const tab of device.tabs) tab.watchGroup(groupId);
+    }
+  }
+
+  const simulation: Simulation = { groupIds, faults, open, serverSnapshot };
   const running: Promise<void>[] = [];
 
   for (const step of steps) {
     const device = devices[step.device];
+    const groupId = groupIds[step.group];
 
-    if (!device) throw new Error('missing_device');
+    if (!device || !groupId) throw new Error('missing_device_or_group');
 
     if (!step.concurrent) await Promise.all(running.splice(0));
 
-    const run = perform(simulation, device, step).then(async () => {
+    const run = perform(simulation, device, groupId, step).then(async (promised) => {
       const state = await first(device).inspect(groupId);
 
-      // Someone who sees the group again has no reason to repeat a lost rejoin.
-      if (!state.hidden) device.unfinishedJoin = null;
+      if (promised) expect(state.hidden).toBe(promised === 'hidden');
+
+      // Someone who sees the group again has no reason to repeat a lost join.
+      if (state.projected_snapshot && !state.hidden) device.unfinishedJoins.delete(groupId);
 
       if (state.projected_snapshot) expectValidSnapshot(state.projected_snapshot);
     });
@@ -294,180 +393,285 @@ async function simulate(steps: readonly Step[]): Promise<void> {
   // background work settles: every tab delivers, then observes the result.
   faults.clear();
 
-  for (const device of devices) for (const tab of device.tabs) tab.setOnline(true);
+  for (const device of devices) {
+    device.storage.failAfter(null);
+
+    for (const tab of device.tabs) tab.setOnline(true);
+  }
 
   for (const device of devices) {
-    if (device.unfinishedJoin) await rejoin(first(device), groupId, device.unfinishedJoin, 'none');
+    for (const [groupId, unfinished] of device.unfinishedJoins) {
+      const state = await first(device).inspect(groupId);
+
+      // Background synchronization may already have shown the group again.
+      if (state.projected_snapshot && !state.hidden) continue;
+
+      // Someone joining for the first time asks for the current link.
+      const token = unfinished.invited ? serverSnapshot(groupId).invite.token : undefined;
+
+      await join(first(device), groupId, unfinished.choice, token, noFaults, false);
+    }
   }
 
   for (let round = 0; round < 3; round += 1) {
-    for (const device of devices) for (const tab of device.tabs) await tab.refreshGroup(groupId);
+    for (const device of devices) {
+      for (const tab of device.tabs) {
+        for (const groupId of groupIds) if (hasAccess(device, groupId)) await tab.refreshGroup(groupId);
+      }
+    }
+
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
 
-  const recorded = server.repository(groupId);
-
-  if (!recorded?.state) throw new Error('missing_server_group');
-  const { revision, snapshot } = recorded.state;
-
-  expectValidSnapshot(snapshot);
-
   // Background synchronization only ever fails because of an injected fault.
-  expect(backgroundErrors.filter((error) => !(error instanceof SplitnextNetworkError))).toEqual([]);
+  expect(backgroundErrors.filter((error) => !injectedFailure(error))).toEqual([]);
 
-  for (const device of devices) {
-    const replica = await first(device).inspect(groupId);
+  for (const groupId of groupIds) {
+    const recorded = server.repository(groupId);
 
-    expect(replica.outbox).toEqual([]);
-    expect(replica.revision).toBe(revision);
-    expect(replica.confirmed_snapshot).toEqual(snapshot);
-    expect(replica.projected_snapshot).toEqual(snapshot);
-  }
+    if (!recorded?.state) throw new Error('missing_server_group');
+    const { revision, snapshot } = recorded.state;
 
-  // Every queued command reached the server exactly once.
-  const outcomes = recorded.command_outcomes;
-  const outcomeIds = outcomes.map((entry) => entry.command_id);
-  const queuedIds = devices.flatMap((device) => device.queued);
+    expectValidSnapshot(snapshot);
 
-  expect(new Set(outcomeIds).size).toBe(outcomeIds.length);
-  expect(new Set(queuedIds).size).toBe(queuedIds.length);
-  expect(new Set(outcomeIds)).toEqual(new Set(queuedIds));
+    for (const device of devices) {
+      const replica = await first(device).inspect(groupId);
 
-  // Each revision is one applied transition with one audit event.
-  expect(recorded.audit_events.map((event) => event.revision)).toEqual(
-    Array.from({ length: revision }, (_, index) => index + 1),
-  );
+      // Only those the server admitted hold a copy, and theirs matches it.
+      if (!hasAccess(device, groupId)) {
+        expect(replica.projected_snapshot).toBeNull();
+        continue;
+      }
 
-  // Every unsuccessful command stays visible until its device resolves it.
-  for (const device of devices) {
-    const replica = await first(device).inspect(groupId);
-    const noticed = new Map(replica.notices.map((notice) => [notice.outcome.command_id, notice.outcome]));
-
-    for (const entry of outcomes) {
-      const unsuccessful = entry.outcome.status === 'rejected' || entry.outcome.status === 'superseded';
-
-      if (!unsuccessful || !device.queued.includes(entry.command_id) || device.resolved.has(entry.command_id)) continue;
-      expect(noticed.get(entry.command_id)).toEqual(entry.outcome);
+      expect(replica.outbox).toEqual([]);
+      expect(replica.revision).toBe(revision);
+      expect(replica.confirmed_snapshot).toEqual(snapshot);
+      expect(replica.projected_snapshot).toEqual(snapshot);
     }
 
-    for (const commandId of noticed.keys()) expect(device.queued).toContain(commandId);
+    // Every queued command reached the server exactly once.
+    const outcomes = recorded.command_outcomes;
+    const outcomeIds = outcomes.map((entry) => entry.command_id);
+
+    const queuedIds = devices.flatMap((device) =>
+      device.queued.flatMap((entry) => (entry.group_id === groupId ? [entry.command_id] : [])),
+    );
+
+    expect(new Set(outcomeIds).size).toBe(outcomeIds.length);
+    expect(new Set(queuedIds).size).toBe(queuedIds.length);
+    expect(new Set(outcomeIds)).toEqual(new Set(queuedIds));
+
+    // Each revision is one applied transition with one audit event.
+    expect(recorded.audit_events.map((event) => event.revision)).toEqual(
+      Array.from({ length: revision }, (_, index) => index + 1),
+    );
+
+    // Every unsuccessful command stays visible until its device resolves it,
+    // and a notice the device retried or dismissed never comes back.
+    for (const device of devices) {
+      const replica = await first(device).inspect(groupId);
+      const noticed = new Map(replica.notices.map((notice) => [notice.outcome.command_id, notice.outcome]));
+      const queued = device.queued.map((entry) => entry.command_id);
+
+      for (const entry of outcomes) {
+        const unsuccessful = entry.outcome.status === 'rejected' || entry.outcome.status === 'superseded';
+
+        if (!unsuccessful || !queued.includes(entry.command_id) || device.resolved.has(entry.command_id)) continue;
+        expect(noticed.get(entry.command_id)).toEqual(entry.outcome);
+      }
+
+      for (const commandId of noticed.keys()) {
+        expect(queued).toContain(commandId);
+        expect(device.resolved.has(commandId)).toBe(false);
+      }
+    }
+  }
+
+  // Each device lists exactly the groups the server lets it access, as named there.
+  const byGroup = (left: { group_id: string }, right: { group_id: string }) => left.group_id.localeCompare(right.group_id);
+
+  for (const device of devices) {
+    const listed = (await first(device).listGroups()).map(({ group_id, name, status, stored_locally, pending_commands }) => (
+      { group_id, name, status, stored_locally, pending_commands }
+    ));
+
+    const expected = groupIds.flatMap((groupId) => {
+      const snapshot = serverSnapshot(groupId);
+      const grant = snapshot.access_grants.find((entry) => entry.identity_id === device.identityId);
+
+      return grant
+        ? [{ group_id: groupId, name: snapshot.group.name, status: grant.hidden_at ? 'left' : 'active', stored_locally: true, pending_commands: 0 }]
+        : [];
+    });
+
+    expect(listed.sort(byGroup)).toEqual(expected.sort(byGroup));
   }
 }
 
-/** Runs one step the way the app would, skipping what the app would not offer. */
-async function perform(simulation: Simulation, device: Device, step: Step): Promise<void> {
-  const { groupId, faults } = simulation;
+/**
+ * Runs one step the way the app would, skipping what the app would not offer,
+ * and returns what its success promises about the group's visibility.
+ */
+async function perform(simulation: Simulation, device: Device, groupId: string, step: Step): Promise<Promised> {
+  const { faults } = simulation;
   const { action } = step;
   // Concurrent steps could consume each other's faults, so only sequential ones inject them.
-  const fault = step.concurrent ? 'none' : step.fault;
+  const injected: Injected = step.concurrent ? noFaults : { network: step.fault, storage: step.storage };
   const client = device.tabs[step.tab];
 
   if (!client) throw new Error('missing_tab');
-  const state = await client.inspect(groupId);
+  const installation = await client.installationState(simulation.groupIds);
+  const state = installation.replicas.find((replica) => replica.group_id === groupId);
+
+  if (!state) throw new Error('missing_replica_state');
   const snapshot = state.projected_snapshot;
   const online = client.isOnline();
-
-  if (!snapshot) throw new Error('missing_replica');
   const notice = (index: number) => state.notices[index % Math.max(state.notices.length, 1)];
 
-  if (fault !== 'none') faults.set(device.secret, fault);
-
-  try {
+  const act = async (): Promise<Promised> => {
     switch (action.kind) {
       case 'goOffline':
         for (const tab of device.tabs) tab.setOnline(false);
 
-        return;
+        return null;
       case 'goOnline':
         for (const tab of device.tabs) tab.setOnline(true);
 
-        return;
+        return null;
       case 'reload': {
         const reloaded = simulation.open(device, step.tab);
 
         reloaded.setOnline(online);
-        await attempt(fault, () => reloaded.initializeIdentity());
+        await attempt(injected, () => reloaded.initializeIdentity());
 
-        if (!state.hidden) reloaded.watchGroup(groupId);
+        // The app watches every group it shows.
+        for (const replica of installation.replicas) {
+          if (replica.projected_snapshot && !replica.hidden) reloaded.watchGroup(replica.group_id);
+        }
 
-        return;
+        return null;
       }
 
-      case 'open':
-        // Opening a group synchronizes it, fetching a left group's snapshot.
-        if (online) await attempt(fault, () => state.hidden ? client.refreshGroup(groupId) : client.syncGroup(groupId));
+      case 'open': {
+        if (!online) return null;
 
-        return;
-      case 'rejoin': {
-        if (!online || !state.hidden) return;
-        const active = activeMembers(snapshot);
-        const existing = action.member === null ? undefined : active[action.member % active.length];
+        // Opening synchronizes the group, fetching a left group's snapshot.
+        if (snapshot) {
+          await attempt(injected, () => state.hidden ? client.refreshGroup(groupId) : client.syncGroup(groupId));
+
+          return null;
+        }
+
+        // A group only the server's list mentions is fetched when opened.
+        if (installation.groups.some((group) => group.group_id === groupId) && await attempt(injected, () => client.syncGroup(groupId)))
+          client.watchGroup(groupId);
+
+        return null;
+      }
+
+      case 'listGroups': {
+        await attempt(injected, async () => {
+          const listed = (await client.listGroups()).map((group) => group.group_id);
+
+          expect(new Set(listed).size).toBe(listed.length);
+
+          for (const listedId of listed) expect(simulation.groupIds).toContain(listedId);
+        });
+
+        return null;
+      }
+
+      case 'join': {
+        if (!online || (snapshot && !state.hidden)) return null;
+
+        // Someone new picks from the link's preview; someone rejoining, from their copy.
+        const invited = !snapshot;
+        const server = simulation.serverSnapshot(groupId);
+        const choices = activeMembers(snapshot ?? server);
+        const existing = action.member === null ? undefined : choices[action.member % choices.length];
 
         const choice: ClientPreferredMemberChoice = existing
           ? { kind: 'existing', member_id: existing.id }
           : { kind: 'new', display_name: action.name };
 
-        const result = await rejoin(client, groupId, choice, fault);
+        const result = await join(client, groupId, choice, invited ? server.invite.token : undefined, injected, step.concurrent);
 
-        device.unfinishedJoin = result === 'unfinished' ? choice : null;
+        if (result === 'unfinished') device.unfinishedJoins.set(groupId, { choice, invited });
+        else device.unfinishedJoins.delete(groupId);
 
-        // A rejoin that reports success shows the group again.
-        if (result === 'joined' && !step.concurrent) expect((await client.inspect(groupId)).hidden).toBe(false);
+        if (result !== 'joined') return null;
+        client.watchGroup(groupId);
 
-        return;
+        // A join that reports success shows the group.
+        return step.concurrent ? null : 'shown';
       }
 
       case 'retryNotice': {
         const retried = notice(action.notice);
 
-        if (!retried || state.hidden || (retried.command.type === 'group.leave' && !online)) return;
-        await attempt(fault, () => client.retryNotice(groupId, retried.command.command_id), step.concurrent);
-        device.resolved.add(retried.command.command_id);
+        if (!retried || state.hidden || (retried.command.type === 'group.leave' && !online)) return null;
 
-        return;
+        if (await attempt(injected, () => client.retryNotice(groupId, retried.command.command_id), step.concurrent))
+          device.resolved.add(retried.command.command_id);
+
+        return null;
       }
 
       case 'dismissNotice': {
         const dismissed = notice(action.notice);
 
-        if (!dismissed) return;
-        await client.dismissNotice(groupId, dismissed.command.command_id);
-        device.resolved.add(dismissed.command.command_id);
+        if (dismissed && await attempt(injected, () => client.dismissNotice(groupId, dismissed.command.command_id)))
+          device.resolved.add(dismissed.command.command_id);
 
-        return;
+        return null;
       }
 
       case 'regenerateInvite':
-        if (online && !state.hidden) await attempt(fault, () => client.regenerateInvite(groupId));
+        if (online && snapshot && !state.hidden) await attempt(injected, () => client.regenerateInvite(groupId));
 
-        return;
+        return null;
       case 'submit': {
-        const intent = intentFor(action.command, snapshot);
+        const intent = snapshot && intentFor(action.command, snapshot);
 
         // The app offers commands only for a group it shows, and leaving only online.
-        if (!intent || state.hidden || (requiresServerDecision(intent.type) && !online)) return;
-        const done = await attempt(fault, () => client.submit(groupId, intent));
+        if (!intent || state.hidden || (requiresServerDecision(intent.type) && !online)) return null;
+        const done = await attempt(injected, () => client.submit(groupId, intent));
 
         // A leave that reports success shows the group as left, even if its response was lost.
-        if (done && intent.type === 'group.leave' && !step.concurrent) expect((await client.inspect(groupId)).hidden).toBe(true);
+        return done && intent.type === 'group.leave' && !step.concurrent ? 'hidden' : null;
       }
     }
+  };
+
+  if (injected.network !== 'none') faults.set(device.secret, injected.network);
+  device.storage.failAfter(injected.storage);
+
+  try {
+    return await act();
   } finally {
-    if (fault !== 'none') faults.delete(device.secret);
+    if (injected.network !== 'none') faults.delete(device.secret);
+    device.storage.failAfter(null);
   }
 }
 
+/** Failures a step injected: a lost request or response, or storage that could not save. */
+function injectedFailure(error: Error): boolean {
+  return error instanceof SplitnextNetworkError || (error instanceof ClientStorageError && error.code === 'storage_unavailable');
+}
+
 /**
- * Runs an operation, accepting only a network failure the step injected and,
- * when tabs race, a notice another tab already resolved.
+ * Runs an operation, accepting only a failure the step injected and, when
+ * tabs race, a notice another tab already resolved.
  */
-async function attempt<T>(fault: Fault, operation: () => Promise<T>, racing = false): Promise<boolean> {
+async function attempt<T>(injected: Injected, operation: () => Promise<T>, racing = false): Promise<boolean> {
   try {
     await operation();
 
     return true;
   } catch (error) {
-    if (error instanceof SplitnextNetworkError && fault !== 'none') return false;
+    if (error instanceof SplitnextNetworkError && injected.network !== 'none') return false;
+
+    if (error instanceof ClientStorageError && error.code === 'storage_unavailable' && injected.storage !== null) return false;
 
     if (racing && error instanceof Error && error.message === 'notice_not_found') return false;
 
@@ -475,18 +679,26 @@ async function attempt<T>(fault: Fault, operation: () => Promise<T>, racing = fa
   }
 }
 
-/** A rejoin may also race with the chosen member being archived meanwhile. */
-async function rejoin(
+/**
+ * A join may race with the chosen member being archived meanwhile and, when
+ * steps run together, with the link being replaced.
+ */
+async function join(
   client: SplitnextSyncClient,
   groupId: string,
   choice: ClientPreferredMemberChoice,
-  fault: Fault,
+  token: string | undefined,
+  injected: Injected,
+  racing: boolean,
 ): Promise<'joined' | 'unfinished' | 'rejected'> {
   try {
-    return (await attempt(fault, () => client.joinGroup(groupId, choice))) ? 'joined' : 'unfinished';
+    return (await attempt(injected, () => client.joinGroup(groupId, choice, token))) ? 'joined' : 'unfinished';
   } catch (error) {
-    if (error instanceof SplitnextRequestError && (error.code === 'member_archived' || error.code === 'member_not_found'))
-      return 'rejected';
+    if (!(error instanceof SplitnextRequestError)) throw error;
+
+    if (error.code === 'member_archived' || error.code === 'member_not_found') return 'rejected';
+
+    if (racing && (error.code === 'invite_replaced' || error.code === 'invite_invalid')) return 'rejected';
 
     throw error;
   }
@@ -509,32 +721,51 @@ function expectValidSnapshot(snapshot: GroupSnapshot): void {
 
 const leave = { kind: 'submit', command: { type: 'group.leave' } } as const;
 
-const sequential = { tab: 0, concurrent: false } as const;
+const sequential = { tab: 0, group: 0, storage: null, concurrent: false } as const;
+
+const together = { tab: 0, group: 0, storage: null, concurrent: true, fault: 'none' } as const;
 
 /** Rare sequences worth checking on every run; each found a bug once. */
 const examples: [Step[]][] = [
   // A rejoin whose response was lost must not be replayed after leaving again.
   [[
     { ...sequential, device: 1, fault: 'none', action: leave },
-    { ...sequential, device: 1, fault: 'lose_response', action: { kind: 'rejoin', member: null, name: 'Dee' } },
+    { ...sequential, device: 1, fault: 'lose_response', action: { kind: 'join', member: null, name: 'Dee' } },
     { ...sequential, device: 1, fault: 'none', action: { kind: 'open' } },
     { ...sequential, device: 1, fault: 'none', action: leave },
-    { ...sequential, device: 1, fault: 'none', action: { kind: 'rejoin', member: 0, name: 'Dee' } },
+    { ...sequential, device: 1, fault: 'none', action: { kind: 'join', member: 0, name: 'Dee' } },
   ]],
   // A leave whose request was lost reaches the server before a rejoin.
   [[
     { ...sequential, device: 0, fault: 'lose_request', action: leave },
-    { ...sequential, device: 0, fault: 'none', action: { kind: 'rejoin', member: null, name: 'Ana' } },
+    { ...sequential, device: 0, fault: 'none', action: { kind: 'join', member: null, name: 'Ana' } },
   ]],
   // Choosing who you are, queued alongside leaving, cannot apply after the leave.
   [[
-    { device: 1, tab: 0, concurrent: true, fault: 'none', action: leave },
-    { device: 1, tab: 0, concurrent: true, fault: 'none', action: { kind: 'submit', command: { type: 'preference.set', member: 0 } } },
+    { ...together, device: 1, action: leave },
+    { ...together, device: 1, action: { kind: 'submit', command: { type: 'preference.set', member: 0 } } },
   ]],
   // A replaced link whose follow-up sync finds the device offline still succeeds.
   [[
-    { device: 1, tab: 0, concurrent: true, fault: 'none', action: { kind: 'regenerateInvite' } },
-    { device: 1, tab: 0, concurrent: true, fault: 'none', action: { kind: 'goOffline' } },
+    { ...together, device: 1, action: { kind: 'regenerateInvite' } },
+    { ...together, device: 1, action: { kind: 'goOffline' } },
+  ]],
+  // A retry saved to the outbox succeeds even if storage fails while delivering
+  // it, and the other tab's late response does not bring back the retired notice.
+  [[
+    { ...sequential, device: 0, fault: 'none', action: { kind: 'submit', command: { type: 'member.rename', member: 0, name: 'Cy' } } },
+    { ...sequential, device: 0, fault: 'none', storage: 1, action: { kind: 'retryNotice', notice: 0 } },
+  ]],
+  // A dismissal that was saved is not reported as failed.
+  [[
+    { ...sequential, device: 2, fault: 'none', action: { kind: 'submit', command: { type: 'member.rename', member: 0, name: 'Cy' } } },
+    { ...sequential, device: 2, fault: 'none', storage: 1, action: { kind: 'dismissNotice', notice: 0 } },
+  ]],
+  // A join whose request was lost, retried with a fresh link after the old one was replaced.
+  [[
+    { ...sequential, group: 1, device: 0, fault: 'lose_request', action: { kind: 'join', member: null, name: 'Ana' } },
+    { ...sequential, group: 1, device: 1, fault: 'none', action: { kind: 'regenerateInvite' } },
+    { ...sequential, group: 1, device: 0, fault: 'none', action: { kind: 'join', member: null, name: 'Ana' } },
   ]],
 ];
 
