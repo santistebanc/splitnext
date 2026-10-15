@@ -89,7 +89,9 @@ export function NoticesPanel(props: NoticesPanelProps) {
                 ? 'Another accepted change made your original edit out of date.'
                 : notice.outcome.reason === 'member_name_taken'
                   ? 'An active member already has that name.'
-                  : 'The group’s current state does not allow this change.'}
+                  : notice.outcome.reason === 'group_left'
+                    ? 'You left this group before the change arrived.'
+                    : 'The group’s current state does not allow this change.'}
             </Text>
             <View style={s.row}>
               <Button

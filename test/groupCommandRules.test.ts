@@ -84,6 +84,7 @@ const rows: Row[] = [
   ['rejects choosing an archived member', prefer(old), 'rejected', 'member_archived'],
   ['rejects choosing an unknown member', prefer(id('member-none')), 'rejected', 'member_not_found'],
   ['rejects a choice without access', prefer(ben), 'rejected', 'access_not_found', outsider],
+  ['rejects a choice after leaving', prefer(ben), 'rejected', 'group_left', id('identity-left')],
   ['leaves the group', leave, 'applied', null],
   ['keeps a left group left', leave, 'no_effect', null, id('identity-left')],
   ['rejects leaving without access', leave, 'rejected', 'access_not_found', outsider],
