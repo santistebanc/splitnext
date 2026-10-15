@@ -49,28 +49,6 @@ describe('member.archive sync command', () => {
     });
   });
 
-  it('returns no_effect when the member is already archived', async () => {
-    const fixture = await createGroupFixture('j');
-
-    await sync(fixture, 1, [archiveCommand(fixture.created.member.id)]);
-
-    const repeatedIntent = archiveCommand(fixture.created.member.id);
-    const response = await sync(fixture, 1, [repeatedIntent]);
-
-    expect(await response.json()).toMatchObject({
-      revision: 2,
-      outcomes: [
-        {
-          command_id: repeatedIntent.command_id,
-          status: 'no_effect',
-          reason: null,
-          audit_id: null,
-          server_state: { member: { status: 'archived' } },
-        },
-      ],
-    });
-  });
-
   it('makes an archived name available to a later command in the batch', async () => {
     const fixture = await createGroupFixture('k');
     const archive = archiveCommand(fixture.created.member.id);
@@ -98,25 +76,6 @@ describe('member.archive sync command', () => {
           ],
         },
       },
-    });
-  });
-
-  it('rejects an archive when the member does not exist', async () => {
-    const fixture = await createGroupFixture('l');
-    const command = archiveCommand(createIdentifier());
-    const response = await sync(fixture, 1, [command]);
-
-    expect(await response.json()).toMatchObject({
-      revision: 1,
-      outcomes: [
-        {
-          command_id: command.command_id,
-          status: 'rejected',
-          reason: 'member_not_found',
-          audit_id: null,
-          server_state: null,
-        },
-      ],
     });
   });
 

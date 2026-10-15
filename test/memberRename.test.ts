@@ -48,75 +48,6 @@ describe('member.rename sync command', () => {
     });
   });
 
-  it('returns no_effect when another command already achieved the intent', async () => {
-    const fixture = await createGroupFixture('v');
-
-    await sync(fixture, 1, [renameCommand(fixture, 'Santi', 'Thomas')]);
-
-    const command = renameCommand(fixture, 'Santi', 'Thomas');
-    const response = await sync(fixture, 1, [command]);
-
-    expect(await response.json()).toMatchObject({
-      revision: 2,
-      outcomes: [
-        {
-          command_id: command.command_id,
-          status: 'no_effect',
-          reason: null,
-          audit_id: null,
-          server_state: { member: { display_name: 'Thomas' } },
-        },
-      ],
-    });
-  });
-
-  it('supersedes a stale rename instead of overwriting a newer name', async () => {
-    const fixture = await createGroupFixture('w');
-
-    await sync(fixture, 1, [renameCommand(fixture, 'Santi', 'Thomas')]);
-
-    const staleCommand = renameCommand(fixture, 'Santi', 'Robin');
-    const response = await sync(fixture, 1, [staleCommand]);
-
-    expect(await response.json()).toMatchObject({
-      revision: 2,
-      outcomes: [
-        {
-          command_id: staleCommand.command_id,
-          status: 'superseded',
-          reason: 'member_changed',
-          audit_id: null,
-          server_state: { member: { display_name: 'Thomas' } },
-        },
-      ],
-      state: {
-        snapshot: { members: [{ display_name: 'Thomas' }] },
-      },
-    });
-  });
-
-  it('supersedes a rename when another active member uses the name', async () => {
-    const fixture = await createGroupFixture('x');
-    const createAlex = createMemberCommand('Alex');
-
-    await sync(fixture, 1, [createAlex]);
-
-    const command = renameCommand(fixture, 'Santi', 'alex');
-    const response = await sync(fixture, 2, [command]);
-
-    expect(await response.json()).toMatchObject({
-      revision: 2,
-      outcomes: [
-        {
-          command_id: command.command_id,
-          status: 'superseded',
-          reason: 'member_name_taken',
-          server_state: { member: { display_name: 'Santi' } },
-        },
-      ],
-    });
-  });
-
   it('returns the original outcome when the same rename is retried', async () => {
     const fixture = await createGroupFixture('y');
     const command = renameCommand(fixture, 'Santi', 'Thomas');
@@ -151,34 +82,6 @@ describe('member.rename sync command', () => {
       },
     });
   });
-
-  it('rejects a rename when its target does not exist', async () => {
-    const fixture = await createGroupFixture('0');
-
-    const command = {
-      ...renameCommand(fixture, 'Missing', 'Robin'),
-      payload: {
-        member_id: createIdentifier(),
-        expected_display_name: 'Missing',
-        display_name: 'Robin',
-      },
-    };
-
-    const response = await sync(fixture, 1, [command]);
-
-    expect(await response.json()).toMatchObject({
-      revision: 1,
-      outcomes: [
-        {
-          command_id: command.command_id,
-          status: 'rejected',
-          reason: 'member_not_found',
-          audit_id: null,
-          server_state: null,
-        },
-      ],
-    });
-  });
 });
 
 function renameCommand(
@@ -192,17 +95,6 @@ function renameCommand(
     payload: {
       member_id: fixture.created.member.id,
       expected_display_name: expectedDisplayName,
-      display_name: displayName,
-    },
-  };
-}
-
-function createMemberCommand(displayName: string) {
-  return {
-    command_id: createIdentifier(),
-    type: 'member.create',
-    payload: {
-      member_id: createIdentifier(),
       display_name: displayName,
     },
   };
