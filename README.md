@@ -71,6 +71,12 @@ realtime revision announcements; expenses are intentionally deferred.
 - Groups have no currency setting. Future expenses and settlements will record
   their own currency, with separate balances per currency; see
   [ADR 0014](./docs/adr/0014-record-currency-per-expense.md).
+- The money rules expenses will use already exist as a pure, property-tested
+  module, `src/domain/money.ts`: whole minor units per currency, allocation by
+  exact amounts and shares, rounding extras that rotate by accumulated burden,
+  and balances that net to zero per currency; see
+  [ADR 0017](./docs/adr/0017-allocate-money-in-whole-minor-units-with-burden-fair-rounding.md).
+  No expense commands or screens exist yet.
 
 ## Run locally
 

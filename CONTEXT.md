@@ -66,6 +66,21 @@ The currency in which an expense's original amount and allocations are recorded.
 A group may contain expenses in several currencies.
 _Avoid_: Group currency, global currency, display currency
 
+**Minor unit**:
+The smallest amount a currency records, such as a euro cent; amounts are whole
+numbers of it.
+_Avoid_: Decimal amount, float
+
+**Allocation**:
+The whole number of minor units each member owes for one expense, fixed when
+the expense is recorded: exact amounts first, then the rest split by shares.
+_Avoid_: Split ratio, percentage
+
+**Rounding burden**:
+The extra minor units a member has absorbed in one currency because a split
+could not be exact; later splits give extras to members with less of it.
+_Avoid_: Rounding error, remainder
+
 **Currency balance**:
 A ledger member's net amount owed or owing in one currency, after expenses and
 recorded settlements in that currency.
