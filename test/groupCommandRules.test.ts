@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { applyGroupCommand, type GroupCommand } from '../src/domain/commands';
+import { applyGroupCommand, type CommandServerState, type GroupCommand } from '../src/domain/commands';
+import type { LedgerMember } from '../src/domain/members';
 import type { GroupSnapshot } from '../src/domain/sync';
 
 /**
@@ -60,41 +61,64 @@ const prefer = (memberId: string): GroupCommand =>
 
 const leave: GroupCommand = { command_id: commandId, type: 'group.leave', payload: {} };
 
-type Row = [situation: string, command: GroupCommand, status: string, reason: string | null, actor?: string];
+/** A command's reported server state with each of its parts matched partially. */
+type ServerState =
+  | (CommandServerState extends infer State
+      ? State extends CommandServerState
+        ? { [Key in keyof State]: Key extends 'kind' ? State[Key] : Partial<State[Key]> }
+        : never
+      : never)
+  | null;
+
+type Row = {
+  situation: string;
+  command: GroupCommand;
+  status: string;
+  reason: string | null;
+  /** The authoritative state the outcome reports, matched partially. */
+  state: ServerState;
+  actor?: string;
+};
+
+const memberState = (detail: Partial<LedgerMember>): ServerState => ({ kind: 'member', member: detail });
 
 const rows: Row[] = [
-  ['renames the group', rename('Lisbon'), 'applied', null],
-  ['keeps a name another device already chose', rename('Trip', 'Old trip'), 'no_effect', null],
-  ['supersedes a rename based on an old name', rename('Lisbon', 'Old trip'), 'superseded', 'group_changed'],
-  ['adds a member', create(id('member-new'), 'Cy'), 'applied', null],
-  ['merges an added name with an active member', create(id('member-new'), 'ana'), 'no_effect', 'member_merged'],
-  ['reuses an archived member name', create(id('member-new'), 'Old'), 'applied', null],
-  ['rejects an add with an existing member id', create(ben, 'Cy'), 'rejected', 'member_id_exists'],
-  ['renames a member', renameMember(ana, 'Anita', 'Ana'), 'applied', null],
-  ['keeps a member name another device already chose', renameMember(ana, 'Ana', 'Annie'), 'no_effect', null],
-  ['supersedes a member rename based on an old name', renameMember(ana, 'Anita', 'Annie'), 'superseded', 'member_changed'],
-  ['supersedes a rename to an active name', renameMember(ana, 'ben', 'Ana'), 'superseded', 'member_name_taken'],
-  ['rejects renaming an archived member', renameMember(old, 'New', 'Old'), 'rejected', 'member_archived'],
-  ['rejects renaming an unknown member', renameMember(id('member-none'), 'New', 'X'), 'rejected', 'member_not_found'],
-  ['archives a member', archive(ben), 'applied', null],
-  ['keeps an archived member archived', archive(old), 'no_effect', null],
-  ['rejects archiving an unknown member', archive(id('member-none')), 'rejected', 'member_not_found'],
-  ['chooses who is you', prefer(ben), 'applied', null],
-  ['keeps the current choice', prefer(ana), 'no_effect', null],
-  ['rejects choosing an archived member', prefer(old), 'rejected', 'member_archived'],
-  ['rejects choosing an unknown member', prefer(id('member-none')), 'rejected', 'member_not_found'],
-  ['rejects a choice without access', prefer(ben), 'rejected', 'access_not_found', outsider],
-  ['rejects a choice after leaving', prefer(ben), 'rejected', 'group_left', id('identity-left')],
-  ['leaves the group', leave, 'applied', null],
-  ['keeps a left group left', leave, 'no_effect', null, id('identity-left')],
-  ['rejects leaving without access', leave, 'rejected', 'access_not_found', outsider],
+  { situation: 'renames the group', command: rename('Lisbon'), status: 'applied', reason: null, state: { kind: 'group', group: { name: 'Lisbon' } } },
+  { situation: 'keeps a name another device already chose', command: rename('Trip', 'Old trip'), status: 'no_effect', reason: null, state: { kind: 'group', group: { name: 'Trip' } } },
+  { situation: 'supersedes a rename based on an old name', command: rename('Lisbon', 'Old trip'), status: 'superseded', reason: 'group_changed', state: { kind: 'group', group: { name: 'Trip' } } },
+  { situation: 'adds a member', command: create(id('member-new'), 'Cy'), status: 'applied', reason: null, state: memberState({ id: id('member-new'), display_name: 'Cy' }) },
+  { situation: 'merges an added name with an active member', command: create(id('member-new'), 'ana'), status: 'no_effect', reason: 'member_merged', state: memberState({ id: ana, display_name: 'Ana' }) },
+  { situation: 'merges a name that differs only in width and case', command: create(id('member-new'), 'ＡＮＡ'), status: 'no_effect', reason: 'member_merged', state: memberState({ id: ana }) },
+  { situation: 'reuses an archived member name', command: create(id('member-new'), 'Old'), status: 'applied', reason: null, state: memberState({ display_name: 'Old', status: 'active' }) },
+  { situation: 'rejects an add with an existing member id', command: create(ben, 'Cy'), status: 'rejected', reason: 'member_id_exists', state: memberState({ id: ben, display_name: 'Ben' }) },
+  { situation: 'renames a member', command: renameMember(ana, 'Anita', 'Ana'), status: 'applied', reason: null, state: memberState({ id: ana, display_name: 'Anita' }) },
+  { situation: 'keeps a member name another device already chose', command: renameMember(ana, 'Ana', 'Annie'), status: 'no_effect', reason: null, state: memberState({ display_name: 'Ana' }) },
+  { situation: 'supersedes a member rename based on an old name', command: renameMember(ana, 'Anita', 'Annie'), status: 'superseded', reason: 'member_changed', state: memberState({ display_name: 'Ana' }) },
+  { situation: 'supersedes a rename to an active name', command: renameMember(ana, 'ben', 'Ana'), status: 'superseded', reason: 'member_name_taken', state: memberState({ display_name: 'Ana' }) },
+  { situation: 'rejects renaming an archived member', command: renameMember(old, 'New', 'Old'), status: 'rejected', reason: 'member_archived', state: memberState({ status: 'archived' }) },
+  { situation: 'rejects renaming an unknown member', command: renameMember(id('member-none'), 'New', 'X'), status: 'rejected', reason: 'member_not_found', state: null },
+  { situation: 'archives a member', command: archive(ben), status: 'applied', reason: null, state: memberState({ id: ben, status: 'archived' }) },
+  { situation: 'keeps an archived member archived', command: archive(old), status: 'no_effect', reason: null, state: memberState({ status: 'archived' }) },
+  { situation: 'rejects archiving an unknown member', command: archive(id('member-none')), status: 'rejected', reason: 'member_not_found', state: null },
+  { situation: 'chooses who is you', command: prefer(ben), status: 'applied', reason: null, state: { kind: 'access', access: { preferred_member_id: ben } } },
+  { situation: 'keeps the current choice', command: prefer(ana), status: 'no_effect', reason: null, state: { kind: 'access', access: { preferred_member_id: ana } } },
+  { situation: 'rejects choosing an archived member', command: prefer(old), status: 'rejected', reason: 'member_archived', state: null },
+  { situation: 'rejects choosing an unknown member', command: prefer(id('member-none')), status: 'rejected', reason: 'member_not_found', state: null },
+  { situation: 'rejects a choice without access', command: prefer(ben), status: 'rejected', reason: 'access_not_found', state: null, actor: outsider },
+  { situation: 'rejects a choice after leaving', command: prefer(ben), status: 'rejected', reason: 'group_left', state: null, actor: id('identity-left') },
+  { situation: 'leaves the group', command: leave, status: 'applied', reason: null, state: { kind: 'access', access: { hidden_at: later, preferred_member_id: null } } },
+  { situation: 'keeps a left group left', command: leave, status: 'no_effect', reason: null, state: { kind: 'access', access: { hidden_at: at } }, actor: id('identity-left') },
+  { situation: 'rejects leaving without access', command: leave, status: 'rejected', reason: 'access_not_found', state: null, actor: outsider },
 ];
 
 describe('group command rules', () => {
-  it.each(rows)('%s', (_, command, status, reason, actor = me) => {
+  it.each(rows)('$situation', ({ command, status, reason, state, actor = me }) => {
     const transition = applyGroupCommand(snapshot, actor, command, later);
 
     expect({ status: transition.status, reason: transition.reason }).toEqual({ status, reason });
+
+    if (state === null) expect(transition.serverState).toBeNull();
+    else expect(transition.serverState).toMatchObject(state);
 
     // Only an applied command changes state or writes history.
     if (status === 'applied') {

@@ -91,29 +91,6 @@ describe('member.create sync command', () => {
     });
   });
 
-  it('merges a creation into the active member that already has its name', async () => {
-    const fixture = await createGroupFixture('r');
-    const command = createMemberCommand('  ＳaｎTi  ');
-    const response = await sync(fixture, 1, [command]);
-
-    expect(await response.json()).toMatchObject({
-      revision: 1,
-      outcomes: [
-        {
-          command_id: command.command_id,
-          status: 'no_effect',
-          reason: 'member_merged',
-          audit_id: null,
-          server_state: {
-            kind: 'member',
-            member: { id: fixture.created.member.id, display_name: 'Santi' },
-          },
-        },
-      ],
-      state: { kind: 'snapshot' },
-    });
-  });
-
   it('rejects reuse of a command id with different input', async () => {
     const fixture = await createGroupFixture('s');
     const command = createMemberCommand('Alex');
