@@ -82,7 +82,7 @@ export function AppScreen(props: ScreenProps) {
       <Frame>
         {error ? (
           <View style={s.main}>
-            <Text style={s.heading}>Letâ€™s try that again</Text>
+            <Text style={s.heading}>Let’s try that again</Text>
             <ErrorMessage message={error} />
             <Button
               onPress={() => {
@@ -107,7 +107,7 @@ export function AppScreen(props: ScreenProps) {
 export function LoadingGroups() {
   return (
     <View
-      accessibilityLabel="Opening your groupsâ€¦"
+      accessibilityLabel="Opening your groups…"
       accessibilityLiveRegion="polite"
       aria-busy
       style={s.stack}
@@ -324,8 +324,8 @@ function ReadyApp(props: AppProps) {
                     ? 'Offline'
                     : !state.reachable
                       ? 'Connection unavailable'
-                      : 'Syncingâ€¦'}
-                  {pending > 0 ? ` Â· ${pending} pending` : ''}
+                      : 'Syncing…'}
+                  {pending > 0 ? ` · ${pending} pending` : ''}
                 </Text>
                 {state.online && !state.reachable ? (
                   <Button
@@ -367,7 +367,7 @@ function ReadyApp(props: AppProps) {
                       );
                     }}
                   >
-                    Review changes Â· {notices}
+                    Review changes · {notices}
                   </Button>
                   <Button
                     quiet
