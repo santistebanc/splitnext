@@ -1,9 +1,19 @@
 // Fails when a tracked text file contains UTF-8 that was decoded as
-// Windows-1252 and encoded again, such as "â€¦" for "…" or "Â·" for "·".
+// Windows-1252 and encoded again, which turns an ellipsis or a middle dot
+// into two or three Latin characters.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-const garbled = /â€|Â[ -¿]|Ã[\u0080-¿]/;
+const char = (code) => String.fromCodePoint(code);
+
+// Lead bytes of common two- and three-byte UTF-8 sequences, read as Windows-1252.
+const garbled = new RegExp(
+  [
+    `${char(0xe2)}${char(0x20ac)}`,
+    `${char(0xc2)}[${char(0xa0)}-${char(0xbf)}]`,
+    `${char(0xc3)}[${char(0x80)}-${char(0xbf)}]`,
+  ].join('|'),
+);
 
 const files = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
   .split('\0')

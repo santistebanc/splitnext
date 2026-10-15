@@ -7,3 +7,5 @@ apps/*/.expo/
 apps/*/dist/
 apps/*/expo-env.d.ts
 src/generated/
+test-results/
+playwright-report/
