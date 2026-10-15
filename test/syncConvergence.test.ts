@@ -357,7 +357,10 @@ async function perform(simulation: Simulation, device: Device, step: Step): Prom
 
         // The app offers commands only for a group it shows, and leaving only online.
         if (!intent || state.hidden || (requiresServerDecision(intent.type) && !online)) return;
-        await attempt(fault, () => client.submit(groupId, intent));
+        const done = await attempt(fault, () => client.submit(groupId, intent));
+
+        // A leave that reports success shows the group as left, even if its response was lost.
+        if (done && intent.type === 'group.leave') expect((await client.inspect(groupId)).hidden).toBe(true);
 
         return;
       }
