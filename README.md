@@ -144,10 +144,11 @@ Everything a person can do in the app is an app action in
 `apps/client/src/model/actions.ts` ([ADR 0016](./docs/adr/0016-dispatch-app-actions-through-one-caller-agnostic-catalog.md)).
 `createDispatcher(controller)` returns one caller-agnostic surface:
 
-- `dispatch(name, input, { confirmed, origin })` validates input with the
-  action's zod schema, checks preconditions (online, reachable, open group),
-  and returns an `Outcome`: `done`, `needs_confirmation` with a message, or
-  `failed` with an error code. It never throws.
+- `dispatch(name, input, { confirmed, origin })` checks preconditions (online,
+  reachable, open group) and validates input with the action's zod schema, in
+  the same order as `availability`, and returns an `Outcome`: `done`,
+  `needs_confirmation` with a message, or `failed` with an error code. It
+  never throws.
 - `dispatchJson(name, json)` does the same for callers holding only names and
   JSON, such as RPC or an assistant.
 - `describe()` lists every action with its description, preconditions,
@@ -158,6 +159,10 @@ Everything a person can do in the app is an app action in
   without running anything; with input, it also validates the proposed values.
   Unavailable results include a short reason and the same failure code dispatch
   enforces. This is a local preflight, not a guarantee of server success.
+  `test/actionModel.test.ts` checks this for generated sequences of every
+  action: dispatch fails exactly when and why availability says, available
+  actions fail only for server decisions about someone else's group, nothing
+  stays running, and every view keeps the group it shows.
 - `stateActionMap()` returns the live state/action map.
 - `executions.snapshot()` and `executions.subscribe()` expose shared pending work.
 - `observe(listener)` reports each dispatch with its origin and status.

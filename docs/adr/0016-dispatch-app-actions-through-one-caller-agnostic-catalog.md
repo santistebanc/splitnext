@@ -5,8 +5,9 @@ name, group, description, zod input schema, declared preconditions, an optional
 confirmation message, and an implementation over `AppController` and shared
 `AppUiState`. Every caller (UI events, a future assistant, RPC, tests, the
 component workbench) invokes actions through the same
-`dispatch(name, input, options)`, which validates the input, checks
-preconditions, and returns an `Outcome` value instead of throwing. The layer
+`dispatch(name, input, options)`, which checks preconditions and the input in
+the same order as availability and returns an `Outcome` value instead of
+throwing. The layer
 never branches on who called it; caller-specific behaviour lives in thin
 adapters. We chose this so the app's capabilities can later be driven by an
 assistant or a remote client with exactly the guarantees the UI has, without a
@@ -69,6 +70,9 @@ causes, through offline reload, without sending it to the server. Diagnostics
 omit credentials, links, inputs, and server state. Observers cannot change an
 outcome.
 
-`test/appActions.test.ts` specifies these rules in detail; devtools show the
+`test/appActions.test.ts` specifies these rules in detail, and
+`test/actionModel.test.ts` dispatches generated sequences of every action the
+way a generic caller would, checking that dispatch fails exactly when and why
+availability predicts and that every view keeps its group; devtools show the
 catalog, each action's availability and reason, the current workflow, running
 actions, and the dispatch log.

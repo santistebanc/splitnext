@@ -447,6 +447,7 @@ export {
 
 export {
   formatInviteLink,
+  inviteTokenSchema,
   parseInviteLink,
   type GroupInvite,
   type InvitePreview,
