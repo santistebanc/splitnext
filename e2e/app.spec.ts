@@ -73,6 +73,32 @@ test('renames the group and replaces the invite link after confirming', async ({
   await expect(field(page, 'Invite link')).not.toHaveValue(before);
 });
 
+test('moves focus into sheets and back without taking it from the page', async ({ page }) => {
+  await createGroup(page, 'Trip', 'Ana');
+  const opener = button(page, /invite/i).first();
+  const sheet = page.locator('[aria-modal="true"]');
+
+  await opener.click();
+  await expect(sheet).toBeVisible();
+  expect(await sheet.evaluate((node) => node.contains(document.activeElement))).toBe(true);
+  await button(page, 'Done').click();
+  await expect(opener).toBeFocused();
+
+  // A member row opened while the sheet is still fading out keeps its focus.
+  await opener.click();
+  await button(page, 'Done').click();
+  await button(page, '+ Add member').click();
+  await page.waitForTimeout(600);
+  await expect(field(page, 'Member name')).toBeFocused();
+  await field(page, 'Member name').fill('Ben');
+  await field(page, 'Member name').press('Enter');
+  await expect(button(page, 'Edit Ben')).toBeVisible();
+
+  await opener.click();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+});
+
 test('joins from a second device and shows changes on both through realtime', async ({ page, browser }) => {
   await createGroup(page, 'Trip', 'Ana');
   const link = await inviteLink(page);
