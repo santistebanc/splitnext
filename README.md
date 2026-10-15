@@ -140,9 +140,12 @@ to connected requests; offline ledger edits continue to queue locally.
 
 ### App actions
 
-Everything a person can do in the app is an app action in
-`apps/client/src/model/actions.ts` ([ADR 0016](./docs/adr/0016-dispatch-app-actions-through-one-caller-agnostic-catalog.md)).
-`createDispatcher(controller)` returns one caller-agnostic surface:
+Everything a person can do in the app is an app action
+([ADR 0016](./docs/adr/0016-dispatch-app-actions-through-one-caller-agnostic-catalog.md)).
+Actions are declared per group in `apps/client/src/model/actions/` (`ui.ts`,
+`ledger.ts`, `access.ts`) with `defineAction` and the shared requirement
+checks in `define.ts`; `apps/client/src/model/actions.ts` assembles the
+catalog. `createDispatcher(controller)` returns one caller-agnostic surface:
 
 - `dispatch(name, input, { confirmed, origin })` checks preconditions (online,
   reachable, open group) and validates input with the action's zod schema, in
