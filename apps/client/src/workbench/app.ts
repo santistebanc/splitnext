@@ -2,7 +2,7 @@ import { MemoryClientStorage, SplitnextSyncClient, type ClientGroupSummary, type
 import { serializeClientDocument } from '../../../../src/client/storage';
 import { AppController } from '../model/controller';
 import { fixtureGroupId, scenarioPresence, scenarioReplica, type Connection, type MemberListScenario } from './memberListFixture';
-import { memoryTransport } from './memoryTransport';
+import { memoryTransport } from '../../../../src/memoryTransport';
 import type { Log } from './stories';
 
 export type FakeApp = AppController;

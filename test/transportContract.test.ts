@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { MemoryClientStorage, SplitnextClient, SplitnextSyncClient, SplitnextNetworkError, type SyncTransport } from '../src/client';
 import { createIdentifier } from '../src/domain/ids';
 import { createInviteToken } from '../src/domain/invites';
-import { memoryTransport } from '../apps/client/src/workbench/memoryTransport';
+import { memoryTransport } from '../src/memoryTransport';
 import { applyTestMigrations, randomDeviceSecret } from './harness';
 
 beforeAll(applyTestMigrations);
