@@ -20,7 +20,7 @@ export default {
       path === '/app' ||
       path === '/app/' ||
       path.startsWith('/join/') ||
-      // The component workbench is a development tool, like the dashboard.
+      // The component workbench is a development tool.
       ((path === '/components' || path === '/components/') &&
         debugEnabled(env));
 

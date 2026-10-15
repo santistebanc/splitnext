@@ -93,10 +93,4 @@ export class GroupIndex {
 
     return results.map((row) => row.group_id);
   }
-
-  /** Development only: forgets the whole index. */
-  async clear(): Promise<void> {
-    await this.database.prepare('DELETE FROM identity_group_access').run();
-  }
-
 }

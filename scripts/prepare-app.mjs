@@ -9,7 +9,7 @@ const assets = join(root, '.wrangler', 'app-assets');
 
 const server = join(root, 'src', 'generated', 'expo-server');
 
-// Only generated build outputs are replaced; public sources and local D1 stay intact.
+// Only generated build outputs are replaced; sources and local D1 stay intact.
 for (const target of [assets, server]) {
   if (!target.startsWith(root + '/') && !target.startsWith(root + '\\')) {
     throw new Error('Build output escaped the repository');
@@ -18,8 +18,6 @@ for (const target of [assets, server]) {
   await rm(target, { recursive: true, force: true });
   await mkdir(target, { recursive: true });
 }
-
-await cp(join(root, 'public'), assets, { recursive: true });
 
 await cp(join(root, 'apps', 'client', 'dist', 'client'), assets, {
   recursive: true,
@@ -59,4 +57,4 @@ await writeFile(
   `const cacheName = ${JSON.stringify('splitnext-app-shell-' + release)};\nconst appAssets = ${JSON.stringify(precache)};\n${serviceWorker}`,
 );
 
-console.log('Prepared Expo server modules and app/dashboard assets.');
+console.log('Prepared Expo server modules and app assets.');

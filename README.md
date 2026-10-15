@@ -29,8 +29,6 @@ realtime revision announcements; expenses are intentionally deferred.
   background synchronization, reconnection, and catch-up in the SDK.
 - A stateful TypeScript client SDK with swappable local storage adapters.
 - A server group engine with Durable Object and in-memory repository adapters.
-- A visual `/dashboard/` synchronization lab for two independent devices and
-  the authoritative server.
 - A `/components` workbench, enabled with debug inspection, for searching the
   app's reusable components and previewing them under editable props and state.
 - A responsive Expo web app at `/app`, with a public homepage and invite entry
@@ -95,21 +93,20 @@ group directly, keeping the selected member. The invite entry route remains
 available for future native app handoff. Expenses and balances are not
 implemented in this beta.
 
-The app and dashboard have separate installation storage. Browser app replicas
-use IndexedDB; the installation credential and last group are retained in
+Browser app replicas use IndexedDB; the installation credential and last group are retained in
 localStorage. Losing that credential loses this installation's access. On a
 fresh installation, use a current invite link to join each group again.
 
 After an online visit has cached the app shell, `/app` can reload without a
 connection. The service worker caches public entry HTML and build assets only;
-API responses, invite previews, and dashboard traffic are not cached. Saved
+API responses and invite previews are not cached. Saved
 ledger replicas stay in IndexedDB, and supported edits queue through the SDK.
 Startup restores those replicas before refreshing in the background, so a
 stalled server does not block opening a saved group. Other tabs on the same
 origin share the installation and reread replicas through a BroadcastChannel.
 
-`npm run dev` exports the Expo web client, combines its client assets with the
-dashboard, and starts the API and server-rendered entry pages on port 8787.
+`npm run dev` exports the Expo web client and starts the API and
+server-rendered entry pages on port 8787.
 For fast UI iteration, keep that Worker running and use `npm run app:dev` in a
 second terminal; Expo runs on port 8081 and connects to the API on port 8787.
 Native release and platform-specific persistence are a later slice.
@@ -241,32 +238,10 @@ Devtools run in Expo development and in builds served by a Worker with
 `GET /debug/status`, which answers only then. Production never enables them,
 and every build is identical, so no build setting can switch them on.
 
-Open `http://localhost:8787/dashboard/` for the test lab. It lets you:
-
-1. Add devices. Each immediately creates its own anonymous identity. To use the
-   same group on another device, copy a current invite link to that device and
-   join with it. The second device has a separate identity and actor history,
-   even if it selects the same ledger member.
-2. Create groups from any device, copy the initial invite link, and join
-   from another device by pasting the link and choosing who it is. Each device
-   shows its groups as tabs, marking the ones it left, plus a "+ New" tab.
-3. Toggle any device or the simulated server offline.
-4. Queue optimistic group and member changes while offline.
-5. Watch changes reach the other device through realtime announcements, or
-   turn a device's Live toggle off to see it fall behind and catch up.
-6. Watch request traffic, realtime activity, command outcomes, snapshots, and
-   replica convergence. Tester devices and their local replicas survive a page
-   refresh in browser local storage; **Clear devices** removes them without
-   deleting server data.
-
-The server panel's **Reset data** button erases the D1 identity directory and
-every group in the D1 identity-group index. Device panels and their local
-replicas remain, but the now-erased device credentials can no longer
-authenticate. Clear devices separately to remove tester-local state. The server
-panel lists all indexed groups in tabs, including groups no current device
-uses. It reads current names and state from each group's Durable Object.
-These inspection and reset routes return 404 unless `ENABLE_DEBUG_INSPECTION`
-is enabled.
+To try several devices by hand, open `/app` in separate browser profiles or
+a private window; tabs in one profile share an installation. Compare their
+devtools Log request IDs, and read the server's state with
+`GET /debug/groups/{groupId}`.
 
 Run the complete verification suite with:
 
@@ -373,8 +348,7 @@ connected participants, deduplicating their tabs. The SDK exposes the current
 roster through `client.presence(groupId)` and `on_presence_change`; a disconnected
 client returns `null` for unknown presence. These updates do not advance revisions
 or write snapshots or audit history. Abrupt network loss is reflected when the
-server detects the disconnect. The dashboard's member markers show the same
-presence and respond to its device Offline and Live controls.
+server detects the disconnect.
 
 ## Client SDK
 
@@ -417,8 +391,7 @@ client.watchGroup(group.group_id);
 
 `MemoryClientStorage` is useful for tests. `IndexedDbClientStorage` is the atomic
 browser adapter used by the app. React Native can provide a SQLite
-adapter at the same opaque storage seam. The dashboard's localStorage adapter is
-only for preserving tester devices and replicas between page reloads.
+adapter at the same opaque storage seam.
 
 Realtime connections go through the same kind of seam: `browserWebSocket` is
 the default `RealtimeSocketFactory`, and tests or other platforms can supply
@@ -436,8 +409,7 @@ The SDK owns notice retries through `retryNotice(groupId, commandId)`. It
 creates fresh command identifiers and rename preconditions from the current
 projection, retaining that intent and retiring the old notice in one atomic
 storage update. Ordinary retries work offline; leaving still needs a server
-decision. The app and dashboard use the same SDK operation. Dashboard reconnects deliver
-outboxes even when Live revision announcements are switched off.
+decision. The app uses this SDK operation.
 
 ## Storage seams
 
@@ -455,13 +427,12 @@ future history or recovery slice exposes product behavior. Protected Hono
 routes share one authenticated-request module for credential parsing, device
 authentication, identity availability, and consistent unauthorized responses.
 
-The dashboard delegates its experiment state to `SyncLab`, which can be tested
-without a browser. In local development, its server panel reads the current
-Durable Object state through debug-only inspection routes, including its
-realtime subscribers. `GET /debug/groups` lists groups represented in the D1
-identity-group index; `GET /debug/groups/{groupId}` reads one group's current
-state; and `POST /debug/reset` clears every indexed group and identity. These
-routes return 404 unless `ENABLE_DEBUG_INSPECTION` is enabled.
+In local development, debug-only inspection routes read current server state.
+`GET /debug/groups` lists groups represented in the D1 identity-group index;
+`GET /debug/groups/{groupId}` reads one group's Durable Object state, including
+its realtime subscribers; and `GET /debug/identity-directory` lists identities
+and devices. These routes return 404 unless `ENABLE_DEBUG_INSPECTION` is
+enabled.
 
 The pure command transition rules are shared by the server and the optimistic
 client projection. Cloudflare storage and client-local persistence remain
@@ -469,7 +440,7 @@ separate implementations.
 
 Shared snapshot selectors in `src/domain/selectors.ts` define active members,
 joined participants, preferred members, and invite-preview choices for the
-server, SDK, app, and dashboard. Display ordering and presence markers live
+server, SDK, and app. Display ordering and presence markers live
 in the app model; devtools input choices also live in the model.
 
 ## HTTP surface
@@ -494,7 +465,6 @@ Debug-only routes, hidden unless `ENABLE_DEBUG_INSPECTION` is enabled:
 - `GET /debug/identity-directory`
 - `GET /debug/groups`
 - `GET /debug/groups/{groupId}`
-- `POST /debug/reset`
 
 Remote deployment has not been performed. `wrangler.jsonc` still contains a
 placeholder D1 database id.
@@ -509,12 +479,12 @@ placeholder D1 database id.
 SDK failures distinguish network, server, protocol, storage and offline causes
 through `clientErrorKind(error)`. Cached identity and queued-command fallback
 apply only to `SplitnextNetworkError`. Invalid server replies are observable
-as `protocol_error` in SDK transport diagnostics and dashboard request cards;
+as `protocol_error` in SDK transport diagnostics;
 storage and programming failures are surfaced rather than marked offline.
 
 `SplitnextSyncClient.installationState(groupIds)` returns group summaries,
 notice counts, and requested replicas from one local storage read. The app
-and dashboard use it to publish consistent state without reparsing the entire
+uses it to publish consistent state without reparsing the entire
 installation once per group. Pending responses reread current storage before
 publication so newer local work takes precedence.
 
@@ -526,7 +496,6 @@ server state.
 
 Devtools Log includes action UUIDs, durations and workflow changes alongside
 SDK command/request/outcome diagnostics. `observeDiagnostics` is available on
-the SDK and dispatcher. Request IDs match HTTP observer and dashboard traffic
-IDs; offline command attribution survives local reload until acknowledgment.
+the SDK and dispatcher. Request IDs match HTTP observer IDs; offline command attribution survives local reload until acknowledgment.
 Observer failures cannot change operation results. Diagnostics contain IDs and
 outcome codes, with credentials, invite links and draft inputs excluded.

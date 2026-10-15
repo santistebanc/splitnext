@@ -12,7 +12,6 @@
     ".pi/**",
     ".roo/**",
     ".windsurf/**",
-    "public/sdk/**",
     "src/generated/**",
     "apps/*/dist/**",
     "apps/*/.expo/**",

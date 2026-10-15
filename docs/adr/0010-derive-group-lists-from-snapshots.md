@@ -11,8 +11,7 @@ announcements prompt. The server index restores the list when an installation
 still has its device credential but has lost its local group cache. Clients
 also cache the list so it works offline.
 
-The debug dashboard derives its server-wide tab list from distinct group IDs
-in the same index, then reads current names and state from each Durable Object.
-This includes groups no current test device uses without adding a second
-catalog that could drift. The debug reset erases every indexed group before
-clearing the index and identity directory.
+Debug inspection lists server-wide groups from distinct group IDs in the same
+index, then reads current names and state from each Durable Object. This
+includes groups no current device uses without adding a second catalog that
+could drift.
