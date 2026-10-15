@@ -18,9 +18,11 @@ If a decision changes, update the relevant document in the same slice.
 - Cover user-visible flows and UI bugs in `e2e/app.spec.ts`. New app actions are
   exercised by `test/actionModel.test.ts` automatically; give inputs that need
   state-backed values a `choices` or `suggestions` source.
-- Give every new group command an action in `test/syncConvergence.test.ts` and a
-  row per outcome in `test/groupCommandRules.test.ts`. When the generated test
-  finds a failure, keep its shrunk steps in that file's `examples`.
+- Put each group command in its own file in `src/domain/commands/` and register
+  it in `src/domain/commands.ts`. Give it a generator in
+  `test/syncConvergence.test.ts` and a row per outcome in
+  `test/groupCommandRules.test.ts`. When a generated test finds a failure, keep
+  its shrunk steps in that file's `examples`.
 - Run `npm run check` after each slice and leave it uncommitted for inspection.
   Commit only when asked.
 - Do not add compatibility code for discarded pre-production designs or erase

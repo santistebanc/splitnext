@@ -1,10 +1,12 @@
 import { z } from 'zod';
-import { commandTargetSchema } from './commands';
-import {
-  createdGroupSchema,
-  groupAccessGrantSchema,
-  groupDetailsSchema,
-} from './groups';
+import { groupLeftAuditSchema } from './commands/groupLeave';
+import { groupRenamedAuditSchema } from './commands/groupRename';
+import { memberArchivedAuditSchema } from './commands/memberArchive';
+import { memberCreatedAuditSchema } from './commands/memberCreate';
+import { memberRenamedAuditSchema } from './commands/memberRename';
+import { commandTargetSchema } from './commands/outcomes';
+import { preferenceChangedAuditSchema } from './commands/preferenceSet';
+import { createdGroupSchema, groupAccessGrantSchema } from './groups';
 import { identifierSchema } from './ids';
 import { inviteRecordSchema, inviteMetadataSchema } from './invites';
 import { ledgerMemberSchema } from './members';
@@ -14,11 +16,7 @@ const joinedStateSchema = z.object({
   created_member: ledgerMemberSchema.nullable(),
 });
 
-const archivedMemberStateSchema = z.object({
-  member: ledgerMemberSchema,
-  preferred_by: z.array(identifierSchema),
-});
-
+/** Every applied transition's change; each group command defines its own in ./commands/. */
 export const auditChangeSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('group.created'),
@@ -35,36 +33,12 @@ export const auditChangeSchema = z.discriminatedUnion('action', [
     before: groupAccessGrantSchema,
     after: joinedStateSchema,
   }),
-  z.object({
-    action: z.literal('group.renamed'),
-    before: groupDetailsSchema,
-    after: groupDetailsSchema,
-  }),
-  z.object({
-    action: z.literal('member.created'),
-    before: z.null(),
-    after: ledgerMemberSchema,
-  }),
-  z.object({
-    action: z.literal('member.renamed'),
-    before: ledgerMemberSchema,
-    after: ledgerMemberSchema,
-  }),
-  z.object({
-    action: z.literal('member.archived'),
-    before: archivedMemberStateSchema,
-    after: archivedMemberStateSchema,
-  }),
-  z.object({
-    action: z.literal('preference.changed'),
-    before: groupAccessGrantSchema,
-    after: groupAccessGrantSchema,
-  }),
-  z.object({
-    action: z.literal('group.left'),
-    before: groupAccessGrantSchema,
-    after: groupAccessGrantSchema,
-  }),
+  groupRenamedAuditSchema,
+  memberCreatedAuditSchema,
+  memberRenamedAuditSchema,
+  memberArchivedAuditSchema,
+  preferenceChangedAuditSchema,
+  groupLeftAuditSchema,
   z.object({
     action: z.literal('invite.created'),
     // Creating a link revokes the previous one, which is recorded here.

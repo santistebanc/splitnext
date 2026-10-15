@@ -1,0 +1,65 @@
+import { z } from 'zod';
+import { groupAccessGrantSchema, groupDetailsSchema } from '../groups';
+import { identifierSchema } from '../ids';
+import { ledgerMemberSchema } from '../members';
+
+/**
+ * Each command's name, used for its app action and SDK intent, and the wire
+ * type it is stored and synchronized as.
+ */
+export const groupCommandTypes = {
+  renameGroup: 'group.rename',
+  createMember: 'member.create',
+  renameMember: 'member.rename',
+  archiveMember: 'member.archive',
+  setPreferredMember: 'preference.set',
+  leaveGroup: 'group.leave',
+} as const;
+
+export const groupCommandTypeSchema = z.enum(groupCommandTypes);
+
+export const commandReasons = {
+  accessNotFound: 'access_not_found',
+  groupChanged: 'group_changed',
+  groupLeft: 'group_left',
+  idempotencyConflict: 'idempotency_conflict',
+  memberArchived: 'member_archived',
+  memberChanged: 'member_changed',
+  memberIdExists: 'member_id_exists',
+  memberMerged: 'member_merged',
+  memberNameTaken: 'member_name_taken',
+  memberNotFound: 'member_not_found',
+} as const;
+
+export const commandReasonSchema = z.enum(commandReasons);
+
+export type CommandReason = z.output<typeof commandReasonSchema>;
+
+export const commandTargetSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('group'), id: identifierSchema }),
+  z.object({ kind: z.literal('member'), id: identifierSchema }),
+  z.object({ kind: z.literal('access'), id: identifierSchema }),
+  z.object({ kind: z.literal('invite'), id: identifierSchema }),
+]);
+
+export type CommandTarget = z.output<typeof commandTargetSchema>;
+
+export const commandServerStateSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('group'), group: groupDetailsSchema }),
+  z.object({ kind: z.literal('member'), member: ledgerMemberSchema }),
+  z.object({ kind: z.literal('access'), access: groupAccessGrantSchema }),
+]);
+
+export type CommandServerState = z.output<typeof commandServerStateSchema>;
+
+export const commandOutcomeSchema = z.object({
+  command_id: identifierSchema,
+  command_type: groupCommandTypeSchema,
+  status: z.enum(['applied', 'no_effect', 'superseded', 'rejected']),
+  reason: commandReasonSchema.nullable(),
+  audit_id: identifierSchema.nullable(),
+  target: commandTargetSchema,
+  server_state: commandServerStateSchema.nullable(),
+});
+
+export type CommandOutcome = z.output<typeof commandOutcomeSchema>;
