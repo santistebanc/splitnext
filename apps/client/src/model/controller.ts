@@ -10,6 +10,7 @@ import {
   type ClientGroupSummary,
   type ClientPreferredMemberChoice,
   type ClientReplicaState,
+  type CommandIntent,
 } from '@splitnext/client';
 
 export type ActionInvocation = { id: string; groupId: string | undefined };
@@ -86,14 +87,9 @@ export class AppController {
       openGroup: (groupId, isCurrent) => this.openGroup(groupId, isCurrent, invocation),
       openJoinedGroup: (groupId, isCurrent) => this.openJoinedGroup(groupId, isCurrent, invocation),
       showGroups: () => this.showGroups(),
-      renameGroup: (name, observed) => this.renameGroup(name, observed, invocation),
-      addPerson: (name) => this.addPerson(name, invocation),
-      renamePerson: (memberId, name, observed) => this.renamePerson(memberId, name, observed, invocation),
-      archivePerson: (memberId) => this.archivePerson(memberId, invocation),
-      selectPerson: (memberId) => this.selectPerson(memberId, invocation),
+      submit: (intent) => this.submit(intent, invocation),
       regenerateInvite: () => this.regenerateInvite(invocation),
-      leaveGroup: () => this.leaveGroup(invocation),
-      applyAgain: (commandId) => this.applyAgain(commandId, invocation),
+      retryNotice: (commandId) => this.retryNotice(commandId, invocation),
       dismissNotice: (commandId) => this.dismissNotice(commandId, invocation),
       client: { previewInvite: (groupId, token) => this.client.previewInvite(groupId, token, invocation.id) },
     };
@@ -323,53 +319,24 @@ export class AppController {
     await this.openResult(await this.client.joinGroup(groupId, choice, token, invocation?.id));
   }
 
-  async addPerson(name: string, invocation?: ActionInvocation): Promise<void> {
-    await this.receive(await this.client.addMember(this.groupId(invocation), name, invocation?.id));
-  }
-
-  async renameGroup(name: string, observedName: string, invocation?: ActionInvocation): Promise<void> {
-    await this.receive(
-      await this.client.renameGroup(this.groupId(invocation), name, observedName, invocation?.id),
-    );
-  }
-
-  async renamePerson(
-    memberId: string,
-    name: string,
-    observedName: string,
-    invocation?: ActionInvocation,
-  ): Promise<void> {
-    await this.receive(
-      await this.client.renameMember(
-        this.groupId(invocation),
-        memberId,
-        name,
-        observedName,
-        invocation?.id,
-      ),
-    );
-  }
-
-  async archivePerson(memberId: string, invocation?: ActionInvocation): Promise<void> {
-    await this.receive(
-      await this.client.removeMember(this.groupId(invocation), memberId, invocation?.id),
-    );
-  }
-
-  async selectPerson(memberId: string, invocation?: ActionInvocation): Promise<void> {
-    await this.receive(
-      await this.client.selectPreferredMember(this.groupId(invocation), memberId, invocation?.id),
-    );
-  }
-
-  async regenerateInvite(invocation?: ActionInvocation): Promise<void> {
-    await this.receive(await this.client.regenerateInvite(this.groupId(invocation), invocation?.id));
-  }
-
-  async leaveGroup(invocation?: ActionInvocation): Promise<void> {
+  /** Submits one command to the selected group, such as renaming a member or leaving. */
+  async submit(intent: CommandIntent, invocation?: ActionInvocation): Promise<void> {
     const opening = this.opening;
-    const group = await this.client.leaveGroup(this.groupId(invocation), invocation?.id);
 
+    await this.settle(await this.client.submit(this.groupId(invocation), intent, invocation?.id), opening);
+  }
+
+  async retryNotice(commandId: string, invocation?: ActionInvocation): Promise<void> {
+    const opening = this.opening;
+
+    await this.settle(await this.client.retryNotice(this.groupId(invocation), commandId, invocation?.id), opening);
+  }
+
+  /**
+   * Publishes a command's result. One that hid the open group, such as
+   * leaving, returns to the groups list unless the person already moved on.
+   */
+  private async settle(group: ClientReplicaState, opening: number): Promise<void> {
     await this.receive(group);
 
     if (group.hidden && opening === this.opening && this.state.group?.group_id === group.group_id) {
@@ -378,22 +345,14 @@ export class AppController {
     }
   }
 
+  async regenerateInvite(invocation?: ActionInvocation): Promise<void> {
+    await this.receive(await this.client.regenerateInvite(this.groupId(invocation), invocation?.id));
+  }
+
   async dismissNotice(commandId: string, invocation?: ActionInvocation): Promise<void> {
     await this.receive(
       await this.client.dismissNotice(this.groupId(invocation), commandId),
     );
-  }
-
-  async applyAgain(commandId: string, invocation?: ActionInvocation): Promise<void> {
-    const opening = this.opening;
-    const result = await this.client.retryNotice(this.groupId(invocation), commandId, invocation?.id);
-
-    await this.receive(result);
-
-    if (result.hidden && opening === this.opening && this.state.group?.group_id === result.group_id) {
-      this.preferences.rememberGroup(null);
-      this.showGroups();
-    }
   }
 
   async receive(group: ClientReplicaState): Promise<void> {

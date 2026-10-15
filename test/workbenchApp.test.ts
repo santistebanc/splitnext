@@ -21,13 +21,15 @@ describe('workbench through production logic', () => {
     if (!second) throw new Error('missing second group');
     await app.openGroup(first);
     const actions = createDispatcher(app);
-    const leave = app.client.leaveGroup.bind(app.client);
+    const submit = app.client.submit.bind(app.client);
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => { release = resolve; });
 
-    app.client.leaveGroup = async (groupId) => { await gate;
+    app.client.submit = async (groupId, intent, invocationId) => {
+      await gate;
 
- return leave(groupId); };
+      return submit(groupId, intent, invocationId);
+    };
 
     const pending = actions.dispatch('leaveGroup', {}, { confirmed: true });
 
@@ -83,7 +85,7 @@ describe('workbench through production logic', () => {
 
     if (!groupId) throw new Error('missing group');
     await app.setOnline(false);
-    await app.addPerson(' ana ');
+    await app.submit({ type: 'member.create', payload: { display_name: ' ana ' } });
     expect(app.snapshot().group?.projected_snapshot?.members).toHaveLength(2);
     expect(app.snapshot().group?.outbox).toHaveLength(1);
     await app.setOnline(true);
@@ -91,7 +93,7 @@ describe('workbench through production logic', () => {
     const member = app.snapshot().group?.projected_snapshot?.members[0];
 
     if (!member) throw new Error('missing member');
-    await app.archivePerson(member.id);
+    await app.submit({ type: 'member.archive', payload: { member_id: member.id } });
     expect(app.snapshot().group?.projected_snapshot?.access_grants.map((grant) => grant.preferred_member_id)).toEqual([null, null]);
     expect(app.snapshot().group?.projected_snapshot?.members[0]?.status).toBe('archived');
     app.dispose();
@@ -111,7 +113,7 @@ describe('workbench through production logic', () => {
     await app.regenerateInvite();
     expect(app.snapshot().group?.projected_snapshot?.invite.id).not.toBe(invite.id);
     await expect(app.client.previewInvite(group.group_id, invite.token)).rejects.toThrow('invite_replaced');
-    await app.leaveGroup();
+    await app.submit({ type: 'group.leave', payload: {} });
     expect(app.snapshot().group).toBeNull();
     expect(app.snapshot().groups.find((entry) => entry.group_id === group.group_id)?.status).toBe('left');
     await app.openGroup(group.group_id);

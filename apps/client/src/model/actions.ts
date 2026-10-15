@@ -11,6 +11,7 @@ import {
   memberNameSchema,
   parseInviteLink,
   formatInviteLink,
+  requiresServerDecision,
   type ClientDiagnosticObserver,
   type InvitePreview,
   type JsonValue,
@@ -44,14 +45,9 @@ export type ActionHost = Pick<
   | 'openGroup'
   | 'openJoinedGroup'
   | 'showGroups'
-  | 'renameGroup'
-  | 'addPerson'
-  | 'renamePerson'
-  | 'archivePerson'
-  | 'selectPerson'
+  | 'submit'
   | 'regenerateInvite'
-  | 'leaveGroup'
-  | 'applyAgain'
+  | 'retryNotice'
   | 'dismissNotice'
 > & {
   forInvocation?: (invocation: ActionInvocation) => ActionHost;
@@ -726,9 +722,13 @@ export const appActions = {
       if (!edit) return;
       const name = edit.name.trim();
 
-      if (name && !edit.memberId) await host.addPerson(name);
+      if (name && !edit.memberId)
+        await host.submit({ type: 'member.create', payload: { display_name: name } });
       else if (name && name !== edit.expectedName && edit.memberId)
-        await host.renamePerson(edit.memberId, name, edit.expectedName);
+        await host.submit({
+          type: 'member.rename',
+          payload: { member_id: edit.memberId, display_name: name, expected_display_name: edit.expectedName },
+        });
       ui.finishMemberEdit(edit);
     },
   }),
@@ -750,7 +750,7 @@ export const appActions = {
       const draft = ui.snapshot().settings;
       const name = groupNameSchema.parse(draft.name);
 
-      await host.renameGroup(name, draft.expectedName);
+      await host.submit({ type: 'group.rename', payload: { name, expected_name: draft.expectedName } });
     },
   }),
   submitCreateGroup: defineAction({
@@ -1048,12 +1048,9 @@ export const appActions = {
     example: { name: 'Lisbon long weekend' },
     requires: ['openGroup'],
     run: (host, input) =>
-      host.renameGroup(
-        input.name,
-        input.expectedName ?? openSnapshot(host.snapshot())?.group.name ?? '',
-      ),
+      host.submit({ type: 'group.rename', payload: { name: input.name, expected_name: input.expectedName } }),
   }),
-  addMember: defineAction({
+  createMember: defineAction({
     group: 'Ledger changes',
     description: 'Add a member to the open group.',
     input: z.object({
@@ -1061,7 +1058,7 @@ export const appActions = {
     }),
     example: { name: 'Ben' },
     requires: ['openGroup'],
-    run: (host, input) => host.addPerson(input.name),
+    run: (host, input) => host.submit({ type: 'member.create', payload: { display_name: input.name } }),
   }),
   renameMember: defineAction({
     resources: ({ state }, input) => memberResource(state, input?.memberId),
@@ -1080,17 +1077,12 @@ export const appActions = {
     requires: ['openGroup'],
     unavailable: ({ state }, input) => requireMember(state, input?.memberId),
     run: (host, input) =>
-      host.renamePerson(
-        input.memberId,
-        input.name,
-        input.expectedName ??
-          openSnapshot(host.snapshot())?.members.find(
-            (member) => member.id === input.memberId,
-          )?.display_name ??
-          '',
-      ),
+      host.submit({
+        type: 'member.rename',
+        payload: { member_id: input.memberId, display_name: input.name, expected_display_name: input.expectedName },
+      }),
   }),
-  removeMember: defineAction({
+  archiveMember: defineAction({
     resources: ({ state }, input) => memberResource(state, input?.memberId),
     group: 'Ledger changes',
     description:
@@ -1100,16 +1092,16 @@ export const appActions = {
     }),
     example: { memberId: 'member-2' },
     requires: ['openGroup'],
-    nextStep: 'removeMember',
+    nextStep: 'archiveMember',
     unavailable: ({ state }, input) => requireMember(state, input?.memberId),
     run: async (host, input, ui) => {
-      await host.archivePerson(input.memberId);
+      await host.submit({ type: 'member.archive', payload: { member_id: input.memberId } });
 
       if (ui.snapshot().memberEdit?.memberId === input.memberId)
         ui.finishMemberEdit();
     },
   }),
-  selectYou: defineAction({
+  setPreferredMember: defineAction({
     resources: ({ state }) => [`preference:${state.group?.group_id}`],
     group: 'Ledger changes',
     description:
@@ -1123,7 +1115,7 @@ export const appActions = {
     }),
     example: { memberId: 'member-1' },
     requires: ['openGroup'],
-    nextStep: 'selectYou',
+    nextStep: 'setPreferredMember',
     suggest: (context) => {
       const snapshot = openSnapshot(context.state);
       const self = context.state.group?.session?.identity.id;
@@ -1150,9 +1142,9 @@ export const appActions = {
         ? `${others.map((grant) => grant.actor_handle).join(', ')} already ${others.length === 1 ? 'uses' : 'use'} this name.`
         : null;
     },
-    run: (host, input) => host.selectPerson(input.memberId),
+    run: (host, input) => host.submit({ type: 'preference.set', payload: { member_id: input.memberId } }),
   }),
-  replaceInviteLink: defineAction({
+  regenerateInvite: defineAction({
     resources: ({ state }) => [`invite:${state.group?.group_id}`],
     group: 'Access & sync',
     description:
@@ -1176,12 +1168,12 @@ export const appActions = {
     run: async (host, input, ui) => {
       const navigation = ui.snapshot().navigation.revision;
 
-      await host.leaveGroup();
+      await host.submit({ type: 'group.leave', payload: {} });
 
       if (ui.snapshot().navigation.revision === navigation) ui.show('home');
     },
   }),
-  applyChangeAgain: defineAction({
+  retryNotice: defineAction({
     waitFor: ({ state }, input) => state.group?.notices.some((entry) => entry.command.command_id === input?.commandId && entry.command.type === 'group.leave') ? ['memberEditor'] : [],
     resources: ({ state }, input) => noticeResources(state, input?.commandId),
     group: 'Ledger changes',
@@ -1191,17 +1183,17 @@ export const appActions = {
     }),
     example: { commandId: 'notice-command-id' },
     requires: ['openGroup'],
-    nextStep: 'retryChange',
+    nextStep: 'retryNotice',
     unavailable: ({ state }, input) => {
       const absent = requireNotice(state, input?.commandId);
 
       if (absent) return absent;
       const candidates = state.group?.notices.filter((entry) => !input || entry.command.command_id === input.commandId) ?? [];
 
-      return !state.online && candidates.every((entry) => entry.command.type === 'group.leave')
-        ? unavailable('client_offline', 'Go online to leave the group.') : null;
+      return !state.online && candidates.every((entry) => requiresServerDecision(entry.command.type))
+        ? unavailable('client_offline', 'Go online to retry this change.') : null;
     },
-    run: (host, input) => host.applyAgain(input.commandId),
+    run: (host, input) => host.retryNotice(input.commandId),
   }),
   dismissNotice: defineAction({
     resources: ({ state }, input) => noticeResources(state, input?.commandId),

@@ -101,8 +101,8 @@ export type WorkflowStep =
   | 'rejoin'
   | 'addMember'
   | 'editMember'
-  | 'removeMember'
-  | 'selectYou'
+  | 'archiveMember'
+  | 'setPreferredMember'
   | 'close'
   | 'groups'
   | 'checkInvite'
@@ -114,7 +114,7 @@ export type WorkflowStep =
   | 'cancelMember'
   | 'copyInvite'
   | 'shareInvite'
-  | 'retryChange'
+  | 'retryNotice'
   | 'dismissNotice'
   | 'refresh'
   | 'confirm'
@@ -153,9 +153,9 @@ export function nextSteps(
         invite: 20,
         notices: 5,
         addMember: 10,
-        selectYou: 25,
+        setPreferredMember: 25,
         editMember: 35,
-        removeMember: 40,
+        archiveMember: 40,
         groups: 50,
         refresh: 1,
       };
@@ -173,7 +173,7 @@ export function nextSteps(
     case 'invite':
       return { copyInvite: 10, shareInvite: 20, close: 30, refresh: 1 };
     case 'notices':
-      return { retryChange: 10, dismissNotice: 20, close: 30, refresh: 1 };
+      return { retryNotice: 10, dismissNotice: 20, close: 30, refresh: 1 };
   }
 }
 

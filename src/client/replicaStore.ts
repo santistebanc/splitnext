@@ -3,6 +3,7 @@ import { activeMembers, preferredMember } from '../domain/selectors';
 import type { JoinGroupRequest, PreferredMemberChoice } from '../domain/access';
 import {
   applyGroupCommand,
+  requiresServerDecision,
   resolveMemberAliases,
   type CommandOutcome,
   type GroupCommand,
@@ -505,7 +506,7 @@ export class ClientReplicaStore {
       const notice = replica.notices.find((entry) => entry.command.command_id === commandId);
 
       if (!notice) throw new Error('notice_not_found');
-      const requiresServer = notice.command.type === 'group.leave';
+      const requiresServer = requiresServerDecision(notice.command.type);
 
       if (requiresServer) requireOnline();
       const command = commandForRetry(notice, project(replica, session.identity.id), createId);

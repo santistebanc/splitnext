@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { commandOutcomeSchema } from '../domain/commands';
+import { commandFromIntent, commandOutcomeSchema, requiresServerDecision, type CommandIntent } from '../domain/commands';
 import { clientErrorKind } from './errors';
 import type { ClientDiagnosticEvent, ClientDiagnosticObserver, ClientExchange, ClientRequestContext, ClientInvocationIds } from './diagnostics';
 import type { PendingCommand } from './storage';
@@ -362,83 +362,18 @@ export class SplitnextSyncClient {
   }
 
   /**
-   * `expectedName` is the name the user saw when they began editing, so a
-   * concurrent rename supersedes this one instead of being overwritten. It
-   * defaults to the current local name.
+   * Queues one command, completed against the local projection, and delivers
+   * it when online. An omitted precondition, such as a rename's expected
+   * name, is the name the person currently sees, so a concurrent change
+   * supersedes this one instead of being overwritten. Leaving needs a server
+   * decision, so a transport failure is reported for it.
    */
-  renameGroup(
-    groupId: string,
-    name: string,
-    expectedName?: string,
-    invocationId?: string,
-  ): Promise<ClientReplicaState> {
-    return this.queueCommand(groupId, (snapshot) => ({
-      command_id: this.createId(),
-      type: 'group.rename',
-      payload: { expected_name: expectedName ?? snapshot.group.name, name },
-    }), invocationId);
-  }
+  async submit(groupId: string, intent: CommandIntent, invocationId?: string): Promise<ClientReplicaState> {
+    const requiresServer = requiresServerDecision(intent.type);
 
-  addMember(groupId: string, displayName: string, invocationId?: string): Promise<ClientReplicaState> {
-    return this.queueCommand(groupId, () => ({
-      command_id: this.createId(),
-      type: 'member.create',
-      payload: { member_id: this.createId(), display_name: displayName },
-    }), invocationId);
-  }
+    if (requiresServer) this.requireOnline();
 
-  /** `expectedDisplayName` works like `renameGroup`'s `expectedName`. */
-  renameMember(
-    groupId: string,
-    memberId: string,
-    displayName: string,
-    expectedDisplayName?: string,
-    invocationId?: string,
-  ): Promise<ClientReplicaState> {
-    return this.queueCommand(groupId, (snapshot) => {
-      const member = snapshot.members.find(
-        (candidate) => candidate.id === memberId,
-      );
-
-      if (!member) throw new Error('member_not_found_locally');
-
-      return {
-        command_id: this.createId(),
-        type: 'member.rename',
-        payload: {
-          member_id: memberId,
-          expected_display_name: expectedDisplayName ?? member.display_name,
-          display_name: displayName,
-        },
-      };
-    }, invocationId);
-  }
-
-  removeMember(groupId: string, memberId: string, invocationId?: string): Promise<ClientReplicaState> {
-    return this.queueCommand(groupId, () => ({
-      command_id: this.createId(),
-      type: 'member.archive',
-      payload: { member_id: memberId },
-    }), invocationId);
-  }
-
-  selectPreferredMember(
-    groupId: string,
-    memberId: string,
-    invocationId?: string,
-  ): Promise<ClientReplicaState> {
-    return this.queueCommand(groupId, () => ({
-      command_id: this.createId(),
-      type: 'preference.set',
-      payload: { member_id: memberId },
-    }), invocationId);
-  }
-
-  /** Leaving needs a server decision, so a transport failure is reported. */
-  async leaveGroup(groupId: string, invocationId?: string): Promise<ClientReplicaState> {
-    this.requireOnline();
-
-    return this.queueCommand(groupId, () => ({ command_id: this.createId(), type: 'group.leave', payload: {} }), invocationId, true);
+    return this.queueCommand(groupId, (snapshot) => commandFromIntent(intent, snapshot, this.createId), invocationId, requiresServer);
   }
 
   async syncGroup(groupId: string, invocationId?: ClientInvocationIds): Promise<ClientReplicaState> {

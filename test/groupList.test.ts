@@ -26,7 +26,7 @@ describe('groups an identity can access', () => {
       kind: 'new',
       display_name: 'Alice',
     });
-    await alice.client.leaveGroup(flat.group_id);
+    await alice.client.submit(flat.group_id, { type: 'group.leave', payload: {} });
 
     expect(await alice.client.listGroups()).toMatchObject([
       { group_id: trip.group_id, name: 'Trip', status: 'active' },
@@ -46,7 +46,7 @@ describe('groups an identity can access', () => {
       kind: 'new',
       display_name: 'Bob',
     });
-    await alice.client.renameGroup(group.group_id, 'After');
+    await alice.client.submit(group.group_id, { type: 'group.rename', payload: { name: 'After' } });
 
     const beforeSync = await listFromServer(bob.secret);
 

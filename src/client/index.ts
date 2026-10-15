@@ -454,6 +454,8 @@ export {
 
 export { activeMembers, joinedParticipants, participantsForMember, preferredMember, previewFromSnapshot } from '../domain/selectors';
 
+export { requiresServerDecision, type CommandIntent } from '../domain/commands';
+
 export { groupNameSchema } from '../domain/groups';
 
 export { identifierSchema } from '../domain/ids';
