@@ -4,7 +4,7 @@ import { MemoryClientStorage, SplitnextClient, SplitnextSyncClient, SplitnextNet
 import { createIdentifier } from '../src/domain/ids';
 import { createInviteToken } from '../src/domain/invites';
 import { memoryTransport } from '../src/memoryTransport';
-import { applyTestMigrations, randomDeviceSecret } from './harness';
+import { applyTestMigrations, createDeviceSecret } from './harness';
 
 beforeAll(applyTestMigrations);
 
@@ -20,8 +20,8 @@ for (const [name, createApi] of Object.entries(transports)) {
   describe(`${name} transport contract`, () => {
     it('shares validation, access failures, invite replacement and retry-safe creation', async () => {
       const api = await createApi();
-      const secret = randomDeviceSecret();
-      const outsider = randomDeviceSecret();
+      const secret = createDeviceSecret();
+      const outsider = createDeviceSecret();
 
       await api.createAnonymousIdentity(secret);
       await api.createAnonymousIdentity(outsider);
@@ -51,7 +51,7 @@ for (const [name, createApi] of Object.entries(transports)) {
 
     it('retains a lost sync response and retries the original command exactly once', async () => {
       const api = await createApi();
-      const secret = randomDeviceSecret();
+      const secret = createDeviceSecret();
       const device = api.forDevice(secret);
       const sync = device.syncGroup.bind(device);
       let lose = false;

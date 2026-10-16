@@ -8,7 +8,7 @@ import {
 import {
   applyTestMigrations,
   joinThroughInvite,
-  randomDeviceSecret,
+  createDeviceSecret,
 } from './harness';
 
 beforeAll(async () => {
@@ -111,7 +111,7 @@ function createApi() {
   });
 }
 
-async function createDevice(secret = randomDeviceSecret()) {
+async function createDevice(secret = createDeviceSecret()) {
   const client = new SplitnextSyncClient({
     api: createApi(),
     device_secret: secret,

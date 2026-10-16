@@ -17,7 +17,7 @@ import {
 import {
   applyTestMigrations,
   joinThroughInvite,
-  randomDeviceSecret,
+  createDeviceSecret,
   settleWorkerSockets,
   workerWebSocket,
 } from './harness';
@@ -352,7 +352,7 @@ function createClient(
   api: SyncTransport,
   onBackgroundSync?: (state: ClientReplicaState) => void,
 ) {
-  const secret = randomDeviceSecret();
+  const secret = createDeviceSecret();
 
   const client = new SplitnextSyncClient({
     api,
@@ -366,7 +366,7 @@ function createClient(
 }
 
 async function createIdentity() {
-  const secret = randomDeviceSecret();
+  const secret = createDeviceSecret();
 
   const response = await exports.default.fetch(
     'https://splitnext.test/identities/anonymous',

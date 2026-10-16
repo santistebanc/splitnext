@@ -460,6 +460,8 @@ export { requiresServerDecision, type CommandIntent } from '../domain/commands';
 
 export { groupNameSchema } from '../domain/groups';
 
+export { createDeviceSecret, deviceSecretSchema } from '../domain/identities';
+
 export { identifierSchema } from '../domain/ids';
 
 export { memberNameSchema } from '../domain/members';

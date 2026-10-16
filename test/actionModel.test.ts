@@ -8,7 +8,7 @@ import { AppController } from '../apps/client/src/model/controller';
 import { createDispatcher, describeActions } from '../apps/client/src/model/actions';
 import { buildInput, formFields, parseSchema, type FormField, type FormValues } from '../apps/client/src/devtools/form';
 import { sourceOptions, type InputState } from '../apps/client/src/model/actionInputs';
-import { randomDeviceSecret } from './harness';
+import { createDeviceSecret } from './harness';
 
 /**
  * Model-based check of the app action layer, driven the way any generic
@@ -99,7 +99,7 @@ async function simulate(steps: readonly Step[]): Promise<void> {
   const server = await memoryTransport(session, [], { connection: 'online', latency: 0, failure: 'none', log: () => undefined });
 
   // Someone else's group, so invites can be checked and joined.
-  const otherSecret = randomDeviceSecret();
+  const otherSecret = createDeviceSecret();
 
   await server.api.createAnonymousIdentity(otherSecret);
   const remote = { groupId: createIdentifier(), token: createInviteToken() };
@@ -112,7 +112,7 @@ async function simulate(steps: readonly Step[]): Promise<void> {
   const pool = ['', 'Ana', 'ana', 'Ben', 'Trip', 'Lisbon', remote.groupId, remote.token,
     formatInviteLink(appUrl, remote.groupId, remote.token), `${appUrl}/join/unknown`];
 
-  const client = new SplitnextSyncClient({ api: server.api, storage: new MemoryClientStorage(), device_secret: randomDeviceSecret() });
+  const client = new SplitnextSyncClient({ api: server.api, storage: new MemoryClientStorage(), device_secret: createDeviceSecret() });
   let lastGroup: string | null = null;
   let lastName: string | null = null;
 

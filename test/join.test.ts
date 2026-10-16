@@ -17,7 +17,7 @@ import {
 import {
   applyTestMigrations,
   fetchOpenApiDocument,
-  randomDeviceSecret,
+  createDeviceSecret,
 } from './harness';
 
 const identitySchema = z.object({
@@ -543,7 +543,7 @@ async function createFixture() {
 }
 
 async function createIdentity() {
-  const deviceSecret = randomDeviceSecret();
+  const deviceSecret = createDeviceSecret();
 
   const response = await exports.default.fetch(
     'https://splitnext.test/identities/anonymous',

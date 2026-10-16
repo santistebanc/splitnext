@@ -4,7 +4,7 @@ import { MemoryClientStorage, SplitnextClient, SplitnextSyncClient, type ClientD
 import { createDispatcher, type DispatchRecord } from '../apps/client/src/model/actions';
 import { AppController } from '../apps/client/src/model/controller';
 import { createWorkbenchApp, type FakeAppOptions } from '../apps/client/src/workbench/app';
-import { applyTestMigrations, randomDeviceSecret } from './harness';
+import { applyTestMigrations, createDeviceSecret } from './harness';
 
 beforeAll(applyTestMigrations);
 
@@ -53,7 +53,7 @@ describe('action and SDK diagnostics', () => {
   });
 
   it('preserves offline attribution through reload and correlates the actual HTTP request without leaking input', async () => {
-    const secret = randomDeviceSecret();
+    const secret = createDeviceSecret();
     const storage = new MemoryClientStorage();
     const transport: ClientTransportEvent[] = [];
     const bodies: string[] = [];

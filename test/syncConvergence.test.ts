@@ -20,7 +20,7 @@ import { createIdentifier } from '../src/domain/ids';
 import { memberNameKey } from '../src/domain/members';
 import { groupSnapshotSchema, type GroupSnapshot } from '../src/domain/sync';
 import { memoryTransport } from '../src/memoryTransport';
-import { randomDeviceSecret } from './harness';
+import { createDeviceSecret } from './harness';
 
 /**
  * Model-based check of the offline-first promise: whatever devices do in two
@@ -315,7 +315,7 @@ async function simulate(steps: readonly Step[]): Promise<void> {
 
   const devices = Array.from({ length: deviceCount }, (): Device => {
     const device: Device = {
-      secret: randomDeviceSecret(), identityId: '', storage: new FlakyStorage(), tabs: [],
+      secret: createDeviceSecret(), identityId: '', storage: new FlakyStorage(), tabs: [],
       queued: [], resolved: new Set(), unfinishedJoins: new Map(),
     };
 
