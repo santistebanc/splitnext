@@ -141,14 +141,7 @@ export const workerWebSocket: RealtimeSocketFactory = (
   };
 };
 
-export function randomDeviceSecret(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-
-  return btoa(String.fromCharCode(...bytes))
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replace(/=+$/, '');
-}
+export { createDeviceSecret } from '../src/domain/identities';
 
 /** Joins the way a new participant must: through a freshly created link. */
 export async function joinThroughInvite(

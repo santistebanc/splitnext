@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import app from '../src/app';
 import { MemoryClientStorage, SplitnextClient, SplitnextSyncClient, type ClientDiagnosticEvent } from '../src/client';
-import { applyTestMigrations, randomDeviceSecret } from './harness';
+import { applyTestMigrations, createDeviceSecret } from './harness';
 
 beforeAll(applyTestMigrations);
 
@@ -25,7 +25,7 @@ async function logged(work: (loggingEnv: Env) => Promise<void>) {
 
 describe('request logs', () => {
   it('log each request under the id in the client diagnostics, with outcomes but no secrets or names', async () => {
-    const secret = randomDeviceSecret();
+    const secret = createDeviceSecret();
     const events: ClientDiagnosticEvent[] = [];
     let groupId = '';
     let identityId = '';

@@ -1,4 +1,6 @@
 import {
+  createDeviceSecret,
+  deviceSecretSchema,
   IndexedDbClientStorage,
   SplitnextClient,
   SplitnextSyncClient,
@@ -20,16 +22,11 @@ function installationSecret(): string {
   let secret = localStorage.getItem(installationKey);
 
   if (!secret) {
-    const bytes = crypto.getRandomValues(new Uint8Array(32));
-
-    secret = btoa(String.fromCharCode(...bytes))
-      .replaceAll('+', '-')
-      .replaceAll('/', '_')
-      .replace(/=+$/, '');
+    secret = createDeviceSecret();
     localStorage.setItem(installationKey, secret);
   }
 
-  if (!/^[A-Za-z0-9_-]{43}$/.test(secret)) throw new Error('corrupt_document');
+  if (!deviceSecretSchema.safeParse(secret).success) throw new Error('corrupt_document');
 
   return secret;
 }

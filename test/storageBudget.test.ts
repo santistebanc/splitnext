@@ -3,7 +3,7 @@ import { MemoryClientStorage, SplitnextSyncClient, type ClientStorageAdapter } f
 import type { ClientStorageUpdate } from '../src/client/storage';
 import { createIdentifier } from '../src/domain/ids';
 import { memoryTransport } from '../src/memoryTransport';
-import { randomDeviceSecret } from './harness';
+import { createDeviceSecret } from './harness';
 
 /**
  * The client keeps one installation document, and every operation parses,
@@ -76,7 +76,7 @@ beforeAll(async () => {
   const session = { identity: { id: createIdentifier(), created_at: now }, device: { id: createIdentifier(), created_at: now } };
   const server = await memoryTransport(session, [], { connection: 'online', latency: 0, failure: 'none', log: () => undefined });
 
-  client = new SplitnextSyncClient({ api: server.api, storage, device_secret: randomDeviceSecret() });
+  client = new SplitnextSyncClient({ api: server.api, storage, device_secret: createDeviceSecret() });
   await client.initializeIdentity();
 
   for (let group = 0; group < groupCount; group += 1) {

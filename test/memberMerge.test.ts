@@ -10,7 +10,7 @@ import { createIdentifier } from '../src/domain/ids';
 import {
   applyTestMigrations,
   joinThroughInvite,
-  randomDeviceSecret,
+  createDeviceSecret,
 } from './harness';
 
 beforeAll(async () => {
@@ -188,7 +188,7 @@ async function createSharedGroup(
 }
 
 async function createDevice(api: SplitnextClient) {
-  const secret = randomDeviceSecret();
+  const secret = createDeviceSecret();
 
   const client = new SplitnextSyncClient({
     api,

@@ -6,7 +6,7 @@ import {
   SplitnextSyncClient,
   type ClientTransportEvent,
 } from '../src/client';
-import { applyTestMigrations, randomDeviceSecret } from './harness';
+import { applyTestMigrations, createDeviceSecret } from './harness';
 
 type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -178,7 +178,7 @@ async function createClient(
 
   const client = new SplitnextSyncClient({
     api,
-    device_secret: randomDeviceSecret(),
+    device_secret: createDeviceSecret(),
     storage: new MemoryClientStorage(),
   });
 

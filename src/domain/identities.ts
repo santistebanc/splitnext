@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { identifierSchema } from './ids';
+import { base64url, identifierSchema } from './ids';
 
 export const identitySchema = z.object({
   id: identifierSchema,
@@ -17,6 +17,13 @@ export const deviceSecretSchema = z
   .meta({
     description: 'A client-generated 32-byte base64url secret without padding.',
   });
+
+/** A new installation's device credential, generated on the device. */
+export function createDeviceSecret(): string {
+  return deviceSecretSchema.parse(
+    base64url(crypto.getRandomValues(new Uint8Array(32))),
+  );
+}
 
 export const identitySessionSchema = z.object({
   identity: identitySchema,

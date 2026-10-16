@@ -10,7 +10,7 @@ import {
   AppController,
   type AppPreferences,
 } from '../apps/client/src/model/controller';
-import { applyTestMigrations, randomDeviceSecret } from './harness';
+import { applyTestMigrations, createDeviceSecret } from './harness';
 import { parseClientDocument } from '../src/client/storage';
 import { createIdentifier } from '../src/domain/ids';
 
@@ -19,7 +19,7 @@ beforeAll(applyTestMigrations);
 const quietSocket: RealtimeSocketFactory = () => ({ close: () => undefined });
 
 function createApp(
-  secret = randomDeviceSecret(),
+  secret = createDeviceSecret(),
   storage = new MemoryClientStorage(),
   preferences = createPreferences(),
 ): AppController {
@@ -112,7 +112,7 @@ describe('user-facing app flows', () => {
 
   it('opens a saved group after upgrading pre-shared-invite storage without losing offline edits', async () => {
     const storage = new MemoryClientStorage();
-    const secret = randomDeviceSecret();
+    const secret = createDeviceSecret();
     const preferences = createPreferences();
     const first = createApp(secret, storage, preferences);
 
@@ -174,7 +174,7 @@ describe('user-facing app flows', () => {
   it('opens the last saved group before a stalled online refresh completes', async () => {
     const storage = new MemoryClientStorage();
     const preferences = createPreferences();
-    const secret = randomDeviceSecret();
+    const secret = createDeviceSecret();
     const first = createApp(secret, storage, preferences);
 
     await first.start(true);
@@ -219,7 +219,7 @@ describe('user-facing app flows', () => {
   it('rereads changes made by another tab without rebroadcasting them', async () => {
     const storage = new MemoryClientStorage();
     const preferences = createPreferences();
-    const secret = randomDeviceSecret();
+    const secret = createDeviceSecret();
     const first = createApp(secret, storage, preferences);
     const second = createApp(secret, storage, preferences);
 
@@ -294,7 +294,7 @@ describe('user-facing app flows', () => {
   it('opens a newly created group with the creator and restores it offline after a reload', async () => {
     const storage = new MemoryClientStorage();
     const preferences = createPreferences();
-    const secret = randomDeviceSecret();
+    const secret = createDeviceSecret();
     const app = createApp(secret, storage, preferences);
 
     await app.start(true);

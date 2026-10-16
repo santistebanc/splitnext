@@ -9,14 +9,16 @@ export const identifierSchema = z.string().regex(identifierPattern).meta({
 
 export type Identifier = z.output<typeof identifierSchema>;
 
-export function createIdentifier(): Identifier {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('');
-
-  const encoded = btoa(binary)
+/** Unpadded base64url, the encoding of identifiers, secrets, and token hashes. */
+export function base64url(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes))
     .replaceAll('+', '-')
     .replaceAll('/', '_')
     .replace(/=+$/, '');
+}
 
-  return identifierSchema.parse(encoded);
+export function createIdentifier(): Identifier {
+  return identifierSchema.parse(
+    base64url(crypto.getRandomValues(new Uint8Array(16))),
+  );
 }

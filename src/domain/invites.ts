@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { identifierSchema } from './ids';
+import { base64url, identifierSchema } from './ids';
 
 /**
  * A 256-bit secret encoded as unpadded base64url. The creating client
@@ -90,10 +90,7 @@ export async function hashInviteToken(token: string): Promise<string> {
     new TextEncoder().encode(token),
   );
 
-  return btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replace(/=+$/, '');
+  return base64url(new Uint8Array(digest));
 }
 
 /** Keeps the token after `#`, so browsers never send it to any server. */
@@ -132,12 +129,7 @@ export function isInviteFailure(code: string): code is InviteFailure {
 }
 
 export function createInviteToken(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-
   return inviteTokenSchema.parse(
-    btoa(String.fromCharCode(...bytes))
-      .replaceAll('+', '-')
-      .replaceAll('/', '_')
-      .replace(/=+$/, ''),
+    base64url(crypto.getRandomValues(new Uint8Array(32))),
   );
 }
