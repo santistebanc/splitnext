@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { formatInviteLink } from '@splitnext/client';
-import { viewFits, viewNames } from '../uiState';
+import { draftFields, viewFits, viewNames } from '../uiState';
 import { workflowGuard, type WorkflowIntent } from '../workflow';
-import { unavailable, editorLock, navigationLock, defineAction, requireOpenable, requireMember, requireNotice, requireJoin, joinMembers, requireConfirmation, requireInvite, memberResource, noticeResources, empty, choice } from './define';
+import { unavailable, editorLock, navigationLock, defineAction, requireOpenable, requireMember, requireNotice, requireJoin, joinMembers, requireConfirmation, requireInvite, memberResource, noticeResources, empty, choice, type ActionHost, type ActionPlatform } from './define';
 
 /** Navigation, drafts, local review state, device copy and share, and confirmation decisions. */
 export const uiActions = {
@@ -73,7 +73,7 @@ export const uiActions = {
       ui.view !== 'home'
         ? null
         : unavailable('panel_not_open', 'No form or panel is open.'),
-    run: async (host, input, ui) => ui.showGroup(),
+    run: async (host, input, ui) => ui.show('home'),
   }),
   showHomepage: defineAction({
     workflow: 'navigate',
@@ -122,14 +122,7 @@ export const uiActions = {
     group: 'UI',
     description: 'Change a form field without submitting it.',
     input: z.object({
-      field: z.enum([
-        'create.name',
-        'create.yourName',
-        'settings.name',
-        'join.link',
-        'join.name',
-        'member.name',
-      ]),
+      field: z.enum(draftFields),
       value: z.string(),
     }),
     example: { field: 'create.name', value: 'Lisbon weekend' },
@@ -190,18 +183,8 @@ export const uiActions = {
           : null)
       );
     },
-    run: async (host, input, ui) => {
-      const chosen = input.as;
-
-      const people = joinMembers({ state: host.snapshot(), ui: ui.snapshot() });
-
-      if (
-        chosen.kind === 'existing' &&
-        !people.some((member) => member.id === chosen.memberId)
-      )
-        throw new Error('member_not_found');
-      ui.chooseJoinMember(chosen.kind === 'new' ? 'new' : chosen.memberId);
-    },
+    run: async (host, input, ui) =>
+      ui.chooseJoinMember(input.as.kind === 'new' ? 'new' : input.as.memberId),
   }),
   clearInvitePreview: defineAction({
     workflow: 'clearPreview',
@@ -274,15 +257,10 @@ export const uiActions = {
     unavailable: (context) => requireInvite(context, 'copyText'),
     run: async (host, input, ui, platform) => {
       if (!platform.copyText) throw new Error('platform_unavailable');
-      const group = host.snapshot().group;
-      const invite = group?.projected_snapshot?.invite;
+      const { link, snapshot } = openInviteLink(host, platform);
 
-      if (!group || !invite || !platform.appUrl)
-        throw new Error('invite_invalid');
-      await platform.copyText(
-        formatInviteLink(platform.appUrl, group.group_id, invite.token),
-      );
-      ui.update({ copiedInviteId: invite.id });
+      await platform.copyText(link);
+      ui.update({ copiedInviteId: snapshot.invite.id });
     },
   }),
   shareInviteLink: defineAction({
@@ -295,19 +273,9 @@ export const uiActions = {
     unavailable: (context) => requireInvite(context, 'shareLink'),
     run: async (host, input, ui, platform) => {
       if (!platform.shareLink) throw new Error('platform_unavailable');
-      const group = host.snapshot().group;
-      const snapshot = group?.projected_snapshot;
+      const { link, snapshot } = openInviteLink(host, platform);
 
-      if (!group || !snapshot?.invite || !platform.appUrl)
-        throw new Error('invite_invalid');
-      await platform.shareLink(
-        formatInviteLink(
-          platform.appUrl,
-          group.group_id,
-          snapshot.invite.token,
-        ),
-        `Join ${snapshot.group.name}`,
-      );
+      await platform.shareLink(link, `Join ${snapshot.group.name}`);
     },
   }),
   copyDiagnostics: defineAction({
@@ -364,7 +332,7 @@ export const uiActions = {
       await host.openGroup(input.groupId);
 
       if (host.snapshot().group?.hidden) ui.showJoin('', true);
-      else ui.showGroup();
+      else ui.show('home');
     },
   }),
   showGroups: defineAction({
@@ -392,3 +360,16 @@ export const uiActions = {
     run: (host, input) => host.dismissNotice(input.commandId),
   }),
 };
+
+/** The open group's invite link as people share it, with the snapshot it came from. */
+function openInviteLink(host: ActionHost, platform: ActionPlatform) {
+  const group = host.snapshot().group;
+  const snapshot = group?.projected_snapshot;
+
+  if (!group || !snapshot || !platform.appUrl) throw new Error('invite_invalid');
+
+  return {
+    link: formatInviteLink(platform.appUrl, group.group_id, snapshot.invite.token),
+    snapshot,
+  };
+}

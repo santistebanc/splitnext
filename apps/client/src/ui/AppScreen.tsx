@@ -169,7 +169,7 @@ function ReadyApp(props: AppProps) {
     actions.executions.snapshot,
   );
 
-  const navigation = { view: ui.view };
+  const view = ui.view;
   const noticeSummary = ui.showNoticeSummary;
   const initialLink = ui.join.link;
 
@@ -278,16 +278,16 @@ function ReadyApp(props: AppProps) {
   const backgroundError =
     action.error ?? (state.syncError ? errorMessage(state.syncError) : null);
 
-  const isFormPage = (mobile || touch) && navigation.view === 'settings';
+  const isFormPage = (mobile || touch) && view === 'settings';
 
   const isSheet =
-    !isFormPage && ['invite', 'settings', 'notices'].includes(navigation.view);
+    !isFormPage && ['invite', 'settings', 'notices'].includes(view);
 
   useSheetKeyboard(isSheet, close);
 
   const pageKey =
-    isFormPage || ['create', 'join', 'rejoin'].includes(navigation.view)
-      ? navigation.view
+    isFormPage || ['create', 'join', 'rejoin'].includes(view)
+      ? view
       : (group?.group_id ?? 'groups');
 
   return (
@@ -300,9 +300,9 @@ function ReadyApp(props: AppProps) {
           }}
           onGroups={
             // Create and join pages have their own Back action.
-            !['create', 'join', 'rejoin'].includes(navigation.view) &&
+            !['create', 'join', 'rejoin'].includes(view) &&
             !isFormPage &&
-            (group || navigation.view !== 'home')
+            (group || view !== 'home')
               ? () => {
                   void actions.dispatch('showGroups', {}, { origin: 'ui' });
                 }
@@ -380,15 +380,15 @@ function ReadyApp(props: AppProps) {
                 </View>
               </View>
             ) : null}
-            {navigation.view === 'create' ? (
+            {view === 'create' ? (
               <CreateGroup app={app} />
-            ) : navigation.view === 'join' || navigation.view === 'rejoin' ? (
+            ) : view === 'join' || view === 'rejoin' ? (
               <JoinGroup
                 app={app}
                 initialLink={initialLink}
-                rejoining={navigation.view === 'rejoin'}
+                rejoining={view === 'rejoin'}
               />
-            ) : isFormPage && navigation.view === 'settings' ? (
+            ) : isFormPage ? (
               <GroupSettings app={app} fullPage />
             ) : group?.projected_snapshot ? (
               <GroupView app={app} showReview={!noticeSummary} />
@@ -405,11 +405,11 @@ function ReadyApp(props: AppProps) {
                 style={s.backdrop}
               />
               <Sheet mobile={mobile}>
-                {navigation.view === 'invite' ? (
+                {view === 'invite' ? (
                   <InvitePanel app={app} />
-                ) : navigation.view === 'settings' ? (
+                ) : view === 'settings' ? (
                   <GroupSettings app={app} />
-                ) : navigation.view === 'notices' ? (
+                ) : view === 'notices' ? (
                   <NoticesPanel app={app} />
                 ) : null}
               </Sheet>
