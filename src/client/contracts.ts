@@ -16,14 +16,6 @@ export const healthResponseSchema = z.object({
   revision: z.string(),
 });
 
-export const readinessResponseSchema = z.object({
-  ok: z.literal(true),
-  checks: z.object({
-    d1: z.literal(true),
-    durable_object: z.literal(true),
-  }),
-});
-
 export {
   createdGroupSchema,
   groupSessionSchema,

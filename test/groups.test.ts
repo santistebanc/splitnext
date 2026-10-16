@@ -184,7 +184,7 @@ describe('group creation API', () => {
     expect(persisted.includes(replacement.token)).toBe(true);
   });
 
-  it('exposes the authoritative snapshot to the local sync lab', async () => {
+  it('exposes the authoritative snapshot to debug inspection', async () => {
     const session = await createIdentity('i');
     const input = newGroupInput();
 

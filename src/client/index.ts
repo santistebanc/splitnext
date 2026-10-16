@@ -39,7 +39,6 @@ import {
   healthResponseSchema,
   identitySessionSchema,
   jsonSchema,
-  readinessResponseSchema,
   syncGroupResponseSchema,
 } from './contracts';
 import {
@@ -109,10 +108,6 @@ export class SplitnextClient {
 
   health() {
     return this.transport.request('GET', '/health', healthResponseSchema);
-  }
-
-  readiness() {
-    return this.transport.request('GET', '/ready', readinessResponseSchema);
   }
 
   createAnonymousIdentity(deviceSecret: string, context?: ClientRequestContext): Promise<IdentitySession> {

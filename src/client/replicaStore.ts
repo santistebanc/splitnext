@@ -341,12 +341,7 @@ export class ClientReplicaStore {
         token: createToken(),
       };
 
-      document.pending_invites = [
-        ...document.pending_invites.filter(
-          (candidate) => candidate.group_id !== groupId,
-        ),
-        invite,
-      ];
+      document.pending_invites.push(invite);
 
       return invite;
     });
@@ -379,19 +374,15 @@ export class ClientReplicaStore {
 
   queueCommand(
     groupId: string,
-    createCommand: (
-      snapshot: GroupSnapshot,
-      identityId: string,
-    ) => GroupCommand,
+    createCommand: (snapshot: GroupSnapshot) => GroupCommand,
     invocationId?: string,
   ): Promise<QueuedCommand> {
     return this.change((document) => {
       const session = requireIdentity(document);
       const replica = requireReplica(document, groupId);
-      const projection = project(replica, session.identity.id);
 
       const pending: PendingCommand = {
-        command: createCommand(projection, session.identity.id),
+        command: createCommand(project(replica, session.identity.id)),
         queued_at: this.now(),
       };
 
@@ -676,7 +667,7 @@ function stateFrom(
     projected_snapshot: projection,
     outbox: structuredClone(replica.outbox),
     notices: structuredClone(replica.notices),
-    hidden: access?.hidden_at !== null && access?.hidden_at !== undefined,
+    hidden: Boolean(access?.hidden_at),
     last_synced_at: replica.last_synced_at,
   };
 }
