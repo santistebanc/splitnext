@@ -172,13 +172,8 @@ export class GroupStore {
       if (transition.memberAlias)
         persistence.recordMemberAlias(transition.memberAlias);
 
-      if (transition.changed && transition.audit) {
+      if (transition.audit) {
         state.next_actor_number = transition.nextActorNumber;
-
-        const actorMemberName =
-          transition.snapshot.members.find(
-            (member) => member.id === transition.access.preferred_member_id,
-          )?.display_name ?? null;
 
         this.commitTransition(
           persistence,
@@ -186,7 +181,7 @@ export class GroupStore {
           transition.snapshot,
           transition.audit,
           transition.access,
-          actorMemberName,
+          memberNameFor(transition.snapshot, transition.access),
           { kind: 'access', id: identityId },
           null,
           command.joined_at,
@@ -320,7 +315,7 @@ export class GroupStore {
           after: { ...invite, revoked_at: null },
         },
         actor,
-        this.memberNameFor(state, actor),
+        memberNameFor(state.snapshot, actor),
         { kind: 'invite', id: invite.id },
         null,
         command.created_at,
@@ -341,10 +336,6 @@ export class GroupStore {
       const failure = inviteFailure(persistence, tokenHash);
 
       if (failure) return { ok: false, error: failure };
-
-      const invite = persistence.findInviteByTokenHash(tokenHash);
-
-      if (!invite) return { ok: false, error: 'invite_invalid' };
 
       return { ok: true, preview: previewFromSnapshot(state.snapshot) };
     });
@@ -475,7 +466,7 @@ export class GroupStore {
 
     if (!actor) throw new Error('actor_missing_inside_transaction');
 
-    const actorMemberName = this.memberNameFor(state, actor);
+    const actorMemberName = memberNameFor(state.snapshot, actor);
 
     const transition = applyGroupCommand(
       state.snapshot,
@@ -563,19 +554,19 @@ export class GroupStore {
       ) ?? null
     );
   }
+}
 
-  private memberNameFor(
-    state: StoredGroupState,
-    access: GroupAccessGrant,
-  ): string | null {
-    if (!access.preferred_member_id) return null;
+/** The name of the member an actor calls "you", recorded with its history. */
+function memberNameFor(
+  snapshot: GroupSnapshot,
+  access: GroupAccessGrant,
+): string | null {
+  if (!access.preferred_member_id) return null;
 
-    return (
-      state.snapshot.members.find(
-        (member) => member.id === access.preferred_member_id,
-      )?.display_name ?? null
-    );
-  }
+  return (
+    snapshot.members.find((member) => member.id === access.preferred_member_id)
+      ?.display_name ?? null
+  );
 }
 
 function inviteFailure(

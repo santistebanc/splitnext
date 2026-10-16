@@ -100,11 +100,7 @@ export class GroupObject extends DurableObject<Env> {
   createGroup(command: InitializeGroupCommand) {
     const parsed = initializeGroupCommandSchema.safeParse(command);
 
-    if (!parsed.success) {
-      return { ok: false as const, error: 'invalid_request' as const };
-    }
-
-    if (this.ctx.id.name !== parsed.data.group_id) {
+    if (!parsed.success || this.ctx.id.name !== parsed.data.group_id) {
       return { ok: false as const, error: 'invalid_request' as const };
     }
 

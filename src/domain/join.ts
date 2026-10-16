@@ -7,10 +7,10 @@ import type { GroupSnapshot } from './sync';
 export type JoinTransition =
   | {
       ok: true;
-      changed: boolean;
       snapshot: GroupSnapshot;
       access: GroupAccessGrant;
       nextActorNumber: number;
+      /** Null when the join changed nothing, such as a repeated choice. */
       audit: CommandTransition['audit'];
       memberAlias?: MemberAlias;
     }
@@ -85,7 +85,6 @@ export function applyGroupJoin(
 
   const transition: JoinTransition = {
     ok: true,
-    changed,
     snapshot: {
       ...snapshot,
       members,

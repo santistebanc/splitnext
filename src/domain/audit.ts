@@ -45,11 +45,6 @@ export const auditChangeSchema = z.discriminatedUnion('action', [
     before: inviteRecordSchema.nullable(),
     after: inviteRecordSchema,
   }),
-  z.object({
-    action: z.literal('invite.revoked'),
-    before: inviteRecordSchema,
-    after: inviteRecordSchema,
-  }),
 ]);
 
 export const newAuditEventSchema = z.object({

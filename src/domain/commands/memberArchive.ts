@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { identifierSchema } from '../ids';
 import { ledgerMemberSchema } from '../members';
-import { defineCommand, withResolvedMember, type IntentOf } from './define';
+import { defineCommand, rejected, unchanged, withResolvedMember, type IntentOf } from './define';
 import { groupCommandTypes } from './outcomes';
 
 export const archiveMemberCommandSchema = z.object({
@@ -39,13 +39,9 @@ export const memberArchive = defineCommand<ArchiveMemberCommand, IntentOf<Archiv
     const target = { kind: 'member' as const, id: command.payload.member_id };
     const current = snapshot.members.find((member) => member.id === command.payload.member_id);
 
-    if (!current) {
-      return { snapshot, status: 'rejected', reason: 'member_not_found', target, serverState: null, audit: null };
-    }
+    if (!current) return rejected(snapshot, target, 'member_not_found');
 
-    if (current.status === 'archived') {
-      return { snapshot, status: 'no_effect', reason: null, target, serverState: { kind: 'member', member: current }, audit: null };
-    }
+    if (current.status === 'archived') return unchanged(snapshot, target, { kind: 'member', member: current });
 
     const member = { ...current, status: 'archived' as const, updated_at: appliedAt };
 

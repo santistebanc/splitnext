@@ -5,6 +5,7 @@ import {
   groupInviteSchema,
   inviteTokenSchema,
 } from './invites';
+import { ledgerMemberSchema, memberNameSchema } from './members';
 
 export const groupNameSchema = z.string().trim().min(1).max(100);
 
@@ -33,7 +34,7 @@ export type GroupAccessGrant = z.output<typeof groupAccessGrantSchema>;
 export const createGroupRequestSchema = z.object({
   group_id: identifierSchema,
   name: groupNameSchema,
-  creator_member_name: groupNameSchema,
+  creator_member_name: memberNameSchema,
   invite: inviteLinkInputSchema,
 });
 
@@ -56,13 +57,7 @@ export type InitializeGroupCommand = z.output<
 
 export const createdGroupSchema = z.object({
   group: groupProjectionSchema,
-  member: z.object({
-    id: identifierSchema,
-    display_name: z.string(),
-    status: z.literal('active'),
-    created_at: z.iso.datetime(),
-    updated_at: z.iso.datetime(),
-  }),
+  member: ledgerMemberSchema.extend({ status: z.literal('active') }),
   access: groupAccessGrantSchema,
   invite: groupInviteSchema,
 });
