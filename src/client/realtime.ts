@@ -17,7 +17,7 @@ export type RealtimeSocket = {
 
 /**
  * The platform seam for realtime connections. Browsers and React Native use
- * `browserWebSocket`; tests and the lab supply their own.
+ * `browserWebSocket`; tests supply their own.
  */
 export type RealtimeSocketFactory = (
   url: string,

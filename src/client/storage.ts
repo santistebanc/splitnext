@@ -67,10 +67,6 @@ export type ClientNotice = z.output<typeof clientNoticeSchema>;
 
 export type ClientGroupReplica = z.output<typeof clientGroupReplicaSchema>;
 
-export type PendingJoin = z.output<typeof pendingJoinSchema>;
-
-export type PendingGroupCreation = z.output<typeof pendingGroupCreationSchema>;
-
 export type PendingInvite = z.output<typeof pendingInviteSchema>;
 
 export type ClientStorageDocument = z.output<
@@ -175,7 +171,7 @@ export type IndexedDbClientStorageOptions = {
   document_key: string;
 };
 
-/** Atomic browser adapter used by the app; the test lab has its own adapter. */
+/** Atomic browser adapter used by the app. */
 export class IndexedDbClientStorage implements ClientStorageAdapter {
   private readonly database: Promise<IDBDatabase>;
   private readonly documentKey: string;

@@ -1,11 +1,9 @@
 import { z } from 'zod';
-import { commandFromIntent, commandOutcomeSchema, requiresServerDecision, type CommandIntent } from '../domain/commands';
-import { clientErrorKind } from './errors';
+import { commandFromIntent, commandOutcomeSchema, requiresServerDecision, type CommandIntent, type GroupCommand } from '../domain/commands';
+import { clientErrorKind, SplitnextNetworkError, SplitnextProtocolError, SplitnextRequestError } from './errors';
 import type { ClientDiagnosticEvent, ClientDiagnosticObserver, ClientExchange, ClientRequestContext, ClientInvocationIds } from './diagnostics';
-import { ClientStorageError, type PendingCommand } from './storage';
-import { SplitnextNetworkError, SplitnextRequestError } from './errors';
+import { ClientStorageError, type ClientStorageAdapter, type PendingCommand } from './storage';
 import type { JoinGroupRequest } from '../domain/access';
-import type { GroupCommand } from '../domain/commands';
 import type {
   AccessibleGroup,
   CreatedGroup,
@@ -39,7 +37,6 @@ import {
   type RealtimeSocket,
   type RealtimeSocketHandlers,
 } from './realtime';
-import type { ClientStorageAdapter } from './storage';
 
 export type SyncDeviceTransport = {
   currentIdentity(): Promise<IdentitySession>;
@@ -165,7 +162,7 @@ export class SplitnextSyncClient {
     } catch (cause) {
       const error = cause instanceof Error ? cause : new Error('request_failed');
 
-      this.diagnostic({ ...exchange, ...context, kind: 'failure', duration_ms: Date.now() - started, error_kind: clientErrorKind(error), error: error instanceof SplitnextRequestError ? error.code : error.name === 'SplitnextProtocolError' ? error.message : `${clientErrorKind(error)}_failure` });
+      this.diagnostic({ ...exchange, ...context, kind: 'failure', duration_ms: Date.now() - started, error_kind: clientErrorKind(error), error: error instanceof SplitnextRequestError ? error.code : error instanceof SplitnextProtocolError ? error.message : `${clientErrorKind(error)}_failure` });
       throw cause;
     }
   }
@@ -435,10 +432,7 @@ export class SplitnextSyncClient {
 
   private async queueCommand(
     groupId: string,
-    createCommand: (
-      snapshot: GroupSnapshot,
-      identityId: string,
-    ) => GroupCommand,
+    createCommand: (snapshot: GroupSnapshot) => GroupCommand,
     invocationId?: string,
   ): Promise<ClientReplicaState> {
     const { pending, state } = await this.replicas.queueCommand(groupId, createCommand, invocationId);
