@@ -1,5 +1,5 @@
 import { MemoryClientStorage, SplitnextSyncClient, type ClientGroupSummary, type ClientReplicaState } from '@splitnext/client';
-import { serializeClientDocument } from '../../../../src/client/storage';
+import { emptyClientDocument, serializeClientDocument } from '../../../../src/client/storage';
 import { AppController } from '../model/controller';
 import { fixtureGroupId, scenarioPresence, scenarioReplica, type Connection, type MemberListScenario } from './memberListFixture';
 import { memoryTransport } from '../../../../src/memoryTransport';
@@ -54,13 +54,12 @@ export async function createWorkbenchApp(options: FakeAppOptions): Promise<AppCo
   const local = options.visitor || options.groups?.length === 0 ? [] : replicas;
 
   const storage = new MemoryClientStorage(serializeClientDocument({
-    schema_version: 2, session: initial.session,
+    ...emptyClientDocument(), session: initial.session,
     groups: local.flatMap((replica) => replica.confirmed_snapshot ? [{
       group_id: replica.group_id, revision: replica.revision ?? 1,
       snapshot: replica.confirmed_snapshot, outbox: [], notices: replica.notices,
       last_synced_at: replica.last_synced_at,
     }] : []),
-    pending_group_creations: [], pending_joins: [], pending_invites: [], group_directory: [],
   }));
 
   const client = new SplitnextSyncClient({ api: transport.api, storage, device_secret: 'w'.repeat(43) });

@@ -5,7 +5,7 @@ import { Button, ErrorMessage, Field, s } from './components';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 import { useCompactLayout } from './useVisibleViewport';
 
-export type CreateGroupApp = Pick<AppController, 'snapshot' | 'lastYouName'>;
+export type CreateGroupApp = Pick<AppController, 'snapshot'>;
 
 type CreateGroupProps = { app: CreateGroupApp; close?: () => void };
 

@@ -152,10 +152,46 @@ export function MemberIcon(props: {
   );
 }
 
-function NewMemberRow() {
-  const name = useUiState().memberEdit?.name ?? '';
+/** A member-name draft in its row; leaving the field saves it, and Enter or Escape leave it. */
+function MemberNameInput(props: {
+  name: string;
+  placeholder?: string;
+  onSave: () => void;
+}) {
   const actions = useActions();
   const input = useRef<TextInput>(null);
+
+  return (
+    <TextInput
+      ref={input}
+      accessibilityLabel="Member name"
+      placeholder={props.placeholder}
+      placeholderTextColor={colors.muted}
+      value={props.name}
+      onChangeText={(value) => {
+        void actions.dispatch(
+          'changeDraft',
+          { field: 'member.name', value },
+          { origin: 'ui' },
+        );
+      }}
+      editable={actions.availability('changeDraft', { field: 'member.name', value: props.name }).available}
+      autoFocus
+      maxLength={100}
+      style={[s.name, s.memberNameInput]}
+      returnKeyType="done"
+      submitBehavior="blurAndSubmit"
+      onBlur={props.onSave}
+      onSubmitEditing={() => input.current?.blur()}
+      onKeyPress={(event) => {
+        if (event.nativeEvent.key === 'Escape') input.current?.blur();
+      }}
+    />
+  );
+}
+
+function NewMemberRow() {
+  const name = useUiState().memberEdit?.name ?? '';
   const action = useActionCall();
 
   function save(): void {
@@ -169,31 +205,7 @@ function NewMemberRow() {
           <MemberIcon joined={false} participants={[]} />
         </View>
         <View style={s.personText}>
-          <TextInput
-            ref={input}
-            accessibilityLabel="Member name"
-            placeholder="Member name"
-            placeholderTextColor={colors.muted}
-            value={name}
-            onChangeText={(value) => {
-              void actions.dispatch(
-                'changeDraft',
-                { field: 'member.name', value },
-                { origin: 'ui' },
-              );
-            }}
-            editable={actions.availability('changeDraft', { field: 'member.name', value: name }).available}
-            autoFocus
-            maxLength={100}
-            style={[s.name, s.memberNameInput]}
-            returnKeyType="done"
-            submitBehavior="blurAndSubmit"
-            onBlur={save}
-            onSubmitEditing={() => input.current?.blur()}
-            onKeyPress={(event) => {
-              if (event.nativeEvent.key === 'Escape') input.current?.blur();
-            }}
-          />
+          <MemberNameInput name={name} placeholder="Member name" onSave={save} />
         </View>
         <View style={s.memberActionsButton} />
       </View>
@@ -207,13 +219,11 @@ function MemberRow(props: MemberRowProps) {
   const draft = useUiState().memberEdit;
   const editing = draft?.memberId === member.id;
   const name = editing ? draft.name : member.display_name;
-  const actions = useActions();
   const select = useActionCall();
   const remove = useActionCall();
   const editAction = useActionCall();
   const canSelect = select.can('setPreferredMember', { memberId: member.id });
   const canRemove = remove.can('archiveMember', { memberId: member.id });
-  const input = useRef<TextInput>(null);
 
   const state = props.app.snapshot();
   const participants = participantMarkers(props.replica, member.id, props.app.client.presence(props.replica.group_id), state.online && state.reachable);
@@ -258,31 +268,7 @@ function MemberRow(props: MemberRowProps) {
         </Pressable>
         <View style={s.personText}>
           {editing ? (
-            <TextInput
-              ref={input}
-              accessibilityLabel="Member name"
-              value={name}
-              onChangeText={(value) => {
-                void actions.dispatch(
-                  'changeDraft',
-                  { field: 'member.name', value },
-                  { origin: 'ui' },
-                );
-              }}
-              editable={actions.availability('changeDraft', { field: 'member.name', value: name }).available}
-              maxLength={100}
-              autoFocus
-              style={[s.name, s.memberNameInput]}
-              returnKeyType="done"
-              submitBehavior="blurAndSubmit"
-              onBlur={() => {
-                save();
-              }}
-              onSubmitEditing={() => input.current?.blur()}
-              onKeyPress={(event) => {
-                if (event.nativeEvent.key === 'Escape') input.current?.blur();
-              }}
-            />
+            <MemberNameInput name={name} onSave={save} />
           ) : (
             <Pressable
               accessibilityRole="button"

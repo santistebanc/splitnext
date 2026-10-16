@@ -2,8 +2,6 @@ import { z } from 'zod';
 
 import { viewNames } from '../model/uiState';
 
-export { viewNames, type ViewName } from '../model/uiState';
-
 /** Browser history entries the app writes, read back on Back and Forward. */
 export const navigationSchema = z.object({
   splitnext: z.literal(true),

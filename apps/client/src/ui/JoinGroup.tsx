@@ -6,7 +6,7 @@ import { Button, ErrorMessage, Field, s } from './components';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 import { useCompactLayout } from './useVisibleViewport';
 
-export type JoinGroupApp = Pick<AppController, 'snapshot' | 'lastYouName'>;
+export type JoinGroupApp = Pick<AppController, 'snapshot'>;
 
 type JoinGroupProps = {
   app: JoinGroupApp;
@@ -190,7 +190,6 @@ export function JoinGroup(props: JoinGroupProps) {
             <Button
               disabled={!joining.can('submitJoin')}
               onPress={() => {
-                if (!chosen) return;
                 void joining.call('submitJoin', {}, props.close);
               }}
             >

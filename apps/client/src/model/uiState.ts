@@ -11,13 +11,16 @@ import {
 
 export { viewNames, type ViewName } from './workflow';
 
-export type DraftField =
-  | 'create.name'
-  | 'create.yourName'
-  | 'settings.name'
-  | 'join.link'
-  | 'join.name'
-  | 'member.name';
+export const draftFields = [
+  'create.name',
+  'create.yourName',
+  'settings.name',
+  'join.link',
+  'join.name',
+  'member.name',
+] as const;
+
+export type DraftField = (typeof draftFields)[number];
 
 export type MemberEdit = {
   memberId: string | null;
@@ -182,11 +185,6 @@ export class AppUiState {
       },
     );
     this.confirmRun = null;
-  }
-
-  showGroup(mode: UiState['navigation']['mode'] = 'push'): void {
-    this.show('home', mode);
-    this.patch({ memberEdit: null });
   }
 
   /**
