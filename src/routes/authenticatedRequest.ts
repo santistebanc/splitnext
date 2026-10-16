@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import { OpenAPIHono, z } from '@hono/zod-openapi';
 import { createMiddleware } from 'hono/factory';
 import type { IdentitySession } from '../domain/identities';
 import { credentialFromProtocols } from '../domain/realtime';
@@ -19,6 +19,19 @@ export type AuthenticatedRequestEnvironment = {
   Bindings: Env;
   Variables: { identitySession: IdentitySession };
 };
+
+/** Routes whose invalid credentials are unauthorized and other invalid input a bad request. */
+export function authenticatedRoutes() {
+  return new OpenAPIHono<AuthenticatedRequestEnvironment>({
+    defaultHook: (result, context) => {
+      if (result.success) return;
+
+      return result.target === 'header'
+        ? context.json({ error: 'unauthorized' }, 401)
+        : context.json({ error: 'invalid_request' }, 400);
+    },
+  });
+}
 
 /** Owns credential parsing, device authentication, and HTTP failure mapping. */
 export const authenticateDevice = createMiddleware<

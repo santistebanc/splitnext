@@ -1,4 +1,4 @@
-import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { createRoute, z } from '@hono/zod-openapi';
 import {
   deviceSecretSchema,
   identitySessionSchema,
@@ -8,7 +8,7 @@ import { GroupIndex } from '../groupIndex';
 import { IdentityDirectory } from '../identityDirectory';
 import {
   authenticateDevice,
-  type AuthenticatedRequestEnvironment,
+  authenticatedRoutes,
   deviceAuthorizationHeadersSchema,
 } from './authenticatedRequest';
 import { errorResponse } from './responses';
@@ -83,15 +83,7 @@ const accessibleGroupsRoute = createRoute({
   },
 });
 
-const identityApp = new OpenAPIHono<AuthenticatedRequestEnvironment>({
-  defaultHook: (result, context) => {
-    if (result.success) return;
-
-    return result.target === 'header'
-      ? context.json({ error: 'unauthorized' }, 401)
-      : context.json({ error: 'invalid_request' }, 400);
-  },
-});
+const identityApp = authenticatedRoutes();
 
 identityApp.use('/identity', authenticateDevice);
 

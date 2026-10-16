@@ -1,19 +1,5 @@
+import type { IdentitySession } from './domain/identities';
 import { createIdentifier } from './domain/ids';
-
-export type AccessIdentity = {
-  id: string;
-  created_at: string;
-};
-
-export type IdentityDevice = {
-  id: string;
-  created_at: string;
-};
-
-export type IdentitySession = {
-  identity: AccessIdentity;
-  device: IdentityDevice;
-};
 
 type StoredIdentitySession = {
   identity_id: string;

@@ -1,5 +1,5 @@
 import { groupFailureStatus } from '../groupTransport';
-import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { createRoute, z } from '@hono/zod-openapi';
 import { joinGroupRequestSchema } from '../domain/access';
 import { createdGroupSchema, createGroupRequestSchema } from '../domain/groups';
 import { createIdentifier, identifierSchema } from '../domain/ids';
@@ -20,7 +20,7 @@ import { GroupIndex } from '../groupIndex';
 import { annotateRequest } from '../requestLog';
 import {
   authenticateDevice,
-  type AuthenticatedRequestEnvironment,
+  authenticatedRoutes,
   deviceAuthorizationHeadersSchema,
 } from './authenticatedRequest';
 import { errorResponse } from './responses';
@@ -190,16 +190,7 @@ const previewInviteRoute = createRoute({
   },
 });
 
-const authenticatedGroupRoutes =
-  new OpenAPIHono<AuthenticatedRequestEnvironment>({
-    defaultHook: (result, context) => {
-      if (result.success) return;
-
-      return result.target === 'header'
-        ? context.json({ error: 'unauthorized' }, 401)
-        : context.json({ error: 'invalid_request' }, 400);
-    },
-  });
+const authenticatedGroupRoutes = authenticatedRoutes();
 
 authenticatedGroupRoutes.use('/groups', authenticateDevice);
 
