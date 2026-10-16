@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { identifierSchema } from '../ids';
 import { ledgerMemberSchema, memberNameKey, memberNameSchema } from '../members';
-import { defineCommand, withResolvedMember, type IntentOf } from './define';
+import { defineCommand, rejected, unchanged, withResolvedMember, type IntentOf } from './define';
 import { groupCommandTypes } from './outcomes';
 
 export const renameMemberCommandSchema = z.object({
@@ -54,20 +54,22 @@ export const memberRename = defineCommand<RenameMemberCommand, IntentOf<RenameMe
     const target = { kind: 'member' as const, id: command.payload.member_id };
     const current = snapshot.members.find((member) => member.id === command.payload.member_id);
 
-    const outcome = (status: 'no_effect' | 'superseded' | 'rejected', reason: 'member_changed' | 'member_name_taken' | 'member_archived' | null) => ({
+    if (!current) return rejected(snapshot, target, 'member_not_found');
+
+    const serverState = { kind: 'member' as const, member: current };
+
+    const outcome = (status: 'superseded' | 'rejected', reason: 'member_changed' | 'member_name_taken' | 'member_archived') => ({
       snapshot,
       status,
       reason,
       target,
-      serverState: current ? { kind: 'member' as const, member: current } : null,
+      serverState,
       audit: null,
     });
 
-    if (!current) return { ...outcome('rejected', null), reason: 'member_not_found' as const };
-
     if (current.status === 'archived') return outcome('rejected', 'member_archived');
 
-    if (current.display_name === command.payload.display_name) return outcome('no_effect', null);
+    if (current.display_name === command.payload.display_name) return unchanged(snapshot, target, serverState);
 
     if (current.display_name !== command.payload.expected_display_name) return outcome('superseded', 'member_changed');
 
