@@ -2,8 +2,8 @@
 
 Splitnext is an offline-first group ledger foundation built on Cloudflare
 Workers, D1, and one SQLite Durable Object per group. The current MVP handles
-groups, invite links, and ledger members with offline synchronization and
-realtime revision announcements; expenses are intentionally deferred.
+groups, invite links, ledger members, expenses, and per-currency balances with
+offline synchronization and realtime revision announcements.
 
 How it fits together, and the rules each part keeps, is in
 [docs/architecture.md](./docs/architecture.md).
@@ -39,20 +39,26 @@ How it fits together, and the rules each part keeps, is in
 - A responsive Expo web app at `/app`, with a public homepage and invite entry
   pages rendered by the same Cloudflare Worker: single-screen group creation,
   member management, invitation sharing, joining and rejoining, group
-  switching, and offline command and conflict feedback. Its screens are
+  switching, expense entry and editing with equal, share, or mixed amount
+  splits, per-currency balances, and offline command and conflict feedback. Its
+  screens are
   described in [docs/architecture.md](./docs/architecture.md#the-web-app) and
   specified in [docs/product-spec.md](./docs/product-spec.md).
 - A `/components` workbench and in-app devtools, enabled with debug
   inspection, for previewing components and calling any app action.
-- Groups have no currency setting. Future expenses and settlements will record
-  their own currency, with separate balances per currency; see
+- Groups have no currency setting. Expenses record their own currency, as
+  future settlements will, with separate balances per currency; see
   [ADR 0014](./docs/adr/0014-record-currency-per-expense.md).
-- The money rules expenses will use already exist as a pure, property-tested
-  module, `src/domain/money.ts`: whole minor units per currency, allocation by
+- Expenses use the pure, property-tested money module, `src/domain/money.ts`:
+  whole minor units per currency, allocation by
   exact amounts and shares, rounding extras that rotate by accumulated burden,
   and balances that net to zero per currency; see
   [ADR 0017](./docs/adr/0017-allocate-money-in-whole-minor-units-with-burden-fair-rounding.md).
-  No expense commands or screens exist yet.
+
+Settlements, Activity browsing and safe undo, important foreground activity
+notifications, monetary group summaries, and the fixed Blue paper theme are
+accepted future slices. Their agreed behavior is in
+[the product specification](./docs/product-spec.md#agreed-feature-port-from-the-earlier-app).
 
 Only the web build of the app exists so far. The Expo app has native
 variants of a few components, but no native build has been made, its storage

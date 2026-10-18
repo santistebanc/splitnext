@@ -18,7 +18,8 @@ behavior unless this document says otherwise. Account sign-in is not planned.
 The first app beta exposes the existing groups, ledger members, and invitations
 to friends traveling together. Anyone can create a group without a beta access
 gate. Ship the responsive web app, public homepage, and invite join flow first;
-native releases follow. Expenses and balances remain deferred.
+native releases follow. Expense entry and per-currency balances are now
+available; settlements and Activity remain accepted future work.
 
 Returning visitors reopen their last active group. Creation uses one view with
 group name and the creator's ledger member name,
@@ -132,6 +133,116 @@ offline fallback; protocol, server and storage failures stay visible with saved
 intent retained. Background refreshes share pending work and back off retries.
 Devtools traces connect action invocation, workflow changes, queued commands,
 requests and outcomes without logging credentials, invite links or draft inputs.
+
+## Agreed feature port from the earlier app
+
+These decisions extend the accepted product behavior. They are specifications
+for future slices, not a claim that the features below are implemented. The
+earlier app is a feature reference; this repository's existing decisions
+continue to govern identity, invitations, member removal, money, and sync.
+
+### Appearance
+
+Use one fixed Blue paper theme, with a colored background and contrasting
+text and controls. The approved study uses background `#C5DBF3` and dark blue
+ink, with a visible fine grain or fine paper-fiber texture. Choose the final
+texture within that direction during visual implementation. Do not add theme
+or texture settings, light/dark switching, or system appearance switching.
+Keep the texture static and subordinate to legible labels, amounts, fields,
+focus indicators, and presence markers. Avoid a stack of white cards.
+
+Reuse the earlier app's original blue split-S logo, preserving its artwork
+and `#60A5FA` blue. Show the logo on the app's groups list only, not on group,
+expense, settlement, joining, creation, settings, or Activity screens. The
+palette studies are visual references, not a replacement navigation design.
+
+### Group summaries
+
+Each group row shows the preferred member's nonzero balances separately by
+currency. Show Settled only when every currency balance is zero. When the
+identity has no preferred member, show Choose who you are rather than a zero
+balance or Settled. Retain member counts, preferred-member labels, offline
+access, and left-group/rejoin behavior.
+
+### Settlements
+
+Explicitly identify a settlement as a recorded repayment. Do not infer one
+from an ordinary expense's payer and allocation. Settlements affect balances
+but do not count as spending. They record money already paid outside the app;
+recording requires no recipient approval and never executes a payment.
+
+Settle up suggests transfers from net balances separately within each
+currency. A suggestion may bypass an intermediate debtor: if Ana owes Ben
+EUR 20 and Ben owes Cara EUR 20, suggest Ana pays Cara EUR 20. Produce a small,
+deterministic set of transfers; exact global minimization is not required.
+
+Tapping a suggestion opens a short review with sender, recipient, and currency
+prefilled, an editable amount, and Record repayment. A secondary Record
+another repayment action allows manual entry. A repayment may be any positive
+amount between two distinct ledger members, including partial repayments and
+overpayments. An overpayment reverses the remaining balance normally. A removed
+member with an outstanding balance remains available for repayment without
+being restored to the active member list; this is an exception to excluding
+removed members from new activity, not permission to add new expenses for them.
+
+Any participant can record, edit, remove, or restore any settlement, including
+offline. Apply the expense lifecycle's intent and conflict rules: edit against
+the version opened, reject editing a removed record, remove without silently
+discarding history, and restore exactly the recorded repayment. Balance and
+history references to removed members remain valid. Settlement arithmetic uses
+the existing currency precision and pure money boundary, without conversion
+or silently forgiving small balances.
+
+### Activity and safe undo
+
+Activity shows expense and settlement changes, member additions, removals and
+renames, group creation and renames, participants joining or leaving, and invite
+replacement. Presence and preferred-member selections do not appear in the
+feed. Existing append-only audit attribution remains authoritative.
+
+Any participant may undo another participant's reversible action, without a
+time limit, while it remains safe. Group creation, joining, leaving, and invite
+replacement have no Undo. Undoing a member addition is blocked once an expense
+or settlement references that member. Historical references remain relevant
+even when their records are removed.
+
+An undo cannot overwrite a later change to the affected information. Explain
+why an action cannot currently be undone. Unrelated changes elsewhere in the
+group do not make an undo stale. Recheck safety on the server when applying
+the compensating command; an offline undo that becomes stale uses the normal
+conflict-notice experience.
+
+An undo creates a new visible Activity entry identifying who reversed which
+action. The reversal can itself be undone while safe. Never delete, rewrite,
+or hide the original audit event as the implementation of undo.
+
+### Important foreground notifications
+
+Notify only when another access identity changes the current preferred
+member's balance, or changes monetary details of or removes an expense or
+settlement originally recorded by this identity. Compare identities, not
+preferred-member names, when suppressing this installation's own actions.
+Routine joins, renames, and other changes remain in Activity without a toast.
+
+These notifications apply to the currently open group only. Deduplicate repeated
+synchronization delivery, combine several fresh changes into one compact
+summary, and do not replay a backlog on startup or reconnect. Existing pending,
+offline, failed-sync, and conflict feedback remains independently visible;
+those signals must not be suppressed by the foreground-activity filter.
+
+The web release uses foreground notifications. Background push is deferred to
+native releases; browser push and native push infrastructure are not required
+by these slices.
+
+### Replacement scope
+
+Implement in this v4 repository, using the earlier app at `code/splitnext` as
+the reference. Existing development and earlier-app data may be replaced; no
+migration or compatibility layer is required. This is authorization for future
+replacement work, not an instruction to wipe data as part of writing specs.
+Native releases, native push, native storage, and native update handling remain
+later work. History-based group recovery remains accepted future work outside
+this feature port.
 
 ## Product principles
 
