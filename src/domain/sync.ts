@@ -3,6 +3,7 @@ import {
   commandOutcomeSchema,
   groupCommandSchema,
 } from './commands';
+import { expenseSchema } from './expenses';
 import { groupAccessGrantSchema, groupDetailsSchema } from './groups';
 import { groupInviteSchema } from './invites';
 import { identifierSchema } from './ids';
@@ -11,6 +12,8 @@ import { ledgerMemberSchema } from './members';
 export const groupSnapshotSchema = z.object({
   group: groupDetailsSchema,
   members: z.array(ledgerMemberSchema),
+  // In the order they were recorded, removed ones included.
+  expenses: z.array(expenseSchema),
   access_grants: z.array(groupAccessGrantSchema),
   // Every group has one reusable link, replaced only through regeneration.
   invite: groupInviteSchema,

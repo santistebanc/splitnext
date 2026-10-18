@@ -9,9 +9,9 @@ were made.
 ## Status and scope
 
 The current MVP establishes identities, groups, ledger members, offline
-synchronization, realtime revision announcements, and invite links. Expenses,
-settlements, audit browsing, and group recovery are accepted future behavior
-unless this document says otherwise. Account sign-in is not planned.
+synchronization, realtime revision announcements, invite links, and
+expenses. Settlements, audit browsing, and group recovery are accepted future
+behavior unless this document says otherwise. Account sign-in is not planned.
 
 ## First user-facing app beta
 
@@ -425,16 +425,30 @@ a later rejection produces a new notice.
   New participants and identities that left still choose a member before joining.
 - Any participant can regenerate the link; there are no roles.
 
-## Expenses and money (deferred)
+## Expenses and money
 
-- Each expense records its original amount, an explicit currency code, and
-  allocations in that currency. A group may contain expenses in several
-  currencies. Currency selection belongs in expense entry, not group setup.
-- Expense entry may suggest a currency from an explicit device/browser locale
-  region, then IP country when available, then EUR. Language alone is not a
-  country; unknown regions fall through. The optional lookup never blocks entry,
-  and the person can change the suggestion before saving the expense. A
-  suggestion never changes an existing expense.
+Expenses are accepted behavior; settlements remain deferred.
+
+- Each expense records a required description, its original amount, an
+  explicit currency code, its payer, and allocations in that currency. It has
+  no expense date; the list shows expenses newest recorded first. A group may
+  contain expenses in several currencies. Currency selection belongs in
+  expense entry, not group setup.
+- Expense entry suggests the currency used most often among the group's last
+  ten current expenses, ties going to the most recent; then the currency of an
+  explicit device/browser locale region; then EUR. Language alone is not a
+  country; unknown regions fall through. The person can change the suggestion
+  before saving, and a suggestion never changes an existing expense.
+- Entry starts with the person's you member as payer, when they have one, and
+  every active member sharing equally.
+- Any participant may record, edit, remove, or restore any expense.
+- Editing replaces everything entered for an expense and is superseded when
+  someone changed it after the version the person saw. Editing a removed
+  expense is rejected.
+- Removing an expense takes it out of balances whatever version the person
+  saw, since restoring undoes it. A removed expense is kept and can be
+  restored exactly as recorded, with its original allocation. Restoring will
+  be offered through the group's Activity; there is no removed-expense list.
 - Balances are calculated and shown separately for each member and currency.
   For example, if Santi is owed EUR 30 and owes USD 20, show both balances;
   never net them into a single number. Expenses in the same currency combine
@@ -444,7 +458,9 @@ a later rejection produces a new notice.
   separate, with no automatic cross-currency offset or conversion.
 - The first expense version has one payer, but the persisted model and money
   module must be extendable to multiple payers without redefining an expense.
-- An expense may include any subset of active ledger members.
+- An expense may include any subset of active ledger members, and its payer
+  need not be one of them. Entry offers only active members, but an expense
+  that arrives after a member it names was removed still applies.
 - Allocation supports equal shares, unequal shares, exact amounts, and a mix of
   exact amounts and shares.
 - All allocation, validation, and deterministic minor-unit rounding lives
@@ -453,9 +469,11 @@ a later rejection produces a new notice.
 - Final integer-minor-unit allocations are persisted with the expense, using
   that currency's precision. Balances must sum to zero separately in each
   currency; currencies cannot share a rounding burden.
-- Rounding should distribute unavoidable extra minor units fairly over time by
-  tracking which members previously absorbed them in the same currency and
-  preferring members with the lowest accumulated rounding burden there.
+- Rounding distributes unavoidable extra minor units fairly over time:
+  each expense records which members absorbed one, a member's burden in a
+  currency counts those across that currency's current expenses, and new
+  extras go to members with the lowest burden there (ADR 0019). Removing,
+  restoring, or editing an expense therefore changes the burden exactly.
 - Expense mutations follow the same offline command, outcome, audit, and
   compensating-reversal model as group and member mutations.
 - Splitnext records a ledger for later external settlement. It does not move

@@ -27,6 +27,7 @@ function fixture() {
   const snapshot = {
     group: created.group,
     members: [created.member],
+    expenses: [],
     access_grants: [created.access],
     invite: created.invite,
   };

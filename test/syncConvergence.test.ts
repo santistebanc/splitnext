@@ -16,6 +16,7 @@ import {
 } from '../src/client';
 import type { ClientStorageUpdate } from '../src/client/storage';
 import { requiresServerDecision } from '../src/domain/commands';
+import { expenseMemberIds, groupBalances } from '../src/domain/expenses';
 import { createIdentifier } from '../src/domain/ids';
 import { groupSnapshotSchema, type GroupSnapshot } from '../src/domain/sync';
 import { memoryTransport } from '../src/memoryTransport';
@@ -65,6 +66,19 @@ const noFaults: Injected = { network: 'none', storage: null };
 
 const pick = fc.nat({ max: 9 });
 
+/**
+ * An expense as someone enters it: members picked from any in the sender's
+ * projection, removed ones included, so late expenses are exercised, and
+ * totals that rarely split evenly so extra units keep moving.
+ */
+const expenseEntry = {
+  payer: pick,
+  participants: fc.uniqueArray(pick, { minLength: 1, maxLength: 4 }),
+  exact: fc.option(fc.nat({ max: 50 })),
+  total: fc.integer({ min: 1, max: 1_000 }),
+  currency: fc.constantFrom('EUR', 'JPY'),
+};
+
 /** One generator per group command; members are picked from the sender's projection. */
 const commandArbitrary = fc.oneof(
   fc.record({ type: fc.constant('group.rename' as const), name: fc.constantFrom(...groupNames) }),
@@ -74,6 +88,10 @@ const commandArbitrary = fc.oneof(
   fc.record({ type: fc.constant('member.restore' as const), member: pick }),
   fc.record({ type: fc.constant('preference.set' as const), member: pick }),
   fc.record({ type: fc.constant('group.leave' as const) }),
+  fc.record({ type: fc.constant('expense.record' as const), ...expenseEntry }),
+  fc.record({ type: fc.constant('expense.edit' as const), expense: pick, ...expenseEntry }),
+  fc.record({ type: fc.constant('expense.remove' as const), expense: pick }),
+  fc.record({ type: fc.constant('expense.restore' as const), expense: pick }),
 );
 
 type CommandStep = typeof commandArbitrary extends fc.Arbitrary<infer T> ? T : never;
@@ -116,6 +134,37 @@ function intentFor(command: CommandStep, snapshot: GroupSnapshot): CommandIntent
 
     case 'group.leave':
       return { type: command.type, payload: {} };
+    case 'expense.record':
+    case 'expense.edit': {
+      const payer = member(command.payer);
+      const participants = [...new Set(command.participants.flatMap((index) => member(index) ?? []))];
+      const expenseId = snapshot.expenses[command.type === 'expense.edit' ? command.expense % Math.max(snapshot.expenses.length, 1) : -1]?.id;
+
+      if (!payer || !participants.length || (command.type === 'expense.edit' && !expenseId)) return null;
+
+      // The first participant may owe an exact amount; the rest share what is left.
+      const [first, ...rest] = participants;
+      const exact = command.exact !== null && rest.length && first ? Math.min(command.exact, command.total) : null;
+
+      const entry = {
+        description: 'Expense', currency: command.currency, total: command.total, paid_by: payer,
+        parts: participants.map((memberId) =>
+          memberId === first && exact !== null
+            ? { kind: 'exact' as const, member_id: memberId, amount: exact }
+            : { kind: 'shares' as const, member_id: memberId, shares: 1 }),
+      };
+
+      return command.type === 'expense.edit' && expenseId
+        ? { type: command.type, payload: { ...entry, expense_id: expenseId } }
+        : { type: 'expense.record', payload: entry };
+    }
+
+    case 'expense.remove':
+    case 'expense.restore': {
+      const expenseId = snapshot.expenses[command.expense % Math.max(snapshot.expenses.length, 1)]?.id;
+
+      return expenseId ? { type: command.type, payload: { expense_id: expenseId } } : null;
+    }
   }
 }
 
@@ -711,6 +760,22 @@ function expectValidSnapshot(snapshot: GroupSnapshot): void {
   const active = activeMembers(snapshot);
 
   expect(new Set(snapshot.members.map((entry) => entry.id)).size).toBe(snapshot.members.length);
+
+  const deleted = new Set(snapshot.members.flatMap((entry) => (entry.status === 'deleted' ? [entry.id] : [])));
+
+  for (const expense of snapshot.expenses) {
+    const sum = (entries: readonly { amount: number }[]) => entries.reduce((total, entry) => total + entry.amount, 0);
+
+    expect(sum(expense.allocations)).toBe(expense.total);
+    expect(sum(expense.paid)).toBe(expense.total);
+    expect(new Set(expense.extras).size).toBe(expense.extras.length);
+
+    // A member any expense names, removed or not, is never deleted.
+    for (const memberId of expenseMemberIds(expense)) expect(deleted.has(memberId)).toBe(false);
+  }
+
+  for (const balances of Object.values(groupBalances(snapshot)))
+    expect(Object.values(balances).reduce((total, amount) => total + amount, 0)).toBe(0);
 
   for (const grant of snapshot.access_grants) {
     if (grant.hidden_at) expect(grant.preferred_member_id).toBeNull();

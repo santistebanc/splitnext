@@ -462,6 +462,19 @@ export { identifierSchema } from '../domain/ids';
 export { memberNameSchema } from '../domain/members';
 
 export {
+  allocate,
+  currencyCodeSchema,
+  formatAmount,
+  minorDigits,
+  parseAmount,
+  type AllocationPart,
+  type CurrencyBalances,
+  type CurrencyCode,
+} from '../domain/money';
+
+export { expenseDescriptionSchema, groupBalances, type Expense } from '../domain/expenses';
+
+export {
   browserWebSocket,
   type RealtimeSocket,
   type RealtimeSocketFactory,

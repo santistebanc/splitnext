@@ -2,6 +2,10 @@ import { z } from 'zod';
 import type { GroupSnapshot } from './sync';
 import type { CommandDefinition, CommandTransition } from './commands/define';
 import type { CommandTarget } from './commands/outcomes';
+import { editExpenseCommandSchema, expenseEdit } from './commands/expenseEdit';
+import { expenseRecord, recordExpenseCommandSchema } from './commands/expenseRecord';
+import { expenseRemove, removeExpenseCommandSchema } from './commands/expenseRemove';
+import { expenseRestore, restoreExpenseCommandSchema } from './commands/expenseRestore';
 import { groupLeave, leaveGroupCommandSchema } from './commands/groupLeave';
 import { groupRename, renameGroupCommandSchema } from './commands/groupRename';
 import { createMemberCommandSchema, memberCreate } from './commands/memberCreate';
@@ -33,12 +37,20 @@ export type { RemoveMemberCommand } from './commands/memberRemove';
 
 export type { RestoreMemberCommand } from './commands/memberRestore';
 
+export type { RecordExpenseCommand } from './commands/expenseRecord';
+
+export type { EditExpenseCommand } from './commands/expenseEdit';
+
 export const groupCommandSchema = z.discriminatedUnion('type', [
   renameGroupCommandSchema,
   createMemberCommandSchema,
   renameMemberCommandSchema,
   removeMemberCommandSchema,
   restoreMemberCommandSchema,
+  recordExpenseCommandSchema,
+  editExpenseCommandSchema,
+  removeExpenseCommandSchema,
+  restoreExpenseCommandSchema,
   setPreferredMemberCommandSchema,
   leaveGroupCommandSchema,
 ]);
@@ -51,6 +63,10 @@ const registered = {
   'member.rename': memberRename,
   'member.remove': memberRemove,
   'member.restore': memberRestore,
+  'expense.record': expenseRecord,
+  'expense.edit': expenseEdit,
+  'expense.remove': expenseRemove,
+  'expense.restore': expenseRestore,
   'preference.set': preferenceSet,
   'group.leave': groupLeave,
 };

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { memberHasRecords } from '../expenses';
 import { identifierSchema } from '../ids';
 import { ledgerMemberSchema } from '../members';
 import { defineCommand, rejected, unchanged, type IntentOf } from './define';
@@ -26,8 +27,9 @@ export const memberRemovedAuditSchema = z.object({
 });
 
 /**
- * Removes a member and clears every identity's choice of it as "you". The
- * member is deleted, and kept only so a late command can still reach it.
+ * Removes a member and clears every identity's choice of it as "you". A
+ * member any expense names, removed or not, is hidden; any other is deleted.
+ * Both are kept, so a late expense or a restore can still reach them.
  */
 export const memberRemove = defineCommand<RemoveMemberCommand, IntentOf<RemoveMemberCommand>>({
   requiresServerDecision: false,
@@ -42,7 +44,8 @@ export const memberRemove = defineCommand<RemoveMemberCommand, IntentOf<RemoveMe
 
     if (current.status !== 'active') return unchanged(snapshot, target, { kind: 'member', member: current });
 
-    const member = { ...current, status: 'deleted' as const, updated_at: appliedAt };
+    const status = memberHasRecords(snapshot, current.id) ? ('hidden' as const) : ('deleted' as const);
+    const member = { ...current, status, updated_at: appliedAt };
 
     const orphaned = snapshot.access_grants.flatMap((grant) =>
       grant.preferred_member_id === current.id ? [grant.identity_id] : [],

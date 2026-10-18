@@ -4,7 +4,7 @@ import type { GroupSnapshot } from '../sync';
 import type { CommandReason, CommandServerState, CommandTarget } from './outcomes';
 
 /** What every group command carries on the wire. */
-export type CommandBase = { command_id: string; type: string; payload: Record<string, string> };
+export type CommandBase = { command_id: string; type: string; payload: object };
 
 /** The result of applying one command to a snapshot. */
 export type CommandTransition = {

@@ -191,6 +191,7 @@ export class ClientReplicaStore {
             created_at: created.group.created_at,
           },
           members: [created.member],
+          expenses: [],
           access_grants: [created.access],
           invite: created.invite,
         };
