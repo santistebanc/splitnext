@@ -57,6 +57,34 @@ test('creates a group and manages its members', async ({ page }) => {
   await expect(button(page, 'Edit Cy')).toHaveCount(0);
 });
 
+test('records, changes, and removes an expense with balances per currency', async ({ page }) => {
+  await createGroup(page, 'Trip', 'Ana');
+  await addMember(page, 'Ben');
+  await button(page, 'Add expense').click();
+
+  // The browser locale names the US, so the first expense suggests dollars.
+  await expect(field(page, 'Currency')).toHaveValue('USD');
+  await field(page, 'Description').fill('Dinner');
+  await field(page, 'Amount').fill('30');
+  await page.getByRole('dialog').getByRole('button', { name: 'Add expense' }).click();
+  await expect(button(page, 'Change Dinner · 30.00 USD')).toBeVisible();
+  await expect(page.getByText('is owed 15.00 USD')).toBeVisible();
+  await expect(page.getByText('owes 15.00 USD')).toBeVisible();
+
+  await button(page, 'Change Dinner · 30.00 USD').click();
+  await field(page, 'Amount').fill('40');
+  await button(page, 'Save changes').click();
+  await expect(button(page, 'Change Dinner · 40.00 USD')).toBeVisible();
+
+  // Ben has a record, so removing him hides him but keeps his debt visible.
+  await button(page, 'Remove Ben').click();
+  await expect(button(page, 'Edit Ben')).toHaveCount(0);
+  await expect(page.getByText('owes 20.00 USD')).toBeVisible();
+
+  await button(page, 'Remove Dinner · 40.00 USD').click();
+  await expect(page.getByText('Balances')).toHaveCount(0);
+});
+
 test('renames the group and replaces the invite link after confirming', async ({ page }) => {
   await createGroup(page, 'Trip', 'Ana');
   await button(page, 'Group settings').click();

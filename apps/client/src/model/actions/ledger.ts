@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { allocate, currencyCodeSchema, expenseDescriptionSchema, groupNameSchema, memberNameSchema, parseAmount, participantsForMember, requiresServerDecision } from '@splitnext/client';
-import { equalParts } from '../expenses';
+import { entryFromDraft, equalParts } from '../expenses';
 import { unavailable, editorLock, defineAction, openSnapshot, requireExpense, requireExpenseEntry, expenseResource, requireMember, requireRemovedMember, requireNotice, requireName, memberResource, noticeResources, empty, choice, suggested } from './define';
 
 /** Changes to the shared ledger; they can queue offline. */
@@ -135,6 +135,40 @@ export const ledgerActions = {
     requires: ['openGroup'],
     unavailable: ({ state }, input) => requireRemovedMember(state, input?.memberId),
     run: (host, input) => host.submit({ type: 'member.restore', payload: { member_id: input.memberId } }),
+  }),
+  saveExpense: defineAction({
+    holds: ({ state, ui }) => expenseResource(state, ui.expense.expenseId),
+    workflow: 'saveExpense',
+    group: 'Ledger changes',
+    description: 'Save the expense being entered and return to the group.',
+    input: empty,
+    example: {},
+    requires: ['openGroup'],
+    unavailable: ({ state, ui }) => {
+      const draft = ui.expense;
+      const entry = entryFromDraft(draft);
+
+      if (draft.expenseId) {
+        const missing = requireExpense(state, draft.expenseId, 'active');
+
+        if (missing) return missing;
+      }
+
+      return entry.ok ? null : unavailable('invalid_input', entry.problem);
+    },
+    run: async (host, input, ui) => {
+      const draft = ui.snapshot().expense;
+      const result = entryFromDraft(draft);
+
+      if (!result.ok) throw new Error('invalid_input');
+
+      await (draft.expenseId && draft.expectedVersion
+        ? host.submit({
+            type: 'expense.edit',
+            payload: { ...result.entry, expense_id: draft.expenseId, expected_version: draft.expectedVersion },
+          })
+        : host.submit({ type: 'expense.record', payload: result.entry }));
+    },
   }),
   recordExpense: defineAction({
     group: 'Ledger changes',

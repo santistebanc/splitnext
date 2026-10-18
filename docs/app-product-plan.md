@@ -192,6 +192,25 @@ group view without requiring invitation sharing or acceptance. Let that flow
 help add missing ledger members. Keep the Members component compact enough to
 move into the group header when expenses become the main content.
 
+## Expenses and balances
+
+The group page shows Balances, then Expenses, then Members. Balances list each
+currency separately, labelled only when there are several: every active member,
+and a removed member only while their balance there is not zero. Expenses list
+newest recorded first with description, payer, and amount; tapping one opens
+it to change, and its cross removes it immediately, like a member row. There is
+no removed-expense list; restoring comes later through Activity.
+
+Add expense and changing one share a form: a sheet on desktop pointer layouts
+and a page with Back to group on narrow and touch screens, like group settings.
+It holds the description, amount, and currency (suggested as the product
+specification describes), payer choices, and a split chosen as Equally, By
+shares, or By amounts. Each active member has a checkbox for sharing the
+expense; split by shares or amounts shows a field per participant, where a
+blank amount shares what is left. Each row previews what that member would
+owe. Entry offers only active members, plus anyone the expense already names.
+Show the name ordinal wherever a member name appears.
+
 ## Synchronization feedback
 
 Show a contextual banner while the installation is offline, the server is

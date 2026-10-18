@@ -459,7 +459,7 @@ export { createDeviceSecret, deviceSecretSchema } from '../domain/identities';
 
 export { identifierSchema } from '../domain/ids';
 
-export { memberNameSchema } from '../domain/members';
+export { memberNameSchema, type LedgerMember } from '../domain/members';
 
 export {
   allocate,
@@ -472,7 +472,7 @@ export {
   type CurrencyCode,
 } from '../domain/money';
 
-export { expenseDescriptionSchema, groupBalances, type Expense } from '../domain/expenses';
+export { expenseDescriptionSchema, groupBalances, roundingBurden, type Expense, type ExpenseEntry } from '../domain/expenses';
 
 export {
   browserWebSocket,
