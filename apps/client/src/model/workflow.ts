@@ -4,6 +4,7 @@ export const viewNames = [
   'join',
   'invite',
   'settings',
+  'expense',
   'notices',
   'rejoin',
 ] as const;
@@ -12,7 +13,7 @@ export type ViewName = (typeof viewNames)[number];
 
 type ReadyWorkflow =
   | { view: 'home' | 'invite' | 'notices'; phase: 'ready' }
-  | { view: 'create' | 'settings'; phase: 'editing' }
+  | { view: 'create' | 'settings' | 'expense'; phase: 'editing' }
   | { view: 'join'; phase: 'link' }
   | { view: 'join' | 'rejoin'; phase: 'choosing' };
 
@@ -31,7 +32,8 @@ export type Submission =
   | 'createDirect'
   | 'submitJoin'
   | 'joinDirect'
-  | 'saveSettings';
+  | 'saveSettings'
+  | 'saveExpense';
 
 export type WorkflowIntent =
   | Submission
@@ -39,6 +41,7 @@ export type WorkflowIntent =
   | 'checkInvite'
   | 'createDraft'
   | 'settingsDraft'
+  | 'expenseDraft'
   | 'joinLink'
   | 'joinName'
   | 'chooseMember'
@@ -67,6 +70,7 @@ const submissionPhases = {
   submitJoin: 'joining',
   joinDirect: 'joining',
   saveSettings: 'saving',
+  saveExpense: 'saving',
 } as const;
 
 export function isSubmission(intent: WorkflowIntent | undefined): intent is Submission {
@@ -77,6 +81,7 @@ export function enterView(view: ViewName, hasPreview = false): ReadyWorkflow {
   switch (view) {
     case 'create':
     case 'settings':
+    case 'expense':
       return { view, phase: 'editing' };
     case 'join':
       return { view, phase: hasPreview ? 'choosing' : 'link' };
@@ -146,7 +151,7 @@ export function transition(
 
     if (
       intent === 'draft' &&
-      ['create', 'settings', 'join', 'rejoin', 'home'].includes(workflow.view)
+      ['create', 'settings', 'expense', 'join', 'rejoin', 'home'].includes(workflow.view)
     )
       return { allowed: true, next: workflow };
 
@@ -173,6 +178,7 @@ export function transition(
     if (
       (intent === 'createDraft' && workflow.view === 'create') ||
       (intent === 'settingsDraft' && workflow.view === 'settings') ||
+      (intent === 'expenseDraft' && workflow.view === 'expense') ||
       (intent === 'groupEditor' && workflow.view === 'home')
     )
       return { allowed: true, next: workflow };
@@ -195,6 +201,9 @@ export function transition(
 
     if (event.intent === 'saveSettings' && workflow.view !== 'settings')
       return blocked('form_not_open', 'Open settings first.');
+
+    if (event.intent === 'saveExpense' && workflow.view !== 'expense')
+      return blocked('form_not_open', 'Open an expense first.');
 
     if (event.intent === 'submitJoin') {
       if (workflow.view !== 'join' && workflow.view !== 'rejoin')
@@ -236,6 +245,7 @@ export function intentEvent(intent: WorkflowIntent): WorkflowEvent {
     case 'submitJoin':
     case 'joinDirect':
     case 'saveSettings':
+    case 'saveExpense':
       return { type: 'start', intent, requestId: 0 };
     default:
       return { type: 'edit', intent };

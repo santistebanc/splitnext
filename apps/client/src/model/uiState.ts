@@ -1,4 +1,5 @@
 import type { InvitePreview } from '@splitnext/client';
+import { draftForExpense, type ExpenseDraft } from './expenses';
 import type { AppState } from './controller';
 import {
   enterView,
@@ -15,6 +16,9 @@ export const draftFields = [
   'create.name',
   'create.yourName',
   'settings.name',
+  'expense.description',
+  'expense.amount',
+  'expense.currency',
   'join.link',
   'join.name',
   'member.name',
@@ -32,6 +36,7 @@ type UiContext = {
   navigation: { revision: number; mode: 'push' | 'replace' | 'restore' };
   create: { name: string; yourName: string };
   settings: { name: string; expectedName: string };
+  expense: ExpenseDraft;
   join: {
     link: string;
     name: string;
@@ -56,6 +61,7 @@ function groupIsOpen(app: AppState): boolean {
 export function viewFits(view: ViewName, app: AppState): boolean {
   switch (view) {
     case 'settings':
+    case 'expense':
     case 'invite':
       return groupIsOpen(app);
     case 'notices':
@@ -87,6 +93,7 @@ export class AppUiState {
       navigation: { revision: 0, mode: 'replace' },
       create: { name: '', yourName: readName() ?? '' },
       settings: { name, expectedName: name },
+      expense: draftForExpense(null, null, 'EUR'),
       join: {
         link: initialLink,
         name: readName() ?? '',
@@ -161,6 +168,30 @@ export class AppUiState {
     this.confirmRun = null;
   }
 
+  /** Opens the expense editor on a new expense, or on one to change. */
+  showExpense(expenseId: string | null, currency: string): void {
+    const snapshot = this.readApp().group?.projected_snapshot ?? null;
+    const expense = snapshot?.expenses.find((entry) => entry.id === expenseId && entry.status === 'active') ?? null;
+
+    if (expenseId && !expense) throw new Error('expense_not_found');
+    this.move(
+      { type: 'navigate', view: 'expense', hasPreview: false },
+      {
+        navigation: { revision: this.state.navigation.revision + 1, mode: 'push' },
+        confirmation: null,
+        memberEdit: null,
+        expense: draftForExpense(snapshot, expense, currency, this.readApp().group?.session?.identity.id),
+      },
+    );
+    this.confirmRun = null;
+  }
+
+  /** Changes how the open expense is paid or split, without saving it. */
+  changeExpense(change: (draft: ExpenseDraft) => Partial<ExpenseDraft>): void {
+    this.move({ type: 'edit', intent: 'expenseDraft' });
+    this.patch({ expense: { ...this.state.expense, ...change(this.state.expense) } });
+  }
+
   showJoin(link = '', rejoining = false): void {
     this.move(
       {
@@ -223,6 +254,15 @@ export class AppUiState {
       case 'settings.name':
         this.move({ type: 'edit', intent: 'settingsDraft' });
         this.patch({ settings: { ...this.state.settings, name: value } });
+        break;
+      case 'expense.description':
+        this.changeExpense(() => ({ description: value }));
+        break;
+      case 'expense.amount':
+        this.changeExpense(() => ({ amount: value }));
+        break;
+      case 'expense.currency':
+        this.changeExpense(() => ({ currency: value.trim().toUpperCase() }));
         break;
       case 'join.name':
         this.move({ type: 'edit', intent: 'joinName' });

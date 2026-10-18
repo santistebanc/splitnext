@@ -45,6 +45,8 @@ export type ActionPlatform = {
   copyText?: (text: string) => Promise<void>;
   shareLink?: (link: string, title: string) => Promise<void>;
   openHomepage?: () => void;
+  /** The region the device's locale names, such as US, for currency suggestions. */
+  localeRegion?: string | null;
   /** The dispatcher's diagnostics report; see DiagnosticsLog. */
   diagnosticsReport?: () => string;
 };

@@ -8,6 +8,7 @@ import { createBrowserApp } from '../model/browser';
 import { ViewTransition } from './ViewTransition';
 import { CreateGroup } from './CreateGroup';
 import { Frame } from './Frame';
+import { ExpenseEditor } from './ExpenseEditor';
 import { GroupSettings } from './GroupSettings';
 import { GroupsView } from './GroupsView';
 import { GroupView } from './GroupView';
@@ -278,10 +279,10 @@ function ReadyApp(props: AppProps) {
   const backgroundError =
     action.error ?? (state.syncError ? errorMessage(state.syncError) : null);
 
-  const isFormPage = (mobile || touch) && view === 'settings';
+  const isFormPage = (mobile || touch) && (view === 'settings' || view === 'expense');
 
   const isSheet =
-    !isFormPage && ['invite', 'settings', 'notices'].includes(view);
+    !isFormPage && ['invite', 'settings', 'expense', 'notices'].includes(view);
 
   useSheetKeyboard(isSheet, close);
 
@@ -388,6 +389,8 @@ function ReadyApp(props: AppProps) {
                 initialLink={initialLink}
                 rejoining={view === 'rejoin'}
               />
+            ) : isFormPage && view === 'expense' ? (
+              <ExpenseEditor app={app} fullPage />
             ) : isFormPage ? (
               <GroupSettings app={app} fullPage />
             ) : group?.projected_snapshot ? (
@@ -409,6 +412,8 @@ function ReadyApp(props: AppProps) {
                   <InvitePanel app={app} />
                 ) : view === 'settings' ? (
                   <GroupSettings app={app} />
+                ) : view === 'expense' ? (
+                  <ExpenseEditor app={app} />
                 ) : view === 'notices' ? (
                   <NoticesPanel app={app} />
                 ) : null}

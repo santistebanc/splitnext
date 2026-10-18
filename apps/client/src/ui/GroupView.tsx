@@ -1,6 +1,7 @@
 import { joinedParticipants, preferredMember } from '@splitnext/client';
 import { Text, View } from 'react-native';
 import { Button, s } from './components';
+import { Balances, ExpenseList } from './ExpenseList';
 import { MemberList, type MemberListApp } from './MemberList';
 import { useActionCall, useActions } from './useActionCall';
 import { useCompactLayout } from './useVisibleViewport';
@@ -10,7 +11,7 @@ type GroupViewProps = {
   showReview: boolean;
 };
 
-/** The open group: its name, invite action, and Members list. */
+/** The open group: its name, invite action, balances, expenses, and Members list. */
 export function GroupView(props: GroupViewProps) {
   const mobile = useCompactLayout();
   const action = useActionCall();
@@ -92,6 +93,8 @@ export function GroupView(props: GroupViewProps) {
               </Text>
             </View>
           ) : null}
+          <Balances replica={replica} />
+          <ExpenseList replica={replica} />
           <View style={[s.card, s.peopleCard]}>
             <View style={s.between}>
               <Text style={s.heading}>Members</Text>

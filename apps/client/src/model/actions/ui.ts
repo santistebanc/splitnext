@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { formatInviteLink } from '@splitnext/client';
+import { expenseSplits, suggestedCurrency } from '../expenses';
 import { draftFields, viewFits, viewNames } from '../uiState';
 import { workflowGuard, type WorkflowIntent } from '../workflow';
-import { unavailable, editorLock, navigationLock, defineAction, requireOpenable, requireMember, requireNotice, requireJoin, joinMembers, requireConfirmation, requireInvite, memberResource, noticeResources, empty, choice, type ActionHost, type ActionPlatform } from './define';
+import { unavailable, editorLock, navigationLock, defineAction, openSnapshot, requireExpense, requireOpenable, requireMember, requireNotice, requireJoin, joinMembers, requireConfirmation, requireInvite, memberResource, noticeResources, empty, choice, type ActionHost, type ActionPlatform } from './define';
 
 /** Navigation, drafts, local review state, device copy and share, and confirmation decisions. */
 export const uiActions = {
@@ -137,7 +138,9 @@ export const uiActions = {
               ? 'joinName'
               : input.field.startsWith('create.')
                 ? 'createDraft'
-                : 'settingsDraft';
+                : input.field.startsWith('expense.')
+                  ? 'expenseDraft'
+                  : 'settingsDraft';
 
       const guard = workflowGuard(ui, intent);
 
@@ -145,7 +148,7 @@ export const uiActions = {
 
       if (!input)
         return ui.memberEdit ||
-          ['create', 'settings', 'join', 'rejoin'].includes(ui.view)
+          ['create', 'settings', 'expense', 'join', 'rejoin'].includes(ui.view)
           ? null
           : unavailable('form_not_open', 'Open a form or edit a member first.');
 
@@ -213,6 +216,79 @@ export const uiActions = {
     example: { visible: false },
     run: async (host, input, ui) =>
       ui.update({ showNoticeSummary: input.visible }),
+  }),
+  showExpense: defineAction({
+    workflow: 'navigate',
+    group: 'UI',
+    description: 'Open the expense form, for a new expense or one to change.',
+    input: z.object({
+      expenseId: choice('expense', 'The expense to change; omit it to add one.').optional(),
+    }),
+    example: {},
+    requires: ['openGroup'],
+    unavailable: ({ state }, input) => (input?.expenseId ? requireExpense(state, input.expenseId, 'active') : null),
+    run: async (host, input, ui, platform) =>
+      ui.showExpense(input.expenseId ?? null, suggestedCurrency(openSnapshot(host.snapshot()), platform.localeRegion)),
+  }),
+  chooseExpensePayer: defineAction({
+    workflow: 'expenseDraft',
+    group: 'UI',
+    description: 'Choose who paid the expense being entered.',
+    input: z.object({ memberId: choice('member', 'The member who paid.') }),
+    example: { memberId: 'member-1' },
+    requires: ['openGroup'],
+    unavailable: ({ state }, input) => requireMember(state, input?.memberId),
+    run: async (host, input, ui) => ui.changeExpense(() => ({ paidBy: input.memberId })),
+  }),
+  toggleExpenseParticipant: defineAction({
+    workflow: 'expenseDraft',
+    group: 'UI',
+    description: 'Include a member in the expense being entered, or leave them out.',
+    input: z.object({ memberId: choice('member', 'The member to include or leave out.') }),
+    example: { memberId: 'member-2' },
+    requires: ['openGroup'],
+    unavailable: ({ state, ui }, input) =>
+      input && ui.expense.participants.includes(input.memberId) ? null : requireMember(state, input?.memberId),
+    run: async (host, input, ui) => {
+      const members = openSnapshot(host.snapshot())?.members ?? [];
+
+      ui.changeExpense((draft) => {
+        const included = draft.participants.includes(input.memberId);
+        const chosen = included ? draft.participants.filter((memberId) => memberId !== input.memberId) : [...draft.participants, input.memberId];
+
+        // Group order keeps rows in place as people are included.
+        return { participants: members.flatMap((member) => (chosen.includes(member.id) ? [member.id] : [])) };
+      });
+    },
+  }),
+  setExpenseSplit: defineAction({
+    workflow: 'expenseDraft',
+    group: 'UI',
+    description: 'Split the expense being entered equally, by shares, or by amounts.',
+    input: z.object({ split: z.enum(expenseSplits).meta({ description: 'How to divide the expense.' }) }),
+    example: { split: 'shares' },
+    requires: ['openGroup'],
+    run: async (host, input, ui) =>
+      ui.changeExpense((draft) => (draft.split === input.split ? {} : { split: input.split, values: {} })),
+  }),
+  setExpenseValue: defineAction({
+    workflow: 'expenseDraft',
+    group: 'UI',
+    description: 'Enter a participant’s shares or amount for the expense being entered.',
+    input: z.object({
+      memberId: choice('member', 'The participant.'),
+      value: z.string().meta({ description: 'Shares, such as 2, or an amount, such as 12.50; blank shares what is left.' }),
+    }),
+    example: { memberId: 'member-2', value: '2' },
+    requires: ['openGroup'],
+    unavailable: ({ ui }, input) =>
+      ui.expense.split === 'equal'
+        ? unavailable('split_equal', 'Split by shares or amounts first.')
+        : input && !ui.expense.participants.includes(input.memberId)
+          ? unavailable('not_participant', 'Include this member first.')
+          : null,
+    run: async (host, input, ui) =>
+      ui.changeExpense((draft) => ({ values: { ...draft.values, [input.memberId]: input.value } })),
   }),
   beginAddMember: defineAction({
     waitsFor: () => [editorLock],
