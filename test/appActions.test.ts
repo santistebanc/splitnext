@@ -67,7 +67,9 @@ function createHost(setup: Setup = {}) {
       if (!snapshot) throw new Error('no_group_selected');
       const command = commandFromIntent(intent, snapshot, () => 'generated');
 
-      return record([command.type, ...Object.values(command.payload).filter((value) => value !== 'generated')].join(' '));
+      const values = Object.values(command.payload).filter((value) => value !== 'generated');
+
+      return record([command.type, ...values.map((value) => JSON.stringify(value).replace(/^"|"$/g, ''))].join(' '));
     },
     regenerateInvite: () => record('regenerateInvite'),
     retryNotice: (id) => record(`retryNotice ${id}`),

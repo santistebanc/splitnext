@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { groupNameSchema, memberNameSchema, participantsForMember, requiresServerDecision } from '@splitnext/client';
-import { unavailable, editorLock, defineAction, openSnapshot, requireMember, requireRemovedMember, requireNotice, requireName, memberResource, noticeResources, empty, choice, suggested } from './define';
+import { allocate, currencyCodeSchema, expenseDescriptionSchema, groupNameSchema, memberNameSchema, parseAmount, participantsForMember, requiresServerDecision } from '@splitnext/client';
+import { equalParts } from '../expenses';
+import { unavailable, editorLock, defineAction, openSnapshot, requireExpense, requireExpenseEntry, expenseResource, requireMember, requireRemovedMember, requireNotice, requireName, memberResource, noticeResources, empty, choice, suggested } from './define';
 
 /** Changes to the shared ledger; they can queue offline. */
 export const ledgerActions = {
@@ -134,6 +135,96 @@ export const ledgerActions = {
     requires: ['openGroup'],
     unavailable: ({ state }, input) => requireRemovedMember(state, input?.memberId),
     run: (host, input) => host.submit({ type: 'member.restore', payload: { member_id: input.memberId } }),
+  }),
+  recordExpense: defineAction({
+    group: 'Ledger changes',
+    description: 'Record an expense in the open group, split equally between its current members.',
+    input: z.object({
+      description: expenseDescriptionSchema.meta({ description: 'What the expense was for.' }),
+      amount: z.string().meta({ description: 'The amount paid, such as 12.50.' }),
+      currency: suggested(currencyCodeSchema, 'currency', 'The ISO currency code, such as EUR.'),
+      paidBy: choice('member', 'The member who paid.'),
+    }),
+    example: { description: 'Dinner', amount: '42.50', currency: 'EUR', paidBy: 'member-1' },
+    requires: ['openGroup'],
+    unavailable: ({ state }, input) => requireExpenseEntry(input) ?? requireMember(state, input?.paidBy),
+    run: (host, input) =>
+      host.submit({
+        type: 'expense.record',
+        payload: {
+          description: input.description,
+          currency: input.currency,
+          total: parseAmount(input.amount, input.currency) ?? 0,
+          paid_by: input.paidBy,
+          parts: equalParts(openSnapshot(host.snapshot())),
+        },
+      }),
+  }),
+  editExpense: defineAction({
+    holds: ({ state }, input) => expenseResource(state, input?.expenseId),
+    group: 'Ledger changes',
+    description: 'Change what was entered for an expense, keeping how it is split.',
+    input: z.object({
+      expenseId: choice('expense', 'The expense to change.'),
+      description: expenseDescriptionSchema.meta({ description: 'What the expense was for.' }),
+      amount: z.string().meta({ description: 'The amount paid, such as 12.50.' }),
+      currency: suggested(currencyCodeSchema, 'currency', 'The ISO currency code, such as EUR.'),
+      paidBy: choice('member', 'The member who paid.'),
+    }),
+    example: { expenseId: 'expense-1', description: 'Dinner', amount: '45.00', currency: 'EUR', paidBy: 'member-1' },
+    requires: ['openGroup'],
+    unavailable: ({ state }, input) => {
+      const blocked = requireExpense(state, input?.expenseId, 'active') ?? requireExpenseEntry(input) ?? requireMember(state, input?.paidBy);
+      const expense = openSnapshot(state)?.expenses.find((entry) => entry.id === input?.expenseId);
+
+      if (blocked || !input || !expense) return blocked;
+
+      return allocate(parseAmount(input.amount, input.currency) ?? 0, expense.parts).ok
+        ? null
+        : unavailable('invalid_input', 'The new amount does not fit how this expense is split.');
+    },
+    run: (host, input) => {
+      const expense = openSnapshot(host.snapshot())?.expenses.find((entry) => entry.id === input.expenseId);
+
+      if (!expense) throw new Error('expense_not_found');
+
+      return host.submit({
+        type: 'expense.edit',
+        payload: {
+          expense_id: expense.id,
+          expected_version: expense.version,
+          description: input.description,
+          currency: input.currency,
+          total: parseAmount(input.amount, input.currency) ?? 0,
+          paid_by: input.paidBy,
+          parts: expense.parts,
+        },
+      });
+    },
+  }),
+  removeExpense: defineAction({
+    holds: ({ state }, input) => expenseResource(state, input?.expenseId),
+    group: 'Ledger changes',
+    description: 'Take an expense out of the balances of the open group.',
+    input: z.object({
+      expenseId: choice('expense', 'The expense to remove.'),
+    }),
+    example: { expenseId: 'expense-1' },
+    requires: ['openGroup'],
+    unavailable: ({ state }, input) => requireExpense(state, input?.expenseId, 'active'),
+    run: (host, input) => host.submit({ type: 'expense.remove', payload: { expense_id: input.expenseId } }),
+  }),
+  restoreExpense: defineAction({
+    holds: ({ state }, input) => expenseResource(state, input?.expenseId),
+    group: 'Ledger changes',
+    description: 'Return a removed expense to the balances of the open group, as it was recorded.',
+    input: z.object({
+      expenseId: choice('removedExpense', 'The removed expense to restore.'),
+    }),
+    example: { expenseId: 'expense-1' },
+    requires: ['openGroup'],
+    unavailable: ({ state }, input) => requireExpense(state, input?.expenseId, 'removed'),
+    run: (host, input) => host.submit({ type: 'expense.restore', payload: { expense_id: input.expenseId } }),
   }),
   setPreferredMember: defineAction({
     holds: ({ state }) => [`preference:${state.group?.group_id}`],

@@ -21,6 +21,9 @@ How it fits together, and the rules each part keeps, is in
   Regeneration invalidates the previous link.
 - Offline-capable group rename and member add, rename, remove, and restore
   commands.
+- Offline-capable expense record, edit, remove, and restore commands, in any
+  currency, with allocations and burden-fair rounding fixed by the server and
+  balances kept per currency.
 - Nonexclusive preferred-member selection (the member the UI calls “you”).
 - Leaving and rejoining a group without revoking its permanent access grant.
 - A per-identity list of accessible groups, marking the ones it left, backed

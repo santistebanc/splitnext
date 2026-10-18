@@ -56,6 +56,7 @@ export function scenarioReplica(
   const snapshot: Snapshot = {
     group: { id: fixtureGroupId, name: 'Workbench trip', created_at: at },
     members,
+    expenses: [],
     access_grants: [
       {
         identity_id: fixtureIdentityId,

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
-import type { ClientReplicaState } from '@splitnext/client';
+import { formatAmount, type ClientReplicaState } from '@splitnext/client';
 import type { AppController } from '../model/controller';
 import { Button, ErrorMessage, s } from './components';
 import { useActionCall } from './useActionCall';
@@ -25,6 +25,14 @@ function intendedChange(notice: Notice): string {
       return 'Remove this member';
     case 'member.restore':
       return 'Restore this member';
+    case 'expense.record':
+      return `Add “${command.payload.description}” for ${formatAmount(command.payload.total, command.payload.currency)} ${command.payload.currency}`;
+    case 'expense.edit':
+      return `Change “${command.payload.description}”`;
+    case 'expense.remove':
+      return 'Remove this expense';
+    case 'expense.restore':
+      return 'Restore this expense';
     case 'preference.set':
       return 'Change who this installation calls “you”';
     case 'group.leave':
@@ -37,6 +45,9 @@ function currentResult(notice: Notice): string {
 
   if (current?.kind === 'group')
     return `The group is currently called “${current.group.name}”.`;
+
+  if (current?.kind === 'expense')
+    return `The expense is currently “${current.expense.description}” for ${formatAmount(current.expense.total, current.expense.currency)} ${current.expense.currency}${current.expense.status === 'removed' ? ' (removed)' : ''}.`;
 
   if (current?.kind === 'member')
     return `The member is currently “${current.member.display_name}” (${current.member.status === 'active' ? 'active' : 'removed'}).`;
@@ -91,6 +102,8 @@ export function NoticesPanel(props: NoticesPanelProps) {
                 ? 'Another accepted change made your original edit out of date.'
                 : notice.outcome.reason === 'member_removed'
                   ? 'That member was removed before the change arrived.'
+                  : notice.outcome.reason === 'expense_removed'
+                    ? 'That expense was removed before the change arrived.'
                   : notice.outcome.reason === 'group_left'
                     ? 'You left this group before the change arrived.'
                     : 'The group’s current state does not allow this change.'}

@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { activeMembers, memberLabel, nameOrdinals, preferredMember, formatInviteLink } from '@splitnext/client';
+import { currentExpenses, expenseLabel, recentCurrencies } from './expenses';
 import type { AppState } from './controller';
 import type { UiState } from './uiState';
 
 export type InputState = AppState & { ui?: UiState };
 
 export const valueSources = [
-  'member', 'preferredMember', 'removedMember', 'group', 'notice', 'inviteLink',
+  'member', 'preferredMember', 'removedMember', 'expense', 'removedExpense', 'currency', 'group', 'notice', 'inviteLink',
   'memberName', 'groupName', 'joinMember', 'confirmation',
 ] as const;
 
@@ -62,6 +63,14 @@ export function sourceOptions(
       return (snapshot?.members ?? [])
         .filter((member) => member.status !== 'active')
         .map((member) => ({ value: member.id, label: `${label(member)} (removed)` }));
+    case 'expense':
+      return currentExpenses(snapshot).map((expense) => ({ value: expense.id, label: expenseLabel(expense) }));
+    case 'removedExpense':
+      return (snapshot?.expenses ?? [])
+        .filter((expense) => expense.status === 'removed')
+        .map((expense) => ({ value: expense.id, label: `${expenseLabel(expense)} (removed)` }));
+    case 'currency':
+      return [...new Set([...recentCurrencies(snapshot), 'EUR'])].map((currency) => ({ value: currency, label: currency }));
     case 'memberName':
       return members.map((member) => ({
         value: member.display_name,

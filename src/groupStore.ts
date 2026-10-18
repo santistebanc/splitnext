@@ -391,6 +391,7 @@ export class GroupStore {
           created_at: group.created_at,
         },
         members: [member],
+        expenses: [],
         access_grants: [access],
         invite,
       },

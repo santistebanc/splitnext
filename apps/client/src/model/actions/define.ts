@@ -1,6 +1,6 @@
 import type { ActionExecutions, PendingExecution } from '../executions';
 import { z } from 'zod';
-import { activeMembers, type JsonValue } from '@splitnext/client';
+import { activeMembers, currencyCodeSchema, expenseDescriptionSchema, parseAmount, type JsonValue } from '@splitnext/client';
 import type { ActionInvocation, AppController, AppState } from '../controller';
 import type { AppUiState, UiState } from '../uiState';
 import type { ValueSource } from '../actionInputs';
@@ -397,6 +397,34 @@ export function requireRemovedMember(
     : unavailable('member_not_found', 'Choose a removed member.');
 }
 
+export function requireExpense(
+  state: AppState,
+  expenseId: string | undefined,
+  status: 'active' | 'removed',
+): BlockedAction | null {
+  const expenses = openSnapshot(state)?.expenses.filter((expense) => expense.status === status) ?? [];
+
+  return expenses.some((expense) => expenseId === undefined || expense.id === expenseId)
+    ? null
+    : unavailable('expense_not_found', status === 'active' ? 'Choose a current expense.' : 'Choose a removed expense.');
+}
+
+/** What a person entered for an expense, checked before it becomes a command. */
+export function requireExpenseEntry(input?: { description: string; amount: string; currency: string }): BlockedAction | null {
+  if (!input) return null;
+
+  return (
+    requireName(expenseDescriptionSchema, input.description, 'description') ??
+    (currencyCodeSchema.safeParse(input.currency).success && parseAmount(input.amount, input.currency)
+      ? null
+      : unavailable('invalid_input', 'Enter an amount and a currency, such as 12.50 EUR.'))
+  );
+}
+
+export function expenseResource(state: AppState, expenseId: string | undefined | null): string[] {
+  return expenseId ? [`expense:${state.group?.group_id}:${expenseId}`] : [];
+}
+
 export function memberResource(state: AppState, memberId: string | undefined | null): string[] {
   return memberId ? [`member:${state.group?.group_id}:${memberId}`] : [];
 }
@@ -408,7 +436,11 @@ export function noticeResources(state: AppState, commandId?: string): string[] {
   const target = notice.outcome.target;
 
   return [`notice:${state.group?.group_id}:${commandId}`,
-    ...(target.kind === 'member' ? memberResource(state, target.id) : target.kind === 'group' ? [`groupName:${state.group?.group_id}`] : [])];
+    ...(target.kind === 'member'
+      ? memberResource(state, target.id)
+      : target.kind === 'expense'
+        ? expenseResource(state, target.id)
+        : target.kind === 'group' ? [`groupName:${state.group?.group_id}`] : [])];
 }
 
 export const empty = z.object({});
