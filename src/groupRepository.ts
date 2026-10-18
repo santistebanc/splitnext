@@ -4,7 +4,7 @@ import {
   type AuditEvent,
   type NewAuditEvent,
 } from './domain/audit';
-import type { CommandOutcome, MemberAlias } from './domain/commands';
+import type { CommandOutcome } from './domain/commands';
 import { groupSnapshotSchema, type GroupSnapshot } from './domain/sync';
 
 import type { GroupPersistence, GroupRepository, StoredGroupCreation, StoredGroupState, StoredCommandOutcome, StoredJoinOutcome, StoredInvite } from './groupPersistence';
@@ -73,11 +73,6 @@ export class DurableObjectGroupRepository implements GroupRepository {
          response_json TEXT NOT NULL CHECK (json_valid(response_json))
        );
 
-       CREATE TABLE IF NOT EXISTS group_member_aliases (
-         alias_id TEXT PRIMARY KEY,
-         member_id TEXT NOT NULL
-       );
-
        CREATE TABLE IF NOT EXISTS group_invites (
          id TEXT PRIMARY KEY,
          token_hash TEXT NOT NULL UNIQUE,
@@ -99,13 +94,22 @@ export class DurableObjectGroupRepository implements GroupRepository {
 
       if (!version) throw new Error('group_schema_version_missing');
 
+      if (!['1', '2', '3'].includes(version.value))
+        throw new Error('unsupported_group_schema_version');
+
       if (version.value === '1') {
         this.storage.sql.exec(
           `ALTER TABLE group_invites DROP COLUMN expires_at;
            UPDATE group_metadata SET value = '2' WHERE key = 'schema_version';`,
         );
-      } else if (version.value !== '2') {
-        throw new Error('unsupported_group_schema_version');
+      }
+
+      // Members no longer merge by name, so nothing reads their aliases.
+      if (version.value !== '3') {
+        this.storage.sql.exec(
+          `DROP TABLE IF EXISTS group_member_aliases;
+           UPDATE group_metadata SET value = '3' WHERE key = 'schema_version';`,
+        );
       }
     });
   }
@@ -232,22 +236,6 @@ class SQLiteGroupPersistence implements GroupPersistence {
       outcome.identity_id,
       outcome.request_json,
       JSON.stringify(outcome.response),
-    );
-  }
-
-  memberAliases(): Map<string, string> {
-    const rows = this.sql
-      .exec<MemberAlias>('SELECT alias_id, member_id FROM group_member_aliases')
-      .toArray();
-
-    return new Map(rows.map((row) => [row.alias_id, row.member_id]));
-  }
-
-  recordMemberAlias(alias: MemberAlias): void {
-    this.sql.exec(
-      `INSERT INTO group_member_aliases (alias_id, member_id) VALUES (?, ?)`,
-      alias.alias_id,
-      alias.member_id,
     );
   }
 

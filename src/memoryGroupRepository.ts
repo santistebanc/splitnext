@@ -1,5 +1,4 @@
 import { auditEventSchema, newAuditEventSchema, type AuditEvent, type NewAuditEvent } from './domain/audit';
-import type { MemberAlias } from './domain/commands';
 import type { GroupPersistence, GroupRepository, StoredGroupState, StoredCommandOutcome, StoredJoinOutcome, StoredInvite } from './groupPersistence';
 
 type MemoryGroupData = {
@@ -7,7 +6,6 @@ type MemoryGroupData = {
   auditEvents: AuditEvent[];
   commandOutcomes: StoredCommandOutcome[];
   joinOutcomes: StoredJoinOutcome[];
-  memberAliases: MemberAlias[];
   invites: StoredInvite[];
 };
 
@@ -16,7 +14,6 @@ export type GroupRepositoryInspection = {
   audit_events: AuditEvent[];
   command_outcomes: StoredCommandOutcome[];
   join_outcomes: StoredJoinOutcome[];
-  member_aliases: MemberAlias[];
   invites: StoredInvite[];
 };
 
@@ -30,7 +27,6 @@ export class MemoryGroupRepository implements GroupRepository {
           auditEvents: clone(initial.audit_events),
           commandOutcomes: clone(initial.command_outcomes),
           joinOutcomes: clone(initial.join_outcomes),
-          memberAliases: clone(initial.member_aliases),
           invites: clone(initial.invites),
         }
       : emptyMemoryData();
@@ -51,7 +47,6 @@ export class MemoryGroupRepository implements GroupRepository {
       audit_events: clone(this.data.auditEvents),
       command_outcomes: clone(this.data.commandOutcomes),
       join_outcomes: clone(this.data.joinOutcomes),
-      member_aliases: clone(this.data.memberAliases),
       invites: clone(this.data.invites),
     };
   }
@@ -96,16 +91,6 @@ class MemoryGroupPersistence implements GroupPersistence {
 
   recordJoinOutcome(outcome: StoredJoinOutcome): void {
     this.data.joinOutcomes.push(clone(outcome));
-  }
-
-  memberAliases(): Map<string, string> {
-    return new Map(
-      this.data.memberAliases.map((alias) => [alias.alias_id, alias.member_id]),
-    );
-  }
-
-  recordMemberAlias(alias: MemberAlias): void {
-    this.data.memberAliases.push(clone(alias));
   }
 
   findInvite(inviteId: string): StoredInvite | null {
@@ -156,7 +141,6 @@ function emptyMemoryData(): MemoryGroupData {
     auditEvents: [],
     commandOutcomes: [],
     joinOutcomes: [],
-    memberAliases: [],
     invites: [],
   };
 }

@@ -1,7 +1,7 @@
 import type { JoinGroupCommand, PreferredMemberChoice } from './access';
-import type { CommandTransition, MemberAlias } from './commands/define';
+import type { CommandTransition } from './commands/define';
 import type { GroupAccessGrant } from './groups';
-import { memberNameKey, type LedgerMember } from './members';
+import type { LedgerMember } from './members';
 import type { GroupSnapshot } from './sync';
 
 export type JoinTransition =
@@ -12,11 +12,10 @@ export type JoinTransition =
       nextActorNumber: number;
       /** Null when the join changed nothing, such as a repeated choice. */
       audit: CommandTransition['audit'];
-      memberAlias?: MemberAlias;
     }
   | {
       ok: false;
-      error: 'member_not_found' | 'member_archived' | 'member_id_exists';
+      error: 'member_not_found' | 'member_removed' | 'member_id_exists';
     };
 
 type PreferredMemberResult =
@@ -24,17 +23,16 @@ type PreferredMemberResult =
       ok: true;
       member: LedgerMember;
       created: boolean;
-      memberAlias?: MemberAlias;
     }
   | {
       ok: false;
-      error: 'member_not_found' | 'member_archived' | 'member_id_exists';
+      error: 'member_not_found' | 'member_removed' | 'member_id_exists';
     };
 
 /**
  * Grants or restores access and chooses who the identity is: an existing
- * active member, or a new one, merged into an active member with the same
- * name. Rejoining keeps the identity's actor handle.
+ * active member, or a new one even if another member has its name.
+ * Rejoining keeps the identity's actor handle.
  */
 export function applyGroupJoin(
   snapshot: GroupSnapshot,
@@ -83,7 +81,7 @@ export function applyGroupJoin(
       )
     : [...snapshot.access_grants, access];
 
-  const transition: JoinTransition = {
+  return {
     ok: true,
     snapshot: {
       ...snapshot,
@@ -112,10 +110,6 @@ export function applyGroupJoin(
             },
           },
   };
-
-  if (preferred.memberAlias) transition.memberAlias = preferred.memberAlias;
-
-  return transition;
 }
 
 function resolvePreferredMember(
@@ -132,28 +126,12 @@ function resolvePreferredMember(
 
     return member.status === 'active'
       ? { ok: true, member, created: false }
-      : { ok: false, error: 'member_archived' };
+      : { ok: false, error: 'member_removed' };
   }
 
   if (members.some((member) => member.id === choice.member_id)) {
     return { ok: false, error: 'member_id_exists' };
   }
-
-  const requestedNameKey = memberNameKey(choice.display_name);
-
-  const existing = members.find(
-    (member) =>
-      member.status === 'active' &&
-      memberNameKey(member.display_name) === requestedNameKey,
-  );
-
-  if (existing)
-    return {
-      ok: true,
-      member: existing,
-      created: false,
-      memberAlias: { alias_id: choice.member_id, member_id: existing.id },
-    };
 
   return {
     ok: true,

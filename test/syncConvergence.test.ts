@@ -17,7 +17,6 @@ import {
 import type { ClientStorageUpdate } from '../src/client/storage';
 import { requiresServerDecision } from '../src/domain/commands';
 import { createIdentifier } from '../src/domain/ids';
-import { memberNameKey } from '../src/domain/members';
 import { groupSnapshotSchema, type GroupSnapshot } from '../src/domain/sync';
 import { memoryTransport } from '../src/memoryTransport';
 import { createDeviceSecret } from './harness';
@@ -71,7 +70,8 @@ const commandArbitrary = fc.oneof(
   fc.record({ type: fc.constant('group.rename' as const), name: fc.constantFrom(...groupNames) }),
   fc.record({ type: fc.constant('member.create' as const), name: fc.constantFrom(...memberNames) }),
   fc.record({ type: fc.constant('member.rename' as const), member: pick, name: fc.constantFrom(...memberNames) }),
-  fc.record({ type: fc.constant('member.archive' as const), member: pick }),
+  fc.record({ type: fc.constant('member.remove' as const), member: pick }),
+  fc.record({ type: fc.constant('member.restore' as const), member: pick }),
   fc.record({ type: fc.constant('preference.set' as const), member: pick }),
   fc.record({ type: fc.constant('group.leave' as const) }),
 );
@@ -106,7 +106,8 @@ function intentFor(command: CommandStep, snapshot: GroupSnapshot): CommandIntent
       return memberId ? { type: command.type, payload: { member_id: memberId, display_name: command.name } } : null;
     }
 
-    case 'member.archive':
+    case 'member.remove':
+    case 'member.restore':
     case 'preference.set': {
       const memberId = member(command.member);
 
@@ -680,7 +681,7 @@ async function attempt<T>(injected: Injected, operation: () => Promise<T>, racin
 }
 
 /**
- * A join may race with the chosen member being archived meanwhile and, when
+ * A join may race with the chosen member being removed meanwhile and, when
  * steps run together, with the link being replaced.
  */
 async function join(
@@ -696,7 +697,7 @@ async function join(
   } catch (error) {
     if (!(error instanceof SplitnextRequestError)) throw error;
 
-    if (error.code === 'member_archived' || error.code === 'member_not_found') return 'rejected';
+    if (error.code === 'member_removed' || error.code === 'member_not_found') return 'rejected';
 
     if (racing && (error.code === 'invite_replaced' || error.code === 'invite_invalid')) return 'rejected';
 
@@ -710,7 +711,6 @@ function expectValidSnapshot(snapshot: GroupSnapshot): void {
   const active = activeMembers(snapshot);
 
   expect(new Set(snapshot.members.map((entry) => entry.id)).size).toBe(snapshot.members.length);
-  expect(new Set(active.map((entry) => memberNameKey(entry.display_name))).size).toBe(active.length);
 
   for (const grant of snapshot.access_grants) {
     if (grant.hidden_at) expect(grant.preferred_member_id).toBeNull();

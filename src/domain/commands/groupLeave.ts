@@ -26,7 +26,6 @@ export const groupLeftAuditSchema = z.object({
 export const groupLeave = defineCommand<LeaveGroupCommand, IntentOf<LeaveGroupCommand>>({
   requiresServerDecision: true,
   target: (snapshot, identityId) => ({ kind: 'access', id: identityId }),
-  resolveAliases: (command) => command,
   complete: (commandId, intent) => ({ command_id: commandId, ...intent }),
   retryIntent: (command) => ({ type: command.type, payload: {} }),
   apply(snapshot, identityId, command, appliedAt) {

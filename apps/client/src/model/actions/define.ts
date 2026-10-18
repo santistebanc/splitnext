@@ -386,6 +386,17 @@ export function requireName(
     : unavailable('invalid_input', `Enter a valid ${label}.`);
 }
 
+export function requireRemovedMember(
+  state: AppState,
+  memberId?: string,
+): BlockedAction | null {
+  const removed = openSnapshot(state)?.members.filter((member) => member.status !== 'active') ?? [];
+
+  return removed.some((member) => memberId === undefined || member.id === memberId)
+    ? null
+    : unavailable('member_not_found', 'Choose a removed member.');
+}
+
 export function memberResource(state: AppState, memberId: string | undefined | null): string[] {
   return memberId ? [`member:${state.group?.group_id}:${memberId}`] : [];
 }

@@ -123,18 +123,10 @@ describe('member.create sync command', () => {
     const response = await sync(fixture, 1, [first, second]);
 
     expect(await response.json()).toMatchObject({
-      revision: 2,
+      revision: 3,
       outcomes: [
         { command_id: first.command_id, status: 'applied' },
-        {
-          command_id: second.command_id,
-          status: 'no_effect',
-          reason: 'member_merged',
-          server_state: {
-            kind: 'member',
-            member: { id: first.payload.member_id, display_name: 'Alex' },
-          },
-        },
+        { command_id: second.command_id, status: 'applied' },
       ],
       state: {
         kind: 'snapshot',
@@ -142,6 +134,7 @@ describe('member.create sync command', () => {
           members: [
             { display_name: 'Santi' },
             { id: first.payload.member_id, display_name: 'Alex' },
+            { id: second.payload.member_id, display_name: 'alex' },
           ],
         },
       },

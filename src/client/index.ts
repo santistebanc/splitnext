@@ -449,7 +449,7 @@ export {
   type InvitePreview,
 } from '../domain/invites';
 
-export { activeMembers, joinedParticipants, participantsForMember, preferredMember, previewFromSnapshot } from '../domain/selectors';
+export { activeMembers, joinedParticipants, memberLabel, nameOrdinals, participantsForMember, preferredMember, previewFromSnapshot } from '../domain/selectors';
 
 export { requiresServerDecision, type CommandIntent } from '../domain/commands';
 

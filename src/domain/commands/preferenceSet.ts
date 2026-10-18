@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { groupAccessGrantSchema } from '../groups';
 import { identifierSchema } from '../ids';
-import { defineCommand, rejected, replaceAccess, unchanged, withResolvedMember, type IntentOf } from './define';
+import { defineCommand, rejected, replaceAccess, unchanged, type IntentOf } from './define';
 import { groupCommandTypes } from './outcomes';
 
 export const setPreferredMemberCommandSchema = z.object({
@@ -22,9 +22,8 @@ export const preferenceChangedAuditSchema = z.object({
 export const preferenceSet = defineCommand<SetPreferredMemberCommand, IntentOf<SetPreferredMemberCommand>>({
   requiresServerDecision: false,
   target: (snapshot, identityId) => ({ kind: 'access', id: identityId }),
-  resolveAliases: withResolvedMember,
   complete: (commandId, intent) => ({ command_id: commandId, ...intent }),
-  retryIntent: (command, member) => ({ type: command.type, payload: { member_id: member(command.payload.member_id) } }),
+  retryIntent: (command) => ({ type: command.type, payload: { member_id: command.payload.member_id } }),
   apply(snapshot, identityId, command) {
     const target = { kind: 'access' as const, id: identityId };
     const access = snapshot.access_grants.find((candidate) => candidate.identity_id === identityId);
@@ -37,7 +36,7 @@ export const preferenceSet = defineCommand<SetPreferredMemberCommand, IntentOf<S
 
     if (!member) return rejected(snapshot, target, 'member_not_found');
 
-    if (member.status === 'archived') return rejected(snapshot, target, 'member_archived');
+    if (member.status !== 'active') return rejected(snapshot, target, 'member_removed');
 
     if (access.preferred_member_id === member.id) return unchanged(snapshot, target, { kind: 'access', access });
 

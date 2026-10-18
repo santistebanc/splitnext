@@ -125,7 +125,7 @@ describe('app actions', () => {
     expect(actions.state().executions).toMatchObject([{ name: 'saveMemberEdit', origin: 'ui' }]);
     expect(actions.availability('saveMemberEdit', {})).toMatchObject({ available: false, error: 'operation_busy' });
     expect(await actions.dispatchJson('saveMemberEdit', {}, { origin: 'devtools' })).toMatchObject({ status: 'failed', error: 'operation_busy' });
-    expect(await actions.dispatch('archiveMember', { memberId: target })).toMatchObject({ status: 'failed', error: 'operation_busy' });
+    expect(await actions.dispatch('removeMember', { memberId: target })).toMatchObject({ status: 'failed', error: 'operation_busy' });
     expect(await actions.dispatch('changeDraft', { field: 'member.name', value: 'Lost draft' })).toMatchObject({ status: 'failed', error: 'operation_busy' });
     expect(await actions.dispatch('cancelMemberEdit', {})).toMatchObject({ status: 'failed', error: 'operation_busy' });
     expect(await actions.dispatch('showGroups', {})).toMatchObject({ status: 'failed', error: 'operation_busy' });
@@ -696,7 +696,7 @@ describe('app actions', () => {
     const snapshot = state.group?.projected_snapshot;
 
     if (!snapshot) throw new Error('missing_fixture');
-    snapshot.members[1]!.status = 'archived';
+    snapshot.members[1]!.status = 'hidden';
     const input = { memberId: 'member-2______________' };
     expect(actions.availability('setPreferredMember', input)).toMatchObject({
       available: false,

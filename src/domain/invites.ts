@@ -67,6 +67,9 @@ export const invitePreviewSchema = z.object({
     z.object({
       id: identifierSchema,
       display_name: z.string(),
+      name_ordinal: z.number().int().positive().nullable().meta({
+        description: 'Tells apart members sharing this name, as in “Ana (2)”.',
+      }),
       in_use: z.boolean().meta({
         description: 'Whether a current participant uses this member name.',
       }),

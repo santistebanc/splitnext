@@ -168,7 +168,6 @@ describe('in-memory group repository adapter', () => {
       audit_events: [],
       command_outcomes: [],
       join_outcomes: [],
-      member_aliases: [],
       invites: [],
     });
   });

@@ -28,7 +28,6 @@ export const groupRenamedAuditSchema = z.object({
 export const groupRename = defineCommand<RenameGroupCommand, IntentOf<RenameGroupCommand, 'expected_name'>>({
   requiresServerDecision: false,
   target: (snapshot) => ({ kind: 'group', id: snapshot.group.id }),
-  resolveAliases: (command) => command,
   complete: (commandId, intent, snapshot) => ({
     command_id: commandId,
     type: intent.type,

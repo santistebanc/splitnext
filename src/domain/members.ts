@@ -6,7 +6,9 @@ export const memberNameSchema = z.string().trim().min(1).max(100);
 export const ledgerMemberSchema = z.object({
   id: identifierSchema,
   display_name: z.string(),
-  status: z.enum(['active', 'archived']),
+  // Removing hides a member that expenses name and deletes any other; both
+  // stay in the group so a late expense or a restore can still reach them.
+  status: z.enum(['active', 'hidden', 'deleted']),
   created_at: z.iso.datetime(),
   updated_at: z.iso.datetime(),
 });

@@ -173,7 +173,7 @@ export function renameNotice(
       command_id: commandId,
       command_type: 'member.rename',
       status,
-      reason: status === 'rejected' ? 'member_name_taken' : null,
+      reason: status === 'rejected' ? 'member_removed' : null,
       audit_id: null,
       target: { kind: 'member', id: memberId },
       server_state: {

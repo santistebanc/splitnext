@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { groupNameSchema, memberNameSchema, participantsForMember, requiresServerDecision } from '@splitnext/client';
-import { unavailable, editorLock, defineAction, openSnapshot, requireMember, requireNotice, requireName, memberResource, noticeResources, empty, choice, suggested } from './define';
+import { unavailable, editorLock, defineAction, openSnapshot, requireMember, requireRemovedMember, requireNotice, requireName, memberResource, noticeResources, empty, choice, suggested } from './define';
 
 /** Changes to the shared ledger; they can queue offline. */
 export const ledgerActions = {
@@ -105,7 +105,7 @@ export const ledgerActions = {
         payload: { member_id: input.memberId, display_name: input.name, expected_display_name: input.expectedName },
       }),
   }),
-  archiveMember: defineAction({
+  removeMember: defineAction({
     holds: ({ state }, input) => memberResource(state, input?.memberId),
     group: 'Ledger changes',
     description:
@@ -117,11 +117,23 @@ export const ledgerActions = {
     requires: ['openGroup'],
     unavailable: ({ state }, input) => requireMember(state, input?.memberId),
     run: async (host, input, ui) => {
-      await host.submit({ type: 'member.archive', payload: { member_id: input.memberId } });
+      await host.submit({ type: 'member.remove', payload: { member_id: input.memberId } });
 
       if (ui.snapshot().memberEdit?.memberId === input.memberId)
         ui.finishMemberEdit();
     },
+  }),
+  restoreMember: defineAction({
+    holds: ({ state }, input) => memberResource(state, input?.memberId),
+    group: 'Ledger changes',
+    description: 'Make a removed member of the open group current again.',
+    input: z.object({
+      memberId: choice('removedMember', 'The removed member to restore.'),
+    }),
+    example: { memberId: 'member-2' },
+    requires: ['openGroup'],
+    unavailable: ({ state }, input) => requireRemovedMember(state, input?.memberId),
+    run: (host, input) => host.submit({ type: 'member.restore', payload: { member_id: input.memberId } }),
   }),
   setPreferredMember: defineAction({
     holds: ({ state }) => [`preference:${state.group?.group_id}`],

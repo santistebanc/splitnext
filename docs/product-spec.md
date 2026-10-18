@@ -93,9 +93,10 @@ this installation cannot observe live presence. A known local outage makes its
 own you badge gray. Multiple tabs for one identity count once. Unassigned identities have no member marker.
 Use a plain Members heading without a count. A cross icon at the end of each
 row removes the member immediately, without a confirmation, including the
-currently selected you member. Removal archives
-the member; the UI calls this removed and shows only current members, without
-a removed-member list or toggle.
+currently selected you member. Removal hides or deletes the member as
+described under Ledger members; the UI calls both removed and shows only
+current members, without a removed-member list or toggle. Restoring a removed
+member will come through the group's Activity.
 Add member inserts a new row in edit mode with a focused Member name field
 without confirm/cancel buttons. Omit visible labels in member edit rows; keep
 accessible field names and a placeholder for a new name. Blur creates a member
@@ -226,31 +227,36 @@ operations remain available without opening an editor, including offline.
 
 - A ledger member is a group-local name used by expenses, balances, and
   settlements. It is not a user account, identity, or access slot.
-- Active member names are unique within a group after normalization.
-- Adding a member whose normalized name matches an active member means the same
-  person. The command has no effect, and the member id the client generated
-  becomes a permanent alias: later commands naming it act on the existing
-  member, so work queued offline against it is not lost.
+- Member names may repeat. Each added member is its own member, even when
+  two devices add the same name while offline (ADR 0020). Wherever a name is
+  shown and another active or hidden member shares it after normalization, the
+  app adds a name ordinal, such as “Ana (2)”, numbered in creation order. The
+  ordinal is never part of the name and disappears once the name is unique.
 - Any participant may add or rename a member.
-- Removing a member archives it rather than erasing it. Historical references
-  remain valid, and an archived member is unavailable for new activity.
-- Archiving a member clears it as the preferred member of every identity that
-  selected it. Those identities remain authorized but become unassigned.
+- Removing a member hides it when any expense names it, removed expenses
+  included, and deletes it otherwise (ADR 0018). Both are kept in the group:
+  historical references remain valid, and neither is offered for new activity.
+  A hidden member still appears in a currency's balances while it is not zero.
+- An expense that arrives after its member was removed still applies; a
+  deleted member it names becomes hidden.
+- Restoring a hidden or deleted member makes it active again.
+- Removing a member clears it as the preferred member of every identity that
+  selected it. Those identities remain authorized but become unassigned, and
+  restoring the member does not bring the choice back.
 - Each identity may change only its own preferred member. It may select any
   active member or create a new one.
 - Preferred-member selection is nonexclusive. Several identities may select the
   same member.
-- Joining or rejoining by entering a name that matches an active member after
-  normalization selects that existing member, even when another identity uses
-  it. No duplicate member is created. The proposed new member id becomes an
-  alias of that existing member, matching the normal member-add behavior.
+- Joining or rejoining as someone new adds a new member, even when an
+  existing member has the same name; choosing an existing member is a
+  separate choice in the join flow.
 - App member rows show the preferred member through the selected person icon,
   without actor-handle subtitles. When an identity selects a member already
   preferred by someone else, the UI names those actor handles in a warning
   but allows the choice.
 - Joining normally requires selecting an active member or creating one, so the
   new identity initially has a preferred member. Being unassigned remains valid
-  after leaving or after that member is archived.
+  after leaving or after that member is removed.
 
 ## Offline client model
 

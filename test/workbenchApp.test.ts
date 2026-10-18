@@ -79,23 +79,24 @@ describe('workbench through production logic', () => {
     app.dispose();
   });
 
-  it('merges duplicate names, retains offline intent, and clears every preference when archiving', async () => {
+  it('keeps repeated names apart, retains offline intent, and clears every preference when removing', async () => {
     const app = await createWorkbenchApp(options);
     const groupId = app.snapshot().group?.group_id;
 
     if (!groupId) throw new Error('missing group');
     await app.setOnline(false);
     await app.submit({ type: 'member.create', payload: { display_name: ' ana ' } });
-    expect(app.snapshot().group?.projected_snapshot?.members).toHaveLength(2);
+    expect(app.snapshot().group?.projected_snapshot?.members).toHaveLength(3);
     expect(app.snapshot().group?.outbox).toHaveLength(1);
     await app.setOnline(true);
     expect(app.snapshot().group?.outbox).toHaveLength(0);
+    expect(app.snapshot().group?.projected_snapshot?.members).toHaveLength(3);
     const member = app.snapshot().group?.projected_snapshot?.members[0];
 
     if (!member) throw new Error('missing member');
-    await app.submit({ type: 'member.archive', payload: { member_id: member.id } });
+    await app.submit({ type: 'member.remove', payload: { member_id: member.id } });
     expect(app.snapshot().group?.projected_snapshot?.access_grants.map((grant) => grant.preferred_member_id)).toEqual([null, null]);
-    expect(app.snapshot().group?.projected_snapshot?.members[0]?.status).toBe('archived');
+    expect(app.snapshot().group?.projected_snapshot?.members[0]?.status).toBe('deleted');
     app.dispose();
   });
 
@@ -119,7 +120,7 @@ describe('workbench through production logic', () => {
     await app.openGroup(group.group_id);
     await app.joinGroup(group.group_id, { kind: 'new', display_name: ' dev ' });
     expect(app.snapshot().group?.hidden).toBe(false);
-    expect(app.snapshot().group?.projected_snapshot?.members).toHaveLength(1);
+    expect(app.snapshot().group?.projected_snapshot?.members).toHaveLength(2);
     app.dispose();
   });
 

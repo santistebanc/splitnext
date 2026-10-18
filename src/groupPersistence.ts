@@ -1,5 +1,5 @@
 import type { AuditEventStore } from './domain/audit';
-import type { CommandOutcome, MemberAlias } from './domain/commands';
+import type { CommandOutcome } from './domain/commands';
 import type { CreatedGroup } from './domain/groups';
 import type { InviteRecord } from './domain/invites';
 import type { GroupSnapshot } from './domain/sync';
@@ -51,8 +51,6 @@ export interface GroupPersistence extends AuditEventStore {
   recordCommandOutcome(outcome: StoredCommandOutcome): void;
   findJoinOutcome(joinId: string): StoredJoinOutcome | null;
   recordJoinOutcome(outcome: StoredJoinOutcome): void;
-  memberAliases(): Map<string, string>;
-  recordMemberAlias(alias: MemberAlias): void;
   findInvite(inviteId: string): StoredInvite | null;
   findInviteByTokenHash(tokenHash: string): StoredInvite | null;
   recordInvite(invite: StoredInvite): void;

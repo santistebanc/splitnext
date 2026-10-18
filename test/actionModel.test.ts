@@ -210,7 +210,7 @@ type Chosen = { name: (typeof actionNames)[number]; input: JsonValue; confirmed:
  */
 function serverDecides(name: string, error: string): boolean {
   return ['checkInvite', 'joinGroup', 'submitJoin'].includes(name) &&
-    ['member_not_found', 'member_archived', 'invite_invalid', 'invite_replaced', 'invite_required', 'group_not_found'].includes(error);
+    ['member_not_found', 'member_removed', 'invite_invalid', 'invite_replaced', 'invite_required', 'group_not_found'].includes(error);
 }
 
 /** After every awaited dispatch nothing is running and each view has its context. */

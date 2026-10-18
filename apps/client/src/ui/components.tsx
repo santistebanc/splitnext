@@ -173,9 +173,7 @@ export function errorMessage(error: Error): string {
       return 'This invitation has been replaced. Ask for the current link.';
     case 'unauthorized':
       return 'This installation can no longer connect. Ask for an invite on a new installation.';
-    case 'member_name_taken':
-      return 'Someone with that name is already in this group. Choose their existing name.';
-    case 'member_archived':
+    case 'member_removed':
       return 'That member has been removed. Choose another member or add a new name.';
     case 'storage_unavailable':
       return 'Changes could not be saved on this device. Free some storage and try again.';
