@@ -11,7 +11,8 @@ export const groupCommandTypes = {
   renameGroup: 'group.rename',
   createMember: 'member.create',
   renameMember: 'member.rename',
-  archiveMember: 'member.archive',
+  removeMember: 'member.remove',
+  restoreMember: 'member.restore',
   setPreferredMember: 'preference.set',
   leaveGroup: 'group.leave',
 } as const;
@@ -23,12 +24,10 @@ export const commandReasons = {
   groupChanged: 'group_changed',
   groupLeft: 'group_left',
   idempotencyConflict: 'idempotency_conflict',
-  memberArchived: 'member_archived',
   memberChanged: 'member_changed',
   memberIdExists: 'member_id_exists',
-  memberMerged: 'member_merged',
-  memberNameTaken: 'member_name_taken',
   memberNotFound: 'member_not_found',
+  memberRemoved: 'member_removed',
 } as const;
 
 export const commandReasonSchema = z.enum(commandReasons);

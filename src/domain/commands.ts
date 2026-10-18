@@ -4,23 +4,24 @@ import type { CommandDefinition, CommandTransition } from './commands/define';
 import type { CommandTarget } from './commands/outcomes';
 import { groupLeave, leaveGroupCommandSchema } from './commands/groupLeave';
 import { groupRename, renameGroupCommandSchema } from './commands/groupRename';
-import { archiveMemberCommandSchema, memberArchive } from './commands/memberArchive';
 import { createMemberCommandSchema, memberCreate } from './commands/memberCreate';
+import { memberRemove, removeMemberCommandSchema } from './commands/memberRemove';
 import { memberRename, renameMemberCommandSchema } from './commands/memberRename';
+import { memberRestore, restoreMemberCommandSchema } from './commands/memberRestore';
 import { preferenceSet, setPreferredMemberCommandSchema } from './commands/preferenceSet';
 
 /**
  * Every group command, one file each in ./commands/: its schema, the rule the
- * server and every client projection apply, its target, member alias
- * handling, how a person's intent completes into it, how a rejected one is
- * retried, and its audit change. To add a command, add its file and list it
+ * server and every client projection apply, its target, how a person's
+ * intent completes into it, how a rejected one is retried, and its audit
+ * change. To add a command, add its file and list it
  * in `groupCommandSchema` and `registered`; the types reject a missing or
  * mismatched entry.
  */
 
 export * from './commands/outcomes';
 
-export type { CommandTransition, MemberAlias } from './commands/define';
+export type { CommandTransition } from './commands/define';
 
 export { applyGroupJoin, type JoinTransition } from './join';
 
@@ -28,13 +29,16 @@ export type { CreateMemberCommand } from './commands/memberCreate';
 
 export type { RenameMemberCommand } from './commands/memberRename';
 
-export type { ArchiveMemberCommand } from './commands/memberArchive';
+export type { RemoveMemberCommand } from './commands/memberRemove';
+
+export type { RestoreMemberCommand } from './commands/memberRestore';
 
 export const groupCommandSchema = z.discriminatedUnion('type', [
   renameGroupCommandSchema,
   createMemberCommandSchema,
   renameMemberCommandSchema,
-  archiveMemberCommandSchema,
+  removeMemberCommandSchema,
+  restoreMemberCommandSchema,
   setPreferredMemberCommandSchema,
   leaveGroupCommandSchema,
 ]);
@@ -45,7 +49,8 @@ const registered = {
   'group.rename': groupRename,
   'member.create': memberCreate,
   'member.rename': memberRename,
-  'member.archive': memberArchive,
+  'member.remove': memberRemove,
+  'member.restore': memberRestore,
   'preference.set': preferenceSet,
   'group.leave': groupLeave,
 };
@@ -101,22 +106,6 @@ function target<T extends keyof CommandMap>(
   return definitions[type].target(snapshot, identityId, command);
 }
 
-/** Rewrites a command's member reference through recorded aliases. */
-export function resolveMemberAliases(
-  command: GroupCommand,
-  aliases: ReadonlyMap<string, string>,
-): GroupCommand {
-  return resolve(command.type, command, aliases);
-}
-
-function resolve<T extends keyof CommandMap>(
-  type: T,
-  command: CommandMap[T],
-  aliases: ReadonlyMap<string, string>,
-): GroupCommand {
-  return definitions[type].resolveAliases(command, aliases);
-}
-
 /** Completes an intent against the projection the person saw. */
 export function commandFromIntent(
   intent: CommandIntent,
@@ -135,23 +124,13 @@ function complete<T extends keyof CommandMap>(
   return definitions[type].complete(createId(), intent, snapshot, createId);
 }
 
-/**
- * The intent behind a rejected or superseded command, without its stale
- * preconditions; `member` maps a member id to one that still exists.
- */
-export function intentForRetry(
-  command: GroupCommand,
-  member: (memberId: string) => string,
-): CommandIntent {
-  return retry(command.type, command, member);
+/** The intent behind a rejected or superseded command, without its stale preconditions. */
+export function intentForRetry(command: GroupCommand): CommandIntent {
+  return retry(command.type, command);
 }
 
-function retry<T extends keyof CommandMap>(
-  type: T,
-  command: CommandMap[T],
-  member: (memberId: string) => string,
-): CommandIntent {
-  return definitions[type].retryIntent(command, member);
+function retry<T extends keyof CommandMap>(type: T, command: CommandMap[T]): CommandIntent {
+  return definitions[type].retryIntent(command);
 }
 
 /** Commands that deliberately stop authority, such as leaving, must start online. */

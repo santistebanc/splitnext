@@ -50,7 +50,7 @@ describe('devtools action form', () => {
       },
       { path: 'token', kind: 'text', optional: true, source: null },
     ]);
-    expect(fieldsOf('archiveMember')).toMatchObject([
+    expect(fieldsOf('removeMember')).toMatchObject([
       {
         path: 'memberId',
         kind: 'text',
@@ -74,7 +74,7 @@ describe('devtools action form', () => {
   });
 
   it('starts dropdowns on their first option and leaves text empty', () => {
-    expect(initialValues(fieldsOf('archiveMember'), state, '')).toEqual({
+    expect(initialValues(fieldsOf('removeMember'), state, '')).toEqual({
       memberId: 'member-2______________',
     });
     expect(initialValues(fieldsOf('joinGroup'), state, '')).toEqual({

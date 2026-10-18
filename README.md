@@ -19,7 +19,8 @@ How it fits together, and the rules each part keeps, is in
 - Exactly one current invite link per group with no time limit and
   regeneration. Every participant can share the same current link.
   Regeneration invalidates the previous link.
-- Offline-capable group rename and member add, rename, and archive commands.
+- Offline-capable group rename and member add, rename, remove, and restore
+  commands.
 - Nonexclusive preferred-member selection (the member the UI calls “you”).
 - Leaving and rejoining a group without revoking its permanent access grant.
 - A per-identity list of accessible groups, marking the ones it left, backed

@@ -33,7 +33,7 @@ const failures = [
   'none',
   'client_offline',
   'request_failed',
-  'member_name_taken',
+  'member_removed',
   'invite_invalid',
   'invite_replaced',
 ] as const;

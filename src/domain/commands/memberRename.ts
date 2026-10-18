@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { identifierSchema } from '../ids';
-import { ledgerMemberSchema, memberNameKey, memberNameSchema } from '../members';
-import { defineCommand, rejected, unchanged, withResolvedMember, type IntentOf } from './define';
+import { ledgerMemberSchema, memberNameSchema } from '../members';
+import { defineCommand, rejected, unchanged, type IntentOf } from './define';
 import { groupCommandTypes } from './outcomes';
 
 export const renameMemberCommandSchema = z.object({
@@ -23,13 +23,12 @@ export const memberRenamedAuditSchema = z.object({
 });
 
 /**
- * Renames an active member unless the name the person saw changed meanwhile
- * or another active member already uses the new name.
+ * Renames an active member unless the name the person saw changed meanwhile.
+ * Another member may already use the new name.
  */
 export const memberRename = defineCommand<RenameMemberCommand, IntentOf<RenameMemberCommand, 'expected_display_name'>>({
   requiresServerDecision: false,
   target: (snapshot, identityId, command) => ({ kind: 'member', id: command.payload.member_id }),
-  resolveAliases: withResolvedMember,
   complete(commandId, intent, snapshot) {
     const memberId = intent.payload.member_id;
     const member = snapshot.members.find((candidate) => candidate.id === memberId);
@@ -46,9 +45,9 @@ export const memberRename = defineCommand<RenameMemberCommand, IntentOf<RenameMe
       },
     };
   },
-  retryIntent: (command, member) => ({
+  retryIntent: (command) => ({
     type: command.type,
-    payload: { member_id: member(command.payload.member_id), display_name: command.payload.display_name },
+    payload: { member_id: command.payload.member_id, display_name: command.payload.display_name },
   }),
   apply(snapshot, identityId, command, appliedAt) {
     const target = { kind: 'member' as const, id: command.payload.member_id };
@@ -58,7 +57,7 @@ export const memberRename = defineCommand<RenameMemberCommand, IntentOf<RenameMe
 
     const serverState = { kind: 'member' as const, member: current };
 
-    const outcome = (status: 'superseded' | 'rejected', reason: 'member_changed' | 'member_name_taken' | 'member_archived') => ({
+    const outcome = (status: 'superseded' | 'rejected', reason: 'member_changed' | 'member_removed') => ({
       snapshot,
       status,
       reason,
@@ -67,19 +66,11 @@ export const memberRename = defineCommand<RenameMemberCommand, IntentOf<RenameMe
       audit: null,
     });
 
-    if (current.status === 'archived') return outcome('rejected', 'member_archived');
+    if (current.status !== 'active') return outcome('rejected', 'member_removed');
 
     if (current.display_name === command.payload.display_name) return unchanged(snapshot, target, serverState);
 
     if (current.display_name !== command.payload.expected_display_name) return outcome('superseded', 'member_changed');
-
-    const nameKey = memberNameKey(command.payload.display_name);
-
-    const taken = snapshot.members.some(
-      (member) => member.id !== current.id && member.status === 'active' && memberNameKey(member.display_name) === nameKey,
-    );
-
-    if (taken) return outcome('superseded', 'member_name_taken');
 
     const member = { ...current, display_name: command.payload.display_name, updated_at: appliedAt };
 

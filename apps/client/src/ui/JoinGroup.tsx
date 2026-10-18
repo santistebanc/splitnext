@@ -1,4 +1,4 @@
-import { previewFromSnapshot } from '@splitnext/client';
+import { memberLabel, previewFromSnapshot } from '@splitnext/client';
 import { useEffect } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import type { AppController } from '../model/controller';
@@ -132,7 +132,7 @@ export function JoinGroup(props: JoinGroupProps) {
                     as: { kind: 'existing', memberId: person.id },
                   }).available
                 }
-                accessibilityLabel={`${person.display_name}${person.in_use ? ', in use' : ''}`}
+                accessibilityLabel={`${memberLabel(person.display_name, person.name_ordinal)}${person.in_use ? ', in use' : ''}`}
                 onPress={() => {
                   void actions.dispatch(
                     'chooseJoinMember',
@@ -147,7 +147,7 @@ export function JoinGroup(props: JoinGroupProps) {
                   chosen === person.id && s.chosen,
                 ]}
               >
-                <Text style={s.name}>{person.display_name}</Text>
+                <Text style={s.name}>{memberLabel(person.display_name, person.name_ordinal)}</Text>
                 {person.in_use ? <Text style={s.caption}>In use</Text> : null}
               </Pressable>
             ))}

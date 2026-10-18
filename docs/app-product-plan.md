@@ -208,7 +208,7 @@ values when a request fails.
 ## Existing product behavior
 
 The current product specification remains authoritative for group rename,
-member add/rename/archive, preferred-member selection, duplicate-selection
+member add/rename/remove, preferred-member selection, duplicate-selection
 warnings, leaving/rejoining, and invite regeneration. The app uses the
 singular invite API through the shared SDK; the identity model stays the same.
 

@@ -14,10 +14,10 @@ beforeAll(async () => {
   await applyTestMigrations();
 });
 
-describe('member.archive sync command', () => {
-  it('archives the member and clears every preference pointing to it', async () => {
+describe('member.remove sync command', () => {
+  it('deletes a member no expense names and clears every preference pointing to it', async () => {
     const fixture = await createGroupFixture('i');
-    const command = archiveCommand(fixture.created.member.id);
+    const command = removeCommand(fixture.created.member.id);
     const response = await sync(fixture, 1, [command]);
 
     expect(await response.json()).toMatchObject({
@@ -25,7 +25,7 @@ describe('member.archive sync command', () => {
       outcomes: [
         {
           command_id: command.command_id,
-          command_type: 'member.archive',
+          command_type: 'member.remove',
           status: 'applied',
           reason: null,
           audit_id: expect.any(String),
@@ -34,7 +34,7 @@ describe('member.archive sync command', () => {
             member: {
               id: fixture.created.member.id,
               display_name: 'Santi',
-              status: 'archived',
+              status: 'deleted',
             },
           },
         },
@@ -42,16 +42,16 @@ describe('member.archive sync command', () => {
       state: {
         kind: 'snapshot',
         snapshot: {
-          members: [{ id: fixture.created.member.id, status: 'archived' }],
+          members: [{ id: fixture.created.member.id, status: 'deleted' }],
           access_grants: [{ preferred_member_id: null }],
         },
       },
     });
   });
 
-  it('makes an archived name available to a later command in the batch', async () => {
+  it('lets a later command in the batch add a member with the removed name', async () => {
     const fixture = await createGroupFixture('k');
-    const archive = archiveCommand(fixture.created.member.id);
+    const remove = removeCommand(fixture.created.member.id);
     const replacementId = createIdentifier();
 
     const create = {
@@ -60,18 +60,18 @@ describe('member.archive sync command', () => {
       payload: { member_id: replacementId, display_name: 'sAnTi' },
     };
 
-    const response = await sync(fixture, 1, [archive, create]);
+    const response = await sync(fixture, 1, [remove, create]);
 
     expect(await response.json()).toMatchObject({
       revision: 3,
       outcomes: [
-        { command_id: archive.command_id, status: 'applied' },
+        { command_id: remove.command_id, status: 'applied' },
         { command_id: create.command_id, status: 'applied' },
       ],
       state: {
         snapshot: {
           members: [
-            { id: fixture.created.member.id, status: 'archived' },
+            { id: fixture.created.member.id, status: 'deleted' },
             { id: replacementId, display_name: 'sAnTi', status: 'active' },
           ],
         },
@@ -81,7 +81,7 @@ describe('member.archive sync command', () => {
 
   it('returns the original applied outcome when the command is retried', async () => {
     const fixture = await createGroupFixture('m');
-    const command = archiveCommand(fixture.created.member.id);
+    const command = removeCommand(fixture.created.member.id);
     const first = await sync(fixture, 1, [command]);
     const firstBody = await first.json();
     const repeated = await sync(fixture, 2, [command]);
@@ -94,10 +94,10 @@ describe('member.archive sync command', () => {
   });
 });
 
-function archiveCommand(memberId: string) {
+function removeCommand(memberId: string) {
   return {
     command_id: createIdentifier(),
-    type: 'member.archive',
+    type: 'member.remove',
     payload: { member_id: memberId },
   };
 }

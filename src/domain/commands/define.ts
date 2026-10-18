@@ -6,15 +6,6 @@ import type { CommandReason, CommandServerState, CommandTarget } from './outcome
 /** What every group command carries on the wire. */
 export type CommandBase = { command_id: string; type: string; payload: Record<string, string> };
 
-/**
- * A member id a client generated for a creation that merged into an existing
- * member. Commands that name the alias act on that member instead.
- */
-export type MemberAlias = {
-  alias_id: string;
-  member_id: string;
-};
-
 /** The result of applying one command to a snapshot. */
 export type CommandTransition = {
   snapshot: GroupSnapshot;
@@ -23,8 +14,6 @@ export type CommandTransition = {
   target: CommandTarget;
   serverState: CommandServerState | null;
   audit: AuditChange | null;
-  /** A merged creation's member id, to be resolved to the existing member. */
-  memberAlias?: MemberAlias;
 };
 
 /**
@@ -41,36 +30,22 @@ export type IntentOf<C extends CommandBase, Filled extends keyof C['payload'] = 
 
 /**
  * Everything one command means, in one place: how it applies on the server
- * and in every client projection, what it targets, how merged member ids are
- * rewritten in it, how a person's intent becomes it, and how a rejected one
- * becomes fresh intent again.
+ * and in every client projection, what it targets, how a person's intent
+ * becomes it, and how a rejected one becomes fresh intent again.
  */
 export type CommandDefinition<C extends CommandBase, I> = {
   /** Commands that deliberately stop authority must start online. */
   requiresServerDecision: boolean;
   target(snapshot: GroupSnapshot, identityId: string, command: C): CommandTarget;
-  resolveAliases(command: C, aliases: ReadonlyMap<string, string>): C;
   /** Completes an intent against the projection the person saw. */
   complete(commandId: string, intent: I, snapshot: GroupSnapshot, createId: () => string): C;
-  /** The original intent without stale preconditions, naming members that still exist. */
-  retryIntent(command: C, member: (memberId: string) => string): I;
+  /** The original intent without its stale preconditions. */
+  retryIntent(command: C): I;
   apply(snapshot: GroupSnapshot, identityId: string, command: C, appliedAt: string): CommandTransition;
 };
 
 export function defineCommand<C extends CommandBase, I>(definition: CommandDefinition<C, I>): CommandDefinition<C, I> {
   return definition;
-}
-
-/** Rewrites a member-targeting command through recorded aliases. */
-export function withResolvedMember<C extends { payload: { member_id: string } }>(
-  command: C,
-  aliases: ReadonlyMap<string, string>,
-): C {
-  const memberId = aliases.get(command.payload.member_id);
-
-  return memberId
-    ? { ...command, payload: { ...command.payload, member_id: memberId } }
-    : command;
 }
 
 export function replaceAccess(

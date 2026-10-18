@@ -21,8 +21,10 @@ function intendedChange(notice: Notice): string {
       return `Add “${command.payload.display_name}”`;
     case 'member.rename':
       return `Rename “${command.payload.expected_display_name}” to “${command.payload.display_name}”`;
-    case 'member.archive':
+    case 'member.remove':
       return 'Remove this member';
+    case 'member.restore':
+      return 'Restore this member';
     case 'preference.set':
       return 'Change who this installation calls “you”';
     case 'group.leave':
@@ -37,7 +39,7 @@ function currentResult(notice: Notice): string {
     return `The group is currently called “${current.group.name}”.`;
 
   if (current?.kind === 'member')
-    return `The member is currently “${current.member.display_name}” (${current.member.status === 'archived' ? 'removed' : current.member.status}).`;
+    return `The member is currently “${current.member.display_name}” (${current.member.status === 'active' ? 'active' : 'removed'}).`;
 
   return 'This change could not be applied to the current group state.';
 }
@@ -87,8 +89,8 @@ export function NoticesPanel(props: NoticesPanelProps) {
             <Text style={s.caption}>
               {notice.outcome.status === 'superseded'
                 ? 'Another accepted change made your original edit out of date.'
-                : notice.outcome.reason === 'member_name_taken'
-                  ? 'An active member already has that name.'
+                : notice.outcome.reason === 'member_removed'
+                  ? 'That member was removed before the change arrived.'
                   : notice.outcome.reason === 'group_left'
                     ? 'You left this group before the change arrived.'
                     : 'The group’s current state does not allow this change.'}

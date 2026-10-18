@@ -10,10 +10,7 @@ import {
 } from '../src/domain/invites';
 import { MemoryGroupRepository } from '../src/memoryGroupRepository';
 import { GroupStore } from '../src/groupStore';
-import {
-  groupSessionSchema,
-  syncGroupResponseSchema,
-} from '../src/domain/sync';
+import { groupSessionSchema } from '../src/domain/sync';
 import {
   applyTestMigrations,
   fetchOpenApiDocument,
@@ -131,7 +128,7 @@ describe('joining through an invite link', () => {
     });
   });
 
-  it('joins an existing active member by name without duplicates and retains the submitted id as an alias', async () => {
+  it('joins as a new member even when another member has the same name', async () => {
     const fixture = await createFixture();
     const { token } = await regenerateInvite(fixture);
 
@@ -144,49 +141,17 @@ describe('joining through an invite link', () => {
 
     expect(response.status).toBe(200);
     const joined = groupSessionSchema.parse(await response.json());
-    expect(joined.snapshot.members).toHaveLength(1);
-    expect(joined.access.preferred_member_id).toBe(fixture.created.member.id);
-    expect(
-      joined.snapshot.access_grants.map((grant) => grant.preferred_member_id),
-    ).toEqual([fixture.created.member.id, fixture.created.member.id]);
+    expect(joined.snapshot.members).toMatchObject([
+      { id: fixture.created.member.id, display_name: 'Santi' },
+      { id: request.preferred_member.member_id, display_name: 'santi' },
+    ]);
+    expect(joined.access.preferred_member_id).toBe(request.preferred_member.member_id);
 
     const repeated = await join(fixture, request);
     expect(repeated.status).toBe(200);
     expect(groupSessionSchema.parse(await repeated.json()).revision).toBe(
       joined.revision,
     );
-
-    const sync = await exports.default.fetch(
-      `https://splitnext.test/groups/${fixture.groupId}/sync`,
-      {
-        method: 'POST',
-        headers: requestHeaders(fixture.joiner.deviceSecret),
-        body: JSON.stringify({
-          known_revision: joined.revision,
-          commands: [
-            {
-              command_id: createIdentifier(),
-              type: 'member.rename',
-              payload: {
-                member_id: request.preferred_member.member_id,
-                expected_display_name: 'Santi',
-                display_name: 'Santiago',
-              },
-            },
-          ],
-        }),
-      },
-    );
-
-    expect(sync.status).toBe(200);
-    const synchronized = syncGroupResponseSchema.parse(await sync.json());
-    expect(synchronized.outcomes[0]?.status).toBe('applied');
-
-    if (synchronized.state.kind !== 'snapshot')
-      throw new Error('Expected a snapshot');
-    expect(synchronized.state.snapshot.members).toMatchObject([
-      { id: fixture.created.member.id, display_name: 'Santiago' },
-    ]);
 
     const reusedId = await join(fixture, {
       ...request,

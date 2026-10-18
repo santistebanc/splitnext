@@ -47,42 +47,6 @@ describe('stateful offline client SDK', () => {
     expect(installation.replicas[0]?.outbox).toHaveLength(1);
   });
 
-  it('retries a rename through a merged member alias using the current real member', async () => {
-    const editor = createSyncClient('e');
-    const other = createSyncClient('f');
-
-    await editor.initializeIdentity();
-    await other.initializeIdentity();
-    const created = await editor.createGroup({ name: 'Alias retries', creator_member_name: 'Ana' });
-
-    await joinThroughInvite(editor, other, created.group_id, { kind: 'new', display_name: 'Visitor' });
-    await editor.syncGroup(created.group_id);
-    editor.setOnline(false);
-    const local = await editor.submit(created.group_id, { type: 'member.create', payload: { display_name: 'Shared' } });
-    const alias = local.projected_snapshot?.members.find((member) => member.display_name === 'Shared');
-
-    if (!alias) throw new Error('missing alias');
-    await editor.submit(created.group_id, { type: 'member.rename', payload: { member_id: alias.id, display_name: 'Taken' } });
-    await other.submit(created.group_id, { type: 'member.create', payload: { display_name: 'Shared' } });
-    const competing = await other.submit(created.group_id, { type: 'member.create', payload: { display_name: 'Taken' } });
-    const taken = competing.projected_snapshot?.members.find((member) => member.display_name === 'Taken');
-
-    if (!taken) throw new Error('missing competing member');
-    editor.setOnline(true);
-    const conflict = await editor.syncGroup(created.group_id);
-    const notice = conflict.notices[0];
-
-    if (!notice) throw new Error('missing notice');
-    expect(notice.command).toMatchObject({ type: 'member.rename', payload: { member_id: alias.id } });
-    expect(conflict.projected_snapshot?.members.some((member) => member.id === alias.id)).toBe(false);
-    await other.submit(created.group_id, { type: 'member.archive', payload: { member_id: taken.id } });
-    await editor.syncGroup(created.group_id);
-    const retried = await editor.retryNotice(created.group_id, notice.command.command_id);
-
-    expect(retried.notices).toHaveLength(0);
-    expect(retried.confirmed_snapshot?.members.filter((member) => member.status === 'active' && member.display_name === 'Taken')).toHaveLength(1);
-  });
-
   it('retains a notice on storage failure and retries it once across client instances offline', async () => {
     class FailingStorage extends MemoryClientStorage {
       fail = false;
@@ -415,13 +379,13 @@ describe('stateful offline client SDK', () => {
       preferred_member_id: robin.id,
     });
 
-    const removed = await client.submit(created.group_id, { type: 'member.archive', payload: { member_id: robin.id } });
+    const removed = await client.submit(created.group_id, { type: 'member.remove', payload: { member_id: robin.id } });
 
     expect(
       removed.projected_snapshot?.members.find(
         (member) => member.id === robin.id,
       ),
-    ).toMatchObject({ status: 'archived' });
+    ).toMatchObject({ status: 'deleted' });
     expect(removed.projected_snapshot?.access_grants[0]).toMatchObject({
       preferred_member_id: null,
     });

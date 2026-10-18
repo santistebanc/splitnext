@@ -5,7 +5,7 @@ import { createIdentifier } from '../src/domain/ids';
 import { DurableObjectGroupRepository } from '../src/groupRepository';
 
 describe('group storage migrations', () => {
-  it('removes time limits while preserving active and revoked invite records', async () => {
+  it('removes time limits and member aliases while preserving active and revoked invite records', async () => {
     const stub = env.GROUPS.get(env.GROUPS.idFromName(createIdentifier()));
 
     await runInDurableObject(stub, (_instance, state) => {
@@ -42,6 +42,14 @@ describe('group storage migrations', () => {
         expect(persistence.findInvite('active')).not.toBeNull();
         expect(persistence.findInvite('revoked')?.revoked_at).toBe('2019-02-01T00:00:00.000Z');
       });
+
+      const tables = state.storage.sql
+        .exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .toArray()
+        .map((table) => table.name);
+
+      // Members no longer merge by name, so their aliases are gone.
+      expect(tables).not.toContain('group_member_aliases');
     });
   });
 });

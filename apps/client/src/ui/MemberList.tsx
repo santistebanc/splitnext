@@ -6,7 +6,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { preferredMember, type ClientReplicaState } from '@splitnext/client';
+import { memberLabel, nameOrdinals, preferredMember, type ClientReplicaState } from '@splitnext/client';
 import { orderedMembers, participantMarkers, memberStatus, type ParticipantMarker } from '../model/memberPresentation';
 import type { AppController } from '../model/controller';
 import { Button, ErrorMessage, colors, s } from './components';
@@ -219,11 +219,12 @@ function MemberRow(props: MemberRowProps) {
   const draft = useUiState().memberEdit;
   const editing = draft?.memberId === member.id;
   const name = editing ? draft.name : member.display_name;
+  const label = memberLabel(member.display_name, nameOrdinals(props.replica.projected_snapshot).get(member.id));
   const select = useActionCall();
   const remove = useActionCall();
   const editAction = useActionCall();
   const canSelect = select.can('setPreferredMember', { memberId: member.id });
-  const canRemove = remove.can('archiveMember', { memberId: member.id });
+  const canRemove = remove.can('removeMember', { memberId: member.id });
 
   const state = props.app.snapshot();
   const participants = participantMarkers(props.replica, member.id, props.app.client.presence(props.replica.group_id), state.online && state.reachable);
@@ -252,7 +253,7 @@ function MemberRow(props: MemberRowProps) {
       <View style={s.memberLine}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${isYou ? 'You' : 'This is me'}: ${member.display_name}, ${participantLabels || 'unclaimed'}`}
+          accessibilityLabel={`${isYou ? 'You' : 'This is me'}: ${label}, ${participantLabels || 'unclaimed'}`}
           accessibilityState={{ selected: isYou, disabled: !canSelect }}
           aria-pressed={isYou}
           disabled={!canSelect}
@@ -272,24 +273,24 @@ function MemberRow(props: MemberRowProps) {
           ) : (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Edit ${member.display_name}`}
+              accessibilityLabel={`Edit ${label}`}
               disabled={!editAction.can('beginEditMember', { memberId: member.id })}
               onPress={edit}
               style={s.editableMemberName}
             >
               <Text numberOfLines={1} style={[s.name, s.memberName]}>
-                {member.display_name}
+                {label}
               </Text>
             </Pressable>
           )}
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Remove ${member.display_name}`}
+          accessibilityLabel={`Remove ${label}`}
           accessibilityState={{ disabled: !canRemove }}
           disabled={!canRemove}
           onPress={() => {
-            void remove.call('archiveMember', { memberId: member.id });
+            void remove.call('removeMember', { memberId: member.id });
           }}
           style={s.memberActionsButton}
         >

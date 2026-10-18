@@ -10,7 +10,6 @@ import {
   applyGroupJoin,
   commandOutcomeSchema,
   commandTarget,
-  resolveMemberAliases,
   type CommandOutcome,
   type CommandTarget,
   type GroupCommand,
@@ -61,7 +60,7 @@ export type JoinStoredGroupResult =
         | 'group_not_found'
         | 'idempotency_conflict'
         | 'member_not_found'
-        | 'member_archived'
+        | 'member_removed'
         | 'member_id_exists'
         | InviteFailure;
     };
@@ -155,12 +154,6 @@ export class GroupStore {
         if (failure) return { ok: false, error: failure };
       }
 
-      if (
-        command.preferred_member.kind === 'new' &&
-        persistence.memberAliases().has(command.preferred_member.member_id)
-      )
-        return { ok: false, error: 'member_id_exists' };
-
       const transition = applyGroupJoin(
         state.snapshot,
         state.next_actor_number,
@@ -168,9 +161,6 @@ export class GroupStore {
       );
 
       if (!transition.ok) return transition;
-
-      if (transition.memberAlias)
-        persistence.recordMemberAlias(transition.memberAlias);
 
       if (transition.audit) {
         state.next_actor_number = transition.nextActorNumber;
@@ -471,13 +461,9 @@ export class GroupStore {
     const transition = applyGroupCommand(
       state.snapshot,
       identityId,
-      resolveMemberAliases(command, persistence.memberAliases()),
+      command,
       appliedAt,
     );
-
-    if (transition.memberAlias) {
-      persistence.recordMemberAlias(transition.memberAlias);
-    }
 
     let auditId: string | null = null;
 

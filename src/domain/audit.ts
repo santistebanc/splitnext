@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { groupLeftAuditSchema } from './commands/groupLeave';
 import { groupRenamedAuditSchema } from './commands/groupRename';
-import { memberArchivedAuditSchema } from './commands/memberArchive';
 import { memberCreatedAuditSchema } from './commands/memberCreate';
+import { memberRemovedAuditSchema } from './commands/memberRemove';
 import { memberRenamedAuditSchema } from './commands/memberRename';
+import { memberRestoredAuditSchema } from './commands/memberRestore';
 import { commandTargetSchema } from './commands/outcomes';
 import { preferenceChangedAuditSchema } from './commands/preferenceSet';
 import { createdGroupSchema, groupAccessGrantSchema } from './groups';
@@ -36,7 +37,8 @@ export const auditChangeSchema = z.discriminatedUnion('action', [
   groupRenamedAuditSchema,
   memberCreatedAuditSchema,
   memberRenamedAuditSchema,
-  memberArchivedAuditSchema,
+  memberRemovedAuditSchema,
+  memberRestoredAuditSchema,
   preferenceChangedAuditSchema,
   groupLeftAuditSchema,
   z.object({

@@ -95,9 +95,13 @@ beforeAll(async () => {
   const [open = ''] = groupIds;
   const members = (await client.inspect(open)).projected_snapshot?.members ?? [];
 
-  // Renames to a taken name come back superseded, as notices to review.
+  // Renames based on a name the member no longer has come back superseded,
+  // as notices to review.
   for (const member of members.slice(2, 2 + noticeCount))
-    await client.submit(open, { type: 'member.rename', payload: { member_id: member.id, display_name: 'Member 1' } });
+    await client.submit(open, {
+      type: 'member.rename',
+      payload: { member_id: member.id, display_name: 'Renamed', expected_display_name: 'Stale name' },
+    });
 
   // An offline session leaves intent queued, which every read replays.
   client.setOnline(false);

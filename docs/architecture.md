@@ -37,9 +37,8 @@ at `/app`.
   on this installation in localStorage and prefills it when creating a group or
   joining as someone new. The name stays editable. The group opens with its
   Members list visible and actions to add members or invite friends.
-- Invite recipients preview the group and choose an existing name or add their
-  own. Entering an existing member's name while joining selects that member,
-  even when another participant uses it, without creating a duplicate. Invite
+- Invite recipients preview the group and choose an existing name, even when
+  another participant uses it, or add their own as a new member. Invite
   links for a group already joined on this installation open that group
   directly, keeping the selected member. The invite entry route remains
   available for future native app handoff.
@@ -115,7 +114,7 @@ this route only when `ENABLE_DEBUG_INSPECTION` is true.
 
 The workbench uses the production `AppController`, SDK, and group engine
 through an isolated memory transport. Its fixtures use valid contracts;
-creation, joining, leaving, replacement links, aliases, outboxes, and notices
+creation, joining, leaving, replacement links, outboxes, and notices
 follow the same rules as the app. Latency and forced server failures apply to
 connected requests; offline ledger edits continue to queue locally.
 
@@ -436,14 +435,14 @@ command without its identifiers; omitted preconditions, such as the name a
 rename expects to replace, default to what the local projection shows. The app
 controller and app actions use the same path. Each command is one file in
 `src/domain/commands/` holding its schema, the rule the server and every
-client projection apply, its target, member alias handling, intent
-completion, retry intent, and audit change. A new command is that file, its
+client projection apply, its target, intent completion, retry intent, and
+audit change. A new command is that file, its
 entries in `groupCommandSchema`, `registered`, and `groupCommandTypes`, its
 notice wording, and one app action; the registry's type rejects a missing or
 mismatched entry, and the notice wording is an exhaustive switch. Each command
 keeps one name everywhere: the `groupCommandTypes` key, such as
-`archiveMember`, names its app action, and its value, such as
-`member.archive`, is the wire type.
+`removeMember`, names its app action, and its value, such as
+`member.remove`, is the wire type.
 
 `MemoryClientStorage` is useful for tests. `IndexedDbClientStorage` is the
 atomic browser adapter used by the app. React Native can provide a SQLite

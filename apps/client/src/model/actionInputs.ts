@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import { activeMembers, preferredMember, formatInviteLink } from '@splitnext/client';
+import { activeMembers, memberLabel, nameOrdinals, preferredMember, formatInviteLink } from '@splitnext/client';
 import type { AppState } from './controller';
 import type { UiState } from './uiState';
 
 export type InputState = AppState & { ui?: UiState };
 
 export const valueSources = [
-  'member', 'preferredMember', 'group', 'notice', 'inviteLink',
+  'member', 'preferredMember', 'removedMember', 'group', 'notice', 'inviteLink',
   'memberName', 'groupName', 'joinMember', 'confirmation',
 ] as const;
 
@@ -26,6 +26,8 @@ export function sourceOptions(
   const snapshot = group?.projected_snapshot;
   const you = preferredMember(snapshot, group?.session?.identity.id)?.id;
   const members = activeMembers(snapshot);
+  const ordinals = nameOrdinals(snapshot);
+  const label = (member: { id: string; display_name: string }) => memberLabel(member.display_name, ordinals.get(member.id));
 
   switch (source) {
     case 'confirmation':
@@ -38,22 +40,28 @@ export function sourceOptions(
           ]
         : [];
     case 'joinMember':
-      return (state.ui?.join.preview?.members ?? members).map((member) => ({
-        value: member.id,
-        label: member.display_name,
-      }));
+      return state.ui?.join.preview
+        ? state.ui.join.preview.members.map((member) => ({
+            value: member.id,
+            label: memberLabel(member.display_name, member.name_ordinal),
+          }))
+        : members.map((member) => ({ value: member.id, label: label(member) }));
     case 'member':
       return members.map((member) => ({
         value: member.id,
-        label: `${member.display_name}${member.id === you ? ' (you)' : ''}`,
+        label: `${label(member)}${member.id === you ? ' (you)' : ''}`,
       }));
     case 'preferredMember':
       return [...members]
         .sort((a, b) => Number(a.id === you) - Number(b.id === you))
         .map((member) => ({
           value: member.id,
-          label: `${member.display_name}${member.id === you ? ' (you)' : ''}`,
+          label: `${label(member)}${member.id === you ? ' (you)' : ''}`,
         }));
+    case 'removedMember':
+      return (snapshot?.members ?? [])
+        .filter((member) => member.status !== 'active')
+        .map((member) => ({ value: member.id, label: `${label(member)} (removed)` }));
     case 'memberName':
       return members.map((member) => ({
         value: member.display_name,
