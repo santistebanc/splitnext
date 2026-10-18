@@ -45,21 +45,36 @@ A named person represented in expenses, balances, and settlements; it is not an
 access identity or authorization record.
 _Avoid_: User, account
 
-**Member alias**:
-A member id a client generated for a creation that merged into an existing
-member with the same name; commands naming it act on that member.
-_Avoid_: Duplicate member
+**Name ordinal**:
+The number, such as “(2)”, shown after a ledger member's name while another
+member has the same name; it is never part of the name.
+_Avoid_: Member number, suffix
 
 **Preferred member**:
 An access identity's nonexclusive choice of which active ledger member its UI
 calls “you.”
 _Avoid_: Claimed member, owned member
 
-**Archived member**:
-A ledger member no longer available for new activity but retained for history.
-_Avoid_: Deleted member
+**Hidden member**:
+A ledger member with expense records, no longer offered for new expenses but
+kept for history and restorable.
+_Avoid_: Archived member, removed member
+
+**Deleted member**:
+A ledger member removed while it had no expense records; it is no longer shown
+or offered for restoring, but the group still keeps it.
+_Avoid_: Hidden member, archived member
 
 ## Money
+
+**Expense**:
+A described amount one or more ledger members paid in one currency, with the
+allocation of who owes what for it.
+_Avoid_: Transaction, bill, payment
+
+**Removed expense**:
+An expense excluded from balances but kept, and restorable, in the group.
+_Avoid_: Deleted expense
 
 **Expense currency**:
 The currency in which an expense's original amount and allocations are recorded.
@@ -129,6 +144,11 @@ _Avoid_: Push update, realtime event
 An immutable historical record of an applied transition, including its actor,
 time, target, and before and after state.
 _Avoid_: Sync event
+
+**Activity**:
+The group's audit events shown to people, from which undoable actions can be
+reversed.
+_Avoid_: History record, log
 
 ## App interaction
 
