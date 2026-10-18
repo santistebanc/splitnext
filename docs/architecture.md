@@ -72,6 +72,11 @@ at `/app`.
   them for history. The app list shows current members only.
 - Mobile and touch layouts use a full page for group settings, with
   keyboard-aware scrolling and Back to group. Desktop layouts retain a dialog.
+- The group page shows balances separately by currency and its current expenses.
+  Expense entry and editing offer a single payer, participant selection, equal
+  shares, weighted shares, and exact amounts with blank amounts sharing the
+  remainder. Removal excludes an expense from balances while retaining it for
+  future restoration. The SDK and server share the same money and command rules.
 
 Browser app replicas use IndexedDB; the installation credential and last group
 are retained in localStorage. Losing that credential loses this installation's
