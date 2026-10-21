@@ -45,6 +45,7 @@ self.addEventListener('fetch', (event) => {
   ) {
     event.respondWith(navigate(request, url.pathname === '/' ? '/' : '/app'));
   } else if (
+    appAssets.includes(url.pathname) ||
     url.pathname.startsWith('/_expo/static/') ||
     url.pathname.startsWith('/assets/')
   ) {

@@ -1,6 +1,6 @@
 # Edit, remove and restore recorded repayments
 
-Status: ready-for-agent
+Status: resolved
 Depends on: 03-record-settlements
 
 See [the feature-port spec](../spec.md) and
@@ -24,3 +24,5 @@ See [the feature-port spec](../spec.md) and
 
 Agreed during the source-app inventory and specification interview.
 
+
+Implemented versioned repayment edits and removal/restoration, with command-rule rows, generated convergence commands, a two-device stale-edit test and the offline browser flow.

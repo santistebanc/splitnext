@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { router, usePathname } from 'expo-router';
-import { Button, s } from './components';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Animated, Platform, ScrollView, Text, View } from 'react-native';
+import { usePathname } from 'expo-router';
+import { s } from './components';
 import {
   useCompactLayout,
   useTouchInput,
@@ -10,65 +10,131 @@ import {
 
 type FrameProps = {
   children: ReactNode;
-  onGroups?: (() => void) | undefined;
-  onHomepage?: (() => void) | undefined;
-  navigationDisabled?: boolean;
+  /** Independent scroll positions for sibling views, such as the group screen and a person. */
+  scrollKey?: string;
+  /** A fixed screen header above the scrolling content. */
+  header?: ReactNode;
+  /** The screen's one main action, pinned below the content. */
+  footer?: ReactNode;
+  /** Whether the footer floats over the content instead of taking its own bar. */
+  floatingFooter?: boolean;
+  /** A rule above the pinned footer, for screens whose content scrolls under it. */
+  ruledFooter?: boolean | undefined;
+  /** Follows the content's scroll position, including the one restored when the screen opens, such as to shrink the balances. */
+  onScroll?: ((y: number) => void) | undefined;
+  /** Receives a way to scroll the content, smoothly unless told not to, such as back to the top. */
+  scrollControl?: { current: ((y: number, animated?: boolean) => void) | null } | undefined;
 };
 
-/** The page shell: brand header, optional Groups action, and scrolling body. */
+/**
+ * The screen shell: a fixed header, scrolling content, and the main action,
+ * in one narrow column like a phone screen on every device.
+ */
 export function Frame(props: FrameProps) {
   const mobile = useCompactLayout();
   const touch = useTouchInput();
+  const scroll = useRef<ScrollView>(null);
+  const control = props.scrollControl;
+
+  useEffect(() => {
+    if (!control) return;
+    control.current = (y, animated = true) => scroll.current?.scrollTo({ y, animated });
+
+    return () => {
+      control.current = null;
+    };
+  }, [control]);
+  const positions = useRef(new Map<string, number>());
+  const scrollKey = props.scrollKey ?? 'page';
   const homepage = usePathname() === '/';
+  const floating = Boolean(props.footer && props.floatingFooter);
+
+  // Scrolls caused by switching screens, including late ones from the screen
+  // left behind, are neither a person scrolling nor this screen's position.
+  const restoring = useRef(false);
+
+  useLayoutEffect(() => {
+    const restored = positions.current.get(scrollKey) ?? 0;
+
+    restoring.current = true;
+    scroll.current?.scrollTo({ y: restored, animated: false });
+    props.onScroll?.(restored);
+
+    const frame = requestAnimationFrame(() => {
+      restoring.current = false;
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [scrollKey]);
+
+  // Each screen rises into place as it fades in. The page area moves rather
+  // than its content, so pinned parts stay at the area's top and nothing
+  // scrolled past them shows above them on the way.
+  const [rise] = useState(() => new Animated.Value(0));
+
+  useLayoutEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    rise.setValue(8);
+    const animation = Animated.timing(rise, { toValue: 0, duration: 180, useNativeDriver: Platform.OS !== 'web' });
+
+    animation.start();
+
+    return () => animation.stop();
+  }, [scrollKey]);
 
   const visibleHeight = useVisibleViewportHeight(
     (mobile || touch) && !homepage,
   );
 
-  const brand = (
-    <>
-      <Text style={s.brandMark}>s</Text>
-      <Text style={s.brandText}>splitnext</Text>
-      <Text style={s.beta}>BETA</Text>
-    </>
-  );
-
   return (
-    <ScrollView
-      style={[s.page, visibleHeight !== null && { maxHeight: visibleHeight }]}
-      contentContainerStyle={{ flexGrow: 1 }}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View style={[s.wrap, !homepage && s.appWrap, mobile && s.mobileWrap]}>
-        <View style={[s.header, mobile && s.mobileHeader]}>
-          {homepage ? (
-            <View style={s.brand}>{brand}</View>
-          ) : (
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel="Splitnext homepage"
-              disabled={props.navigationDisabled}
-              accessibilityState={{
-                disabled: Boolean(props.navigationDisabled),
-              }}
-              onPress={props.onHomepage ?? (() => router.push('/'))}
-              style={s.brand}
-            >
-              {brand}
-            </Pressable>
-          )}
-          {props.onGroups ? (
-            <Button
-              quiet
-              disabled={Boolean(props.navigationDisabled)}
-              onPress={props.onGroups}
-            >
-              Groups
-            </Button>
-          ) : null}
+    <View style={[s.page, visibleHeight !== null && { maxHeight: visibleHeight }]}>
+      {props.header ? (
+        <View style={s.screenHeaderBar}>
+          <View style={s.screenColumn}>{props.header}</View>
         </View>
-        {props.children}
-      </View>
-    </ScrollView>
+      ) : null}
+      <Animated.View style={[s.page, { transform: [{ translateY: rise }] }]}>
+        <ScrollView
+          ref={scroll}
+          onScroll={(event) => {
+            if (restoring.current) return;
+            positions.current.set(scrollKey, event.nativeEvent.contentOffset.y);
+            props.onScroll?.(event.nativeEvent.contentOffset.y);
+          }}
+          scrollEventThrottle={16}
+          nativeID="splitnext-page"
+          style={s.page}
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={[s.wrap, !homepage && s.appWrap, homepage && mobile && s.mobileWrap, floating && { paddingBottom: 104 }]}>
+            {homepage ? (
+              <View style={[s.header, mobile && s.mobileHeader]}>
+                <View style={s.brand}>
+                  <Text style={s.brandText}>splitnext</Text>
+                  <Text style={s.beta}>BETA</Text>
+                </View>
+              </View>
+            ) : null}
+            {props.children}
+          </View>
+        </ScrollView>
+      </Animated.View>
+      {props.footer ? (
+        floating ? (
+          <View
+            pointerEvents="box-none"
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 28 }}
+          >
+            <View pointerEvents="box-none" style={[s.screenColumn, s.footerInner]}>{props.footer}</View>
+          </View>
+        ) : (
+          <View style={[s.footerBar, props.ruledFooter && s.footerBarRuled]}>
+            <View style={[s.screenColumn, s.footerInner]}>{props.footer}</View>
+          </View>
+        )
+      ) : null}
+    </View>
   );
 }

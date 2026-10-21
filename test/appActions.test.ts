@@ -78,7 +78,7 @@ function createHost(setup: Setup = {}) {
       previewInvite: async (groupId) => {
         await record(`previewInvite ${groupId}`);
 
-        return { group: { id: groupId, name: 'Trip' }, members: [] };
+        return { group: { id: groupId ?? 'codeGroup_____________', name: 'Trip' }, members: [] };
       },
     },
   };
@@ -106,6 +106,46 @@ function deferred<T>() {
 }
 
 describe('app actions', () => {
+  it('offers split controls for people an existing expense names even after they are hidden', async () => {
+    const { host, state } = createHost();
+    const actions = createDispatcher(host);
+
+    await actions.dispatch('showExpense', {});
+
+    for (const member of state.group!.projected_snapshot!.members) member.status = 'hidden';
+
+    const [ana, ben] = actions.inputOptions('expenseMember');
+
+    expect(await actions.dispatch('increaseExpenseShare', { memberId: ana!.value })).toMatchObject({ status: 'done' });
+    expect(await actions.dispatch('setExpenseFixedAmount', { memberId: ben!.value, amount: '20' })).toMatchObject({ status: 'done' });
+    expect(actions.inputOptions('expenseMember')).toHaveLength(2);
+    expect(await actions.dispatch('decreaseExpenseShare', { memberId: ben!.value })).toMatchObject({ status: 'done' });
+  });
+
+  it('edits mixed expense splits offline and protects the last person sharing the remainder', async () => {
+    const { host, calls } = createHost({ connection: 'offline' });
+    const actions = createDispatcher(host);
+    const ana = 'member-1______________';
+    const ben = 'member-2______________';
+
+    expect(await actions.dispatch('showExpense', {})).toMatchObject({ status: 'done' });
+    await actions.dispatch('changeDraft', { field: 'expense.amount', value: '100' });
+    await actions.dispatch('changeDraft', { field: 'expense.description', value: 'Dinner' });
+    expect(await actions.dispatch('increaseExpenseShare', { memberId: ben })).toMatchObject({ status: 'done' });
+    expect(actions.ui.snapshot().expense.parts).toEqual([{ kind: 'shares', member_id: ana, shares: 1 }, { kind: 'shares', member_id: ben, shares: 2 }]);
+    const fixed = await actions.dispatch('setExpenseFixedAmount', { memberId: ana, amount: '20' });
+
+    expect(fixed.status, JSON.stringify(fixed)).toBe('done');
+    expect(actions.ui.snapshot().expense.parts).toEqual([{ kind: 'exact', member_id: ana, amount: '20' }, { kind: 'shares', member_id: ben, shares: 1 }]);
+    expect(actions.availability('toggleExpenseParticipant', { memberId: ben })).toMatchObject({ available: false, error: 'last_share' });
+    expect(await actions.dispatch('decreaseExpenseShare', { memberId: ben })).toMatchObject({ status: 'failed', error: 'last_share' });
+    expect(await actions.dispatch('setExpenseFixedAmount', { memberId: ben, amount: '30' })).toMatchObject({ status: 'failed', error: 'last_share' });
+    expect(actions.inputOptions('expenseMember').map((option) => option.value)).toEqual([ana, ben]);
+    expect(await actions.dispatch('saveExpense', {})).toMatchObject({ status: 'done' });
+    expect(calls.at(-1)).toContain('"kind":"exact","member_id":"member-1______________","amount":2000');
+    expect(calls.at(-1)).toContain('"kind":"shares","member_id":"member-2______________","shares":1');
+  });
+
   it('protects a pending member save across callers while unrelated offline edits remain available', async () => {
     const { host, calls } = createHost({ connection: 'offline' });
     const request = deferred<void>();
@@ -728,10 +768,6 @@ describe('app actions', () => {
       available: false,
       error: 'no_member_edit',
     });
-    expect(actions.availability('showNotices')).toMatchObject({
-      available: false,
-      error: 'notice_not_found',
-    });
     expect(actions.availability('confirmAction')).toMatchObject({
       available: false,
       error: 'confirmation_not_found',
@@ -776,6 +812,21 @@ describe('app actions', () => {
     expect(actions.availability('submitJoin').available).toBe(true);
     await actions.dispatch('clearInvitePreview', {});
     expect(actions.availability('submitJoin').available).toBe(false);
+  });
+
+  it('joins through a short link, whose preview names the group', async () => {
+    const { host, calls } = createHost();
+    const actions = createDispatcher(host);
+
+    await actions.dispatch('checkInvite', { link: 'https://splitnext.test/j#Xk3m9QpL2vT7' });
+    await actions.dispatch('chooseJoinMember', { as: { kind: 'new' } });
+    await actions.dispatch('changeDraft', { field: 'join.name', value: 'Dev' });
+    await actions.dispatch('submitJoin', {});
+    expect(calls).toEqual([
+      'previewInvite null',
+      'openJoinedGroup codeGroup_____________',
+      'joinGroup codeGroup_____________ Dev Xk3m9QpL2vT7',
+    ]);
   });
 
   it('fades approval when its original action becomes unavailable but still allows cancellation', async () => {
@@ -826,6 +877,22 @@ describe('app actions', () => {
     expect(actions.ui.snapshot().view).toBe('home');
     expect(views).toContain('settings');
     stop();
+  });
+
+  it('lists everyone in the balances once a person is added, but not after a rename', async () => {
+    const { host, calls } = createHost();
+    const actions = createDispatcher(host);
+
+    await actions.dispatch('beginEditMember', { memberId: 'member-2______________' });
+    await actions.dispatch('changeDraft', { field: 'member.name', value: 'Benjamin' });
+    await actions.dispatch('saveMemberEdit', {});
+    expect(actions.state().ui.balancesExpanded).toBe(false);
+
+    await actions.dispatch('beginAddMember', {});
+    await actions.dispatch('changeDraft', { field: 'member.name', value: 'Cy' });
+    expect(await actions.dispatch('saveMemberEdit', {})).toMatchObject({ status: 'done' });
+    expect(calls).toContain('member.create Cy');
+    expect(actions.state().ui.balancesExpanded).toBe(true);
   });
 
   it('retains failed drafts and discards cancelled member edits without saving', async () => {
@@ -907,7 +974,7 @@ describe('app actions', () => {
         previewInvite: async (groupId) => {
           await delayed;
 
-          return { group: { id: groupId, name: 'Trip' }, members: [] };
+          return { group: { id: groupId ?? 'codeGroup_____________', name: 'Trip' }, members: [] };
         },
       },
     });
@@ -1139,7 +1206,7 @@ describe('app actions', () => {
 
     expect(await actions.dispatch('regenerateInvite', {})).toMatchObject({
       status: 'needs_confirmation',
-      message: 'The current link will stop working.',
+      message: 'The old link will stop working. Everyone already in the group keeps their access.',
     });
     expect(calls).toEqual([]);
     expect(
@@ -1148,20 +1215,24 @@ describe('app actions', () => {
     expect(calls).toEqual(['regenerateInvite']);
   });
 
-  it('asks before choosing a member another participant uses', async () => {
+  it('chooses a member another participant uses without asking', async () => {
     const { host, calls } = createHost({ others: ['Ben'] });
     const actions = createDispatcher(host);
 
     expect(
       await actions.dispatch('setPreferredMember', { memberId: 'member-2______________' }),
-    ).toMatchObject({
-      status: 'needs_confirmation',
-      message: 'Participant 1 already uses this name.',
-    });
-    expect(
-      await actions.dispatch('setPreferredMember', { memberId: 'member-1______________' }),
     ).toMatchObject({ status: 'done' });
-    expect(calls).toEqual(['preference.set member-1______________']);
+    expect(calls).toEqual(['preference.set member-2______________']);
+  });
+
+  it('opens a person from the group screen and goes back to it', async () => {
+    const { host } = createHost();
+    const actions = createDispatcher(host);
+
+    await actions.dispatch('showPerson', { memberId: 'member-2______________' });
+    expect(actions.ui.snapshot()).toMatchObject({ view: 'person', person: 'member-2______________', trail: ['home'] });
+    await actions.dispatch('closePanel', {});
+    expect(actions.ui.snapshot()).toMatchObject({ view: 'home', trail: [] });
   });
 
   it('reports failures as outcomes instead of throwing', async () => {
@@ -1247,6 +1318,6 @@ describe('app actions', () => {
       described
         .filter((action) => action.confirms)
         .map((action) => action.name),
-    ).toEqual(['setPreferredMember', 'regenerateInvite', 'leaveGroup']);
+    ).toEqual(['regenerateInvite', 'leaveGroup']);
   });
 });

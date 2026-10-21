@@ -2,7 +2,7 @@
 
 Splitnext is an offline-first group ledger foundation built on Cloudflare
 Workers, D1, and one SQLite Durable Object per group. The current MVP handles
-groups, invite links, ledger members, expenses, and per-currency balances with
+groups, invite links, ledger members, expenses, repayments, Activity and safe undo with
 offline synchronization and realtime revision announcements.
 
 How it fits together, and the rules each part keeps, is in
@@ -24,6 +24,15 @@ How it fits together, and the rules each part keeps, is in
 - Offline-capable expense record, edit, remove, and restore commands, in any
   currency, with allocations and burden-fair rounding fixed by the server and
   balances kept per currency.
+- Explicit repayments with a settle-up plan of the fewest payments per
+  currency, partial or excess amounts, offline recording and versioned
+  edit/remove/restore commands.
+- Cached, attributed Activity and safe compensating undo, including reversing a
+  reversal while preserving immutable history and later changes.
+- An Activity bell counting new changes from other identities and changes
+  waiting for review, with New tags and Mark all seen in Activity.
+- Group settings, opened by the gear beside the Activity bell, for renaming
+  the group and leaving it on this device.
 - Nonexclusive preferred-member selection (the member the UI calls “you”).
 - Leaving and rejoining a group without revoking its permanent access grant.
 - A per-identity list of accessible groups, marking the ones it left, backed
@@ -39,15 +48,22 @@ How it fits together, and the rules each part keeps, is in
 - A responsive Expo web app at `/app`, with a public homepage and invite entry
   pages rendered by the same Cloudflare Worker: single-screen group creation,
   member management, invitation sharing, joining and rejoining, group
-  switching, expense entry and editing with equal, share, or mixed amount
-  splits, per-currency balances, and offline command and conflict feedback. Its
+  switching, expense entry and editing with per-person share controls and fixed
+  amounts mixed with weighted shares, per-currency balances, and offline command and conflict feedback. Its
   screens are
   described in [docs/architecture.md](./docs/architecture.md#the-web-app) and
   specified in [docs/product-spec.md](./docs/product-spec.md).
+- One group screen with collapsible balances above the expenses and
+  repayments; person details with a balance breakdown, Settle up, rename,
+  “I’m …” and remove; and browser Back/Forward support. Forms return to where
+  they were opened.
 - A `/components` workbench and in-app devtools, enabled with debug
   inspection, for previewing components and calling any app action.
-- Groups have no currency setting. Expenses record their own currency, as
-  future settlements will, with separate balances per currency; see
+- One fixed light theme with locally served IBM Plex Sans, IBM Plex Mono, and
+  Bricolage Grotesque fonts. The original blue split-S mark appears on the
+  groups list and the join screen. Theme assets are precached with the app shell
+  for offline reloads; changing a theme asset invalidates that cache.
+- Groups have no currency setting. Expenses record their own currency, and repayments do, with separate balances per currency; see
   [ADR 0014](./docs/adr/0014-record-currency-per-expense.md).
 - Expenses use the pure, property-tested money module, `src/domain/money.ts`:
   whole minor units per currency, allocation by
@@ -55,9 +71,8 @@ How it fits together, and the rules each part keeps, is in
   and balances that net to zero per currency; see
   [ADR 0017](./docs/adr/0017-allocate-money-in-whole-minor-units-with-burden-fair-rounding.md).
 
-Settlements, Activity browsing and safe undo, important foreground activity
-notifications, monetary group summaries, and the fixed Blue paper theme are
-accepted future slices. Their agreed behavior is in
+Repayments, cached Activity, safe undo and the Activity bell are
+implemented. Their agreed behavior is in
 [the product specification](./docs/product-spec.md#agreed-feature-port-from-the-earlier-app).
 
 Only the web build of the app exists so far. The Expo app has native
@@ -115,6 +130,26 @@ recreated on every run, so it does not touch `npm run dev` data. Install the
 browser once with `npx playwright install chromium-headless-shell`; a failure
 keeps a trace in `test-results/` that `npx playwright show-trace` opens.
 
+## Showcase
+
+```bash
+npm run showcase
+```
+
+builds the app and drives it through every flow on a phone-sized screen.
+It records a video of each flow, with steps and thumbnails that jump to each
+moment, then writes `showcase/out/index.html` to open in a browser. Its
+Conditional UI section spotlights every element that appears only in some
+situation, such as an empty state, an offline or failure message, a conflict
+to review, or a missing browser capability, forcing each one with offline
+mode, failed or slowed requests, a second device, or a shifted clock. Like the
+browser tests, it starts its own Worker, on port 8793, with fresh storage in
+`.wrangler/showcase-state`. The flows live in `showcase/capture.spec.ts` and
+the conditional cases in `showcase/cases.spec.ts`; a case that can no longer
+be reached shows on the page as not captured, with the reason.
+`npm run showcase:page` rebuilds only the page from the last capture. The
+output is not committed.
+
 ## How it is tested
 
 | What | Where | What it guarantees |
@@ -133,7 +168,7 @@ it in that test's examples once fixed.
 
 ## Diagnosing a problem
 
-**Copy diagnostics**, at the bottom of the groups list in every build, copies
+In development, **Copy diagnostics** in devtools' Actions tab copies
 a report of the app's recent actions and requests with their ids, without
 names, links, or inputs. Every request's id is also in the Worker's log line
 for it, which records what the server decided. In development, devtools show
@@ -147,3 +182,5 @@ state. See [docs/architecture.md](./docs/architecture.md#diagnostics).
 - [Accepted product behavior](./docs/product-spec.md)
 - [Architecture decisions](./docs/adr/)
 - [Agent working agreement](./AGENTS.md)
+
+The groups list shows your separate currency balances. Settle up suggests net transfers and records partial or excess repayments, including offline. Repayments represent money paid outside the app.

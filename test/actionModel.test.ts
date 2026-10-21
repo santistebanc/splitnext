@@ -221,14 +221,14 @@ function expectSettled(state: ReturnType<ReturnType<typeof createDispatcher>['st
   expect(state.executions, trace).toEqual([]);
   expect(['ready', 'editing', 'link', 'choosing'], trace).toContain(state.ui.phase);
 
-  if (state.ui.view === 'settings' || state.ui.view === 'invite') expect(open, `${state.ui.view} without an open group:\n${trace}`).toBe(true);
+  if (['settings', 'invite', 'expense', 'person', 'settle', 'activity', 'settlements'].includes(state.ui.view)) expect(open, `${state.ui.view} without an open group:\n${trace}`).toBe(true);
 
-  if (state.ui.view === 'notices') expect(group, `notices without a group:\n${trace}`).toBeTruthy();
+  if (state.ui.view === 'person' || state.ui.view === 'settle') expect(state.ui.person, `${state.ui.view} without a person:\n${trace}`).toBeTruthy();
 
   if (state.ui.view === 'rejoin') expect(group?.hidden, `rejoin without a left group:\n${trace}`).toBe(true);
 
   if (state.ui.memberEdit) {
-    expect(state.ui.view, trace).toBe('home');
+    expect(['home', 'person'], trace).toContain(state.ui.view);
     expect(open, `member editor without an open group:\n${trace}`).toBe(true);
   }
 }

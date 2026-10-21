@@ -36,7 +36,7 @@ export function expenseLabel(expense: Pick<Expense, 'description' | 'total' | 'c
 }
 
 /** One share for every active member, the default split. */
-export function equalParts(snapshot: Snapshot): AllocationPart[] {
+export function equalParts(snapshot: Snapshot): Extract<AllocationPart, { kind: 'shares' }>[] {
   return activeMembers(snapshot).map((member) => ({ kind: 'shares', member_id: member.id, shares: 1 }));
 }
 
@@ -56,10 +56,10 @@ export function suggestedCurrency(snapshot: Snapshot, region: string | null | un
   return recentCurrencies(snapshot)[0] ?? regionCurrency(region) ?? 'EUR';
 }
 
-/** How the entry form divides an expense between its participants. */
-export type ExpenseSplit = 'equal' | 'shares' | 'amounts';
-
-export const expenseSplits = ['equal', 'shares', 'amounts'] as const satisfies readonly ExpenseSplit[];
+/** One person's split, keeping a fixed amount exactly as it is being typed. */
+export type ExpenseDraftPart =
+  | { kind: 'shares'; member_id: string; shares: number }
+  | { kind: 'exact'; member_id: string; amount: string };
 
 /** An expense as it is being entered, with every number still as typed. */
 export type ExpenseDraft = {
@@ -69,11 +69,7 @@ export type ExpenseDraft = {
   amount: string;
   currency: string;
   paidBy: string | null;
-  split: ExpenseSplit;
-  /** Members sharing the expense, in group order. */
-  participants: string[];
-  /** Shares or an amount per participant, by split; a blank amount shares what is left. */
-  values: Record<string, string>;
+  parts: ExpenseDraftPart[];
 };
 
 /**
@@ -94,14 +90,9 @@ export function draftForExpense(
       amount: '',
       currency,
       paidBy: preferredMember(snapshot, identityId)?.id ?? null,
-      split: 'equal',
-      participants: activeMembers(snapshot).map((member) => member.id),
-      values: {},
+      parts: equalParts(snapshot),
     };
   }
-
-  const exact = expense.parts.some((part) => part.kind === 'exact');
-  const equal = expense.parts.every((part) => part.kind === 'shares' && part.shares === 1);
 
   return {
     expenseId: expense.id,
@@ -110,15 +101,67 @@ export function draftForExpense(
     amount: formatAmount(expense.total, expense.currency),
     currency: expense.currency,
     paidBy: expense.paid[0]?.member_id ?? null,
-    split: exact ? 'amounts' : equal ? 'equal' : 'shares',
-    participants: expense.parts.map((part) => part.member_id),
-    values: Object.fromEntries(
-      expense.parts.map((part) => [
-        part.member_id,
-        part.kind === 'exact' ? formatAmount(part.amount, expense.currency) : exact ? '' : String(part.shares),
-      ]),
-    ),
+    parts: expense.parts.map((part) => part.kind === 'exact' ? { ...part, amount: formatAmount(part.amount, expense.currency) } : { ...part }),
   };
+}
+
+/** Reduce share counts together, leaving every fixed amount intact. */
+function normalizeShares(parts: ExpenseDraftPart[]): ExpenseDraftPart[] {
+  function gcd(left: number, right: number): number {
+    return right ? gcd(right, left % right) : left;
+  }
+
+  const divisor = parts.reduce((common, part) => part.kind === 'shares' ? gcd(common, part.shares) : common, 0);
+
+  return divisor > 1 ? parts.map((part) => part.kind === 'shares' ? { ...part, shares: part.shares / divisor } : part) : parts;
+}
+
+/** The nearest whole share count above a fixed person's current proportion. */
+function sharesFromFixed(draft: ExpenseDraft, fixed: Extract<ExpenseDraftPart, { kind: 'exact' }>): number {
+  const amount = parseAmount(fixed.amount, draft.currency) ?? 0;
+  const total = parseAmount(draft.amount, draft.currency) ?? 0;
+  const otherFixed = draft.parts.reduce((sum, part) => part.kind === 'exact' && part !== fixed ? sum + (parseAmount(part.amount, draft.currency) ?? 0) : sum, 0);
+  const shares = draft.parts.reduce((sum, part) => part.kind === 'shares' ? sum + part.shares : sum, 0);
+  const remaining = total - otherFixed - amount;
+
+  if (!shares || remaining <= 0) return 1;
+  const numerator = BigInt(amount) * BigInt(shares);
+  const denominator = BigInt(remaining);
+
+  return Math.max(1, Math.min(1_000_000, Number((numerator + denominator - 1n) / denominator)));
+}
+
+/** Increase a share, add someone excluded, or return a fixed person to shares. */
+export function increaseExpenseShare(draft: ExpenseDraft, memberId: string): ExpenseDraftPart[] {
+  const current = draft.parts.find((part) => part.member_id === memberId);
+  const shares = current?.kind === 'exact' ? sharesFromFixed(draft, current) : (current?.shares ?? 0) + 1;
+  const replacement: ExpenseDraftPart = { kind: 'shares', member_id: memberId, shares };
+  const parts = current ? draft.parts.map((part) => part === current ? replacement : part) : [...draft.parts, replacement];
+
+  return normalizeShares(parts);
+}
+
+/** Decrease a share; a fixed person or someone at one share is excluded. */
+export function decreaseExpenseShare(draft: ExpenseDraft, memberId: string): ExpenseDraftPart[] {
+  return normalizeShares(draft.parts.flatMap((part): ExpenseDraftPart[] => {
+    if (part.member_id !== memberId) return [part];
+
+    return part.kind === 'shares' && part.shares > 1 ? [{ ...part, shares: part.shares - 1 }] : [];
+  }));
+}
+
+/** Keep a person sharing the remainder, even when everybody else has a fixed amount. */
+export function canExcludeExpensePart(draft: ExpenseDraft, memberId: string): boolean {
+  const others = draft.parts.filter((part) => part.member_id !== memberId);
+
+  return others.some((part) => part.kind === 'shares') || (!draft.parts.some((part) => part.kind === 'shares') && others.length > 0);
+}
+
+/** Keep a typed fixed amount, or return that person to one share when cleared. */
+export function fixExpenseAmount(draft: ExpenseDraft, memberId: string, amount: string): ExpenseDraftPart[] {
+  return normalizeShares(draft.parts.map((part): ExpenseDraftPart => part.member_id !== memberId ? part : amount.trim()
+    ? { kind: 'exact', member_id: memberId, amount }
+    : { kind: 'shares', member_id: memberId, shares: 1 }));
 }
 
 export type DraftEntry = { ok: true; entry: ExpenseEntry } | { ok: false; problem: string };
@@ -137,24 +180,18 @@ export function entryFromDraft(draft: ExpenseDraft): DraftEntry {
 
   if (!draft.paidBy) return fail('Choose who paid.');
 
-  if (!draft.participants.length) return fail('Choose who shares the expense.');
+  if (!draft.parts.length) return fail('Choose who shares the expense.');
   const parts: AllocationPart[] = [];
 
-  for (const memberId of draft.participants) {
-    const value = (draft.values[memberId] ?? '').trim();
-
-    if (draft.split === 'equal' || (draft.split === 'amounts' && !value)) {
-      parts.push({ kind: 'shares', member_id: memberId, shares: 1 });
-    } else if (draft.split === 'shares') {
-      const shares = /^\d+$/.test(value || '1') ? Number(value || '1') : 0;
-
-      if (!shares) return fail('Use whole numbers of shares, such as 2.');
-      parts.push({ kind: 'shares', member_id: memberId, shares });
+  for (const part of draft.parts) {
+    if (part.kind === 'shares') {
+      if (!Number.isInteger(part.shares) || part.shares <= 0 || part.shares > 1_000_000) return fail('Use between 1 and 1000000 whole shares.');
+      parts.push(part);
     } else {
-      const amount = parseAmount(value, draft.currency);
+      const amount = parseAmount(part.amount, draft.currency);
 
       if (amount === null) return fail(`Enter each amount in ${draft.currency}.`);
-      parts.push({ kind: 'exact', member_id: memberId, amount });
+      parts.push({ kind: 'exact', member_id: part.member_id, amount });
     }
   }
 
@@ -163,7 +200,7 @@ export function entryFromDraft(draft: ExpenseDraft): DraftEntry {
   if (!allocated.ok) {
     return fail(
       allocated.error === 'remainder_without_shares'
-        ? 'The amounts must add up to the total, or leave one blank to share the rest.'
+        ? 'The fixed amounts must add up to the total, or clear one to share the rest.'
         : 'The amounts add up to more than the total.',
     );
   }
@@ -177,9 +214,10 @@ export function entryFromDraft(draft: ExpenseDraft): DraftEntry {
 /**
  * What each participant would owe, allocated as the group would now. The
  * group decides when the expense arrives, so an extra unit may still move.
+ * The split shows before the expense is described.
  */
 export function previewAllocation(snapshot: Snapshot, draft: ExpenseDraft): Map<string, number> {
-  const result = entryFromDraft(draft);
+  const result = entryFromDraft({ ...draft, description: draft.description.trim() || 'Expense' });
 
   if (!result.ok || !snapshot) return new Map();
   const burden = roundingBurden(snapshot, result.entry.currency, draft.expenseId ?? undefined);
@@ -198,8 +236,8 @@ export function memberName(snapshot: Snapshot, memberId: string): string {
 export type BalanceRow = { member: LedgerMember; amount: number };
 
 /**
- * Each currency's balances: every active member, and a hidden one only while
- * it is not settled there. Positive is owed to the member.
+ * Each currency's balances for people named in its current records, including
+ * settled zeros. Hidden people stay only while not settled. Positive is owed.
  */
 export function balanceRows(snapshot: Snapshot): { currency: string; rows: BalanceRow[] }[] {
   const byCurrency = snapshot ? groupBalances(snapshot) : {};
@@ -209,9 +247,9 @@ export function balanceRows(snapshot: Snapshot): { currency: string; rows: Balan
     .map((currency) => ({
       currency,
       rows: (snapshot?.members ?? []).flatMap((member) => {
-        const amount = byCurrency[currency]?.[member.id] ?? 0;
+        const amount = byCurrency[currency]?.[member.id];
 
-        return member.status === 'active' || (member.status === 'hidden' && amount !== 0) ? [{ member, amount }] : [];
+        return amount !== undefined && (member.status === 'active' || (member.status === 'hidden' && amount !== 0)) ? [{ member, amount }] : [];
       }),
     }));
 }

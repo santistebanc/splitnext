@@ -31,7 +31,8 @@ _Avoid_: Membership, attendance, ownership
 A group's single reusable link that issues permanent group access grants.
 Every participant can copy or share the same current link.
 It has no time limit; changing it replaces the token and invalidates the old
-link while leaving previously granted access intact.
+link while leaving previously granted access intact. Its link carries only a
+short invite code, which identifies the group.
 _Avoid_: Access grant, individual invite
 
 **Invite preview**:
@@ -105,6 +106,23 @@ _Avoid_: Converted balance, combined balance
 A recorded repayment between ledger members in a specified currency.
 _Avoid_: Payment execution, currency conversion
 
+**Settle-up plan**:
+The fewest payments that bring every balance in one currency to zero; it may
+skip people in the middle. A person's Settle up shows the plan's payments that
+involve them.
+_Avoid_: Suggestions, pairwise debts
+
+**Settled member**:
+A ledger member whose current expenses and settlements cancel out, leaving a
+zero balance in every currency. A member that no current expense or
+settlement names has no expenses yet, rather than being settled.
+_Avoid_: Inactive, empty
+
+**Balance breakdown**:
+The current expenses and settlements behind one member's balance in a
+currency, each with its signed effect; they add up exactly to the balance.
+_Avoid_: Statement, history
+
 ## Synchronization and history
 
 **Command**:
@@ -150,6 +168,12 @@ The group's audit events shown to people, from which undoable actions can be
 reversed.
 _Avoid_: History record, log
 
+**New activity**:
+Activity events from other identities after the sequence this installation
+last marked seen for the group. The bell counts them together with conflict
+notices.
+_Avoid_: Notification, unread message
+
 ## App interaction
 
 **App action**:
@@ -162,3 +186,7 @@ _Avoid_: Command (for this sense), handler, intent
 A person's explicit approval of an app action whose effects others notice or
 cannot easily undo, given before it runs.
 _Avoid_: Prompt, dialog
+
+**Reversal**:
+An attributed compensating action that safely undoes an earlier Activity action while leaving the original history intact.
+_Avoid_: History deletion, force overwrite

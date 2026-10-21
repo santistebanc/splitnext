@@ -1,4 +1,4 @@
-import type { InvitePreview } from '@splitnext/client';
+import { repaymentMembers, type InvitePreview } from '@splitnext/client';
 import { draftForExpense, type ExpenseDraft } from './expenses';
 import type { AppState } from './controller';
 import {
@@ -22,7 +22,18 @@ export const draftFields = [
   'join.link',
   'join.name',
   'member.name',
+  'repayment.amount',
+  'repayment.currency',
 ] as const;
+
+/** The group screen and the views that open over it, each returning to the view below. */
+export const groupViews = ['home', 'person', 'settle', 'invite', 'settings', 'expense', 'settlements', 'activity'] as const satisfies readonly ViewName[];
+
+export type GroupView = (typeof groupViews)[number];
+
+export function isGroupView(view: ViewName): view is GroupView {
+  return groupViews.some((entry) => entry === view);
+}
 
 export type DraftField = (typeof draftFields)[number];
 
@@ -32,11 +43,31 @@ export type MemberEdit = {
   expectedName: string;
 };
 
+/** A member just removed on this device, offered back by the undo toast. */
+/** A member just taken out of the group: hidden when expenses or repayments name them, removed otherwise. */
+export type Removal = { id: number; memberId: string; name: string; hidden: boolean };
+
+/** Where this installation keeps how far it has seen each group’s Activity. */
+export type SeenStorage = {
+  read(): Record<string, number>;
+  write(seen: Record<string, number>): void;
+};
+
 type UiContext = {
+  /** The group views below the current one, which Back and Cancel return to in turn. */
+  trail: GroupView[];
+  /** The member whose details or settle-up plan is open. */
+  person: string | null;
+  /** Whether the balances panel above the expenses is expanded. */
+  balancesExpanded: boolean;
+  /** The last Activity sequence marked seen in each group on this installation. */
+  activitySeen: Record<string, number>;
+  removal: Removal | null;
   navigation: { revision: number; mode: 'push' | 'replace' | 'restore' };
   create: { name: string; yourName: string };
   settings: { name: string; expectedName: string };
   expense: ExpenseDraft;
+  repayment: { from: string; to: string; amount: string; currency: string; settlementId: string | null; expectedVersion: number | null; manual: boolean };
   join: {
     link: string;
     name: string;
@@ -46,7 +77,6 @@ type UiContext = {
   };
   memberEdit: MemberEdit | null;
   showLeftGroups: boolean;
-  showNoticeSummary: boolean;
   copiedInviteId: string | null;
   confirmation: { id: string; name: string; message: string } | null;
 };
@@ -57,15 +87,23 @@ function groupIsOpen(app: AppState): boolean {
   return Boolean(app.group?.projected_snapshot && !app.group.hidden);
 }
 
+/** Whether a member has details to show: current, or removed while their balances are still open. */
+export function personFits(app: AppState, memberId: string | null | undefined): boolean {
+  return Boolean(memberId && groupIsOpen(app) && repaymentMembers(app.group?.projected_snapshot).some((member) => member.id === memberId));
+}
+
 /** Whether the group a view shows is there: panels need it open, rejoining needs it left. */
-export function viewFits(view: ViewName, app: AppState): boolean {
+export function viewFits(view: ViewName, app: AppState, person: string | null = null): boolean {
   switch (view) {
+    case 'person':
+    case 'settle':
+      return personFits(app, person);
     case 'settings':
     case 'expense':
+    case 'settlements':
+    case 'activity':
     case 'invite':
       return groupIsOpen(app);
-    case 'notices':
-      return Boolean(app.group?.projected_snapshot);
     case 'rejoin':
       return Boolean(app.group?.hidden);
     default:
@@ -81,19 +119,27 @@ export class AppUiState {
   private listeners = new Set<() => void>();
   private confirmationSequence = 0;
   private requestSequence = 0;
+  private removalSequence = 0;
   private confirmRun: (() => Promise<void>) | null = null;
 
   constructor(
     private readApp: () => AppState,
     private readName: () => string | null,
     initialLink = '',
+    private seenStorage: SeenStorage | null = null,
   ) {
     const name = readApp().group?.projected_snapshot?.group.name ?? '';
     this.context = {
+      trail: [],
+      person: null,
+      balancesExpanded: false,
+      activitySeen: seenStorage?.read() ?? {},
+      removal: null,
       navigation: { revision: 0, mode: 'replace' },
       create: { name: '', yourName: readName() ?? '' },
       settings: { name, expectedName: name },
       expense: draftForExpense(null, null, 'EUR'),
+      repayment: { from: '', to: '', amount: '', currency: 'EUR', settlementId: null, expectedVersion: null, manual: false },
       join: {
         link: initialLink,
         name: readName() ?? '',
@@ -103,7 +149,6 @@ export class AppUiState {
       },
       memberEdit: null,
       showLeftGroups: false,
-      showNoticeSummary: true,
       copiedInviteId: null,
       confirmation: null,
     };
@@ -127,10 +172,24 @@ export class AppUiState {
 
   update(
     patch: Partial<
-      Pick<UiContext, 'showLeftGroups' | 'showNoticeSummary' | 'copiedInviteId'>
+      Pick<UiContext, 'showLeftGroups' | 'copiedInviteId' | 'balancesExpanded' | 'removal'>
     >,
   ): void {
     this.patch(patch);
+  }
+
+  /** Marks a group's Activity seen up to a sequence; later items from others count as new. */
+  markActivitySeen(groupId: string, sequence: number): void {
+    if ((this.state.activitySeen[groupId] ?? -1) >= sequence) return;
+    const activitySeen = { ...this.state.activitySeen, [groupId]: sequence };
+
+    this.seenStorage?.write(activitySeen);
+    this.patch({ activitySeen });
+  }
+
+  /** Remembers a member removed here, so the toast can offer it back. */
+  removed(memberId: string, name: string, hidden: boolean): void {
+    this.patch({ removal: { id: ++this.removalSequence, memberId, name, hidden } });
   }
 
   private move(event: WorkflowEvent, patch: Partial<UiContext> = {}): boolean {
@@ -146,11 +205,32 @@ export class AppUiState {
     return true;
   }
 
-  show(view: ViewName, mode: UiState['navigation']['mode'] = 'push'): void {
+  /**
+   * The views below a view opened from the current one. Opening the group
+   * screen or a view already below returns to it; anything else stacks on top.
+   */
+  private trailTo(view: ViewName): GroupView[] {
+    const current = this.state.view;
+
+    if (!isGroupView(view) || view === 'home' || !isGroupView(current)) return [];
+
+    const below = this.state.trail.indexOf(view);
+
+    if (below >= 0) return this.state.trail.slice(0, below);
+
+    if (current === view) return this.state.trail;
+
+    // The invite sheet sits over the group screen; whatever opens from it does too.
+    return current === 'invite' ? this.state.trail : [...this.state.trail, current];
+  }
+
+  show(view: ViewName, mode: UiState['navigation']['mode'] = 'push', options: { person?: string | null; trail?: GroupView[] } = {}): void {
     const patch: Partial<UiContext> = {
       navigation: { revision: this.state.navigation.revision + 1, mode },
       confirmation: null,
       memberEdit: null,
+      trail: options.trail ?? this.trailTo(view),
+      person: options.person !== undefined ? options.person : view === 'home' ? null : this.state.person,
     };
 
     if (view === 'create')
@@ -168,6 +248,15 @@ export class AppUiState {
     this.confirmRun = null;
   }
 
+  /** Returns to the view below the current one, or the group screen when it no longer fits. */
+  back(mode: UiState['navigation']['mode'] = 'push'): void {
+    const trail = [...this.state.trail];
+    const target = trail.pop() ?? 'home';
+
+    if (viewFits(target, this.readApp(), this.state.person)) this.show(target, mode, { trail });
+    else this.show('home', mode);
+  }
+
   /** Opens the expense editor on a new expense, or on one to change. */
   showExpense(expenseId: string | null, currency: string): void {
     const snapshot = this.readApp().group?.projected_snapshot ?? null;
@@ -180,6 +269,7 @@ export class AppUiState {
         navigation: { revision: this.state.navigation.revision + 1, mode: 'push' },
         confirmation: null,
         memberEdit: null,
+        trail: this.trailTo('expense'),
         expense: draftForExpense(snapshot, expense, currency, this.readApp().group?.session?.identity.id),
       },
     );
@@ -190,6 +280,11 @@ export class AppUiState {
   changeExpense(change: (draft: ExpenseDraft) => Partial<ExpenseDraft>): void {
     this.move({ type: 'edit', intent: 'expenseDraft' });
     this.patch({ expense: { ...this.state.expense, ...change(this.state.expense) } });
+  }
+
+  changeRepayment(patch: Partial<UiContext['repayment']>): void {
+    this.move({ type: 'edit', intent: 'draft' });
+    this.patch({ repayment: { ...this.state.repayment, ...patch } });
   }
 
   showJoin(link = '', rejoining = false): void {
@@ -206,6 +301,8 @@ export class AppUiState {
         },
         confirmation: null,
         memberEdit: null,
+        trail: [],
+        person: null,
         join: {
           link,
           name: this.readName() ?? '',
@@ -228,8 +325,8 @@ export class AppUiState {
   }
 
   /**
-   * Leaves a view whose group went away, such as settings for a group left
-   * meanwhile in this tab or another, for the groups list in its place. A
+   * Leaves a view whose group or person went away, such as settings for a
+   * group left meanwhile in this tab or another, for the view below it. A
    * running step finishes first and is checked again when it fails.
    */
   fitToApp(): void {
@@ -237,8 +334,10 @@ export class AppUiState {
 
     if (this.state.memberEdit && !groupIsOpen(app)) this.patch({ memberEdit: null });
 
-    if ('requestId' in this.workflow || viewFits(this.state.view, app)) return;
-    this.show('home', 'replace');
+    if ('requestId' in this.workflow || viewFits(this.state.view, app, this.state.person)) return;
+
+    if (groupIsOpen(app) && isGroupView(this.state.view)) this.back('replace');
+    else this.show('home', 'replace');
   }
 
   changeDraft(field: DraftField, value: string): void {
@@ -263,6 +362,12 @@ export class AppUiState {
         break;
       case 'expense.currency':
         this.changeExpense(() => ({ currency: value.trim().toUpperCase() }));
+        break;
+      case 'repayment.amount':
+        this.changeRepayment({ amount: value });
+        break;
+      case 'repayment.currency':
+        this.changeRepayment({ currency: value.trim().toUpperCase() });
         break;
       case 'join.name':
         this.move({ type: 'edit', intent: 'joinName' });
@@ -375,6 +480,8 @@ export class AppUiState {
             mode: 'push',
           },
           memberEdit: null,
+          trail: [],
+          person: null,
         },
       );
   }
@@ -392,6 +499,12 @@ export class AppUiState {
       throw cause;
     }
 
+    // Saving a form returns to the view it was opened from; creating or
+    // joining opens the group screen.
+    const returns = intent === 'saveSettings' || intent === 'saveExpense';
+    const trail = returns ? [...this.state.trail] : [];
+    const target = trail.pop() ?? 'home';
+
     this.move(
       { type: 'succeeded', requestId },
       {
@@ -401,8 +514,16 @@ export class AppUiState {
         },
         memberEdit: null,
         confirmation: null,
+        trail: [],
+        person: returns ? this.state.person : null,
       },
     );
+
+    if (target !== 'home') {
+      if (viewFits(target, this.readApp(), this.state.person)) this.show(target, 'replace', { trail });
+      else this.show('home', 'replace');
+    }
+
     this.confirmRun = null;
 
     return result;

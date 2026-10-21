@@ -1,11 +1,11 @@
 # Earlier-app feature port
 
-Status: ready-for-agent
+Status: resolved
 
 Agreed through the feature inventory and specification interview. Product
 behavior is recorded in [docs/product-spec.md](../../docs/product-spec.md#agreed-feature-port-from-the-earlier-app).
-This document provides the implementation handoff, not a claim of completed
-features. Leave work uncommitted unless asked otherwise.
+All eight implementation slices are implemented and validated. Their tickets
+record the scope and checks. Implementation changes remain uncommitted for inspection.
 
 ## Target and authority
 
@@ -15,7 +15,7 @@ features. Leave work uncommitted unless asked otherwise.
   implementation quirks, and dormant UI paths do not override them.
 - No old-data migration or compatibility layer is required. The user explicitly
   permits replacing/wiping existing data when needed for implementation.
-- This planning slice does not wipe data or implement the features.
+- The implementation uses fresh v4 groups and the current domain model.
 
 ## Source inventory and disposition
 
@@ -184,5 +184,4 @@ Do not introduce new layers merely to copy the older app's architecture.
   `test/syncConvergence.test.ts`, and preserve shrunk failures as examples.
 - Extend pure money and persistence/transport tests where behavior changes.
 - Run `npm run check` after each slice. Leave all changes uncommitted.
-- This planning slice is complete when the accepted behavior, source inventory,
-  and separate implementation issues are recorded; implementation is future work.
+- All eight implementation slices are complete, with full checks after each.

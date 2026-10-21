@@ -19,6 +19,8 @@ export default {
       path === '/' ||
       path === '/app' ||
       path === '/app/' ||
+      path === '/j' ||
+      path === '/j/' ||
       path.startsWith('/join/') ||
       // The component workbench is a development tool.
       ((path === '/components' || path === '/components/') &&

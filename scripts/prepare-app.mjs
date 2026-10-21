@@ -35,14 +35,29 @@ const serializedManifest = await readFile(
 
 const manifest = JSON.parse(serializedManifest);
 
-const release = createHash('sha256')
-  .update(serializedManifest)
-  .digest('hex')
-  .slice(0, 16);
+const publicAssets = [
+  '/assets/ibm-plex-sans.woff2',
+  '/assets/ibm-plex-mono-500.woff2',
+  '/assets/ibm-plex-mono-600.woff2',
+  '/assets/bricolage-grotesque.woff2',
+  '/icon.svg',
+  '/manifest.webmanifest',
+];
+
+// A font or icon replacement must invalidate the shell cache too, even
+// when the JavaScript bundle and route manifest have not changed.
+const releaseHash = createHash('sha256').update(serializedManifest);
+
+for (const path of publicAssets) {
+  releaseHash.update(path).update(await readFile(join(assets, path.slice(1))));
+}
+
+const release = releaseHash.digest('hex').slice(0, 16);
 
 const precache = [
   '/',
   '/app',
+  ...publicAssets,
   ...(manifest.assets?.js ?? []),
   ...(manifest.assets?.css ?? []),
 ];

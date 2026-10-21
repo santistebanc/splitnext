@@ -22,6 +22,8 @@ export type TransportControls = {
 /** The production group engine behind an isolated transport; no network or browser storage. */
 export async function memoryTransport(session: IdentitySession, replicas: ClientReplicaState[], controls: TransportControls) {
   const repositories = new Map<string, MemoryGroupRepository>();
+  // Which group each invite secret opens, as the server's invite index records it.
+  const invites = new Map<string, string>();
   const now = () => new Date().toISOString();
 
   for (const replica of replicas) {
@@ -41,6 +43,7 @@ export async function memoryTransport(session: IdentitySession, replicas: Client
     });
 
     store.create(initial);
+    invites.set(initial.invite_token_hash, replica.group_id);
     repository.transaction((persistence) => {
       const state = persistence.loadState();
 
@@ -71,6 +74,14 @@ export async function memoryTransport(session: IdentitySession, replicas: Client
 
   function deviceFor(session: IdentitySession): SyncDeviceTransport {
     return {
+    activity: async (groupId) => {
+      await request('activity', groupId, false);
+      const result = requireStore(groupId).activity(session.identity.id);
+
+      if (!result.ok) throw new SplitnextRequestError(401, { error: result.error });
+
+      return { events: result.events };
+    },
     currentIdentity: async () => {
       await request('currentIdentity', '', false);
 
@@ -102,6 +113,7 @@ export async function memoryTransport(session: IdentitySession, replicas: Client
 
       if (!result.ok) throw new SplitnextRequestError(groupFailureStatus.create(result.error), { error: result.error });
       repositories.set(input.group_id, repository);
+      invites.set(await hashInviteToken(input.invite.token), input.group_id);
 
       return result.created;
     },
@@ -129,10 +141,14 @@ export async function memoryTransport(session: IdentitySession, replicas: Client
 
       return { revision: result.revision, snapshot: result.snapshot, access: result.access };
     },
-    previewInvite: async (groupId, token) => {
+    previewInvite: async (requested, token) => {
       previewInviteRequestSchema.parse({ token });
-      await request('previewInvite', groupId);
-      const result = requireStore(groupId).previewInvite(await hashInviteToken(token));
+      const tokenHash = await hashInviteToken(token);
+      const groupId = requested ?? invites.get(tokenHash);
+      await request('previewInvite', groupId ?? 'invite code');
+
+      if (!groupId) throw new SplitnextRequestError(403, { error: 'invite_invalid' });
+      const result = requireStore(groupId).previewInvite(tokenHash);
 
       if (!result.ok) throw new SplitnextRequestError(groupFailureStatus.preview(result.error), { error: result.error });
 
@@ -148,6 +164,7 @@ export async function memoryTransport(session: IdentitySession, replicas: Client
       });
 
       if (!result.ok) throw new SplitnextRequestError(groupFailureStatus.invite(result.error), { error: result.error });
+      invites.set(await hashInviteToken(input.token), groupId);
 
       return { revision: result.revision, invite: result.invite };
     },

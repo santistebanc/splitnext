@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import { changeUndoneAuditSchema } from './reversals';
+import { settlementRestoredAuditSchema } from './commands/settlementRestore';
+import { settlementRemovedAuditSchema } from './commands/settlementRemove';
+import { settlementEditedAuditSchema } from './commands/settlementEdit';
+import { settlementRecordedAuditSchema } from './commands/settlementRecord';
 import { expenseEditedAuditSchema } from './commands/expenseEdit';
 import { expenseRecordedAuditSchema } from './commands/expenseRecord';
 import { expenseRemovedAuditSchema } from './commands/expenseRemove';
@@ -43,6 +48,11 @@ export const auditChangeSchema = z.discriminatedUnion('action', [
   memberRenamedAuditSchema,
   memberRemovedAuditSchema,
   memberRestoredAuditSchema,
+  settlementEditedAuditSchema,
+  settlementRemovedAuditSchema,
+  settlementRestoredAuditSchema,
+  changeUndoneAuditSchema,
+  settlementRecordedAuditSchema,
   expenseRecordedAuditSchema,
   expenseEditedAuditSchema,
   expenseRemovedAuditSchema,
@@ -109,3 +119,5 @@ export class AuditHistory {
     return this.store.readAudit().map((event) => auditEventSchema.parse(event));
   }
 }
+
+export const activityResponseSchema = z.object({ events: z.array(auditEventSchema) });

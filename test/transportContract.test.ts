@@ -35,6 +35,11 @@ for (const [name, createApi] of Object.entries(transports)) {
       await expect(owner.createGroup({ ...input, name: '' })).rejects.toMatchObject({ name: 'ZodError' });
       await expect(visitor.syncGroup(input.group_id, { known_revision: null, commands: [] })).rejects.toMatchObject({ status: 401, code: 'unauthorized' });
       await expect(visitor.syncGroup(createIdentifier(), { known_revision: null, commands: [] })).rejects.toMatchObject({ status: 401, code: 'unauthorized' });
+      const history = await owner.activity(input.group_id);
+
+      expect(history.events).toMatchObject([{ change: { action: 'group.created' }, actor_member_name: 'Ana' }]);
+      expect(JSON.stringify(history)).not.toContain(input.invite.token);
+      await expect(visitor.activity(input.group_id)).rejects.toMatchObject({ status: 401, code: 'unauthorized' });
       const join = { join_id: createIdentifier(), preferred_member: { kind: 'existing' as const, member_id: created.member.id } };
 
       await expect(visitor.joinGroup(input.group_id, join)).rejects.toMatchObject({ status: 403, code: 'invite_required' });

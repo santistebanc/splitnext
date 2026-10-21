@@ -1,6 +1,6 @@
 # Record repayments with net-balance suggestions
 
-Status: ready-for-agent
+Status: resolved
 Depends on: None
 
 See [the feature-port spec](../spec.md) and
@@ -28,3 +28,5 @@ See [the feature-port spec](../spec.md) and
 
 Agreed during the source-app inventory and specification interview.
 
+
+Implemented explicit settlements, deterministic per-currency suggestions, catalog actions and offline repayment review. Full check passed: 271 unit tests and 12 browser tests.

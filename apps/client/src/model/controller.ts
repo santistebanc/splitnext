@@ -91,8 +91,18 @@ export class AppController {
       regenerateInvite: () => this.regenerateInvite(invocation),
       retryNotice: (commandId) => this.retryNotice(commandId, invocation),
       dismissNotice: (commandId) => this.dismissNotice(commandId, invocation),
-      client: { previewInvite: (groupId, token) => this.client.previewInvite(groupId, token, invocation.id) },
+      client: { activity: async (groupId) => {
+        const replica = await this.client.activity(groupId);
+        await this.readStorage();
+
+        return replica;
+      }, previewInvite: (groupId, token) => this.client.previewInvite(groupId, token, invocation.id) },
     };
+  }
+
+  /** The group on this installation whose current invite link uses this secret. */
+  groupWithInvite(token: string): Promise<string | null> {
+    return this.client.groupWithInvite(token);
   }
 
   lastYouName(): string | null {

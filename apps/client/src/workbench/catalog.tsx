@@ -1,20 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Frame } from '../ui/Frame';
 import {
+  BackButton,
   Button,
   Choice,
   ErrorMessage,
   Field,
+  FooterButton,
+  ScreenHeader,
   colors,
   errorMessage,
   s,
 } from '../ui/components';
 import {
   MemberIcon,
-  MemberList,
   type ParticipantMarker,
 } from '../ui/MemberList';
+import { GroupBalances, useBalancesLayout } from '../ui/BalancesPanel';
+import type { MemberListApp, Replica } from '../ui/MemberList';
 import { YouBadge } from '../ui/YouBadge';
 import { ActionsProvider } from '../ui/useActionCall';
 import { useFakeApp, useFakeDispatcher } from './fakeApp';
@@ -166,14 +170,13 @@ export const stories: Story[] = [
     id: 'you-badge',
     group: 'Members',
     title: 'YouBadge',
-    description: "The marker for this installation's own presence.",
+    description: 'The label beside the member this installation is.',
     controls: {
-      status: { kind: 'select', options: statuses, default: 'online' },
       zoom: { kind: 'number', default: 4, min: 1, max: 10 },
     },
     render: (values) => (
       <View style={{ transform: [{ scale: values.zoom }], margin: 48 }}>
-        <YouBadge status={values.status} />
+        <YouBadge />
       </View>
     ),
   }),
@@ -184,7 +187,6 @@ export const stories: Story[] = [
     description:
       'Person figure with one combined presence marker and a +N for extra participants.',
     controls: {
-      joined: { kind: 'boolean', default: true },
       isYou: {
         kind: 'boolean',
         default: true,
@@ -222,7 +224,7 @@ export const stories: Story[] = [
 
       return (
         <View style={{ transform: [{ scale: values.zoom }], margin: 64 }}>
-          <MemberIcon joined={values.joined} participants={participants} />
+          <MemberIcon participants={participants} />
         </View>
       );
     },
@@ -230,16 +232,16 @@ export const stories: Story[] = [
   defineStory({
     id: 'member-list',
     group: 'Members',
-    title: 'MemberList',
+    title: 'BalancesPanel',
     description:
-      'The editable members list through the real client and memory server; ' +
-      'change a control to start over.',
+      'Everyone’s balances with the inline Add a person row, through the real ' +
+      'client and memory server; change a control to start over.',
     controls: {
       members: { kind: 'text', default: 'Ana, Ben, Chloe, Dev' },
       you: {
         kind: 'text',
         default: 'Ana',
-        hint: 'The member this installation uses; blank for nobody.',
+        hint: 'The name taken on this installation; blank for nobody.',
       },
       others: {
         kind: 'text',
@@ -273,7 +275,7 @@ export const stories: Story[] = [
       },
     },
     render: (values, log) => (
-      <View style={[s.card, s.listCard, { width: '100%', maxWidth: 680 }]}>
+      <View style={{ width: '100%', maxWidth: 480 }}>
         <MemberListDemo
           scenario={{
             members: listValue(values.members),
@@ -294,14 +296,18 @@ export const stories: Story[] = [
     id: 'frame',
     group: 'Layout',
     title: 'Frame',
-    description: 'The page shell with the brand header.',
+    description: 'The screen shell: a fixed header, scrolling content, and a pinned footer action.',
     controls: {
-      groupsButton: { kind: 'boolean', default: true },
+      header: { kind: 'boolean', default: true },
+      footer: { kind: 'boolean', default: true },
       content: { kind: 'text', default: 'Page content goes here.' },
     },
     render: (values, log) => (
       <View style={{ width: '100%', height: 320 }}>
-        <Frame onGroups={values.groupsButton ? () => log('onGroups') : undefined}>
+        <Frame
+          header={values.header ? <ScreenHeader title="Screen title" start={<BackButton label="Back" onPress={() => log('back')} />} /> : undefined}
+          footer={values.footer ? <FooterButton onPress={() => log('footer')}>Main action</FooterButton> : undefined}
+        >
           <Text style={s.body}>{values.content}</Text>
         </Frame>
       </View>
@@ -385,7 +391,7 @@ type MemberListDemoProps = {
   log: Log;
 };
 
-/** Runs MemberList through the real client over an in-memory server. */
+/** Runs BalancesPanel through the real client over an in-memory server. */
 function MemberListDemo(props: MemberListDemoProps) {
   const app = useFakeApp({
     scenario: props.scenario,
@@ -400,7 +406,18 @@ function MemberListDemo(props: MemberListDemoProps) {
 
   return replica && app && actions ? (
     <ActionsProvider value={actions}>
-      <MemberList app={app} replica={replica} />
+      <BalancesDemo app={app} replica={replica} />
     </ActionsProvider>
   ) : null;
+}
+
+/** The balances at their default level, as if under a group header of the given height. */
+function BalancesDemo(props: { app: MemberListApp; replica: Replica }) {
+  const layout = useBalancesLayout();
+
+  useEffect(() => {
+    layout.measureHeader(60);
+  }, []);
+
+  return <GroupBalances app={props.app} replica={props.replica} layout={layout} />;
 }

@@ -1,3 +1,4 @@
+import { activityResponseSchema } from '../domain/audit';
 import { groupFailureStatus } from '../groupTransport';
 import { createRoute, z } from '@hono/zod-openapi';
 import { joinGroupRequestSchema } from '../domain/access';
@@ -17,6 +18,7 @@ import {
 } from '../domain/sync';
 import { realtimeIdentityHeader } from '../groupObject';
 import { GroupIndex } from '../groupIndex';
+import { InviteIndex } from '../inviteIndex';
 import { annotateRequest } from '../requestLog';
 import {
   authenticateDevice,
@@ -90,6 +92,12 @@ const joinGroupRoute = createRoute({
   },
 });
 
+const activityRoute = createRoute({
+  method: 'get', path: '/groups/{groupId}/activity', tags: ['Groups'], summary: 'Read immutable group Activity', security: [{ bearerAuth: [] }],
+  request: { params: groupIdParameter, headers: deviceAuthorizationHeadersSchema },
+  responses: { 200: { description: 'Audit events in sequence order, with historical attribution.', content: { 'application/json': { schema: activityResponseSchema } } }, 401: errorResponse('The identity has no access to this group.') },
+});
+
 const syncGroupRoute = createRoute({
   method: 'post',
   path: '/groups/{groupId}/sync',
@@ -140,7 +148,7 @@ const regenerateInviteRoute = createRoute({
   tags: ['Invites'],
   summary: "Replace the group's single current invite link",
   description:
-    'The client generates the token and shares `/join/{groupId}#{token}`. The ' +
+    'The client generates a 12-character code and shares `/j#{code}`. The ' +
     'server shares the current token in authenticated group snapshots. The same ' +
     'invite id and token make retries safe and never restore a replaced link.',
   security: [{ bearerAuth: [] }],
@@ -190,11 +198,40 @@ const previewInviteRoute = createRoute({
   },
 });
 
+const previewInviteCodeRoute = createRoute({
+  method: 'post',
+  path: '/invites/preview',
+  tags: ['Invites'],
+  summary: 'Show a link holder the group of an invite code before they join',
+  description:
+    'Short links carry only the code, as `/j#{code}`. The server finds the ' +
+    'group from a hash of the code; the preview includes the group id to join.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    headers: deviceAuthorizationHeadersSchema,
+    body: {
+      required: true,
+      content: { 'application/json': { schema: previewInviteRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'The group, its name, and the active members to choose from.',
+      content: { 'application/json': { schema: invitePreviewSchema } },
+    },
+    400: errorResponse('The request body is invalid.'),
+    401: errorResponse('The device credential is unavailable or invalid.'),
+    403: errorResponse('The invite code is unknown or replaced.'),
+  },
+});
+
 const authenticatedGroupRoutes = authenticatedRoutes();
 
 authenticatedGroupRoutes.use('/groups', authenticateDevice);
 
 authenticatedGroupRoutes.use('/groups/*', authenticateDevice);
+
+authenticatedGroupRoutes.use('/invites/*', authenticateDevice);
 
 authenticatedGroupRoutes.use('/groups/:groupId/*', async (context, next) => {
   const groupId = identifierSchema.safeParse(context.req.param('groupId'));
@@ -214,12 +251,17 @@ export const groupRoutes = authenticatedGroupRoutes
       context.env.GROUPS.idFromName(input.group_id),
     );
 
+    const tokenHash = await hashInviteToken(input.invite.token);
+
+    if (!(await new InviteIndex(context.env.INDEX).claim(tokenHash, input.group_id)))
+      return context.json({ error: 'idempotency_conflict' as const }, 409);
+
     const result = await group.createGroup({
       group_id: input.group_id,
       name: input.name,
       creator_member_name: input.creator_member_name,
       invite_id: input.invite.invite_id,
-      invite_token_hash: await hashInviteToken(input.invite.token),
+      invite_token_hash: tokenHash,
       invite_token: input.invite.token,
       creator_identity_id: session.identity.id,
       member_id: createIdentifier(),
@@ -315,6 +357,15 @@ export const groupRoutes = authenticatedGroupRoutes
 
     return context.json(result.response, 200);
   })
+  .openapi(activityRoute, async (context) => {
+    const { groupId } = context.req.valid('param');
+    const group = context.env.GROUPS.get(context.env.GROUPS.idFromName(groupId));
+    const result = await group.groupActivity(context.get('identitySession').identity.id);
+
+    if (!result.ok) return context.json({ error: result.error }, 401);
+
+    return context.json(activityResponseSchema.parse({ events: result.events }), 200);
+  })
   .openapi(realtimeRoute, async (context) => {
     const { groupId } = context.req.valid('param');
     const session = context.get('identitySession');
@@ -343,11 +394,16 @@ export const groupRoutes = authenticatedGroupRoutes
       context.env.GROUPS.idFromName(groupId),
     );
 
+    const tokenHash = await hashInviteToken(input.token);
+
+    if (!(await new InviteIndex(context.env.INDEX).claim(tokenHash, groupId)))
+      return context.json({ error: 'idempotency_conflict' as const }, 409);
+
     const result = await group.regenerateInvite({
       group_id: groupId,
       identity_id: session.identity.id,
       invite_id: input.invite_id,
-      token_hash: await hashInviteToken(input.token),
+      token_hash: tokenHash,
       token: input.token,
       created_at: createdAt,
     });
@@ -377,6 +433,25 @@ export const groupRoutes = authenticatedGroupRoutes
     if (!result.ok) {
       return context.json({ error: result.error }, groupFailureStatus.preview(result.error));
     }
+
+    return context.json(result.preview, 200);
+  })
+  .openapi(previewInviteCodeRoute, async (context) => {
+    const { token } = context.req.valid('json');
+    const tokenHash = await hashInviteToken(token);
+    const groupId = await new InviteIndex(context.env.INDEX).find(tokenHash);
+
+    if (!groupId) return context.json({ error: 'invite_invalid' as const }, 403);
+
+    annotateRequest(context.req.raw, { group_id: groupId });
+
+    const result = await context.env.GROUPS.get(
+      context.env.GROUPS.idFromName(groupId),
+    ).previewInvite(groupId, tokenHash);
+
+    // A code whose group is gone is as unknown as one never issued.
+    if (!result.ok)
+      return context.json({ error: result.error === 'invite_replaced' ? 'invite_replaced' as const : 'invite_invalid' as const }, 403);
 
     return context.json(result.preview, 200);
   });

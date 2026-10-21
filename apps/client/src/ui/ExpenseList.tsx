@@ -1,127 +1,219 @@
+import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { memberLabel, nameOrdinals, type ClientReplicaState } from '@splitnext/client';
+import { formatAmount, preferredMember, type ClientReplicaState, type Expense, type Settlement } from '@splitnext/client';
 import { balanceRows, currentExpenses, expenseLabel, memberName, moneyLabel } from '../model/expenses';
-import { Button, ErrorMessage, s } from './components';
-import { useActionCall } from './useActionCall';
+import { needsReview } from '../model/notices';
+import { StickyTop } from './StickyTop';
+import { ErrorMessage, colors, s } from './components';
+import { PlusIcon } from './icons';
+import { fontFamily, monoFamily } from './theme';
+import { useActionCall, useActions, useUiState } from './useActionCall';
 
 type Replica = ClientReplicaState;
 
-/** The group's current expenses, newest first, each opening the form to change it. */
-export function ExpenseList(props: { replica: Replica }) {
-  const snapshot = props.replica.projected_snapshot;
-  const expenses = currentExpenses(snapshot);
-  const add = useActionCall();
+/** An amount with its direction, such as "+12.50 EUR" or "−12.50 EUR". */
+export function signedMoney(amount: number, currency: string): string {
+  return `${signedFigure(amount, currency)} ${currency}`;
+}
 
+/** A balance figure without its currency, such as "+12.50", "−12.50", or "0.00". */
+export function signedFigure(amount: number, currency: string): string {
+  return `${amount > 0 ? '+' : amount < 0 ? '−' : ''}${formatAmount(Math.abs(amount), currency)}`;
+}
+
+/** Your own non-zero balance in each currency. */
+export function yourBalances(replica: Replica): { currency: string; amount: number }[] {
+  const snapshot = replica.projected_snapshot;
+  const you = preferredMember(snapshot, replica.session?.identity.id);
+
+  if (!you) return [];
+
+  return balanceRows(snapshot).flatMap(({ currency, rows }) => {
+    const amount = rows.find((row) => row.member.id === you.id)?.amount ?? 0;
+
+    return amount ? [{ currency, amount }] : [];
+  });
+}
+
+/** A name in a sentence, as "You"/"you" when it is this device's member. */
+function personName(replica: Replica, memberId: string, capital: boolean): string {
+  const you = preferredMember(replica.projected_snapshot, replica.session?.identity.id)?.id;
+
+  return memberId === you ? (capital ? 'You' : 'you') : memberName(replica.projected_snapshot, memberId);
+}
+
+/** A recorded repayment as people say it: "Ana paid you back". */
+export function repaymentTitle(replica: Replica, entry: Pick<Settlement, 'from_member_id' | 'to_member_id'>): string {
+  return `${personName(replica, entry.from_member_id, true)} paid ${personName(replica, entry.to_member_id, false)} back`;
+}
+
+type Entry = { kind: 'expense'; expense: Expense } | { kind: 'settlement'; settlement: Settlement };
+
+/** Current expenses and recorded repayments together, newest first. */
+function ledgerEntries(replica: Replica): Entry[] {
+  const snapshot = replica.projected_snapshot;
+  const expenses = currentExpenses(snapshot).toReversed().map((expense): Entry => ({ kind: 'expense', expense }));
+  const settlements = (snapshot?.settlements ?? []).filter((entry) => entry.status === 'active').map((settlement): Entry => ({ kind: 'settlement', settlement }));
+  const created = (entry: Entry) => (entry.kind === 'expense' ? entry.expense.created_at : entry.settlement.created_at);
+
+  // Recorded order breaks ties, as the group applied them.
+  return [...expenses, ...settlements]
+    .map((entry, index) => ({ entry, index }))
+    .sort((left, right) => (created(right.entry) < created(left.entry) ? -1 : created(right.entry) > created(left.entry) ? 1 : right.index - left.index))
+    .map(({ entry }) => entry);
+}
+
+/** One row of a group screen section: compact, so more of the page fits on screen. */
+export const listRow = { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingVertical: 6, paddingHorizontal: 16 } as const;
+
+/** A row's second line, smaller than a caption elsewhere. */
+export const rowCaption = { color: colors.muted, fontFamily, fontSize: 12, lineHeight: 16 } as const;
+
+/** A group screen section's title, with an optional action at its end. */
+export function SectionHeading(props: { title: string; end?: ReactNode; onPress?: (() => void) | undefined }) {
   return (
-    <View style={[s.card, s.peopleCard]}>
-      <View style={s.between}>
-        <Text accessibilityRole="header" style={s.heading}>
-          Expenses
-        </Text>
-        <Button
-          quiet
-          disabled={!add.can('showExpense', {})}
-          onPress={() => {
-            void add.call('showExpense', {});
-          }}
-        >
-          Add expense
-        </Button>
-      </View>
-      {expenses.map((expense) => (
-        <ExpenseRow key={expense.id} replica={props.replica} expenseId={expense.id} />
-      ))}
-      <ErrorMessage message={add.error} />
+    <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 28, paddingTop: 2, paddingBottom: 4, paddingHorizontal: 4 }}>
+      <Text accessibilityRole="header" onPress={props.onPress} style={{ flex: 1, fontFamily, fontSize: 15, fontWeight: '600', color: colors.ink }}>{props.title}</Text>
+      {props.end}
     </View>
   );
 }
 
-function ExpenseRow(props: { replica: Replica; expenseId: string }) {
-  const snapshot = props.replica.projected_snapshot;
-  const expense = snapshot?.expenses.find((entry) => entry.id === props.expenseId);
-  const open = useActionCall();
-  const remove = useActionCall();
+/** The group screen's list: expenses and repayments, newest first. */
+export function ExpenseList(props: { replica: Replica; stickyTop?: number | undefined; onHeadingPress?: (() => void) | undefined }) {
+  const entries = ledgerEntries(props.replica);
 
-  if (!expense) return null;
-
-  const payer = expense.paid[0]?.member_id;
-
-  const needsReview = props.replica.notices.some(
-    (notice) => notice.outcome.target.kind === 'expense' && notice.outcome.target.id === expense.id,
-  );
+  if (!entries.length) return null;
 
   return (
-    <View>
-      <View style={s.ledgerRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Change ${expenseLabel(expense)}`}
-          disabled={!open.can('showExpense', { expenseId: expense.id })}
-          onPress={() => {
-            void open.call('showExpense', { expenseId: expense.id });
-          }}
-          style={[s.personText, s.between]}
-        >
-          <View style={s.personText}>
-            <Text numberOfLines={1} style={s.name}>
-              {expense.description}
-            </Text>
-            <Text numberOfLines={1} style={s.caption}>
-              Paid by {payer ? memberName(snapshot, payer) : 'someone'}
-              {needsReview ? ' · needs review' : ''}
-            </Text>
-          </View>
-          <Text style={s.amount}>{moneyLabel(expense.total, expense.currency)}</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Remove ${expenseLabel(expense)}`}
-          disabled={!remove.can('removeExpense', { expenseId: expense.id })}
-          onPress={() => {
-            void remove.call('removeExpense', { expenseId: expense.id });
-          }}
-          style={s.memberActionsButton}
-        >
-          <Text style={s.name}>×</Text>
-        </Pressable>
-      </View>
-      <ErrorMessage message={open.error ?? remove.error} />
-    </View>
-  );
-}
-
-/** What each member is owed or owes, separately in every currency. */
-export function Balances(props: { replica: Replica }) {
-  const snapshot = props.replica.projected_snapshot;
-  const currencies = balanceRows(snapshot);
-  const ordinals = nameOrdinals(snapshot);
-
-  if (!currencies.length) return null;
-
-  return (
-    <View style={[s.card, s.peopleCard]}>
-      <Text accessibilityRole="header" style={s.heading}>
-        Balances
-      </Text>
-      {currencies.map(({ currency, rows }) => (
-        <View key={currency}>
-          {currencies.length > 1 ? <Text style={s.label}>{currency}</Text> : null}
-          {rows.map(({ member, amount }) => (
-            <View key={member.id} style={[s.ledgerRow, s.between]}>
-              <Text numberOfLines={1} style={[s.name, s.memberName]}>
-                {memberLabel(member.display_name, ordinals.get(member.id))}
-              </Text>
-              <Text style={[s.amount, amount > 0 && s.owed]}>
-                {amount > 0
-                  ? `is owed ${moneyLabel(amount, currency)}`
-                  : amount < 0
-                    ? `owes ${moneyLabel(-amount, currency)}`
-                    : 'settled'}
-              </Text>
-            </View>
-          ))}
+    <View style={{ gap: 0 }}>
+      {/* Stays under the pinned Balances heading while the expenses scroll. */}
+      <StickyTop top={props.stickyTop ?? 0} layer={1}>
+        <View style={{ backgroundColor: colors.background }}>
+          <SectionHeading title="Expenses" onPress={props.onHeadingPress} />
         </View>
-      ))}
+      </StickyTop>
+      <View style={[s.listCard, { borderRadius: 16, borderWidth: 0 }]}>
+        {entries.map((entry, index) =>
+          entry.kind === 'expense'
+            ? <ExpenseRow key={entry.expense.id} replica={props.replica} expense={entry.expense} first={index === 0} />
+            : <RepaymentRow key={entry.settlement.id} replica={props.replica} settlement={entry.settlement} first={index === 0} />,
+        )}
+      </View>
     </View>
   );
 }
+
+/** The small orange dot on a row whose change from this device needs review. */
+function ReviewDot() {
+  return <View role="img" aria-label="Needs review" style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: colors.alert }} />;
+}
+
+function Row(props: { first: boolean; label: string; title: string; meta: string; amount: string; quiet?: boolean; review: boolean; disabled: boolean; onPress: () => void; error: string | null }) {
+  return (
+    <View style={!props.first && s.ruled}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={props.label}
+        disabled={props.disabled}
+        onPress={props.onPress}
+        style={({ pressed }) => [listRow, pressed && { backgroundColor: colors.background }]}
+      >
+        <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text numberOfLines={1} style={[s.name, { flexShrink: 1 }]}>{props.title}</Text>
+            {props.review ? <ReviewDot /> : null}
+          </View>
+          <Text numberOfLines={1} style={rowCaption}>{props.meta}</Text>
+        </View>
+        <Text style={{ fontFamily: monoFamily, fontWeight: '600', fontSize: 16, color: props.quiet ? colors.muted : colors.ink }}>{props.amount}</Text>
+      </Pressable>
+      <ErrorMessage message={props.error} />
+    </View>
+  );
+}
+
+function ExpenseRow(props: { replica: Replica; expense: Expense; first: boolean }) {
+  const open = useActionCall();
+  const expense = props.expense;
+  const payer = expense.paid[0]?.member_id;
+  const people = expense.parts.length;
+
+  return (
+    <Row
+      first={props.first}
+      label={`Change ${expenseLabel(expense)}`}
+      title={expense.description}
+      meta={`${payer ? personName(props.replica, payer, true) : 'Someone'} paid · ${people === 1 ? '1 person' : `${people} people`}`}
+      amount={moneyLabel(expense.total, expense.currency)}
+      review={needsReview(props.replica, 'expense', expense.id)}
+      disabled={!open.can('showExpense', { expenseId: expense.id })}
+      onPress={() => { void open.call('showExpense', { expenseId: expense.id }); }}
+      error={open.error}
+    />
+  );
+}
+
+function RepaymentRow(props: { replica: Replica; settlement: Settlement; first: boolean }) {
+  const open = useActionCall();
+  const entry = props.settlement;
+  const title = repaymentTitle(props.replica, entry);
+
+  return (
+    <Row
+      first={props.first}
+      label={`Change repayment: ${title} ${moneyLabel(entry.amount, entry.currency)}`}
+      title={title}
+      meta="Repayment"
+      amount={moneyLabel(entry.amount, entry.currency)}
+      quiet
+      review={needsReview(props.replica, 'settlement', entry.id)}
+      disabled={!open.can('showSettlement', { settlementId: entry.id })}
+      onPress={() => { void open.call('showSettlement', { settlementId: entry.id }); }}
+      error={open.error}
+    />
+  );
+}
+
+/** Add expense: a blue pill, floating at the foot of the group screen. */
+export function AddExpenseButton() {
+  const add = useActionCall();
+  const editingMember = useUiState().memberEdit !== null;
+
+  // A floating button would cover a name being typed above the keyboard.
+  if (editingMember) return null;
+
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        disabled={!add.can('showExpense', {})}
+        onPress={() => { void add.call('showExpense', {}); }}
+        style={({ pressed }) => [
+          { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, paddingLeft: 16, paddingRight: 20, borderRadius: 999, backgroundColor: colors.action, boxShadow: '0 6px 18px rgba(16, 22, 29, 0.2)' },
+          !add.can('showExpense', {}) && s.dim,
+          pressed && s.pressed,
+        ]}
+      >
+        <PlusIcon size={20} color={colors.actionInk} strokeWidth={2.2} />
+        <Text style={{ fontFamily, fontSize: 16, fontWeight: '600', color: colors.actionInk }}>Add expense</Text>
+      </Pressable>
+      <ErrorMessage message={add.error} />
+    </>
+  );
+}
+
+/** Opens the repayment form for one payment, from the settle-up plan or by hand. */
+export function useRepaymentForm() {
+  const actions = useActions();
+  const action = useActionCall();
+
+  function open(input: { from: string; to: string; amount: string; currency: string; manual: boolean }): void {
+    void action.call('prepareRepayment', { ...input, keepEditing: false }, () => {
+      void actions.dispatch('showSettlements', {}, { origin: 'ui' });
+    });
+  }
+
+  return { open, action };
+}
+

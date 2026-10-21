@@ -1,18 +1,17 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, type ComponentProps, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { formatInviteLink } from '@splitnext/client';
 import { LoadingGroups } from '../ui/AppScreen';
 import { CreateGroup } from '../ui/CreateGroup';
 import { GroupSettings } from '../ui/GroupSettings';
 import { GroupsView } from '../ui/GroupsView';
-import { GroupView } from '../ui/GroupView';
-import { InvitePanel } from '../ui/InvitePanel';
-import { JoinGroup } from '../ui/JoinGroup';
-import { NoticesPanel } from '../ui/NoticesPanel';
-import { Sheet } from '../ui/Sheet';
+import { GroupHeader, GroupView } from '../ui/GroupView';
+import { useBalancesLayout } from '../ui/BalancesPanel';
+import { InviteSheet } from '../ui/InvitePanel';
+import { JoinGroup, JoinGroupFooter, type JoinCalls } from '../ui/JoinGroup';
+import { ActivityPanel } from '../ui/ActivityPanel';
 import { s } from '../ui/components';
-import { ActionsProvider } from '../ui/useActionCall';
-import { useCompactLayout } from '../ui/useVisibleViewport';
+import { ActionsProvider, useActionCall } from '../ui/useActionCall';
 import {
   useFakeApp,
   useFakeDispatcher,
@@ -68,16 +67,14 @@ const defaultScenario: MemberListScenario = {
 type ScreenDemoProps = {
   options: Omit<FakeAppOptions, 'scenario'> &
     Partial<Pick<FakeAppOptions, 'scenario'>>;
-  sheet?: boolean;
   initialAction?: 'showCreateGroup' | 'showSettings';
   children: (app: FakeApp) => ReactNode;
 };
 
-/** Renders a screen against an in-memory group, optionally inside a sheet. */
+/** Renders a screen's content against an in-memory group. */
 function ScreenDemo(props: ScreenDemoProps) {
   const app = useFakeApp({ scenario: defaultScenario, ...props.options });
   const actions = useFakeDispatcher(app);
-  const mobile = useCompactLayout();
 
   useEffect(() => {
     if (props.initialAction && actions)
@@ -86,18 +83,35 @@ function ScreenDemo(props: ScreenDemoProps) {
 
   if (!app || !actions) return <LoadingGroups />;
 
-  // Sheets sit on the app's dimmed overlay at a fixed height, so their height
-  // limit and scrolling behave as they do over a page.
   return (
     <ActionsProvider value={actions}>
-      {props.sheet ? (
-        <View style={[s.overlay, mobile && s.mobileOverlay, ws.backdrop]}>
-          <Sheet mobile={mobile}>{props.children(app)}</Sheet>
-        </View>
-      ) : (
-        <View style={[s.stack, ws.page]}>{props.children(app)}</View>
-      )}
+      <View style={[s.stack, ws.page]}>{props.children(app)}</View>
     </ActionsProvider>
+  );
+}
+
+/** The group screen's header and content, sharing the balances layout as the app does. */
+function GroupScreenDemo(props: { app: FakeApp; onRetry: () => void }) {
+  const layout = useBalancesLayout();
+
+  return (
+    <>
+      <GroupHeader app={props.app} pending={0} busy={false} onRetry={props.onRetry} onLayout={layout.measureHeader} />
+      <GroupView app={props.app} layout={layout} />
+    </>
+  );
+}
+
+/** The join screen's body and its pinned button, sharing their calls as the app does. */
+function JoinGroupDemo(props: Omit<ComponentProps<typeof JoinGroup>, keyof JoinCalls>) {
+  const previewing = useActionCall();
+  const joining = useActionCall();
+
+  return (
+    <>
+      <JoinGroup {...props} previewing={previewing} joining={joining} />
+      <JoinGroupFooter {...props} previewing={previewing} joining={joining} />
+    </>
   );
 }
 
@@ -177,7 +191,8 @@ export const screenStories: Story[] = [
     group: 'Screens',
     title: 'GroupView',
     description:
-      'An open group. Share invite is primary until someone else joins.',
+      'An open group: the header with the Activity bell, the balances, and ' +
+      'the expenses and repayments.',
     controls: {
       members: { kind: 'text', default: 'Ana, Ben, Chloe' },
       you: {
@@ -188,7 +203,7 @@ export const screenStories: Story[] = [
       others: {
         kind: 'text',
         default: '',
-        hint: 'Member names other participants use; any makes invite secondary.',
+        hint: 'Names taken by other participants; any makes invite secondary.',
       },
       left: {
         kind: 'boolean',
@@ -219,19 +234,18 @@ export const screenStories: Story[] = [
             : [],
         }}
       >
-        {(app) => <GroupView app={app} showReview />}
+        {(app) => <GroupScreenDemo app={app} onRetry={() => log('retry')} />}
       </ScreenDemo>
     ),
   }),
   defineStory({
-    id: 'invite-panel',
-    group: 'Sheets',
-    title: 'InvitePanel',
+    id: 'invite-sheet',
+    group: 'Screens',
+    title: 'InviteSheet',
     description: 'Copy, share, and replace the invite link, with confirmation.',
     controls: { ...commandControls },
     render: (values, log) => (
       <ScreenDemo
-        sheet
         options={{
           connection: values.connection,
           latency: values.latency,
@@ -239,23 +253,21 @@ export const screenStories: Story[] = [
           log,
         }}
       >
-        {(app) => <InvitePanel app={app} close={() => log('close')} />}
+        {(app) => <InviteSheet app={app} />}
       </ScreenDemo>
     ),
   }),
   defineStory({
     id: 'group-settings',
-    group: 'Sheets',
+    group: 'Screens',
     title: 'GroupSettings',
-    description: 'Rename or leave the group, as a sheet or a full page.',
+    description: 'Renaming the group and leaving it on this device.',
     controls: {
-      fullPage: { kind: 'boolean', default: false },
       ...commandControls,
     },
     render: (values, log) => (
       <ScreenDemo
         initialAction="showSettings"
-        sheet={!values.fullPage}
         options={{
           connection: values.connection,
           latency: values.latency,
@@ -267,7 +279,6 @@ export const screenStories: Story[] = [
           <GroupSettings
             app={app}
             close={() => log('close')}
-            fullPage={values.fullPage}
           />
         )}
       </ScreenDemo>
@@ -278,8 +289,8 @@ export const screenStories: Story[] = [
     group: 'Screens',
     title: 'JoinGroup',
     description:
-      'Joining from a link or rejoining a left group. Names a participant ' +
-      'uses are marked In use.',
+      'Joining from a link or rejoining a left group. Names taken on other ' +
+      'devices are marked Taken.',
     controls: {
       mode: {
         kind: 'select',
@@ -290,7 +301,7 @@ export const screenStories: Story[] = [
       inUse: {
         kind: 'text',
         default: 'Ana, Ben',
-        hint: 'Names current participants use.',
+        hint: 'Names taken by current participants.',
       },
       lastYouName: { kind: 'text', default: 'Dev' },
       ...commandControls,
@@ -317,7 +328,7 @@ export const screenStories: Story[] = [
         }}
       >
         {(app) => (
-          <JoinGroup
+          <JoinGroupDemo
             app={app}
             close={() => log('close')}
             rejoining={values.mode === 'rejoin'}
@@ -336,10 +347,12 @@ export const screenStories: Story[] = [
     ),
   }),
   defineStory({
-    id: 'notices-panel',
-    group: 'Sheets',
-    title: 'NoticesPanel',
-    description: 'Rejected or superseded changes to apply again or dismiss.',
+    id: 'activity-panel',
+    group: 'Screens',
+    title: 'ActivityPanel',
+    description:
+      'Changes needing review, to apply again or dismiss, above every change ' +
+      'in the group.',
     controls: {
       notices: {
         kind: 'select',
@@ -350,7 +363,6 @@ export const screenStories: Story[] = [
     },
     render: (values, log) => (
       <ScreenDemo
-        sheet
         options={{
           connection: values.connection,
           latency: values.latency,
@@ -366,20 +378,16 @@ export const screenStories: Story[] = [
           ],
         }}
       >
-        {(app) => <NoticesPanel app={app} close={() => log('close')} />}
+        {(app) => {
+          const replica = app.snapshot().group;
+
+          return replica ? <ActivityPanel replica={replica} /> : null;
+        }}
       </ScreenDemo>
     ),
   }),
 ];
 
 const ws = StyleSheet.create({
-  backdrop: {
-    flexGrow: 0,
-    flexShrink: 0,
-    flexBasis: 'auto',
-    alignSelf: 'stretch',
-    height: 600,
-    borderRadius: 8,
-  },
-  page: { width: '100%', maxWidth: 680 },
+  page: { width: '100%', maxWidth: 560 },
 });

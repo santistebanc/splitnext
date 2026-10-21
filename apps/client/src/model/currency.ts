@@ -59,3 +59,68 @@ export function localeRegion(locale: string | undefined): string | null {
 export function regionCurrency(region: string | null | undefined): string | null {
   return (region && regionCurrencies[region.toUpperCase()]) || null;
 }
+
+/** The currencies most groups use, offered right after the group's own. */
+export const commonCurrencies = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'CNY', 'INR', 'MXN', 'BRL', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'NZD', 'SGD', 'HKD', 'KRW', 'ZAR', 'TRY', 'THB'];
+
+export type CurrencyOption = { code: string; name: string };
+
+let catalog: CurrencyOption[] | null = null;
+
+/** Every currency the runtime can name, and every one in the region table, by code. */
+function allCurrencies(): CurrencyOption[] {
+  if (catalog) return catalog;
+
+  const names = new Intl.DisplayNames(['en'], { type: 'currency' });
+  const codes = new Set([...Intl.supportedValuesOf('currency'), ...Object.values(regionCurrencies)]);
+
+  catalog = [...codes].sort().map((code) => ({ code, name: names.of(code) ?? code }));
+
+  return catalog;
+}
+
+/** How well a currency matches a search, best first; null when it does not. */
+function matchRank(option: CurrencyOption, search: string): number | null {
+  const code = option.code.toLowerCase();
+  const name = option.name.toLowerCase();
+
+  if (code === search) return 0;
+
+  if (code.startsWith(search)) return 1;
+
+  if (name.split(/[\s-]+/).some((word) => word.startsWith(search))) return 2;
+
+  return name.includes(search) ? 3 : null;
+}
+
+/**
+ * The currencies to choose from. Without a search: the group's recent ones,
+ * then the common ones, then the rest by code. A search keeps that order
+ * within each kind of match: the code itself, codes starting with it, names
+ * with a word starting with it, then names containing it. A three-letter code
+ * that matches nothing listed is still offered.
+ */
+export function currencyOptions(recent: string[], query: string): CurrencyOption[] {
+  const all = allCurrencies();
+  const byCode = new Map(all.map((option) => [option.code, option]));
+  const first = [...recent, ...commonCurrencies].map((code) => byCode.get(code) ?? { code, name: code });
+  const ordered = [...new Map([...first, ...all].map((option) => [option.code, option])).values()];
+  const search = query.trim().toLowerCase();
+
+  if (!search) return ordered;
+
+  const matches = ordered
+    .flatMap((option) => {
+      const rank = matchRank(option, search);
+
+      return rank === null ? [] : [{ option, rank }];
+    })
+    .sort((left, right) => left.rank - right.rank)
+    .map((match) => match.option);
+
+  const typed = search.toUpperCase();
+
+  if (!matches.length && /^[A-Z]{3}$/.test(typed)) matches.push({ code: typed, name: 'Not a listed currency' });
+
+  return matches;
+}

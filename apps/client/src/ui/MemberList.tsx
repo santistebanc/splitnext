@@ -1,162 +1,62 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  AccessibilityInfo,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { memberLabel, nameOrdinals, preferredMember, type ClientReplicaState } from '@splitnext/client';
-import { orderedMembers, participantMarkers, memberStatus, type ParticipantMarker } from '../model/memberPresentation';
+import { useRef, useState } from 'react';
+import { TextInput, View, type StyleProp, type TextStyle } from 'react-native';
+import type { ClientReplicaState } from '@splitnext/client';
+import { memberStatus, type ParticipantMarker } from '../model/memberPresentation';
 import type { AppController } from '../model/controller';
-import { Button, ErrorMessage, colors, s } from './components';
-import { useActionCall, useActions, useUiState } from './useActionCall';
-import { MemberRowTransition } from './MemberRowTransition';
-import { YouBadge } from './YouBadge';
+import { ErrorMessage, colors, errorMessage, s } from './components';
+import { PlusIcon } from './icons';
+import { fontFamily } from './theme';
+import { useActions } from './useActionCall';
 
 export type { ParticipantMarker } from '../model/memberPresentation';
 
-type LedgerMember = NonNullable<
-  ClientReplicaState['projected_snapshot']
->['members'][number];
-
-/** The controller surface the list uses, so previews can supply a fake. */
+/** The controller surface member views use, so previews can supply a fake. */
 export type MemberListApp = Pick<AppController, 'snapshot'> & {
   client: Pick<AppController['client'], 'presence'>;
 };
 
-type MemberListProps = { app: MemberListApp; replica: ClientReplicaState };
+export type Replica = ClientReplicaState;
 
-type MemberRowProps = MemberListProps & {
-  member: LedgerMember;
-};
-
-/** A compact editable list; names and preferred-member selection stay in place. */
-export function MemberList(props: MemberListProps) {
-  const edit = useUiState().memberEdit;
-  const adding = edit !== null && edit.memberId === null;
-  const action = useActionCall();
-  const [reducedMotion, setReducedMotion] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (mounted) setReducedMotion(enabled);
-    });
-
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      setReducedMotion,
-    );
-
-    return () => {
-      mounted = false;
-      subscription.remove();
-    };
-  }, []);
-
-  const preferredId = preferredMember(props.replica.projected_snapshot, props.replica.session?.identity.id)?.id;
-  const members = orderedMembers(props.replica);
-  const order = members.map((member) => member.id).join(',');
-
-  return (
-    <View>
-      {members.map((member) => (
-        <MemberRowTransition
-          key={member.id}
-          order={order}
-          selected={member.id === preferredId}
-          reducedMotion={reducedMotion}
-        >
-          <MemberRow app={props.app} replica={props.replica} member={member} />
-        </MemberRowTransition>
-      ))}
-      {adding ? (
-        <NewMemberRow />
-      ) : (
-        <Button
-          quiet
-          disabled={!action.can('beginAddMember')}
-          onPress={() => {
-            void action.call('beginAddMember', {});
-          }}
-        >
-          + Add member
-        </Button>
-      )}
-    </View>
-  );
-}
-
-export function MemberIcon(props: {
-  joined: boolean;
-  participants: ParticipantMarker[];
-}) {
-  const you = props.participants.some((participant) => participant.you);
-  const count = props.participants.length;
+/** A member's presence: a filled dot online, a ring offline, a dashed ring when the name is not taken. */
+export function MemberIcon(props: { participants: ParticipantMarker[]; size?: number }) {
   const status = memberStatus(props.participants);
+  const size = props.size ?? 9;
 
   return (
-    <View style={s.memberSelectIcon} aria-hidden>
-      <View style={[s.memberFigure, you && s.memberFigureYou]}>
-        <View
-          style={[
-            s.memberSelectHead,
-            props.joined && s.memberSelectJoined,
-            you && s.memberSelectYou,
-            you && s.memberSelectYouHead,
-          ]}
-        />
-        <View
-          style={[
-            s.memberSelectBody,
-            props.joined && s.memberSelectJoined,
-            you && s.memberSelectYou,
-            you && s.memberSelectYouBody,
-          ]}
-        />
-      </View>
-      {count > 1 ? (
-        <View style={s.participantMore} pointerEvents="none">
-          <Text numberOfLines={1} style={s.participantMoreLabel}>
-            +{count - 1}
-          </Text>
-        </View>
-      ) : null}
-      {count > 0 ? (
-        <View style={s.memberPresence} pointerEvents="none">
-          <View style={[s.presenceMarker, you && s.presenceMarkerYou]}>
-            {you ? (
-              <YouBadge status={status} />
-            ) : (
-              <>
-                <View
-                  style={[
-                    s.presenceRing,
-                    status === 'online' && s.presenceRingOnline,
-                  ]}
-                />
-                <View
-                  style={[
-                    s.presenceDot,
-                    status === 'online' && s.presenceDotOnline,
-                    status === 'offline' && s.presenceDotOffline,
-                  ]}
-                />
-              </>
-            )}
-          </View>
-        </View>
-      ) : null}
-    </View>
+    <View
+      aria-hidden
+      style={[
+        s.presenceDot,
+        { width: size, height: size, borderRadius: size / 2 },
+        !props.participants.length
+          ? s.presenceUnclaimed
+          : status === 'online'
+            ? s.presenceOnline
+            : s.presenceOffline,
+      ]}
+    />
   );
 }
 
-/** A member-name draft in its row; leaving the field saves it, and Enter or Escape leave it. */
-function MemberNameInput(props: {
+/** "Online · taken on 2 devices", "Offline · taken on 1 device", or "Not taken on any device". */
+export function presenceText(participants: ParticipantMarker[]): string {
+  if (!participants.length) return 'Not taken on any device';
+  const status = memberStatus(participants);
+  const devices = `taken on ${participants.length === 1 ? '1 device' : `${participants.length} devices`}`;
+
+  return `${status === 'online' ? 'Online' : status === 'offline' ? 'Offline' : 'Joined'} · ${devices}`;
+}
+
+/** A member-name draft; leaving the field saves it, and Enter or Escape leave it. */
+export function MemberNameInput(props: {
   name: string;
   placeholder?: string;
   onSave: () => void;
+  onFocus?: () => void;
+  /** Takes the typing instead of the shared member-name draft. */
+  onChangeText?: ((value: string) => void) | undefined;
+  autoFocus?: boolean;
+  style?: StyleProp<TextStyle>;
 }) {
   const actions = useActions();
   const input = useRef<TextInput>(null);
@@ -164,21 +64,18 @@ function MemberNameInput(props: {
   return (
     <TextInput
       ref={input}
-      accessibilityLabel="Member name"
+      accessibilityLabel={props.placeholder ?? 'Member name'}
       placeholder={props.placeholder}
-      placeholderTextColor={colors.muted}
+      placeholderTextColor={colors.faint}
       value={props.name}
+      onFocus={props.onFocus}
       onChangeText={(value) => {
-        void actions.dispatch(
-          'changeDraft',
-          { field: 'member.name', value },
-          { origin: 'ui' },
-        );
+        if (props.onChangeText) props.onChangeText(value);
+        else void actions.dispatch('changeDraft', { field: 'member.name', value }, { origin: 'ui' });
       }}
-      editable={actions.availability('changeDraft', { field: 'member.name', value: props.name }).available}
-      autoFocus
+      autoFocus={props.autoFocus}
       maxLength={100}
-      style={[s.name, s.memberNameInput]}
+      style={props.style ?? s.memberNameInput}
       returnKeyType="done"
       submitBehavior="blurAndSubmit"
       onBlur={props.onSave}
@@ -190,130 +87,98 @@ function MemberNameInput(props: {
   );
 }
 
-function NewMemberRow() {
-  const name = useUiState().memberEdit?.name ?? '';
-  const action = useActionCall();
+/**
+ * The last row of the balances: typing a name adds that person once typing
+ * ends, without a confirm step. The field keeps its own text, and leaving it
+ * queues the name and clears it at once, so the next name can be typed while
+ * earlier ones are still saving; a save holds the member editor, which would
+ * otherwise drop that typing.
+ */
+export function AddPersonRow() {
+  const actions = useActions();
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const queue = useRef<string[]>([]);
+  const draining = useRef(false);
+  const focused = useRef(false);
 
-  function save(): void {
-    void action.call('saveMemberEdit', {});
+  /** Opens an add, which hides Add expense while the field is in use; skipped while a save holds the editor. */
+  function begin(): void {
+    if (actions.ui.snapshot().memberEdit === null) void actions.dispatch('beginAddMember', {}, { origin: 'ui' });
+  }
+
+  /** Adds the queued names one at a time, each through its own add, draft, and save. */
+  async function drain(): Promise<void> {
+    if (draining.current) return;
+    draining.current = true;
+
+    try {
+      while (queue.current.length) {
+        const name = queue.current[0] ?? '';
+        // An add opened by focusing the field is used as is.
+        const open = actions.ui.snapshot().memberEdit?.memberId === null;
+
+        const steps = [
+          ...(open ? [] : [() => actions.dispatch('beginAddMember', {}, { origin: 'ui' })]),
+          () => actions.dispatch('changeDraft', { field: 'member.name', value: name }, { origin: 'ui' }),
+          () => actions.dispatch('saveMemberEdit', {}, { origin: 'ui' }),
+        ];
+
+        for (const step of steps) {
+          const outcome = await step();
+
+          if (outcome.status === 'failed') {
+            // Keeps the names that did not save, unless a new one is being typed.
+            setError(errorMessage(new Error(outcome.error)));
+            setText((current) => current || queue.current.join(', '));
+            queue.current = [];
+
+            return;
+          }
+        }
+
+        queue.current.shift();
+      }
+    } finally {
+      draining.current = false;
+
+      if (focused.current) begin();
+    }
   }
 
   return (
-    <View style={s.memberRow}>
-      <View style={s.memberLine}>
-        <View style={s.memberSelectButton}>
-          <MemberIcon joined={false} participants={[]} />
-        </View>
-        <View style={s.personText}>
-          <MemberNameInput name={name} placeholder="Member name" onSave={save} />
-        </View>
-        <View style={s.memberActionsButton} />
-      </View>
-      <ErrorMessage message={action.error} />
-    </View>
-  );
-}
-
-function MemberRow(props: MemberRowProps) {
-  const member = props.member;
-  const draft = useUiState().memberEdit;
-  const editing = draft?.memberId === member.id;
-  const name = editing ? draft.name : member.display_name;
-  const label = memberLabel(member.display_name, nameOrdinals(props.replica.projected_snapshot).get(member.id));
-  const select = useActionCall();
-  const remove = useActionCall();
-  const editAction = useActionCall();
-  const canSelect = select.can('setPreferredMember', { memberId: member.id });
-  const canRemove = remove.can('removeMember', { memberId: member.id });
-
-  const state = props.app.snapshot();
-  const participants = participantMarkers(props.replica, member.id, props.app.client.presence(props.replica.group_id), state.online && state.reachable);
-  const isYou = participants.some((participant) => participant.you);
-
-  const participantLabels = participants
-    .map((participant) => `${participant.label}: ${participant.status}`)
-    .join('; ');
-
-  const needsReview = props.replica.notices.some(
-    (notice) =>
-      notice.outcome.target.kind === 'member' &&
-      notice.outcome.target.id === member.id,
-  );
-
-  function edit(): void {
-    void editAction.call('beginEditMember', { memberId: member.id });
-  }
-
-  function save(): void {
-    if (editing) void editAction.call('saveMemberEdit', {});
-  }
-
-  return (
-    <View style={s.memberRow}>
-      <View style={s.memberLine}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${isYou ? 'You' : 'This is me'}: ${label}, ${participantLabels || 'unclaimed'}`}
-          accessibilityState={{ selected: isYou, disabled: !canSelect }}
-          aria-pressed={isYou}
-          disabled={!canSelect}
-          onPress={() => {
-            if (!isYou) void select.call('setPreferredMember', { memberId: member.id });
+    <View>
+      <View style={[s.ruled, { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44, paddingLeft: 16, paddingRight: 12 }]}>
+        <PlusIcon size={14} color={colors.action} strokeWidth={2.6} />
+        <MemberNameInput
+          name={text}
+          placeholder="Add a person"
+          onChangeText={(value) => {
+            setText(value);
+            setError(null);
           }}
-          style={({ pressed }) => [
-            s.memberSelectButton,
-            (pressed || select.busy) && s.dim,
-          ]}
-        >
-          <MemberIcon joined={participants.length > 0} participants={participants} />
-        </Pressable>
-        <View style={s.personText}>
-          {editing ? (
-            <MemberNameInput name={name} onSave={save} />
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Edit ${label}`}
-              disabled={!editAction.can('beginEditMember', { memberId: member.id })}
-              onPress={edit}
-              style={s.editableMemberName}
-            >
-              <Text numberOfLines={1} style={[s.name, s.memberName]}>
-                {label}
-              </Text>
-            </Pressable>
-          )}
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Remove ${label}`}
-          accessibilityState={{ disabled: !canRemove }}
-          disabled={!canRemove}
-          onPress={() => {
-            void remove.call('removeMember', { memberId: member.id });
+          onFocus={() => {
+            focused.current = true;
+
+            if (!draining.current) begin();
           }}
-          style={s.memberActionsButton}
-        >
-          <Text style={s.name}>×</Text>
-        </Pressable>
+          onSave={() => {
+            const name = text.trim();
+
+            focused.current = false;
+            setText('');
+
+            if (name) {
+              queue.current.push(name);
+              void drain();
+            } else if (!draining.current && actions.ui.snapshot().memberEdit?.memberId === null) {
+              void actions.dispatch('cancelMemberEdit', {}, { origin: 'ui' });
+            }
+          }}
+          style={{ flex: 1, minWidth: 0, height: 44, marginLeft: -10, paddingHorizontal: 10, borderWidth: 0, borderRadius: 8, backgroundColor: 'transparent', fontFamily, fontSize: 15, color: colors.ink }}
+        />
       </View>
-      {select.confirmation && !isYou ? (
-        <View style={s.stack}>
-          <Text style={s.caption}>{select.confirmation.message}</Text>
-          <View style={s.row}>
-            <Button quiet disabled={select.busy} onPress={select.cancel}>
-              Cancel
-            </Button>
-            <Button quiet disabled={select.busy} onPress={select.confirmation.confirm}>
-              Use anyway
-            </Button>
-          </View>
-        </View>
-      ) : null}
-      {needsReview ? <Text style={s.error}>A change needs review</Text> : null}
-      <ErrorMessage message={editAction.error} />
-      <ErrorMessage message={select.error} />
-      <ErrorMessage message={remove.error} />
+      <ErrorMessage message={error} />
     </View>
   );
 }

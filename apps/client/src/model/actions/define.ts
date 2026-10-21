@@ -2,7 +2,7 @@ import type { ActionExecutions, PendingExecution } from '../executions';
 import { z } from 'zod';
 import { activeMembers, currencyCodeSchema, expenseDescriptionSchema, parseAmount, type JsonValue } from '@splitnext/client';
 import type { ActionInvocation, AppController, AppState } from '../controller';
-import type { AppUiState, UiState } from '../uiState';
+import type { AppUiState, SeenStorage, UiState } from '../uiState';
 import type { ValueSource } from '../actionInputs';
 import { isSubmission, workflowGuard, type WorkflowIntent } from '../workflow';
 
@@ -28,7 +28,7 @@ export type ActionHost = Pick<
   | 'dismissNotice'
 > & Partial<Pick<AppController, 'subscribe'>> & {
   forInvocation?: (invocation: ActionInvocation) => ActionHost;
-  client: Pick<AppController['client'], 'previewInvite'> & Partial<Pick<AppController['client'], 'observeDiagnostics'>>;
+  client: Pick<AppController['client'], 'previewInvite'> & Partial<Pick<AppController['client'], 'observeDiagnostics' | 'activity'>>;
 };
 
 /** Conditions checked before an action runs, the same for every caller. */
@@ -51,7 +51,7 @@ export type ActionPlatform = {
   diagnosticsReport?: () => string;
 };
 
-export type DispatcherOptions = Partial<Omit<ActionPlatform, 'diagnosticsReport'>> & { initialLink?: string };
+export type DispatcherOptions = Partial<Omit<ActionPlatform, 'diagnosticsReport'>> & { initialLink?: string; seenStorage?: SeenStorage };
 
 export type ActionAvailability =
   | { available: true }
@@ -462,4 +462,8 @@ export function suggested<S extends z.ZodString>(
   description: string,
 ) {
   return schema.meta({ description, suggestions: source });
+}
+
+export function requireSettlement(state: AppState, id?: string, status = 'active'): BlockedAction | null {
+  return state.group?.projected_snapshot?.settlements.some((entry) => (!id || entry.id === id) && entry.status === status) ? null : unavailable('settlement_not_found', 'Choose a repayment from this group.');
 }

@@ -1,4 +1,5 @@
 import fc from 'fast-check';
+import type { AuditEvent } from '../src/domain/audit';
 import { describe, expect, it } from 'vitest';
 import {
   ClientStorageError,
@@ -81,6 +82,7 @@ const expenseEntry = {
 
 /** One generator per group command; members are picked from the sender's projection. */
 const commandArbitrary = fc.oneof(
+  fc.record({ type: fc.constant('change.undo' as const), event: pick }),
   fc.record({ type: fc.constant('group.rename' as const), name: fc.constantFrom(...groupNames) }),
   fc.record({ type: fc.constant('member.create' as const), name: fc.constantFrom(...memberNames) }),
   fc.record({ type: fc.constant('member.rename' as const), member: pick, name: fc.constantFrom(...memberNames) }),
@@ -88,6 +90,10 @@ const commandArbitrary = fc.oneof(
   fc.record({ type: fc.constant('member.restore' as const), member: pick }),
   fc.record({ type: fc.constant('preference.set' as const), member: pick }),
   fc.record({ type: fc.constant('group.leave' as const) }),
+  fc.record({ type: fc.constant('settlement.edit' as const), settlement: pick, from: pick, to: pick, amount: fc.integer({ min: 1, max: 2000 }), currency: fc.constantFrom('EUR', 'JPY') }),
+  fc.record({ type: fc.constant('settlement.remove' as const), settlement: pick }),
+  fc.record({ type: fc.constant('settlement.restore' as const), settlement: pick }),
+  fc.record({ type: fc.constant('settlement.record' as const), from: pick, to: pick, amount: fc.integer({ min: 1, max: 2000 }), currency: fc.constantFrom('EUR', 'JPY') }),
   fc.record({ type: fc.constant('expense.record' as const), ...expenseEntry }),
   fc.record({ type: fc.constant('expense.edit' as const), expense: pick, ...expenseEntry }),
   fc.record({ type: fc.constant('expense.remove' as const), expense: pick }),
@@ -103,6 +109,7 @@ const actionArbitrary = fc.oneof(
   fc.record({ kind: fc.constant('open' as const) }),
   fc.record({ kind: fc.constant('reload' as const) }),
   fc.record({ kind: fc.constant('listGroups' as const) }),
+  fc.record({ kind: fc.constant('readActivity' as const) }),
   fc.record({ kind: fc.constant('join' as const), member: fc.option(pick), name: fc.constantFrom(...memberNames) }),
   fc.record({ kind: fc.constant('regenerateInvite' as const) }),
   fc.record({ kind: fc.constant('retryNotice' as const), notice: pick }),
@@ -110,10 +117,16 @@ const actionArbitrary = fc.oneof(
 );
 
 /** The intent a person would submit for a generated command, if its member exists. */
-function intentFor(command: CommandStep, snapshot: GroupSnapshot): CommandIntent | null {
+function intentFor(command: CommandStep, snapshot: GroupSnapshot, history: readonly AuditEvent[]): CommandIntent | null {
   const member = (index: number) => snapshot.members[index % snapshot.members.length]?.id;
 
   switch (command.type) {
+    case 'change.undo': {
+      const event = history[command.event % Math.max(1, history.length)];
+
+      return event ? { type: command.type, payload: { event_id: event.id } } : null;
+    }
+
     case 'group.rename':
       return { type: command.type, payload: { name: command.name } };
     case 'member.create':
@@ -134,6 +147,27 @@ function intentFor(command: CommandStep, snapshot: GroupSnapshot): CommandIntent
 
     case 'group.leave':
       return { type: command.type, payload: {} };
+    case 'settlement.edit':
+    case 'settlement.record': {
+      const from = member(command.from);
+      const to = member(command.to);
+
+      if (!from || !to) return null;
+      const payload = { from_member_id: from, to_member_id: to, amount: command.amount, currency: command.currency };
+
+      if (command.type === 'settlement.record') return { type: command.type, payload };
+      const current = snapshot.settlements[command.settlement % Math.max(1, snapshot.settlements.length)];
+
+      return current ? { type: command.type, payload: { ...payload, settlement_id: current.id } } : null;
+    }
+
+    case 'settlement.remove':
+    case 'settlement.restore': {
+      const current = snapshot.settlements[command.settlement % Math.max(1, snapshot.settlements.length)];
+
+      return current ? { type: command.type, payload: { settlement_id: current.id } } : null;
+    }
+
     case 'expense.record':
     case 'expense.edit': {
       const payer = member(command.payer);
@@ -315,6 +349,7 @@ function flakyTransport(api: SyncTransport, faults: Map<string, Fault>, hub: Rea
       }
 
       return {
+        activity: (groupId, context) => deliver(() => device.activity(groupId, context)),
         currentIdentity: () => deliver(() => device.currentIdentity()),
         createGroup: (input, context) => deliver(() => device.createGroup(input, context)),
         joinGroup: (groupId, input, context) => deliver(() => device.joinGroup(groupId, input, context), groupId),
@@ -619,6 +654,12 @@ async function perform(simulation: Simulation, device: Device, groupId: string, 
         return null;
       }
 
+      case 'readActivity': {
+        if (snapshot) await attempt(injected, () => client.activity(groupId));
+
+        return null;
+      }
+
       case 'listGroups': {
         await attempt(injected, async () => {
           const listed = (await client.listGroups()).map((group) => group.group_id);
@@ -681,7 +722,7 @@ async function perform(simulation: Simulation, device: Device, groupId: string, 
 
         return null;
       case 'submit': {
-        const intent = snapshot && intentFor(action.command, snapshot);
+        const intent = snapshot && intentFor(action.command, snapshot, state.activity);
 
         // The app offers commands only for a group it shows, and leaving only online.
         if (!intent || state.hidden || (requiresServerDecision(intent.type) && !online)) return null;
@@ -772,6 +813,16 @@ function expectValidSnapshot(snapshot: GroupSnapshot): void {
 
     // A member any expense names, removed or not, is never deleted.
     for (const memberId of expenseMemberIds(expense)) expect(deleted.has(memberId)).toBe(false);
+  }
+
+  for (const settlement of snapshot.settlements) {
+    expect(settlement.amount).toBeGreaterThan(0);
+    expect(settlement.from_member_id).not.toBe(settlement.to_member_id);
+
+    for (const memberId of [settlement.from_member_id, settlement.to_member_id]) {
+      expect(snapshot.members.some((member) => member.id === memberId)).toBe(true);
+      expect(deleted.has(memberId)).toBe(false);
+    }
   }
 
   for (const balances of Object.values(groupBalances(snapshot)))

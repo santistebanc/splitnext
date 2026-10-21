@@ -1,18 +1,21 @@
 export const viewNames = [
   'home',
+  'person',
+  'settle',
   'create',
   'join',
   'invite',
   'settings',
   'expense',
-  'notices',
+  'settlements',
+  'activity',
   'rejoin',
 ] as const;
 
 export type ViewName = (typeof viewNames)[number];
 
 type ReadyWorkflow =
-  | { view: 'home' | 'invite' | 'notices'; phase: 'ready' }
+  | { view: 'home' | 'person' | 'settle' | 'invite' | 'settlements' | 'activity'; phase: 'ready' }
   | { view: 'create' | 'settings' | 'expense'; phase: 'editing' }
   | { view: 'join'; phase: 'link' }
   | { view: 'join' | 'rejoin'; phase: 'choosing' };
@@ -151,7 +154,7 @@ export function transition(
 
     if (
       intent === 'draft' &&
-      ['create', 'settings', 'expense', 'join', 'rejoin', 'home'].includes(workflow.view)
+      ['create', 'settings', 'expense', 'join', 'rejoin', 'home', 'person', 'settle', 'invite', 'activity', 'settlements'].includes(workflow.view)
     )
       return { allowed: true, next: workflow };
 
@@ -179,7 +182,7 @@ export function transition(
       (intent === 'createDraft' && workflow.view === 'create') ||
       (intent === 'settingsDraft' && workflow.view === 'settings') ||
       (intent === 'expenseDraft' && workflow.view === 'expense') ||
-      (intent === 'groupEditor' && workflow.view === 'home')
+      (intent === 'groupEditor' && (workflow.view === 'home' || workflow.view === 'person'))
     )
       return { allowed: true, next: workflow };
 

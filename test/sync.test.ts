@@ -56,6 +56,7 @@ describe('group sync API', () => {
           },
           members: [fixture.created.member],
           expenses: [],
+          settlements: [],
           access_grants: [fixture.created.access],
           invite: fixture.created.invite,
         },

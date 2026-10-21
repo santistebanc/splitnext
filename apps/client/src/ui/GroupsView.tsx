@@ -2,26 +2,114 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import type { ClientGroupSummary } from '@splitnext/client';
 import type { AppController } from '../model/controller';
-import { Button, ErrorMessage, s } from './components';
+import { BrandMark } from './BrandMark';
+import { Button, EmptyState, ErrorMessage, FooterButton, ScreenHeader, s } from './components';
+import { signedMoney } from './ExpenseList';
+import { CheckIcon, ChevronDownIcon, LinkIcon, PeopleIcon, PlusIcon } from './icons';
+import { colors, displayFamily, fontFamily, monoFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
-import { useCompactLayout } from './useVisibleViewport';
 
 export type GroupsViewApp = Pick<AppController, 'snapshot'>;
 
 type GroupsViewProps = { app: GroupsViewApp };
 
-/** The installation's groups, with create, join, and rejoin entry points. */
+/** The groups list's main action, pinned at the foot of the screen. */
+export function GroupsFooter() {
+  const action = useActionCall();
+
+  return (
+    <>
+      <ErrorMessage message={action.error} />
+      <FooterButton
+        icon={<PlusIcon color={colors.actionInk} />}
+        disabled={!action.can('showCreateGroup')}
+        onPress={() => {
+          void action.call('showCreateGroup', {});
+        }}
+      >
+        New group
+      </FooterButton>
+    </>
+  );
+}
+
+/** The logo, the name, and Join, above the groups list. */
+export function GroupsHeader() {
+  const join = useActionCall();
+
+  return (
+    <>
+      <ScreenHeader
+        heading={(
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <BrandMark size={32} />
+            <Text numberOfLines={1} style={[s.screenTitle, { flexShrink: 1 }]}>splitnext</Text>
+          </View>
+        )}
+        end={(
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Join with an invite link"
+            disabled={!join.can('showJoinGroup', {})}
+            onPress={() => {
+              void join.call('showJoinGroup', {});
+            }}
+            style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 44, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }, (pressed || !join.can('showJoinGroup', {})) && s.dim]}
+          >
+            <LinkIcon />
+            <Text style={{ fontFamily, fontSize: 14, fontWeight: '500', color: colors.ink }}>Join</Text>
+          </Pressable>
+        )}
+      />
+      <ErrorMessage message={join.error} />
+    </>
+  );
+}
+
+/** The first screen, before any group: the logo and name, and Create or Join, centered. */
+export function WelcomeView() {
+  const action = useActionCall();
+
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 36, paddingVertical: 48 }}>
+      <View style={{ alignItems: 'center', gap: 16 }}>
+        <BrandMark size={128} />
+        <Text accessibilityRole="header" style={{ fontFamily: displayFamily, fontWeight: '700', fontSize: 32, letterSpacing: -0.4, color: colors.ink }}>splitnext</Text>
+      </View>
+      <View style={{ width: '100%', maxWidth: 320, gap: 10 }}>
+        <Button
+          icon={<PlusIcon color={colors.actionInk} />}
+          disabled={!action.can('showCreateGroup')}
+          onPress={() => {
+            void action.call('showCreateGroup', {});
+          }}
+        >
+          Create a group
+        </Button>
+        <Button
+          secondary
+          icon={<LinkIcon />}
+          disabled={!action.can('showJoinGroup', {})}
+          onPress={() => {
+            void action.call('showJoinGroup', {});
+          }}
+        >
+          Join a group
+        </Button>
+        <ErrorMessage message={action.error} />
+      </View>
+    </View>
+  );
+}
+
+/** The installation's groups as cards with your balance, and the groups you left. */
 export function GroupsView(props: GroupsViewProps) {
-  const mobile = useCompactLayout();
   const state = props.app.snapshot();
   const showLeft = useUiState().showLeftGroups;
   const actions = useActions();
-  // The row last pressed, so a failure to open it appears beside that row.
+  // The card last pressed, so a failure to open it appears beside that card.
   const [target, setTarget] = useState<string | null>(null);
   const action = useActionCall();
-  // A support report of recent activity, as ids and codes only.
-  const report = useActionCall();
-  const [copied, setCopied] = useState(false);
   const active = state.groups.filter((group) => group.status === 'active');
   const left = state.groups.filter((group) => group.status === 'left');
 
@@ -30,121 +118,94 @@ export function GroupsView(props: GroupsViewProps) {
     void action.call('openGroup', { groupId: group.group_id });
   }
 
-  function row(group: ClientGroupSummary) {
-    const details = [
-      group.member_count === null
-        ? null
-        : `${group.member_count} ${group.member_count === 1 ? 'member' : 'members'}`,
-      group.you_name ? `you: ${group.you_name}` : null,
-    ].filter(Boolean);
+  function card(group: ClientGroupSummary) {
+    const isLeft = group.status === 'left';
+    const people = group.member_count === null ? null : group.member_count === 1 ? '1 person' : `${group.member_count} people`;
+    const balances = group.status === 'active' && group.stored_locally ? group.you_balances : undefined;
+    const review = state.reviewGroups.includes(group.group_id);
 
     return (
-      <View key={group.group_id}>
+      <View key={group.group_id} style={{ gap: 6 }}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${group.status === 'left' ? 'Rejoin' : 'Open'} ${group.name}`}
+          accessibilityLabel={`${isLeft ? 'Rejoin' : 'Open'} ${group.name}`}
           disabled={action.busy}
           onPress={() => open(group)}
-          style={({ pressed }) => [s.person, pressed && s.dim]}
+          style={({ pressed }) => [s.groupCard, isLeft && { backgroundColor: colors.background }, pressed && s.pressed]}
         >
-          <View style={[s.avatar, group.status === 'left' && s.avatarLeft]}>
-            <Text style={s.avatarText}>
-              {group.name.slice(0, 1).toUpperCase()}
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+            <Text numberOfLines={1} style={{ flex: 1, fontFamily, fontSize: 18, fontWeight: '600', color: colors.ink }}>{group.name}</Text>
+            {people ? <Text style={s.caption}>{people}</Text> : null}
           </View>
-          <View style={s.personText}>
-            <Text style={s.name}>{group.name}</Text>
-            {details.length ? (
-              <Text style={s.caption}>{details.join(' · ')}</Text>
-            ) : null}
-            {group.pending_commands ? (
-              <Text style={s.caption}>
-                {group.pending_commands} changes waiting
+          <View style={{ flexDirection: 'row', alignItems: balances?.length ? 'flex-end' : 'center', justifyContent: 'space-between', gap: 12 }}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text numberOfLines={1} style={s.caption}>
+                {isLeft ? 'You left this group' : group.you_name ? `You’re ${group.you_name}` : balances === null ? 'No name chosen' : ' '}
               </Text>
-            ) : null}
-            {state.reviewGroups.includes(group.group_id) ? (
-              <Text style={s.error}>A change needs review</Text>
-            ) : null}
+              {group.pending_commands ? <Text style={s.caption}>{group.pending_commands === 1 ? '1 change waiting' : `${group.pending_commands} changes waiting`}</Text> : null}
+              {review ? <Text style={{ fontFamily, fontSize: 13, fontWeight: '600', color: colors.warningInk }}>A change needs review</Text> : null}
+            </View>
+            {isLeft ? (
+              <Text style={s.rowAction}>Rejoin</Text>
+            ) : balances === null ? (
+              <Text style={{ height: 32, lineHeight: 32, paddingHorizontal: 12, borderRadius: 999, overflow: 'hidden', backgroundColor: colors.actionSoft, color: colors.actionDark, fontFamily, fontSize: 14, fontWeight: '600' }}>Choose who you are</Text>
+            ) : balances === undefined ? (
+              <Text style={[s.amount, { fontSize: 17, color: colors.muted }]}>—</Text>
+            ) : balances.length ? (
+              <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                {balances.map(({ currency, amount }) => (
+                  <Text key={currency} style={{ fontFamily: monoFamily, fontSize: 17, fontWeight: '600', color: amount > 0 ? colors.owed : colors.owes }}>
+                    {signedMoney(amount, currency)}
+                  </Text>
+                ))}
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <CheckIcon color={colors.settled} />
+                <Text style={{ fontFamily, fontSize: 15, fontWeight: '600', color: colors.settled }}>Settled</Text>
+              </View>
+            )}
           </View>
-          {group.status === 'left' ? (
-            <Text style={s.rowAction}>Rejoin</Text>
-          ) : (
-            <Text style={s.chevron}>›</Text>
-          )}
         </Pressable>
-        {target === group.group_id ? (
-          <ErrorMessage message={action.error} />
-        ) : null}
+        {target === group.group_id ? <ErrorMessage message={action.error} /> : null}
       </View>
     );
   }
 
   return (
-    <View style={s.stack}>
-      <Text
-        accessibilityRole="header"
-        style={[s.title, mobile && s.mobileTitle]}
-      >
-        {active.length ? 'Your groups' : 'Start a group'}
+    <View style={{ gap: 10 }}>
+      <Text accessibilityRole="header" style={{ paddingHorizontal: 4, fontFamily, fontSize: 14, fontWeight: '600', color: colors.muted }}>
+        Your groups
       </Text>
-      {!active.length ? (
-        <Text style={s.subtitle}>
-          Create one for a trip, home, or team, or join with an invite link.
-        </Text>
-      ) : null}
       {active.length ? (
-        <View style={[s.card, s.listCard]}>{active.map(row)}</View>
-      ) : null}
-      <View style={s.actions}>
-        <Button
-          grow
-          onPress={() => {
-            void action.call('showCreateGroup', {});
-          }}
-        >
-          + Create group
-        </Button>
-        <Button
-          grow
-          secondary
-          onPress={() => {
-            void action.call('showJoinGroup', {});
-          }}
-        >
-          Join group
-        </Button>
-      </View>
+        active.map(card)
+      ) : (
+        <EmptyState
+          icon={<PeopleIcon size={34} color={colors.action} strokeWidth={1.6} />}
+          title="No groups yet"
+          text="Create a group to start splitting expenses, or join one with an invite link."
+        />
+      )}
       {left.length ? (
-        <>
-          <Button
-            quiet
+        <View style={{ flexDirection: 'row' }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showLeft }}
             onPress={() => {
-              void actions.dispatch(
-                'setLeftGroupsVisible',
-                { visible: !showLeft },
-                { origin: 'ui' },
-              );
+              void actions.dispatch('setLeftGroupsVisible', { visible: !showLeft }, { origin: 'ui' });
             }}
+            style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 44, marginTop: 4, paddingHorizontal: 4 }, pressed && s.dim]}
           >
-            {showLeft ? 'Hide' : 'Show'} left groups · {left.length}
-          </Button>
-          {showLeft ? (
-            <View style={[s.card, s.listCard]}>{left.map(row)}</View>
-          ) : null}
-        </>
+            <View style={showLeft ? { transform: [{ rotate: '180deg' }] } : null}>
+              <ChevronDownIcon color={colors.action} strokeWidth={1.8} />
+            </View>
+            <Text style={{ fontFamily, fontSize: 14, fontWeight: '500', color: colors.action }}>
+              {showLeft ? 'Hide' : 'Show'} {left.length === 1 ? '1 group' : `${left.length} groups`} you left
+            </Text>
+          </Pressable>
+        </View>
       ) : null}
-      {report.can('copyDiagnostics') || copied ? (
-        <Button
-          quiet
-          disabled={!report.can('copyDiagnostics')}
-          onPress={() => {
-            void report.call('copyDiagnostics', {}, () => setCopied(true));
-          }}
-        >
-          {copied ? 'Diagnostics copied' : 'Copy diagnostics'}
-        </Button>
-      ) : null}
-      <ErrorMessage message={report.error} />
+      {showLeft && left.length ? left.map(card) : null}
     </View>
   );
 }

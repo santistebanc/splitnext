@@ -1,6 +1,6 @@
 # Browse meaningful group Activity
 
-Status: ready-for-agent
+Status: resolved
 Depends on: 03-record-settlements
 
 See [the feature-port spec](../spec.md) and
@@ -25,3 +25,5 @@ See [the feature-port spec](../spec.md) and
 
 Agreed during the source-app inventory and specification interview.
 
+
+Implemented authenticated audit-history reads, a lazy offline cache and attributed Activity with monetary restoration. Browser and transport checks cover history access, redaction and offline reading.

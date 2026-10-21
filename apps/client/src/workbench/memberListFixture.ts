@@ -57,6 +57,7 @@ export function scenarioReplica(
     group: { id: fixtureGroupId, name: 'Workbench trip', created_at: at },
     members,
     expenses: [],
+          settlements: [],
     access_grants: [
       {
         identity_id: fixtureIdentityId,
@@ -94,6 +95,7 @@ export function scenarioReplica(
     outbox: [],
     notices: [],
     hidden: false,
+    activity: [],
     last_synced_at: at,
   };
 }
@@ -130,6 +132,7 @@ export function fixtureGroups(
       pending_commands: 0,
       member_count: entry.index + 2,
       you_name: entry.left ? null : 'Ana',
+      you_balances: entry.left ? null : [],
     }),
   );
 }

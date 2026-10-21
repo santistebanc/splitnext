@@ -28,6 +28,7 @@ function fixture() {
     group: created.group,
     members: [created.member],
     expenses: [],
+          settlements: [],
     access_grants: [created.access],
     invite: created.invite,
   };

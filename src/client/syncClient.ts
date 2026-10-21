@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { AuditEvent } from '../domain/audit';
 import { commandFromIntent, commandOutcomeSchema, requiresServerDecision, type CommandIntent, type GroupCommand } from '../domain/commands';
 import { clientErrorKind, SplitnextNetworkError, SplitnextProtocolError, SplitnextRequestError } from './errors';
 import type { ClientDiagnosticEvent, ClientDiagnosticObserver, ClientExchange, ClientRequestContext, ClientInvocationIds } from './diagnostics';
@@ -39,6 +40,7 @@ import {
 } from './realtime';
 
 export type SyncDeviceTransport = {
+  activity(groupId: string, context?: ClientRequestContext): Promise<{ events: AuditEvent[] }>;
   currentIdentity(): Promise<IdentitySession>;
   createGroup(input: CreateGroupRequest, context?: ClientRequestContext): Promise<CreatedGroup>;
   joinGroup(groupId: string, input: JoinGroupRequest, context?: ClientRequestContext): Promise<GroupSession>;
@@ -56,7 +58,7 @@ export type SyncDeviceTransport = {
     input: InviteLinkInput,
     context?: ClientRequestContext,
   ): Promise<{ revision: number; invite: GroupInvite }>;
-  previewInvite(groupId: string, token: string, context?: ClientRequestContext): Promise<InvitePreview>;
+  previewInvite(groupId: string | null, token: string, context?: ClientRequestContext): Promise<InvitePreview>;
   listGroups(context?: ClientRequestContext): Promise<{ groups: AccessibleGroup[] }>;
 };
 
@@ -353,7 +355,7 @@ export class SplitnextSyncClient {
   }
 
   /** Shows a link holder the group and its members before they join. */
-  previewInvite(groupId: string, token: string, invocationId?: string): Promise<InvitePreview> {
+  previewInvite(groupId: string | null, token: string, invocationId?: string): Promise<InvitePreview> {
     this.requireOnline();
 
     return this.exchange(this.requestContext('previewInvite', groupId, invocationId), (context) => this.deviceApi.previewInvite(groupId, token, context));
@@ -410,8 +412,26 @@ export class SplitnextSyncClient {
     return this.realtime.presence(groupId);
   }
 
+  async activity(groupId: string): Promise<ClientReplicaState> {
+    if (!this.online) return this.replicas.state(groupId);
+    const response = await this.deviceApi.activity(groupId);
+
+    return this.replicas.cacheActivity(groupId, response.events);
+  }
+
   inspect(groupId: string): Promise<ClientReplicaState> {
     return this.replicas.state(groupId);
+  }
+
+  /** The stored group whose current invite uses this secret, found without a request. */
+  async groupWithInvite(token: string): Promise<string | null> {
+    for (const group of await this.knownGroups()) {
+      const replica = await this.replicas.state(group.group_id);
+
+      if (replica.projected_snapshot?.invite.token === token) return group.group_id;
+    }
+
+    return null;
   }
 
   async dismissNotice(

@@ -1,4 +1,4 @@
-import type { AuditChange } from '../audit';
+import type { AuditEvent, AuditChange } from '../audit';
 import type { GroupAccessGrant } from '../groups';
 import type { GroupSnapshot } from '../sync';
 import type { CommandReason, CommandServerState, CommandTarget } from './outcomes';
@@ -41,7 +41,7 @@ export type CommandDefinition<C extends CommandBase, I> = {
   complete(commandId: string, intent: I, snapshot: GroupSnapshot, createId: () => string): C;
   /** The original intent without its stale preconditions. */
   retryIntent(command: C): I;
-  apply(snapshot: GroupSnapshot, identityId: string, command: C, appliedAt: string): CommandTransition;
+  apply(snapshot: GroupSnapshot, identityId: string, command: C, appliedAt: string, history?: readonly AuditEvent[]): CommandTransition;
 };
 
 export function defineCommand<C extends CommandBase, I>(definition: CommandDefinition<C, I>): CommandDefinition<C, I> {

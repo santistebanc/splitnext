@@ -1,101 +1,94 @@
 import { useRef } from 'react';
 import { Text, View, type TextInput } from 'react-native';
 import type { AppController } from '../model/controller';
-import { Button, ErrorMessage, Field, s } from './components';
+import { ErrorMessage, Field, FooterButton, Notice, s } from './components';
+import { LinkIcon } from './icons';
+import { colors } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
-import { useCompactLayout } from './useVisibleViewport';
 
 export type CreateGroupApp = Pick<AppController, 'snapshot'>;
 
 type CreateGroupProps = { app: CreateGroupApp; close?: () => void };
 
-/** One form for the group name and the creator's own member name. */
-export function CreateGroup(props: CreateGroupProps) {
-  const mobile = useCompactLayout();
-  const ui = useUiState();
-  const { name, yourName: person } = ui.create;
-  const actions = useActions();
-  const personInput = useRef<TextInput>(null);
+function useSubmitCreate(close?: () => void) {
   const action = useActionCall();
-  const back = useActionCall();
-  const { online, reachable } = props.app.snapshot();
 
   function submit(): void {
     if (!action.can('submitCreateGroup')) return;
 
-    void action.call('submitCreateGroup', {}, props.close);
+    void action.call('submitCreateGroup', {}, close);
   }
+
+  return { action, submit };
+}
+
+/** The New group screen's footer: why it could not be created, and Create group. */
+export function CreateGroupFooter(props: { app: CreateGroupApp; close?: () => void }) {
+  const ui = useUiState();
+  const { action, submit } = useSubmitCreate(props.close);
+  const { online, reachable } = props.app.snapshot();
+  const busy = ui.phase === 'creating' || action.busy;
 
   return (
     <>
-      <Text
-        accessibilityRole="header"
-        style={[s.title, mobile && s.mobileTitle]}
-      >
-        Create group
-      </Text>
-      <View style={s.card}>
-        <Field
-          label="Group name"
-          placeholder="e.g. Lisbon weekend"
-          value={name}
-          editable={actions.availability('changeDraft', { field: 'create.name', value: name }).available}
-          onChangeText={(value) => {
-            void actions.dispatch(
-              'changeDraft',
-              { field: 'create.name', value },
-              { origin: 'ui' },
-            );
-          }}
-          maxLength={100}
-          autoFocus
-          returnKeyType="next"
-          submitBehavior="submit"
-          onSubmitEditing={() => personInput.current?.focus()}
+      {!online || !reachable ? (
+        <Notice
+          tone="danger"
+          role="alert"
+          message={`Can’t create the group. ${!online ? 'You’re offline.' : 'Splitnext can’t be reached.'} Nothing you typed was lost.`}
         />
-        <Field
-          label="Your name"
-          inputRef={personInput}
-          placeholder="e.g. Santi"
-          value={person}
-          editable={actions.availability('changeDraft', { field: 'create.yourName', value: person }).available}
-          onChangeText={(value) => {
-            void actions.dispatch(
-              'changeDraft',
-              { field: 'create.yourName', value },
-              { origin: 'ui' },
-            );
-          }}
-          maxLength={100}
-          returnKeyType="done"
-          onSubmitEditing={submit}
-        />
-        <ErrorMessage message={action.error ?? back.error} />
-        <View style={s.actions}>
-          <Button
-            grow
-            quiet
-            disabled={!back.can('showGroups')}
-            onPress={() => {
-              void back.call('showGroups', {}, props.close);
-            }}
-          >
-            Back to groups
-          </Button>
-          <Button grow onPress={submit} disabled={!action.can('submitCreateGroup')}>
-            {ui.phase === 'creating' || action.busy
-              ? 'Creating…'
-              : 'Create group'}
-          </Button>
-        </View>
-        {!online ? (
-          <Text style={s.caption}>Offline · connect to create a group</Text>
-        ) : !reachable ? (
-          <Text style={s.caption}>
-            Can’t reach Splitnext · connect to create a group
-          </Text>
-        ) : null}
-      </View>
+      ) : null}
+      <ErrorMessage message={action.error} />
+      <FooterButton onPress={submit} busy={busy} disabled={!action.can('submitCreateGroup')}>
+        {busy ? 'Creating…' : action.error ? 'Try again' : 'Create group'}
+      </FooterButton>
     </>
+  );
+}
+
+/** One form for the group name and the creator's own member name. */
+export function CreateGroup(props: CreateGroupProps) {
+  const ui = useUiState();
+  const { name, yourName: person } = ui.create;
+  const actions = useActions();
+  const personInput = useRef<TextInput>(null);
+  const { submit } = useSubmitCreate(props.close);
+  const big = { height: 56, fontSize: 18 };
+
+  return (
+    <View style={{ gap: 22 }}>
+      <Field
+        label="Group name"
+        placeholder="Lisbon, May"
+        value={name}
+        editable={actions.availability('changeDraft', { field: 'create.name', value: name }).available}
+        onChangeText={(value) => {
+          void actions.dispatch('changeDraft', { field: 'create.name', value }, { origin: 'ui' });
+        }}
+        maxLength={100}
+        autoFocus
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => personInput.current?.focus()}
+        style={big}
+      />
+      <Field
+        label="Your name in this group"
+        inputRef={personInput}
+        placeholder="Carlos"
+        value={person}
+        editable={actions.availability('changeDraft', { field: 'create.yourName', value: person }).available}
+        onChangeText={(value) => {
+          void actions.dispatch('changeDraft', { field: 'create.yourName', value }, { origin: 'ui' });
+        }}
+        maxLength={100}
+        returnKeyType="done"
+        onSubmitEditing={submit}
+        style={big}
+      />
+      <Notice tone="info" icon={<LinkIcon size={20} color={colors.muted} />}>
+        <Text style={[s.body, { flex: 1, fontSize: 14, lineHeight: 20, color: colors.soft }]}>You’ll get an invite link to share right away.</Text>
+      </Notice>
+    </View>
   );
 }
