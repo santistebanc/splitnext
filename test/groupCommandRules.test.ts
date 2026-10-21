@@ -1,3 +1,4 @@
+import { auditEventSchema } from '../src/domain/audit';
 import { describe, expect, it } from 'vitest';
 import { applyGroupCommand, type CommandServerState, type GroupCommand } from '../src/domain/commands';
 import type { Expense } from '../src/domain/expenses';
@@ -57,6 +58,7 @@ function grant(identityId: string, preferred: string | null, hiddenAt: string | 
 const snapshot: GroupSnapshot = {
   group: { id: id('group'), name: 'Trip', created_at: at },
   members: [member(ana, 'Ana'), member(ben, 'Ben'), member(old, 'Old', 'hidden'), member(gone, 'Gone', 'deleted'), member(cy, 'Cy')],
+  settlements: [],
   expenses: [
     expense(dinner, {}),
     expense(taxi, {
@@ -132,7 +134,12 @@ const memberState = (detail: Partial<LedgerMember>): ServerState => ({ kind: 'me
 
 const expenseState = (detail: Partial<Expense>): ServerState => ({ kind: 'expense', expense: detail });
 
+const repayment = (from: string, to: string): GroupCommand => ({ command_id: commandId, type: 'settlement.record', payload: { settlement_id: id('repayment'), from_member_id: from, to_member_id: to, currency: 'EUR', amount: 300 } });
+
 const rows: Row[] = [
+  { situation: 'records a separate repayment', command: repayment(ben, ana), status: 'applied', reason: null, state: { kind: 'settlement', settlement: { amount: 300 } } },
+  { situation: 'rejects repayment to self', command: repayment(ana, ana), status: 'rejected', reason: 'settlement_invalid', state: null },
+  { situation: 'rejects repayment with unknown member', command: repayment(ana, id('unknown')), status: 'rejected', reason: 'member_not_found', state: null },
   { situation: 'renames the group', command: rename('Lisbon'), status: 'applied', reason: null, state: { kind: 'group', group: { name: 'Lisbon' } } },
   { situation: 'keeps a name another device already chose', command: rename('Trip', 'Old trip'), status: 'no_effect', reason: null, state: { kind: 'group', group: { name: 'Trip' } } },
   { situation: 'supersedes a rename based on an old name', command: rename('Lisbon', 'Old trip'), status: 'superseded', reason: 'group_changed', state: { kind: 'group', group: { name: 'Trip' } } },
@@ -212,4 +219,117 @@ describe('group command rules', () => {
     expect(restored.access_grants.find((entry) => entry.identity_id === me)?.preferred_member_id).toBeNull();
     expect(left.access_grants.find((entry) => entry.identity_id === me)).toMatchObject({ hidden_at: later, preferred_member_id: null });
   });
+});
+
+const settlementFixture = { ...snapshot, settlements: [
+  { id: id('repayment-active'), from_member_id: ben, to_member_id: ana, currency: 'EUR', amount: 300, status: 'active' as const, version: 2, created_at: at, updated_at: at },
+  { id: id('repayment-removed'), from_member_id: ben, to_member_id: ana, currency: 'EUR', amount: 300, status: 'removed' as const, version: 3, created_at: at, updated_at: at },
+] };
+
+const settlementRows: { type: 'settlement.edit' | 'settlement.remove' | 'settlement.restore'; record: string; version?: number; amount?: number; status: string; reason: string | null }[] = [
+  { type: 'settlement.edit', record: 'active', version: 2, amount: 200, status: 'applied', reason: null },
+  { type: 'settlement.edit', record: 'active', version: 1, amount: 200, status: 'superseded', reason: 'settlement_changed' },
+  { type: 'settlement.edit', record: 'active', version: 1, amount: 300, status: 'no_effect', reason: null },
+  { type: 'settlement.edit', record: 'removed', version: 3, amount: 200, status: 'rejected', reason: 'settlement_removed' },
+  { type: 'settlement.edit', record: 'missing', version: 1, amount: 200, status: 'rejected', reason: 'settlement_not_found' },
+  { type: 'settlement.remove', record: 'active', status: 'applied', reason: null },
+  { type: 'settlement.remove', record: 'removed', status: 'no_effect', reason: null },
+  { type: 'settlement.remove', record: 'missing', status: 'rejected', reason: 'settlement_not_found' },
+  { type: 'settlement.restore', record: 'removed', status: 'applied', reason: null },
+  { type: 'settlement.restore', record: 'active', status: 'no_effect', reason: null },
+  { type: 'settlement.restore', record: 'missing', status: 'rejected', reason: 'settlement_not_found' },
+];
+
+it.each(settlementRows)('$type $record version $version amount $amount produces $status', (row) => {
+  const payload = { settlement_id: id(`repayment-${row.record}`) };
+  const command: GroupCommand = row.type === 'settlement.edit' ? { command_id: commandId, type: row.type, payload: { ...payload, from_member_id: ben, to_member_id: ana, currency: 'EUR', amount: row.amount ?? 200, expected_version: row.version ?? 1 } } : { command_id: commandId, type: row.type, payload };
+  const result = applyGroupCommand(settlementFixture, me, command, later);
+  expect({ status: result.status, reason: result.reason }).toEqual({ status: row.status, reason: row.reason });
+});
+
+const editedEvent = auditEventSchema.parse({ id: id('audit-edit'), sequence: 1, revision: 2, command_id: commandId, actor_identity_id: other, actor_handle: 'User 2', actor_member_name: 'Ben', occurred_at: at, target: { kind: 'expense', id: dinner }, change: { action: 'expense.edited', before: expense(dinner, { total: 600, version: 1 }), after: { expense: snapshot.expenses[0], hidden_members: [] } } });
+
+const undoRows = [
+  { situation: 'undoes another participant edit', eventId: editedEvent.id, history: [editedEvent], version: 2, status: 'applied', reason: null },
+  { situation: 'does not overwrite a later expense version', eventId: editedEvent.id, history: [editedEvent], version: 3, status: 'superseded', reason: 'undo_changed' },
+  { situation: 'rejects an unknown audit event', eventId: id('missing-event'), history: [], version: 2, status: 'rejected', reason: 'undo_not_found' },
+];
+
+it.each(undoRows)('$situation', (row) => {
+  const group = { ...snapshot, expenses: snapshot.expenses.map((entry) => entry.id === dinner ? { ...entry, version: row.version } : entry) };
+  const result = applyGroupCommand(group, me, { command_id: commandId, type: 'change.undo', payload: { event_id: row.eventId } }, later, row.history);
+  expect({ status: result.status, reason: result.reason }).toEqual({ status: row.status, reason: row.reason });
+
+  if (result.status === 'applied') expect(result.snapshot.expenses[0]).toMatchObject({ total: 600, version: 3 });
+});
+
+it('can reverse a reversal while preserving immutable events and an unrelated group rename', () => {
+  const renamed = { ...snapshot, group: { ...snapshot.group, name: 'New group name' } };
+  const first = applyGroupCommand(renamed, me, { command_id: commandId, type: 'change.undo', payload: { event_id: editedEvent.id } }, later, [editedEvent]);
+  const reversed = auditEventSchema.parse({ ...editedEvent, id: id('audit-reversal'), sequence: 2, revision: 3, change: first.audit });
+  const second = applyGroupCommand(first.snapshot, other, { command_id: id('another-command'), type: 'change.undo', payload: { event_id: reversed.id } }, later, [editedEvent, reversed]);
+  expect(second.status).toBe('applied');
+  expect(second.snapshot.expenses[0]).toMatchObject({ total: 1000, version: 4 });
+  expect(second.snapshot.group.name).toBe('New group name');
+  expect(editedEvent.change.action).toBe('expense.edited');
+  expect(second.audit).toMatchObject({ action: 'change.undone', reverses_event_id: reversed.id });
+});
+
+
+function reversibleEvent(change: import('../src/domain/audit').AuditChange | null, target: import('../src/domain/audit').AuditEvent['target'], label: string, sequence = 1) {
+  return auditEventSchema.parse({ ...editedEvent, id: id(label), sequence, target, change });
+}
+
+it('undoes member removal without restoring preferred-member selections', () => {
+  const removed = applyGroupCommand(snapshot, me, remove(ana), later);
+  const event = reversibleEvent(removed.audit, { kind: 'member', id: ana }, 'removed-ana');
+  const result = applyGroupCommand(removed.snapshot, other, { command_id: commandId, type: 'change.undo', payload: { event_id: event.id } }, later, [event]);
+  expect(result.status).toBe('applied');
+  expect(result.snapshot.members.find((member) => member.id === ana)?.status).toBe('active');
+  expect(result.snapshot.access_grants.find((grant) => grant.identity_id === me)?.preferred_member_id).toBeNull();
+});
+
+const memberAddition = reversibleEvent({ action: 'member.created', before: null, after: member(cy, 'Cy') }, { kind: 'member', id: cy }, 'added-cy');
+
+const referenceRows = [
+  { situation: 'undoes an unreferenced member addition', kind: 'none', status: 'applied', reason: null },
+  { situation: 'blocks undo of a member named by a removed expense', kind: 'expense', status: 'superseded', reason: 'undo_member_referenced' },
+  { situation: 'blocks undo of a member named by a removed repayment', kind: 'settlement', status: 'superseded', reason: 'undo_member_referenced' },
+];
+
+it.each(referenceRows)('$situation', (row) => {
+  const group = { ...snapshot, expenses: row.kind === 'expense' ? [...snapshot.expenses, expense(id('cy-expense'), { status: 'removed', paid: [{ member_id: cy, amount: 1000 }] })] : snapshot.expenses,
+    settlements: row.kind === 'settlement' ? [{ ...settlementFixture.settlements[0]!, id: id('cy-repayment'), from_member_id: cy, to_member_id: ana, status: 'removed' as const }] : [] };
+
+  const result = applyGroupCommand(group, me, { command_id: commandId, type: 'change.undo', payload: { event_id: memberAddition.id } }, later, [memberAddition]);
+  expect({ status: result.status, reason: result.reason }).toEqual({ status: row.status, reason: row.reason });
+});
+
+it('detects later group and member changes even when their visible value returns to the earlier result', () => {
+  const first = reversibleEvent({ action: 'group.renamed', before: { ...snapshot.group, name: 'Before' }, after: snapshot.group }, { kind: 'group', id: snapshot.group.id }, 'group-rename');
+  const laterEvent = reversibleEvent({ action: 'group.renamed', before: { ...snapshot.group, name: 'Elsewhere' }, after: snapshot.group }, first.target, 'later-rename', 2);
+  const result = applyGroupCommand(snapshot, me, { command_id: commandId, type: 'change.undo', payload: { event_id: first.id } }, later, [first, laterEvent]);
+  expect(result.status).toBe('superseded');
+  expect(result.reason).toBe('undo_changed');
+});
+
+it('never offers reversal of creation, access changes or invite replacement', () => {
+  const unsupported = reversibleEvent({ action: 'group.left', before: grant(me, ana), after: grant(me, null, later) }, { kind: 'group', id: snapshot.group.id }, 'left-group');
+  const result = applyGroupCommand(snapshot, me, { command_id: commandId, type: 'change.undo', payload: { event_id: unsupported.id } }, later, [unsupported]);
+  expect(result.reason).toBe('undo_not_supported');
+});
+
+
+it('rejects duplicate repayment identifiers and invalid edited member references', () => {
+  const existing = settlementFixture.settlements[0];
+
+  if (!existing) throw new Error('missing fixture');
+  const recorded = applyGroupCommand(settlementFixture, me, { command_id: commandId, type: 'settlement.record', payload: { settlement_id: existing.id, from_member_id: ben, to_member_id: ana, amount: 300, currency: 'EUR' } }, later);
+  expect(recorded.reason).toBe('settlement_id_exists');
+
+  for (const [recipient, reason] of [[ben, 'settlement_invalid'], [id('unknown-member'), 'member_not_found']] as const) {
+    const edited = applyGroupCommand(settlementFixture, me, { command_id: commandId, type: 'settlement.edit', payload: { settlement_id: existing.id, expected_version: existing.version, from_member_id: ben, to_member_id: recipient, amount: 200, currency: 'EUR' } }, later);
+    expect(edited.status).toBe('rejected');
+    expect(edited.reason).toBe(reason);
+  }
 });

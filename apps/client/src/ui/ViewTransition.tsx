@@ -4,7 +4,10 @@ import { s } from './components';
 
 type ViewTransitionProps = { children: ReactNode; mobile: boolean };
 
-/** Each page mounts hidden, so new content cannot flash before its fade starts. */
+/**
+ * Each page mounts hidden, so new content cannot flash before its fade starts.
+ * The rise that goes with the fade moves the whole page area, in Frame.
+ */
 export function ViewTransition(props: ViewTransitionProps) {
   const [reducedMotion] = useState(
     () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -31,17 +34,7 @@ export function ViewTransition(props: ViewTransitionProps) {
       style={[
         s.main,
         props.mobile && s.mobileMain,
-        {
-          opacity: progress,
-          transform: [
-            {
-              translateY: progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: [8, 0],
-              }),
-            },
-          ],
-        },
+        { opacity: progress },
       ]}
     >
       {props.children}

@@ -1,38 +1,44 @@
 import { useRef, useState, type ReactNode, type Ref } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
   type TextInputProps,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 
-export const colors = {
-  background: '#f5f6f2',
-  surface: '#ffffff',
-  ink: '#20372f',
-  // At least 4.5:1 against background, pale, amber, and surface for small text.
-  muted: '#5d6f66',
-  green: '#246b56',
-  pale: '#e9f1eb',
-  border: '#dde5de',
-  amber: '#fff2d5',
-  red: '#a43b38',
-};
+import { between, useCompactProgress } from './pageScroll';
+import { AlertIcon, BackIcon, ChevronDownIcon, ChevronRightIcon, WarningIcon } from './icons';
+import { colors, displayFamily, fontFamily, monoFamily } from './theme';
+
+export { colors } from './theme';
 
 type ButtonProps = {
   children: ReactNode;
   onPress: () => void;
+  /** White with a grey edge, for the second choice beside a main action. */
   secondary?: boolean;
+  /** Blue text without a background, for minor actions. */
   quiet?: boolean;
+  /** Orange text, for leaving or removing. */
   danger?: boolean;
+  /** Near-black, for confirming a change that cannot be taken back. */
+  dark?: boolean;
+  /** A compact button for actions inside rows and cards. */
+  small?: boolean;
   disabled?: boolean;
   label?: string;
   grow?: boolean;
+  icon?: ReactNode;
 };
 
 export function Button(props: ButtonProps) {
+  const filled = !props.secondary && !props.quiet && !props.danger && !props.dark;
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -42,17 +48,23 @@ export function Button(props: ButtonProps) {
       onPress={props.onPress}
       style={({ pressed }) => [
         s.button,
+        props.small && s.smallButton,
         props.grow && s.growButton,
         props.secondary && s.secondary,
         props.quiet && s.quiet,
         props.danger && s.danger,
-        (pressed || props.disabled) && s.dim,
+        props.dark && s.dark,
+        pressed && !props.disabled && s.pressed,
+        props.disabled && (filled ? s.busyButton : s.dim),
       ]}
     >
+      {props.icon}
       <Text
         style={[
           s.buttonText,
-          (props.secondary || props.quiet) && s.secondaryText,
+          props.small && s.smallButtonText,
+          (props.secondary || props.danger) && s.inkText,
+          props.quiet && s.quietText,
           props.danger && s.dangerText,
         ]}
       >
@@ -68,55 +80,300 @@ type FieldProps = TextInputProps & {
   hint?: string;
   trailing?: ReactNode;
   inputRef?: Ref<TextInput>;
+  /** A large monospaced figure, for the amount a form is about. */
+  figure?: boolean;
 };
 
+export function Field(props: FieldProps) {
+  const { label, hideLabel, hint, trailing, inputRef, figure, ...input } = props;
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <View style={s.field}>
+      {!hideLabel ? <Text style={s.label}>{label}</Text> : null}
+      <View style={s.fieldRow}>
+        <TextInput
+          {...input}
+          ref={inputRef}
+          accessibilityLabel={label}
+          placeholderTextColor={colors.control}
+          onFocus={(event) => {
+            setFocused(true);
+            input.onFocus?.(event);
+          }}
+          onBlur={(event) => {
+            setFocused(false);
+            input.onBlur?.(event);
+          }}
+          style={[s.input, figure && s.figureInput, focused && input.editable !== false && s.inputFocused, input.style]}
+        />
+        {trailing}
+      </View>
+      {hint ? <Text style={s.caption}>{hint}</Text> : null}
+    </View>
+  );
+}
+
+/** A three-letter currency code, typed into a field-height box beside an amount. */
+export function CurrencyField(props: { value: string; onChangeText: (value: string) => void }) {
+  return (
+    <View style={s.fieldButton}>
+      <TextInput
+        accessibilityLabel="Currency"
+        value={props.value}
+        onChangeText={props.onChangeText}
+        maxLength={3}
+        autoCapitalize="characters"
+        autoCorrect={false}
+        style={s.currencyInput}
+      />
+      <ChevronDownIcon />
+    </View>
+  );
+}
+
 type ChoiceProps = {
-  children: ReactNode;
+  children?: string;
+  /** Richer content than a single line of text, such as a code and an amount. */
+  content?: ReactNode;
   selected: boolean;
   onPress: () => void;
+  /** One option of a segmented control rather than a free-standing chip. */
+  segment?: boolean;
+  label?: string;
 };
 
 export function Choice(props: ChoiceProps) {
   return (
     <Pressable
       accessibilityRole="radio"
+      accessibilityLabel={props.label}
       accessibilityState={{ checked: props.selected }}
       aria-checked={props.selected}
       onPress={props.onPress}
-      style={[s.button, s.option, !props.selected && s.secondary]}
+      style={({ pressed }) => [
+        props.segment ? s.segment : s.chip,
+        props.selected && (props.segment ? s.segmentSelected : s.chipSelected),
+        pressed && s.pressed,
+      ]}
     >
-      <Text style={[s.buttonText, !props.selected && s.secondaryText]}>
-        {props.children}
-      </Text>
+      {props.content ?? (
+        <Text
+          numberOfLines={1}
+          style={[s.chipText, props.segment && !props.selected && { color: colors.soft }, props.selected && !props.segment && s.chipTextSelected]}
+        >
+          {props.children}
+        </Text>
+      )}
     </Pressable>
   );
 }
 
-export function Field(props: FieldProps) {
-  const { label, hideLabel, hint, trailing, inputRef, ...input } = props;
-
-  const control = (
-    <TextInput
-      {...input}
-      ref={inputRef}
-      accessibilityLabel={label}
-      placeholderTextColor={colors.muted}
-      style={[s.input, Boolean(trailing) && s.inputWithAction]}
-    />
+/** A radio row with a round marker, as on the join screen. */
+export function RadioRow(props: { label: string; selected: boolean; onPress: () => void; disabled?: boolean; accessibilityLabel?: string; children?: ReactNode; style?: StyleProp<ViewStyle> }) {
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityLabel={props.accessibilityLabel ?? props.label}
+      accessibilityState={{ checked: props.selected, disabled: Boolean(props.disabled) }}
+      aria-checked={props.selected}
+      disabled={props.disabled}
+      onPress={props.onPress}
+      style={({ pressed }) => [s.radioRow, props.style, props.selected && s.radioRowSelected, pressed && s.pressed]}
+    >
+      <View style={[s.radioDot, props.selected && s.radioDotSelected]} />
+      <Text numberOfLines={1} style={s.radioLabel}>{props.label}</Text>
+      {props.children}
+    </Pressable>
   );
+}
+
+/** A small uppercase section title with an optional action at its end. */
+export function SectionHeader(props: { title: string; children?: ReactNode }) {
+  return (
+    <View style={s.sectionHeader}>
+      <Text accessibilityRole="header" style={s.eyebrow}>
+        {props.title}
+      </Text>
+      {props.children}
+    </View>
+  );
+}
+
+/** A large page title, for screens whose header holds only a back button. */
+export function PageTitle(props: { children: ReactNode; size?: number }) {
+  return (
+    <Text accessibilityRole="header" style={[s.pageTitle, props.size ? { fontSize: props.size, lineHeight: props.size * 1.15 } : null]}>
+      {props.children}
+    </Text>
+  );
+}
+
+/**
+ * A screen's fixed header, the same height on every screen: a back or text
+ * action, the title with what it belongs to named quietly above it, and
+ * actions at the end. It shrinks as the page scrolls, its context fading
+ * out and its title scaling down from its left edge. A heading that is more
+ * than text stands in for the title and styles its text with `s.screenTitle`.
+ */
+export function ScreenHeader(props: { title?: string; heading?: ReactNode; context?: string | undefined; start?: ReactNode; end?: ReactNode }) {
+  const progress = useCompactProgress();
 
   return (
-    <View style={s.field}>
-      {!hideLabel ? <Text style={s.label}>{label}</Text> : null}
-      {trailing ? (
-        <View style={s.fieldWithAction}>
-          {control}
-          {trailing}
+    <View style={[s.screenHeader, { minHeight: between(66, 52, progress), paddingTop: between(10, 4, progress) }]}>
+      {props.start}
+      <View style={[s.screenHeaderTitle, !props.start && s.screenHeaderInset]}>
+        {props.context ? (
+          <Text numberOfLines={1} style={[s.screenContext, { height: between(16, 0, progress), opacity: 1 - progress }]}>{props.context}</Text>
+        ) : null}
+        <View style={[s.screenHeaderScale, { transform: [{ scale: between(1, compactTitleScale, progress) }] }]}>
+          {props.heading ?? (props.title ? (
+            <Text accessibilityRole="header" numberOfLines={1} style={s.screenTitle}>
+              {props.title}
+            </Text>
+          ) : null)}
         </View>
-      ) : (
-        control
-      )}
-      {hint ? <Text style={s.caption}>{hint}</Text> : null}
+      </View>
+      {props.end ? <View style={s.screenHeaderEnd}>{props.end}</View> : null}
+    </View>
+  );
+}
+
+/**
+ * The space a screen's fixed header keeps below itself. It belongs to the
+ * header, so a screen's content starts right below it at rest and scrolls out
+ * of sight at that same edge.
+ */
+export const headerGap = 8;
+
+/** How large a screen title draws once the page has scrolled: 19px against its full 24px. */
+const compactTitleScale = 19 / 24;
+
+type HeaderActionProps = { label: string; onPress: () => void; disabled?: boolean };
+
+/** The back chevron in a screen header; its label names where it goes. */
+export function BackButton(props: HeaderActionProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={props.label}
+      accessibilityState={{ disabled: Boolean(props.disabled) }}
+      disabled={props.disabled}
+      onPress={props.onPress}
+      style={({ pressed }) => [s.navIcon, (pressed || props.disabled) && s.dim]}
+    >
+      <BackIcon />
+    </Pressable>
+  );
+}
+
+/** A text action in a screen header, such as Cancel, or the filled Save beside it. */
+export function HeaderAction(props: HeaderActionProps & { text: string; danger?: boolean; primary?: boolean }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={props.label}
+      accessibilityState={{ disabled: Boolean(props.disabled) }}
+      disabled={props.disabled}
+      onPress={props.onPress}
+      style={({ pressed }) => [
+        s.headerAction,
+        props.primary && s.headerPrimary,
+        props.primary && props.disabled && s.headerPrimaryIdle,
+        pressed && s.pressed,
+        !props.primary && props.disabled && s.dim,
+      ]}
+    >
+      <Text style={[s.headerActionText, props.primary && s.headerPrimaryText, props.danger && s.dangerText]}>{props.text}</Text>
+    </Pressable>
+  );
+}
+
+/** A full-width row of a settings card. */
+export function ListRow(props: { label: string; onPress: () => void; disabled?: boolean; first?: boolean; value?: string; danger?: boolean; chevron?: boolean }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={props.label}
+      accessibilityState={{ disabled: Boolean(props.disabled) }}
+      disabled={props.disabled}
+      onPress={props.onPress}
+      style={({ pressed }) => [s.listRow, !props.first && s.ruled, (pressed || props.disabled) && s.dim]}
+    >
+      <Text style={[s.listRowLabel, props.danger && s.listRowDanger]}>{props.label}</Text>
+      {props.value ? <Text style={s.listRowValue}>{props.value}</Text> : null}
+      {props.chevron ? <ChevronRightIcon color={colors.muted} /> : null}
+    </Pressable>
+  );
+}
+
+/** A centered empty state: a tinted icon, a short title, and one line of guidance. */
+export function EmptyState(props: { icon: ReactNode; title: string; text?: string; tone?: 'action' | 'settled' }) {
+  return (
+    <View style={s.emptyState}>
+      <View style={[s.emptyIcon, props.tone === 'settled' && s.emptyIconSettled]}>{props.icon}</View>
+      <Text style={s.emptyTitle}>{props.title}</Text>
+      {props.text ? <Text style={s.emptyText}>{props.text}</Text> : null}
+    </View>
+  );
+}
+
+/**
+ * The screen's main action at the foot of the screen: a large blue button,
+ * a greyed one with a spinner while it works.
+ */
+export function FooterButton(props: { children: ReactNode; onPress: () => void; disabled?: boolean; busy?: boolean; label?: string; icon?: ReactNode; floating?: boolean }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={props.label}
+      accessibilityState={{ disabled: Boolean(props.disabled || props.busy), busy: Boolean(props.busy) }}
+      disabled={props.disabled || props.busy}
+      onPress={props.onPress}
+      style={({ pressed }) => [
+        s.footerButton,
+        props.floating && s.floatingButton,
+        (props.disabled || props.busy) && s.footerButtonIdle,
+        pressed && s.pressed,
+      ]}
+    >
+      {props.busy ? <ActivityIndicator size="small" color={colors.actionInk} /> : props.icon}
+      <Text style={s.footerButtonText}>{props.children}</Text>
+    </Pressable>
+  );
+}
+
+/** A small rounded label, such as Taken, To review, or You. */
+export function Tag(props: { children: string; tone?: 'neutral' | 'warning' | 'action' }) {
+  return (
+    <Text
+      style={[
+        s.tag,
+        props.tone === 'warning' && s.tagWarning,
+        props.tone === 'action' && s.tagAction,
+      ]}
+    >
+      {props.children}
+    </Text>
+  );
+}
+
+/**
+ * A tinted message panel: amber for something to look at, orange for a
+ * failure. It shows its message, or richer content such as a button.
+ */
+export function Notice(props: { message?: string; children?: ReactNode; tone: 'warning' | 'danger' | 'info'; icon?: ReactNode; role?: 'alert' | 'status' }) {
+  const ink = props.tone === 'warning' ? colors.warningInk : props.tone === 'danger' ? colors.dangerInk : colors.soft;
+
+  return (
+    <View
+      role={props.role}
+      accessibilityLiveRegion={props.role ? 'polite' : undefined}
+      style={[s.notice, props.tone === 'warning' && s.noticeWarning, props.tone === 'danger' && s.noticeDanger]}
+    >
+      {props.icon ?? (props.tone === 'warning' ? <WarningIcon color={ink} /> : <AlertIcon color={ink} />)}
+      {props.message ? <Text style={[s.noticeText, { color: ink }]}>{props.message}</Text> : null}
+      {props.children}
     </View>
   );
 }
@@ -125,9 +382,10 @@ type ErrorProps = { message: string | null };
 
 export function ErrorMessage(props: ErrorProps) {
   return props.message ? (
-    <Text accessibilityRole="alert" style={s.error}>
-      {props.message}
-    </Text>
+    <View accessibilityRole="alert" style={[s.notice, s.noticeDanger]}>
+      <AlertIcon color={colors.dangerInk} />
+      <Text style={[s.noticeText, { color: colors.dangerInk }]}>{props.message}</Text>
+    </View>
   ) : null;
 }
 
@@ -163,7 +421,7 @@ export function useAction() {
 export function errorMessage(error: Error): string {
   switch (error.message) {
     case 'client_offline':
-      return 'Connect to the internet to finish this step. Your entries are still here.';
+      return 'You’re offline. Connect to finish this step. Nothing you typed was lost.';
     case 'group_unavailable_offline':
       return 'This group is not saved on this device yet. Go online to open it.';
     case 'invite_invalid':
@@ -197,81 +455,168 @@ export function errorMessage(error: Error): string {
   }
 }
 
+/** A hairline between rows inside a card. */
+const rule = {
+  borderTopWidth: 1,
+  borderColor: colors.rule,
+} as const;
+
+const caps = {
+  color: colors.muted,
+  fontFamily,
+  fontSize: 13,
+  fontWeight: '600',
+  letterSpacing: 0.8,
+  textTransform: 'uppercase',
+} as const;
+
 export const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.background },
   wrap: {
     width: '100%',
     maxWidth: 1040,
     alignSelf: 'center',
+    flexGrow: 1,
     paddingHorizontal: 24,
-    paddingBottom: 24,
+    paddingBottom: 32,
   },
-  appWrap: { maxWidth: 720 },
+  /** App screens are one narrow column, like the phone app, on every device. */
+  appWrap: { maxWidth: 560, paddingHorizontal: 16 },
+  screenColumn: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 12 },
+  /** Content rests right below the bar and scrolls out of sight at the same place. */
+  screenHeaderBar: { paddingBottom: headerGap, backgroundColor: colors.background },
+  screenHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 66,
+    paddingTop: 10,
+    paddingBottom: 4,
+    gap: 8,
+  },
+  screenHeaderTitle: { flex: 1, minWidth: 0, justifyContent: 'center' },
+  /** Without a back button the title lines up with the page's own text. */
+  screenHeaderInset: { paddingLeft: 8 },
+  screenHeaderEnd: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  screenHeaderScale: { alignSelf: 'flex-start', maxWidth: '100%', transformOrigin: 'left center' },
+  screenContext: { color: colors.muted, fontFamily, fontSize: 12, lineHeight: 16 },
+  screenTitle: {
+    color: colors.ink,
+    fontFamily: displayFamily,
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  pageTitle: {
+    color: colors.ink,
+    fontFamily: displayFamily,
+    fontSize: 34,
+    lineHeight: 39,
+    fontWeight: '700',
+    letterSpacing: -0.7,
+  },
+  navIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navIconEnd: { marginLeft: 0 },
+  headerAction: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 12 },
+  headerActionText: { color: colors.ink, fontFamily, fontSize: 16, fontWeight: '400' },
+  headerPrimary: { backgroundColor: colors.action, paddingHorizontal: 18, borderRadius: 999 },
+  headerPrimaryIdle: { backgroundColor: colors.actionBusy },
+  headerPrimaryText: { color: colors.actionInk, fontWeight: '600' },
+  /** A plain tappable row of a settings card. */
+  listRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 56,
+    paddingHorizontal: 16,
+  },
+  listRowLabel: { flex: 1, color: colors.ink, fontFamily, fontSize: 16 },
+  listRowDanger: { color: colors.owes, fontWeight: '500' },
+  listRowValue: { color: colors.muted, fontFamily, fontSize: 14 },
+  emptyState: { alignItems: 'center', paddingTop: 72, paddingBottom: 24, paddingHorizontal: 24, gap: 12 },
+  emptyIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: colors.actionSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyIconSettled: { borderRadius: 36, backgroundColor: colors.settledSoft },
+  emptyTitle: { color: colors.ink, fontFamily: displayFamily, fontSize: 26, lineHeight: 31, fontWeight: '700', textAlign: 'center' },
+  emptyText: { color: colors.muted, fontFamily, fontSize: 15, lineHeight: 22, textAlign: 'center', maxWidth: 310 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    minHeight: 64,
+    paddingVertical: 10,
     gap: 8,
   },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 46 },
-  brandMark: {
-    backgroundColor: colors.green,
-    color: '#ffffff',
-    width: 30,
-    height: 30,
-    borderRadius: 5,
-    fontSize: 23,
-    lineHeight: 29,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
   brandText: {
     color: colors.ink,
+    fontFamily: displayFamily,
     fontSize: 20,
-    fontWeight: '600',
-    letterSpacing: -0.7,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   beta: {
-    color: colors.green,
+    color: colors.actionDark,
+    fontFamily,
     fontSize: 11,
     fontWeight: '600',
-    letterSpacing: 1,
-    backgroundColor: colors.pale,
-    paddingHorizontal: 6,
-    paddingVertical: 5,
-    borderRadius: 2,
+    letterSpacing: 0.8,
+    backgroundColor: colors.actionSoft,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    overflow: 'hidden',
   },
   main: {
+    flexGrow: 1,
     width: '100%',
     maxWidth: 680,
     alignSelf: 'center',
-    paddingTop: 8,
-    gap: 14,
+    paddingTop: 4,
+    gap: 16,
   },
   wide: { maxWidth: 1040 },
-  eyebrow: {
-    color: colors.green,
-    fontSize: 11,
-    letterSpacing: 2,
-    fontWeight: '600',
+  eyebrow: caps,
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 4,
+    paddingTop: 4,
   },
   title: {
-    fontSize: 38,
-    lineHeight: 44,
+    fontFamily: displayFamily,
+    fontSize: 34,
+    lineHeight: 39,
     color: colors.ink,
-    fontWeight: '600',
-    letterSpacing: -1.4,
+    fontWeight: '700',
+    letterSpacing: -0.7,
   },
-  subtitle: { color: colors.muted, fontSize: 16, lineHeight: 25 },
+  subtitle: { color: colors.muted, fontFamily, fontSize: 15, lineHeight: 22 },
   heading: {
     color: colors.ink,
-    fontSize: 21,
-    fontWeight: '600',
-    letterSpacing: -0.4,
+    fontFamily: displayFamily,
+    fontSize: 24,
+    lineHeight: 29,
+    fontWeight: '700',
   },
-  body: { color: colors.ink, fontSize: 15, lineHeight: 23 },
-  caption: { color: colors.muted, fontSize: 13, lineHeight: 20 },
+  body: { color: colors.ink, fontFamily, fontSize: 15, lineHeight: 22 },
+  caption: { color: colors.muted, fontFamily, fontSize: 13, lineHeight: 18 },
+  /** Amounts and codes in the monospaced face. */
+  figures: { fontFamily: monoFamily, fontWeight: '600' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -286,232 +631,215 @@ export const s = StyleSheet.create({
     gap: 12,
   },
   stack: { gap: 14 },
-  actions: { flexDirection: 'row', gap: 10 },
-  groupHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  groupTitle: { flex: 1, minWidth: 0, gap: 4 },
+  tight: { gap: 4 },
+  actions: { flexDirection: 'row', gap: 8 },
   card: {
     padding: 16,
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.border,
     gap: 12,
   },
-  listCard: { padding: 12, gap: 0 },
-  peopleCard: { gap: 8 },
-  memberRow: {
-    gap: 6,
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  memberLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  editableMemberName: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minHeight: 44,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  memberName: { flexShrink: 1, minWidth: 0, lineHeight: 22 },
-  memberNameInput: {
-    height: 44,
-    minWidth: 0,
-    margin: 0,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+  groupCard: {
+    gap: 14,
+    padding: 18,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 4,
     backgroundColor: colors.surface,
-    lineHeight: 22,
   },
-  memberActionsButton: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  memberSelectButton: {
-    width: 44,
-    minHeight: 44,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  memberSelectIcon: { width: 32, height: 32, position: 'relative' },
-  memberFigure: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-  },
-  memberSelectHead: {
-    width: 10,
-    height: 10,
-    borderWidth: 1.5,
-    borderRadius: 5,
-    borderColor: colors.muted,
-  },
-  memberSelectBody: {
-    width: 24,
-    height: 14,
-    borderWidth: 1.5,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    borderBottomLeftRadius: 2,
-    borderBottomRightRadius: 2,
-    borderColor: colors.muted,
-  },
-  memberSelectJoined: { backgroundColor: colors.ink, borderColor: colors.ink },
-  memberFigureYou: {
-    backgroundColor: colors.pale,
-    borderRadius: 6,
+  /** A white card holding rows separated by hairlines. */
+  listCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    gap: 2,
+    overflow: 'hidden',
   },
-  memberSelectYou: { backgroundColor: colors.green, borderColor: colors.green },
-  memberSelectYouHead: { width: 12, height: 12, borderRadius: 6 },
-  memberSelectYouBody: {
-    width: 26,
-    height: 16,
-    borderTopLeftRadius: 13,
-    borderTopRightRadius: 13,
-    borderBottomLeftRadius: 3,
-    borderBottomRightRadius: 3,
-  },
-  memberPresence: {
-    position: 'absolute',
-    left: 26,
-    bottom: -2,
-    flexDirection: 'row',
-    flexWrap: 'nowrap',
-    gap: 2,
-    alignItems: 'flex-end',
-    overflow: 'visible',
-  },
-  participantMore: {
-    position: 'absolute',
-    left: -8,
-    bottom: -2,
-    minWidth: 20,
-    height: 14,
-    paddingHorizontal: 5,
-    borderRadius: 7,
-    borderWidth: 1,
-    borderColor: colors.muted,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  participantMoreLabel: {
-    fontSize: 9,
-    lineHeight: 10,
-    fontWeight: '700',
-    color: colors.ink,
-    includeFontPadding: false,
-  },
-  presenceMarker: {
-    width: 12,
-    height: 12,
-    flexShrink: 0,
-    borderRadius: 6,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  presenceMarkerYou: {
-    width: 30,
-    height: 16,
-    backgroundColor: 'transparent',
-    borderRadius: 0,
-  },
-  presenceRing: {
-    position: 'absolute',
-    inset: 0,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.muted,
-  },
-  presenceRingOnline: { borderColor: colors.green },
-  presenceDot: {
-    position: 'absolute',
-    left: 2,
-    top: 2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.muted,
-  },
-  presenceDotOnline: {
-    backgroundColor: colors.green,
-    borderColor: colors.green,
-  },
-  presenceDotOffline: { backgroundColor: colors.muted, opacity: 0.4 },
-  inlineActions: { flexDirection: 'row', alignItems: 'center' },
+  /** A quiet grey panel inside a card or form. */
+  inset: { backgroundColor: colors.pale, borderRadius: 14, padding: 14, gap: 12 },
+  ruled: rule,
   prompt: {
-    padding: 20,
-    backgroundColor: colors.pale,
-    borderRadius: 6,
-    gap: 8,
+    padding: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 12,
   },
-  divider: { height: 1, backgroundColor: colors.border },
+  divider: { borderTopWidth: 1, borderColor: colors.rule },
   button: {
+    flexDirection: 'row',
+    gap: 8,
     minWidth: 44,
-    minHeight: 46,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 4,
-    backgroundColor: colors.green,
+    minHeight: 48,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.action,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  smallButton: {
+    minHeight: 40,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 10,
   },
   growButton: { flex: 1 },
   buttonText: {
-    color: '#ffffff',
-    fontSize: 14,
+    color: colors.actionInk,
+    fontFamily,
+    fontSize: 15,
     fontWeight: '600',
     textAlign: 'center',
   },
-  option: { minWidth: 44, paddingHorizontal: 12 },
-  secondary: { backgroundColor: colors.pale },
-  secondaryText: { color: colors.green },
-  quiet: { backgroundColor: 'transparent', paddingHorizontal: 8 },
-  danger: { backgroundColor: '#fbefec' },
-  dangerText: { color: colors.red },
-  dim: { opacity: 0.5 },
-  field: { gap: 8 },
-  label: { color: colors.ink, fontSize: 14, fontWeight: '500' },
-  input: {
-    minHeight: 50,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: colors.surface,
+  smallButtonText: { fontSize: 14 },
+  inkText: { color: colors.ink },
+  secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.field },
+  quiet: { backgroundColor: 'transparent', paddingHorizontal: 6 },
+  quietText: { color: colors.actionText },
+  danger: { backgroundColor: 'transparent', paddingHorizontal: 6 },
+  dangerText: { color: colors.owes },
+  dark: { backgroundColor: colors.night },
+  pressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
+  dim: { opacity: 0.45 },
+  busyButton: { backgroundColor: colors.actionBusy },
+  chip: {
+    minHeight: 44,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 4,
-    color: colors.ink,
-    fontSize: 16,
+    borderColor: colors.field,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  fieldWithAction: {
+  chipSelected: { backgroundColor: colors.night, borderColor: colors.night },
+  chipText: { color: colors.ink, fontFamily, fontSize: 14, fontWeight: '600' },
+  chipTextSelected: { color: colors.surface },
+  segments: {
+    flexDirection: 'row',
+    padding: 4,
+    gap: 4,
+    borderRadius: 12,
+    backgroundColor: colors.track,
+  },
+  segment: {
+    flex: 1,
+    minHeight: 40,
+    paddingHorizontal: 8,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentSelected: {
+    backgroundColor: colors.surface,
+    boxShadow: '0 1px 3px rgba(16, 22, 29, 0.15)',
+  },
+  radioRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 14,
+    minHeight: 52,
+    paddingHorizontal: 14,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 4,
     backgroundColor: colors.surface,
-    overflow: 'hidden',
   },
-  inputWithAction: { flex: 1, minWidth: 0, borderWidth: 0 },
+  radioRowSelected: { borderWidth: 2, borderColor: colors.action, paddingHorizontal: 13 },
+  radioDot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.control },
+  radioDotSelected: { borderWidth: 6, borderColor: colors.action },
+  radioLabel: { flex: 1, color: colors.ink, fontFamily, fontSize: 17, fontWeight: '500' },
+  field: { gap: 8 },
+  fieldRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
+  label: {
+    color: colors.ink,
+    fontFamily,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  input: {
+    flex: 1,
+    minWidth: 0,
+    height: 52,
+    paddingHorizontal: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.field,
+    borderRadius: 12,
+    color: colors.ink,
+    fontFamily,
+    fontSize: 17,
+  },
+  inputFocused: { borderWidth: 2, borderColor: colors.action, paddingHorizontal: 13 },
+  /** A one-line text box in a form, such as an expense's description. */
+  textInput: {
+    height: 48,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: colors.field,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    color: colors.ink,
+    fontFamily,
+    fontSize: 17,
+  },
+  /**
+   * A large bare amount. Its padding gives the text and the focus outline
+   * room, and the matching negative margin keeps the figure aligned with the
+   * page.
+   */
+  amountInput: {
+    flex: 1,
+    minWidth: 0,
+    height: 64,
+    marginLeft: -12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    color: colors.ink,
+    fontFamily: monoFamily,
+    fontSize: 44,
+    fontWeight: '600',
+    letterSpacing: -0.8,
+  },
+  figureInput: {
+    height: 64,
+    fontFamily: monoFamily,
+    fontSize: 30,
+    fontWeight: '600',
+  },
+  /** A white field-height button beside an input, such as Paste or a currency. */
+  fieldButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.field,
+    backgroundColor: colors.surface,
+  },
+  fieldButtonText: { color: colors.ink, fontFamily, fontSize: 15, fontWeight: '600' },
+  splitInput: {
+    width: 92,
+    height: 40,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.field,
+    backgroundColor: colors.surface,
+    textAlign: 'right',
+    color: colors.ink,
+    fontFamily: monoFamily,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  currencyInput: { width: 46, height: '100%', padding: 0, color: colors.ink, fontFamily: monoFamily, fontSize: 18, fontWeight: '600' },
   copyButton: {
     width: 48,
     minHeight: 48,
@@ -527,8 +855,8 @@ export const s = StyleSheet.create({
     width: 12,
     height: 14,
     borderWidth: 1.5,
-    borderColor: colors.green,
-    borderRadius: 2,
+    borderColor: colors.actionText,
+    borderRadius: 3,
   },
   copyFront: {
     position: 'absolute',
@@ -537,115 +865,150 @@ export const s = StyleSheet.create({
     width: 12,
     height: 14,
     borderWidth: 1.5,
-    borderColor: colors.green,
-    borderRadius: 2,
+    borderColor: colors.actionText,
+    borderRadius: 3,
     backgroundColor: colors.surface,
   },
-  copiedIcon: { color: colors.green, fontSize: 21 },
-  error: { color: colors.red, fontSize: 14, lineHeight: 22 },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 6,
-    backgroundColor: colors.pale,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { color: colors.green, fontWeight: '600', fontSize: 18 },
-  person: {
+  error: { color: colors.owes, fontFamily, fontSize: 13, lineHeight: 18 },
+  notice: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 8,
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: colors.pale,
   },
-  personText: { flex: 1, minWidth: 0, gap: 3 },
-  name: { color: colors.ink, fontSize: 16, fontWeight: '500' },
-  chevron: { color: colors.muted, fontSize: 24, lineHeight: 24 },
-  rowAction: { color: colors.green, fontSize: 14, fontWeight: '600' },
-  avatarLeft: { backgroundColor: colors.border },
-  errorBanner: { backgroundColor: '#fbefec' },
-  skeleton: { backgroundColor: colors.border, borderRadius: 4 },
+  noticeWarning: { backgroundColor: colors.warning },
+  noticeDanger: { backgroundColor: colors.danger },
+  noticeText: { flex: 1, fontFamily, fontSize: 14, lineHeight: 20, fontWeight: '500' },
+  tag: {
+    color: colors.soft,
+    backgroundColor: colors.pale,
+    fontFamily,
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  tagWarning: { color: colors.warningInk, backgroundColor: colors.warning, fontSize: 11, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
+  tagAction: { color: colors.actionInk, backgroundColor: colors.action, fontWeight: '700' },
+  name: { color: colors.ink, fontFamily, fontSize: 16, fontWeight: '500' },
+  memberRow: { minHeight: 64, paddingVertical: 6, paddingLeft: 16, paddingRight: 6, justifyContent: 'center', gap: 6 },
+  memberLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  /** A member name that reads as text and becomes a field when tapped. */
+  editableMemberName: { minHeight: 36, justifyContent: 'center', marginLeft: -6, paddingHorizontal: 6, borderRadius: 8 },
+  memberNameInput: {
+    height: 40,
+    minWidth: 0,
+    marginLeft: -10,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: colors.field,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    color: colors.ink,
+    fontFamily,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  memberActionsButton: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  addPersonRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 60, paddingHorizontal: 16 },
+  presenceDot: { width: 10, height: 10, borderRadius: 5 },
+  presenceOnline: { backgroundColor: colors.online },
+  presenceOffline: { borderWidth: 2, borderColor: colors.muted },
+  presenceUnclaimed: { borderWidth: 2, borderStyle: 'dashed', borderColor: colors.control },
+  chevron: { color: colors.muted, fontFamily, fontSize: 26, lineHeight: 26 },
+  rowAction: { color: colors.actionText, fontFamily, fontSize: 14, fontWeight: '600' },
+  skeleton: { backgroundColor: colors.track, borderRadius: 8 },
   skeletonTitle: { width: 220, height: 36 },
   skeletonLine: { width: '60%', height: 14 },
   skeletonShort: { width: '35%', height: 12 },
-  badge: {
-    color: colors.green,
-    backgroundColor: colors.pale,
-    fontSize: 12,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
   banner: {
-    backgroundColor: colors.amber,
-    padding: 12,
-    borderRadius: 6,
+    backgroundColor: colors.warning,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
     gap: 6,
   },
-  choice: {
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 4,
-    gap: 5,
+  chosen: { borderWidth: 2, borderColor: colors.action },
+  amount: {
+    color: colors.ink,
+    fontFamily: monoFamily,
+    fontSize: 16,
+    fontWeight: '600',
   },
-  chosen: { borderColor: colors.green, backgroundColor: colors.pale },
-  ledgerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    minHeight: 48,
-    paddingVertical: 6,
-  },
-  amount: { color: colors.ink, fontSize: 16, fontWeight: '500', fontVariant: ['tabular-nums'] },
-  owed: { color: colors.green },
-  wrapRow: { flexWrap: 'wrap' },
-  currencyField: { width: 96 },
-  splitInput: { width: 104, minHeight: 44, paddingVertical: 8, textAlign: 'right' },
+  owed: { color: colors.owed },
+  owes: { color: colors.owes },
+  currency: { fontFamily: monoFamily, fontSize: 12, fontWeight: '600', color: colors.muted },
   checkbox: {
     width: 24,
     height: 24,
-    borderRadius: 4,
+    borderRadius: 7,
     borderWidth: 2,
-    borderColor: colors.green,
+    borderColor: colors.control,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checked: { backgroundColor: colors.green },
-  checkMark: { color: colors.surface, fontSize: 14, fontWeight: '700', lineHeight: 16 },
-  choiceInUse: { opacity: 0.75 },
+  checked: { backgroundColor: colors.action, borderColor: colors.action },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(20,40,30,0.3)',
-    justifyContent: 'center',
-    padding: 16,
+    backgroundColor: 'rgba(16, 22, 29, 0.45)',
+    justifyContent: 'flex-end',
   },
   backdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
+  /** Wider screens show a drawer as a popup in the middle. */
+  overlayCentered: { justifyContent: 'center', padding: 24 },
+  drawer: { maxHeight: '88%', paddingTop: 20, gap: 14 },
+  popup: { maxWidth: 440, maxHeight: '80%', borderRadius: 24, paddingBottom: 24 },
+  drawerClose: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
   sheet: {
     width: '100%',
-    maxWidth: 520,
-    maxHeight: '90%',
+    maxWidth: 560,
     alignSelf: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 8,
-    padding: 20,
-    gap: 14,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+    gap: 12,
   },
+  footerBar: {
+    backgroundColor: colors.background,
+    paddingTop: 12,
+    paddingBottom: 28,
+  },
+  footerBarRuled: { borderTopWidth: 1, borderColor: colors.border },
+  footerInner: { gap: 12, paddingHorizontal: 16 },
+  footerButton: {
+    flexDirection: 'row',
+    gap: 10,
+    minHeight: 56,
+    borderRadius: 16,
+    backgroundColor: colors.action,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  floatingButton: { boxShadow: '0 6px 18px rgba(16, 22, 29, 0.18)' },
+  footerButtonIdle: { backgroundColor: colors.actionBusy, boxShadow: 'none' },
+  footerButtonText: { color: colors.actionInk, fontFamily, fontSize: 17, fontWeight: '600' },
   mobileWrap: { paddingHorizontal: 16 },
-  mobileHeader: { paddingVertical: 8 },
-  mobileMain: { paddingTop: 4, gap: 12 },
-  mobileTitle: { fontSize: 30, lineHeight: 36, letterSpacing: -1 },
-  mobileOverlay: { justifyContent: 'flex-end', padding: 8 },
-  mobileSheet: { padding: 16, maxHeight: '92%' },
-  hero: { paddingVertical: 48, gap: 24, maxWidth: 660 },
-  mobileHero: { paddingVertical: 24, gap: 20 },
-  mobileHeroTitle: { fontSize: 38, lineHeight: 44, letterSpacing: -1.4 },
+  mobileHeader: { minHeight: 56, paddingVertical: 6 },
+  mobileMain: { paddingTop: 0, gap: 14 },
+  hero: { paddingVertical: 56, gap: 22, maxWidth: 680 },
+  mobileHero: { paddingVertical: 28, gap: 20 },
+  mobileHeroTitle: { fontSize: 46, lineHeight: 50, letterSpacing: -1.4 },
   heroTitle: {
-    fontSize: 56,
-    lineHeight: 62,
-    fontWeight: '600',
-    letterSpacing: -2.6,
+    fontFamily: displayFamily,
+    fontSize: 68,
+    lineHeight: 72,
+    fontWeight: '700',
+    letterSpacing: -2,
     color: colors.ink,
   },
+  heroAccent: { color: colors.actionText },
 });

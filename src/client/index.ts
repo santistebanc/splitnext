@@ -3,6 +3,7 @@ import type { ClientRequestContext } from './diagnostics';
 export type { ClientDiagnosticEvent, ClientDiagnosticObserver, ClientRequestContext } from './diagnostics';
 
 import { z } from 'zod';
+import { activityResponseSchema } from '../domain/audit';
 import {
   joinGroupRequestSchema,
   type JoinGroupRequest,
@@ -151,6 +152,10 @@ export class SplitnextDeviceClient {
     return this.request('POST', '/groups', createdGroupSchema, { body, context });
   }
 
+  activity(groupId: string, context?: ClientRequestContext) {
+    return this.request('GET', `/groups/${encodeURIComponent(groupId)}/activity`, activityResponseSchema, { context });
+  }
+
   async syncGroup(groupId: string, input: SyncGroupRequest, context?: ClientRequestContext) {
     const body = jsonSchema.parse(syncGroupRequestSchema.parse(input));
 
@@ -173,13 +178,13 @@ export class SplitnextDeviceClient {
     );
   }
 
-  /** The token travels in the body, never in a URL. */
-  async previewInvite(groupId: string, token: string, context?: ClientRequestContext): Promise<InvitePreview> {
+  /** The token travels in the body, never in a URL; a short link's code finds its own group. */
+  async previewInvite(groupId: string | null, token: string, context?: ClientRequestContext): Promise<InvitePreview> {
     const body = jsonSchema.parse(previewInviteRequestSchema.parse({ token }));
 
     return this.request(
       'POST',
-      `/groups/${encodeURIComponent(groupId)}/invite/preview`,
+      groupId ? `/groups/${encodeURIComponent(groupId)}/invite/preview` : '/invites/preview',
       invitePreviewSchema,
       { body, context },
     );
@@ -463,6 +468,7 @@ export { memberNameSchema, type LedgerMember } from '../domain/members';
 
 export {
   allocate,
+  balances,
   currencyCodeSchema,
   formatAmount,
   minorDigits,
@@ -472,7 +478,7 @@ export {
   type CurrencyCode,
 } from '../domain/money';
 
-export { expenseDescriptionSchema, groupBalances, roundingBurden, type Expense, type ExpenseEntry } from '../domain/expenses';
+export { expenseDescriptionSchema, groupBalances, memberHasRecords, roundingBurden, type Expense, type ExpenseEntry } from '../domain/expenses';
 
 export {
   browserWebSocket,
@@ -492,3 +498,9 @@ export {
   type SyncDeviceTransport,
   type SyncTransport,
 } from './syncClient';
+
+export { memberSettlements, repaymentMembers, settlementSuggestions, settlementEntrySchema, type Settlement, type SettlementEntry } from '../domain/settlements';
+
+export { type AuditEvent } from '../domain/audit';
+
+export { reversibleEffect, undoProblem, undoExplanation } from '../domain/reversals';

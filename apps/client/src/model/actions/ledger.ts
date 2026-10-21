@@ -1,10 +1,66 @@
 import { z } from 'zod';
-import { allocate, currencyCodeSchema, expenseDescriptionSchema, groupNameSchema, memberNameSchema, parseAmount, participantsForMember, requiresServerDecision } from '@splitnext/client';
-import { entryFromDraft, equalParts } from '../expenses';
-import { unavailable, editorLock, defineAction, openSnapshot, requireExpense, requireExpenseEntry, expenseResource, requireMember, requireRemovedMember, requireNotice, requireName, memberResource, noticeResources, empty, choice, suggested } from './define';
+import { undoProblem, undoExplanation, memberHasRecords, repaymentMembers, allocate, currencyCodeSchema, expenseDescriptionSchema, groupNameSchema, memberLabel, memberNameSchema, nameOrdinals, parseAmount, requiresServerDecision } from '@splitnext/client';
+import { balanceRows, entryFromDraft, equalParts } from '../expenses';
+import { requireSettlement, unavailable, editorLock, defineAction, openSnapshot, requireExpense, requireExpenseEntry, expenseResource, requireMember, requireRemovedMember, requireNotice, requireName, memberResource, noticeResources, empty, choice, suggested } from './define';
 
 /** Changes to the shared ledger; they can queue offline. */
 export const ledgerActions = {
+  undoChange: defineAction({
+    group: 'Ledger changes', description: 'Safely reverse a recorded action, without overwriting later changes.', input: z.object({ eventId: choice('activity', 'The Activity action to undo.') }), example: { eventId: 'event-1' }, requires: ['openGroup'],
+    unavailable: ({ state }, input) => {
+      const snapshot = openSnapshot(state);
+      const event = state.group?.activity.find((entry) => input ? entry.id === input.eventId : snapshot && !undoProblem(snapshot, entry));
+
+      if (!snapshot || !event) return unavailable('undo_not_found', 'Choose a saved Activity action.');
+      const problem = undoProblem(snapshot, event, state.group?.activity);
+
+      return problem ? unavailable(problem, undoExplanation(problem)) : null;
+    },
+    run: (host, input) => host.submit({ type: 'change.undo', payload: { event_id: input.eventId } }),
+  }),
+  saveRepayment: defineAction({
+    workflow: 'draft', group: 'Ledger changes', description: 'Save the repayment at the version opened for editing.', input: empty, example: {}, requires: ['openGroup'],
+    holds: ({ state, ui }) => ui.repayment.settlementId ? [`settlement:${state.group?.group_id}:${ui.repayment.settlementId}`] : [],
+    unavailable: ({ state, ui }) => {
+      const draft = ui.repayment;
+
+      return ui.view === 'settlements' && draft.settlementId && draft.from !== draft.to && currencyCodeSchema.safeParse(draft.currency).success && [draft.from, draft.to].every((id) => openSnapshot(state)?.members.some((member) => member.id === id)) && (parseAmount(draft.amount, draft.currency) ?? 0) > 0 ? requireSettlement(state, draft.settlementId) : unavailable('invalid_input', 'Open a repayment and enter a positive amount.');
+    },
+    run: async (host, input, ui) => {
+      const draft = ui.snapshot().repayment;
+
+      if (!draft.settlementId || !draft.expectedVersion) throw new Error('settlement_not_found');
+      await host.submit({ type: 'settlement.edit', payload: { settlement_id: draft.settlementId, expected_version: draft.expectedVersion, from_member_id: draft.from, to_member_id: draft.to, currency: draft.currency, amount: parseAmount(draft.amount, draft.currency) ?? 0 } });
+      ui.changeRepayment({ amount: '', settlementId: null, expectedVersion: null });
+    },
+  }),
+  removeSettlement: defineAction({
+    holds: ({ state }, input) => input ? [`settlement:${state.group?.group_id}:${input.settlementId}`] : [],
+    group: 'Ledger changes', description: 'Remove a repayment from balances.', input: z.object({ settlementId: choice('settlement', 'The repayment to remove.') }), example: { settlementId: 'settlement-1' }, requires: ['openGroup'],
+    unavailable: ({ state }, input) => requireSettlement(state, input?.settlementId),
+    run: (host, input) => host.submit({ type: 'settlement.remove', payload: { settlement_id: input.settlementId } }),
+  }),
+  restoreSettlement: defineAction({
+    holds: ({ state }, input) => input ? [`settlement:${state.group?.group_id}:${input.settlementId}`] : [],
+    group: 'Ledger changes', description: 'Restore a removed repayment exactly as recorded.', input: z.object({ settlementId: choice('removedSettlement', 'The repayment to restore.') }), example: { settlementId: 'settlement-1' }, requires: ['openGroup'],
+    unavailable: ({ state }, input) => requireSettlement(state, input?.settlementId, 'removed'),
+    run: (host, input) => host.submit({ type: 'settlement.restore', payload: { settlement_id: input.settlementId } }),
+  }),
+  recordSettlement: defineAction({
+    group: 'Ledger changes', description: 'Record money already repaid outside Splitnext.',
+    input: z.object({ from: choice('repaymentMember', 'Who paid.'), to: choice('repaymentMember', 'Who received it.'), amount: z.string(), currency: suggested(currencyCodeSchema, 'currency', 'The repayment currency.') }),
+    example: { from: 'member-1', to: 'member-2', amount: '10.00', currency: 'EUR' }, requires: ['openGroup'],
+    unavailable: ({ state }, input) => {
+      if (!input) return repaymentMembers(openSnapshot(state)).length > 1 ? null : unavailable('member_not_found', 'Add another member first.');
+      const members = repaymentMembers(openSnapshot(state));
+
+      return input.from !== input.to && members.some((member) => member.id === input.from) && members.some((member) => member.id === input.to) && (parseAmount(input.amount, input.currency) ?? 0) > 0
+        ? null : unavailable('invalid_input', 'Choose two different members and a positive amount.');
+    },
+    run: async (host, input) => {
+      await host.submit({ type: 'settlement.record', payload: { from_member_id: input.from, to_member_id: input.to, currency: input.currency, amount: parseAmount(input.amount, input.currency) ?? 0 } });
+    },
+  }),
   saveMemberEdit: defineAction({
     holds: ({ state, ui }) => [editorLock, ...memberResource(state, ui.memberEdit?.memberId)],
     group: 'Ledger changes',
@@ -27,9 +83,13 @@ export const ledgerActions = {
       if (!edit) return;
       const name = edit.name.trim();
 
-      if (name && !edit.memberId)
+      if (name && !edit.memberId) {
+        // Everyone shows, so the person just added is in the list rather than behind Show all. The
+        // list opens first: the person appears before the save settles, and a list too long but not
+        // yet open would hide the Add a person line for a moment, losing the next name being typed.
+        ui.update({ balancesExpanded: true });
         await host.submit({ type: 'member.create', payload: { display_name: name } });
-      else if (name && name !== edit.expectedName && edit.memberId)
+      } else if (name && name !== edit.expectedName && edit.memberId)
         await host.submit({
           type: 'member.rename',
           payload: { member_id: edit.memberId, display_name: name, expected_display_name: edit.expectedName },
@@ -110,18 +170,34 @@ export const ledgerActions = {
     holds: ({ state }, input) => memberResource(state, input?.memberId),
     group: 'Ledger changes',
     description:
-      'Remove a member from the open group. Their name stays in history.',
+      'Take a settled member out of the open group: hidden when an expense or repayment names them, removed otherwise. Their name stays in history.',
     input: z.object({
-      memberId: choice('preferredMember', 'The member to remove.'),
+      memberId: choice('preferredMember', 'The member to hide or remove.'),
     }),
     example: { memberId: 'member-2' },
     requires: ['openGroup'],
-    unavailable: ({ state }, input) => requireMember(state, input?.memberId),
+    unavailable: ({ state }, input) => {
+      const missing = requireMember(state, input?.memberId);
+
+      if (missing || !input) return missing;
+
+      // Only a zero balance in every currency lets someone go.
+      return balanceRows(openSnapshot(state)).some(({ rows }) => rows.some((row) => row.member.id === input.memberId && row.amount !== 0))
+        ? unavailable('member_has_balance', 'Settle up with this person first.')
+        : null;
+    },
     run: async (host, input, ui) => {
+      const snapshot = openSnapshot(host.snapshot());
+      const name = memberLabel(snapshot?.members.find((member) => member.id === input.memberId)?.display_name ?? '', nameOrdinals(snapshot).get(input.memberId));
+      // The group hides a member any expense or repayment has ever named, removed ones included, and deletes the rest.
+      const hidden = Boolean(snapshot && memberHasRecords(snapshot, input.memberId));
+
       await host.submit({ type: 'member.remove', payload: { member_id: input.memberId } });
 
       if (ui.snapshot().memberEdit?.memberId === input.memberId)
         ui.finishMemberEdit();
+      // The toast offers the member back either way.
+      ui.removed(input.memberId, name, hidden);
     },
   }),
   restoreMember: defineAction({
@@ -134,7 +210,11 @@ export const ledgerActions = {
     example: { memberId: 'member-2' },
     requires: ['openGroup'],
     unavailable: ({ state }, input) => requireRemovedMember(state, input?.memberId),
-    run: (host, input) => host.submit({ type: 'member.restore', payload: { member_id: input.memberId } }),
+    run: async (host, input, ui) => {
+      await host.submit({ type: 'member.restore', payload: { member_id: input.memberId } });
+
+      if (ui.snapshot().removal?.memberId === input.memberId) ui.update({ removal: null });
+    },
   }),
   saveExpense: defineAction({
     holds: ({ state, ui }) => expenseResource(state, ui.expense.expenseId),
@@ -266,28 +346,17 @@ export const ledgerActions = {
     waitsFor: ({ state }, input) => memberResource(state, input?.memberId),
     group: 'Ledger changes',
     description:
-      'Choose which member is you on this installation. Asks first when ' +
-      'another participant already uses that member.',
+      'Choose which member is you on this installation, even when the name ' +
+      'is already taken on another device.',
     input: z.object({
       memberId: choice(
         'preferredMember',
-        'The member to use as you on this installation.',
+        'The member to select as you on this installation.',
       ),
     }),
     example: { memberId: 'member-1' },
     requires: ['openGroup'],
     unavailable: ({ state }, input) => requireMember(state, input?.memberId),
-    confirm: (input, state) => {
-      const self = state.group?.session?.identity.id;
-
-      const others = participantsForMember(openSnapshot(state), input.memberId).filter(
-        (grant) => grant.identity_id !== self,
-      );
-
-      return others.length
-        ? `${others.map((grant) => grant.actor_handle).join(', ')} already ${others.length === 1 ? 'uses' : 'use'} this name.`
-        : null;
-    },
     run: (host, input) => host.submit({ type: 'preference.set', payload: { member_id: input.memberId } }),
   }),
   retryNotice: defineAction({

@@ -1,5 +1,7 @@
+import type { AuditEvent } from '../domain/audit';
 import { commandForRetry } from './commandRetry';
 import { activeMembers, preferredMember } from '../domain/selectors';
+import { groupBalances } from '../domain/expenses';
 import type { JoinGroupRequest, PreferredMemberChoice } from '../domain/access';
 import {
   applyGroupCommand,
@@ -37,6 +39,7 @@ export type ClientGroupCreationInput = Omit<
 > & { group_id?: string };
 
 export type ClientReplicaState = {
+  activity: AuditEvent[];
   online: boolean;
   session: IdentitySession | null;
   group_id: string;
@@ -61,6 +64,8 @@ export type ClientGroupSummary = {
   member_count: number | null;
   /** The member this identity calls “you” in the local copy, if any. */
   you_name: string | null;
+  /** Nonzero balances of you; null until a local preferred member is known. */
+  you_balances: { currency: string; amount: number }[] | null;
 };
 
 /** One coherent local document read, with only the requested full replicas. */
@@ -96,6 +101,17 @@ export class ClientReplicaStore {
     private readonly online: () => boolean,
   ) {
     this.storage = withStorageErrors(storage);
+  }
+
+  cacheActivity(groupId: string, events: AuditEvent[]): Promise<ClientReplicaState> {
+    return this.change((document) => {
+      const replica = requireReplica(document, groupId);
+      const latest = replica.activity?.at(-1)?.sequence ?? 0;
+
+      if ((events.at(-1)?.sequence ?? 0) >= latest) replica.activity = events;
+
+      return stateFrom(document, groupId, this.online());
+    });
   }
 
   session(): Promise<IdentitySession | null> {
@@ -192,6 +208,7 @@ export class ClientReplicaStore {
           },
           members: [created.member],
           expenses: [],
+          settlements: [],
           access_grants: [created.access],
           invite: created.invite,
         };
@@ -586,6 +603,15 @@ function summariesFrom(document: ClientStorageDocument): ClientGroupSummary[] {
         const access = accessFor(projection, session.identity.id);
 
         const active = activeMembers(projection);
+        const you = preferredMember(projection, session.identity.id);
+        const balances = groupBalances(projection);
+        const youBalances: { currency: string; amount: number }[] = [];
+
+        for (const currency of Object.keys(balances).sort()) {
+          const amount = you ? balances[currency]?.[you.id] ?? 0 : 0;
+
+          if (amount) youBalances.push({ currency, amount });
+        }
 
         return {
           group_id: replica.group_id,
@@ -594,8 +620,8 @@ function summariesFrom(document: ClientStorageDocument): ClientGroupSummary[] {
           stored_locally: true,
           pending_commands: replica.outbox.length,
           member_count: active.length,
-          you_name:
-            preferredMember(projection, session.identity.id)?.display_name ?? null,
+          you_name: you?.display_name ?? null,
+          you_balances: you ? youBalances : null,
         };
       })
     : [];
@@ -613,6 +639,7 @@ function summariesFrom(document: ClientStorageDocument): ClientGroupSummary[] {
         pending_commands: 0,
         member_count: null,
         you_name: null,
+        you_balances: null,
       }),
     );
 
@@ -638,6 +665,7 @@ function stateFrom(
       session: document.session,
       group_id: groupId,
       revision: null,
+      activity: [],
       confirmed_snapshot: null,
       projected_snapshot: null,
       outbox: [],
@@ -655,6 +683,7 @@ function stateFrom(
     session: document.session,
     group_id: groupId,
     revision: replica.revision,
+    activity: structuredClone(replica.activity ?? []),
     confirmed_snapshot: structuredClone(replica.snapshot),
     projected_snapshot: projection,
     outbox: structuredClone(replica.outbox),
@@ -676,6 +705,7 @@ function project(
       identityId,
       pending.command,
       pending.queued_at,
+      replica.activity,
     );
 
     if (transition.status === 'applied') snapshot = transition.snapshot;

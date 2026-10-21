@@ -3,6 +3,7 @@ import {
   ScrollViewStyleReset,
   useServerDocumentContext,
 } from 'expo-router/html';
+import { colors } from '../ui/theme';
 
 type DocumentProps = { children: ReactNode };
 
@@ -22,7 +23,11 @@ export default function DocumentRoot(props: DocumentProps) {
           name="description"
           content="Bring your group together. Create a group, add your people, and invite friends. No account needed."
         />
-        <meta name="theme-color" content="#246b56" />
+        <meta name="theme-color" content={colors.background} />
+        <meta name="color-scheme" content="light" />
+        <link rel="preload" href="/assets/ibm-plex-sans.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/assets/ibm-plex-mono-600.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/assets/bricolage-grotesque.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <link rel="manifest" href="/manifest.webmanifest" />
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
         <ScrollViewStyleReset />
@@ -31,8 +36,14 @@ export default function DocumentRoot(props: DocumentProps) {
         <style
           dangerouslySetInnerHTML={{
             __html:
-              ':focus-visible{outline:2px solid #246b56!important;outline-offset:2px}' +
-              'input:focus-visible,textarea:focus-visible{outline-offset:-2px}',
+              '@font-face{font-family:"IBM Plex Sans";src:url(/assets/ibm-plex-sans.woff2) format("woff2");font-style:normal;font-weight:400 600;font-display:swap}' +
+              '@font-face{font-family:"IBM Plex Mono";src:url(/assets/ibm-plex-mono-500.woff2) format("woff2");font-style:normal;font-weight:400 500;font-display:swap}' +
+              '@font-face{font-family:"IBM Plex Mono";src:url(/assets/ibm-plex-mono-600.woff2) format("woff2");font-style:normal;font-weight:600 700;font-display:swap}' +
+              '@font-face{font-family:"Bricolage Grotesque";src:url(/assets/bricolage-grotesque.woff2) format("woff2");font-style:normal;font-weight:500 700;font-display:swap}' +
+              `html,body{background:${colors.background};color-scheme:light;-webkit-font-smoothing:antialiased}` +
+              `:focus-visible{outline:3px solid ${colors.action}!important;outline-offset:2px}` +
+              // A focused field's own 2px blue edge and its outline coincide.
+              'input:focus-visible,textarea:focus-visible{outline-width:2px!important;outline-offset:-2px}',
           }}
         />
         {document.headNodes}

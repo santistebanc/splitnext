@@ -1,6 +1,6 @@
 # Safely reverse group and member Activity
 
-Status: ready-for-agent
+Status: resolved
 Depends on: 05-activity, 06-undo-money
 
 See [the feature-port spec](../spec.md) and
@@ -25,3 +25,5 @@ See [the feature-port spec](../spec.md) and
 
 Agreed during the source-app inventory and specification interview.
 
+
+Implemented group/member reversals, intervening-change checks and retained-record reference protection. Restoring a member leaves cleared preferred-member choices unchanged.

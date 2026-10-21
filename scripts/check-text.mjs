@@ -2,7 +2,7 @@
 // UTF-8 that was decoded as Windows-1252 and encoded again, which turns an
 // ellipsis or a middle dot into two or three Latin characters.
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const char = (code) => String.fromCodePoint(code);
 
@@ -18,7 +18,9 @@ const garbled = new RegExp(
 const files = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
   .split('\0')
   .filter((file) => /\.(ts|tsx|js|mjs|cjs|json|jsonc|md|html|css|sql|yml)$/.test(file))
-  .filter((file) => file !== 'package-lock.json');
+  .filter((file) => file !== 'package-lock.json')
+  // A tracked file deleted in the working tree has nothing left to check.
+  .filter((file) => existsSync(file));
 
 const findings = files.flatMap((file) => {
   const text = readFileSync(file, 'utf8');

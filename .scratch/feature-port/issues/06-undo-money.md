@@ -1,6 +1,6 @@
 # Safely reverse expense and settlement Activity
 
-Status: ready-for-agent
+Status: resolved
 Depends on: 04-settlement-lifecycle, 05-activity
 
 See [the feature-port spec](../spec.md) and
@@ -25,3 +25,5 @@ See [the feature-port spec](../spec.md) and
 
 Agreed during the source-app inventory and specification interview.
 
+
+Implemented canonical-event reversals, monetary version checks, reversal-of-reversal, offline projection and server conflict notices. Browser regression also covers immediate navigation after recording.

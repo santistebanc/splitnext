@@ -1,6 +1,6 @@
 # Fixed Blue paper theme and original logo
 
-Status: ready-for-agent
+Status: resolved
 Depends on: None
 
 See [the feature-port spec](../spec.md) and
@@ -25,3 +25,22 @@ See [the feature-port spec](../spec.md) and
 
 Agreed during the source-app inventory and specification interview.
 
+Implemented the fixed palette, local Manrope font, static procedural fine grain,
+transparent content surfaces, and original split-S mark on the groups list only.
+Presence green and white presence badges retain their meaning. Appearance assets
+are precached, and their contents participate in cache invalidation. Added a
+small-screen, dark-system-appearance browser flow that verifies logo placement
+and an offline reload with the font, texture, and icon available.
+
+Visual review used desktop and 375px Playwright screenshots after the T3 preview
+connection failed. The grain was reduced after that review to preserve legibility.
+
+
+Texture refinement: replaced the synthetic SVG noise with the attributed Paper
+Fibers texture at native scale after feedback that the grain looked poor. The
+asset and its credit notice are served locally and included in the offline
+precache and release hash. Blue paper tokens and layout are unchanged.
+
+Superseded: the Blue paper palette and Paper Fibers texture were later replaced
+by the Calm receipt theme described in docs/product-spec.md#appearance. The
+logo placement rule is unchanged.

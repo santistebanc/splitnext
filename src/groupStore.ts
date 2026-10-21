@@ -361,6 +361,16 @@ export class GroupStore {
     });
   }
 
+  activity(identityId: string): { ok: true; events: AuditEvent[] } | { ok: false; error: 'unauthorized' } {
+    return this.repository.transaction((persistence) => {
+      const state = persistence.loadState();
+
+      if (!state || !this.accessFor(state, identityId)) return { ok: false, error: 'unauthorized' };
+
+      return { ok: true, events: this.auditHistory(persistence).read() };
+    });
+  }
+
   history(): AuditEvent[] {
     return this.repository.transaction((persistence) =>
       this.auditHistory(persistence).read(),
@@ -392,6 +402,7 @@ export class GroupStore {
         },
         members: [member],
         expenses: [],
+          settlements: [],
         access_grants: [access],
         invite,
       },
@@ -464,6 +475,7 @@ export class GroupStore {
       identityId,
       command,
       appliedAt,
+      command.type === 'change.undo' ? this.auditHistory(persistence).read() : [],
     );
 
     let auditId: string | null = null;

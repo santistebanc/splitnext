@@ -1,96 +1,85 @@
 import { Text, View } from 'react-native';
-import type { AppController } from '../model/controller';
-import { ConfirmBanner } from './ConfirmBanner';
-import { Button, ErrorMessage, Field, s } from './components';
+import { Button, ErrorMessage, Field, FooterButton, s } from './components';
+import { ConfirmSheet } from './ConfirmSheet';
+import type { MemberListApp } from './MemberList';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
-export type GroupSettingsApp = Pick<AppController, 'snapshot'>;
+export type GroupSettingsApp = MemberListApp;
 
 type GroupSettingsProps = {
   app: GroupSettingsApp;
   close?: () => void;
-  fullPage?: boolean;
 };
 
-/** Renaming and leaving the group, as a sheet or a full page on touch. */
-export function GroupSettings(props: GroupSettingsProps) {
-  const online = props.app.snapshot().online;
-
-  const ui = useUiState();
-  const { name, expectedName: observedName } = ui.settings;
-  const actions = useActions();
-  const back = useActionCall();
+function useSaveName(close?: () => void) {
   const rename = useActionCall();
-  const leave = useActionCall();
 
-  function saveName(): void {
-    if (!rename.can('saveGroupSettings')) return;
-
-    void rename.call('saveGroupSettings', {}, props.close);
+  function save(): void {
+    if (rename.can('saveGroupSettings')) void rename.call('saveGroupSettings', {}, close);
   }
+
+  return { rename, save };
+}
+
+/** Saves a changed group name from settings. */
+export function GroupSettingsFooter(props: { close?: () => void }) {
+  const { rename, save } = useSaveName(props.close);
+  const ui = useUiState();
+
+  if (ui.settings.name.trim() === ui.settings.expectedName) return null;
 
   return (
     <>
-      <View style={s.between}>
-        <Text accessibilityRole="header" style={s.heading}>
-          Group settings
-        </Text>
-        <Button
-          quiet
-          onPress={() => {
-            void back.call('closePanel', {}, props.close);
-          }}
-          disabled={!back.can('closePanel')}
-        >
-          {props.fullPage ? 'Back to group' : 'Done'}
-        </Button>
-      </View>
+      <ErrorMessage message={rename.error} />
+      <FooterButton busy={ui.phase === 'saving' || rename.busy} disabled={!rename.can('saveGroupSettings')} onPress={save}>
+        {ui.phase === 'saving' || rename.busy ? 'Saving…' : 'Save group name'}
+      </FooterButton>
+    </>
+  );
+}
+
+/** Group settings: rename the group or leave it on this device. */
+export function GroupSettings(props: GroupSettingsProps) {
+  const ui = useUiState();
+  const { name } = ui.settings;
+  const actions = useActions();
+  const { save } = useSaveName(props.close);
+  const leave = useActionCall();
+
+  return (
+    <View style={[s.stack, { gap: 24 }]}>
       <Field
         label="Group name"
         value={name}
         editable={actions.availability('changeDraft', { field: 'settings.name', value: name }).available}
         onChangeText={(value) => {
-          void actions.dispatch(
-            'changeDraft',
-            { field: 'settings.name', value },
-            { origin: 'ui' },
-          );
+          void actions.dispatch('changeDraft', { field: 'settings.name', value }, { origin: 'ui' });
         }}
         maxLength={100}
         returnKeyType="done"
-        onSubmitEditing={saveName}
+        onSubmitEditing={save}
+        style={{ height: 56, fontSize: 18 }}
       />
-      {name.trim() !== observedName ? (
-        <Button disabled={!rename.can('saveGroupSettings')} onPress={saveName}>
-          Save group name
-        </Button>
-      ) : null}
-      <ErrorMessage message={rename.error ?? back.error} />
-      <View style={s.divider} />
+      <Text style={s.caption}>Everyone in the group sees the new name.</Text>
+      <Button
+        danger
+        label="Leave group on this device"
+        disabled={!leave.can('leaveGroup')}
+        onPress={() => { void leave.call('leaveGroup', {}); }}
+      >
+        Leave group
+      </Button>
+      <ErrorMessage message={leave.error} />
       {leave.confirmation ? (
-        <ConfirmBanner
+        <ConfirmSheet
+          title="Leave this group?"
           message={leave.confirmation.message}
-          confirmLabel="Confirm leave"
-          danger
+          confirmLabel="Leave group"
           busy={leave.busy}
           onConfirm={leave.confirmation.confirm}
           onCancel={leave.cancel}
         />
-      ) : (
-        <Button
-          danger
-          disabled={!leave.can('leaveGroup')}
-          onPress={() => {
-            void leave.call('leaveGroup', {}, props.close);
-          }}
-        >
-          Leave group
-        </Button>
-      )}
-      {!online ? (
-        <Text style={s.caption}>Offline · connect to leave this group</Text>
       ) : null}
-      <ErrorMessage message={leave.error} />
-    </>
+    </View>
   );
 }

@@ -10,8 +10,8 @@ were made.
 
 The current MVP establishes identities, groups, ledger members, offline
 synchronization, realtime revision announcements, invite links, and
-expenses. Settlements, audit browsing, and group recovery are accepted future
-behavior unless this document says otherwise. Account sign-in is not planned.
+expenses, repayments, Activity, safe undo and an Activity bell.
+Group recovery remains accepted future behavior. Account sign-in is not planned.
 
 ## First user-facing app beta
 
@@ -19,7 +19,8 @@ The first app beta exposes the existing groups, ledger members, and invitations
 to friends traveling together. Anyone can create a group without a beta access
 gate. Ship the responsive web app, public homepage, and invite join flow first;
 native releases follow. Expense entry and per-currency balances are now
-available; settlements and Activity remain accepted future work.
+available, together with repayments, cached Activity, safe undo and an
+Activity bell.
 
 Returning visitors reopen their last active group. Creation uses one view with
 group name and the creator's ledger member name,
@@ -29,20 +30,18 @@ installation, saved in localStorage. The default stays editable and survives
 reloads and leaving groups. Creating, joining, selecting a different member,
 or renaming the current preferred member updates this local default.
 Use the same default in the name field when joining or rejoining as someone new.
-After creation, show the group and its Members list immediately, with inline Add member and prominent
-Invite actions. Share invite stays the primary action until another participant
-has joined, then becomes secondary. Adding names and inviting can happen in
-either order. The groups list shows each locally stored group's active member
-count and the member this installation uses. Sheets close with Escape, keep
-keyboard focus inside them, and return it to their opener without taking it
-from anything chosen while they close. Sharing
-opens a compact sheet with a copy icon inline with the invite-link field,
-native Share link where supported, New link, and Done. New link first asks
-for confirmation, stating that the current link will stop working, with
-Cancel and Replace link actions.
-Show link actions directly without a Manage link disclosure. The copy icon
-has an accessible label and changes to a checkmark after copying.
-Done returns to the same group.
+After creation, open the group screen. Its balances end with an inline Add a
+person row, and Invite in the balances heading opens the invite link in a
+bottom sheet, so adding names and inviting can happen in either order. The
+groups list shows each locally stored group's people count and the member this
+installation uses. The invite sheet shows the link in the monospaced face;
+tapping it selects and copies it. Below sit native Share where supported and
+Replace link, side by side. Replace link first
+asks for confirmation in the same sheet, stating that the old link will stop
+working while everyone already in the group keeps their access, with Cancel and
+Replace link actions.
+Show link actions directly without a Manage link disclosure. Under the link,
+Tap the link to copy it changes to Copied with a checkmark after copying.
 Creating a link does not imply anyone has joined.
 
 Use a calm visual direction and animated state-driven views. Use compact mobile
@@ -50,74 +49,63 @@ layouts with clear labels and usable touch targets. Draw textbox keyboard focus
 outlines inside the field's edge so scroll containers and inline actions cannot
 clip them. Avoid repeated explanatory text, duplicate actions, unsupported controls, and rename
 save actions before a name changes. Use precise control labels rather than
-static explanatory paragraphs in app views and sheets. Keep access-recovery
+static explanatory paragraphs in app screens. Keep access-recovery
 details in the product documentation and the current beta scope on the homepage. Keep URL handling
-for public entry points and browser navigation. Show a contextual banner while
-offline or while changes are pending; hide it once synchronization succeeds.
-Keep rejected/superseded change notices as described below. Add expense remains
+for public entry points and browser navigation. While offline, or while the
+server cannot be reached, show one short line under the group name and on the
+groups list, such as Offline · 2 changes saved here, or Can’t reach splitnext
+with an inline Retry. Show nothing once synchronized, and no banners or pills.
+Keep rejected/superseded changes for review as described below. Add expense remains
 absent until supported, then becomes the primary group action without requiring
 invitation acceptance. See [the app plan](./app-product-plan.md).
 
-Use Members as the list heading, Add member for inserting a draft row, and Member
-name for editing. Keep rows compact without avatars. Tapping a name edits that
-row in place; losing focus commits the edit, without confirm/cancel buttons.
-The textbox occupies the same space as the name, leaving icons and row height
-unchanged. Enter/Done blurs the field to commit. An empty existing name restores
-the saved name without removing the member. A clickable person icon selects
-the preferred member in the same row.
-Give it an accessible This is me/You label and pressed state, and retain
-the joined status in its accessible label. Fill other members' icons in dark ink
-when at least one active access identity currently selects that member; leave
-unselected names outlined. This follows current preferred-member choices,
-not a permanent ownership or historical attendance record. Retain
-the warning and Use anyway confirmation when another identity uses the name.
-Overlay one compact marker at the right edge of each person icon that at least
-one active access identity is currently selecting, 26px from the icon's left
-edge and 2px below its bottom edge. When this installation's identity is among
-them, the marker is a compact badge reading "YOU" in bold instead of a dot.
-It is 30px wide and 16px tall, with its bottom edge aligned with the 12px dots.
-Its background stays white; only its outline and text carry the presence
-color, green when connected and gray otherwise. Dot badges have a filled
-center and outer circular outline separated by a small surface-colored gap.
-The marker combines every identity selecting the name: online when at least
-one is online, unknown only when all are unknown, otherwise offline.
-When two or more identities select the name, a small circled badge such as
-"+2" overlays the icon's bottom-left edge, counting the identities beyond the
-first. The person button's accessible label lists every
-participant and their status.
-Keep the person artwork compact in its 44px tap target,
-independently of the overlay markers. Center each dot and ring on the same point.
-Keep the dot's white gap narrow, with an 8px center in its 12px ring.
-Green means connected; lightly filled gray dots
-mean disconnected, retaining a clear outer ring; hollow means presence is unknown while reconnecting or when
-this installation cannot observe live presence. A known local outage makes its
-own you badge gray. Multiple tabs for one identity count once. Unassigned identities have no member marker.
-Use a plain Members heading without a count. A cross icon at the end of each
-row removes the member immediately, without a confirmation, including the
-currently selected you member. Removal hides or deletes the member as
-described under Ledger members; the UI calls both removed and shows only
-current members, without a removed-member list or toggle. Restoring a removed
-member will come through the group's Activity.
-Add member inserts a new row in edit mode with a focused Member name field
-without confirm/cancel buttons. Omit visible labels in member edit rows; keep
-accessible field names and a placeholder for a new name. Blur creates a member
-when the draft is nonempty, or discards an empty draft. Failed edits retain the
-draft and show inline feedback.
-Adding and editing members stay in the group page on every screen size.
-Keep the preferred member (you) first, followed by names currently used by
-at least one active participant, then unclaimed names. Preserve the original
-order within each set; online status does not affect this ordering.
-Animate rows into their new positions when preferred-member choices change, without
-remounting editors. Respect reduced-motion preferences.
+The balances list everyone in the group with their balance per currency, you
+first on a tinted row with a blue You label, then everyone else from most
+negative to most positive balance (owing first, then settled, then owed; in
+several currencies, a debt in any currency sorts first), then people in no
+current expense or repayment yet, and a last Add a person row. Typing a name there and ending
+the typing (leaving the field, Enter, or Done) adds the person without a
+confirm step; an empty draft is discarded, and a failed add keeps the draft
+with inline feedback. Keep rows compact without avatars. Show a settled zero,
+such as 0.00 EUR, in green for each currency the person has current records in;
+leave the amount blank only when no current expense or repayment names them.
+A presence marker beside each name shows a filled green dot when at least one
+identity selecting the name is connected, a gray ring when they are known to be
+disconnected, and a dashed ring when no identity selects the name. Person
+details spell it out, such as Online · taken on 2 devices or Not taken on any
+device. This follows current preferred-member choices, not a permanent
+ownership or historical attendance record. Multiple tabs for one identity count
+once.
 
-On narrow screens and touch devices, group settings, creation, and joining use
-pages with an explicit Back action. Keep draft fields mounted when the keyboard
+Tapping a person opens their details: their name and presence, their balance in
+each currency (Owes or Gets back), or a numeric zero labelled Settled when their expenses and
+repayments cancel out in that currency, or No expenses yet when no current expense or
+repayment names them, Settle up with the number of payments in the
+group's plan that involve them, and Rename, I’m [name], and Remove. Settle up is
+hidden for a settled person. Rename edits the name in place, committing on
+leaving the field or Done; an empty name restores the saved name. I’m [name]
+makes that member you on this device without asking first; when another device
+already has the name taken, an inline warning says so afterward. Only someone with a
+zero balance in every currency can be taken out; otherwise the action is
+disabled with Settle up first. It is called Hide when any expense or repayment
+has named them, removed ones included, since they are kept for history, and
+Remove otherwise. Either is immediate, without a confirmation, including the
+current you member. A toast names the person, hidden or removed, with Undo,
+and Activity can restore them later. A hidden member who has a balance again,
+such as from an offline change, stays in the balances marked removed, with
+Restore in their details. Below the actions, the details list every current expense and
+repayment behind the balance, one row each, newest first, grouped by currency,
+and end each currency with a Balance row; the rows add up exactly to it.
+
+Every app screen is a page on every device: a fixed header with Back or Cancel,
+an optional centered title or a large page title below it, an optional end
+action such as Save, and at most one main action pinned at the foot of the
+screen. The invite link and the confirmation of leaving a group open as bottom
+sheets over the page. Keep draft fields mounted when the keyboard
 changes the visible height, allow scrolling above it, and support keyboard
 Next/Done actions. Forms fill the visible area above the keyboard, including
 when the browser pans to the focused field, without leaving a blank gap.
-Back leaves unsaved edits unapplied. Sharing and conflict
-review may use compact drawers because they need no editable fields. Desktop
-pointer layouts may continue to use a dialog for group settings.
+Back and Cancel leave unsaved edits unapplied.
 
 Pending member saves protect their draft and target across UI, devtools, and
 other callers. While saving, prevent repeated saves, changing or closing that
@@ -136,25 +124,107 @@ requests and outcomes without logging credentials, invite links or draft inputs.
 
 ## Agreed feature port from the earlier app
 
-These decisions extend the accepted product behavior. They are specifications
-for future slices, not a claim that the features below are implemented. The
+These decisions extend the accepted product behavior. Appearance, group summaries,
+repayments, Activity, safe undo and the Activity bell are implemented. The
 earlier app is a feature reference; this repository's existing decisions
 continue to govern identity, invitations, member removal, money, and sync.
 
 ### Appearance
 
-Use one fixed Blue paper theme, with a colored background and contrasting
-text and controls. The approved study uses background `#C5DBF3` and dark blue
-ink, with a visible fine grain or fine paper-fiber texture. Choose the final
-texture within that direction during visual implementation. Do not add theme
-or texture settings, light/dark switching, or system appearance switching.
-Keep the texture static and subordinate to legible labels, amounts, fields,
-focus indicators, and presence markers. Avoid a stack of white cards.
+Use one fixed light theme, which replaced the earlier Calm receipt theme:
+white cards with a hairline edge on a cool grey page (`#F2F4F6`) with near-black
+ink (`#10161D`). Body text uses IBM Plex Sans, amounts, currency codes and
+invite links use IBM Plex Mono, and page titles, group names and empty-state
+titles use Bricolage Grotesque. One blue (`#1B5FC1`) marks the main action on
+each page and links. Blue figures mean someone gets money back and orange
+(`#A9470C`) means someone owes it; green means settled or online. A brighter
+orange (`#C2410C`) marks the Activity badge and changes waiting for review. Do
+not add theme settings, light/dark switching, or system appearance
+switching.
 
 Reuse the earlier app's original blue split-S logo, preserving its artwork
-and `#60A5FA` blue. Show the logo on the app's groups list only, not on group,
-expense, settlement, joining, creation, settings, or Activity screens. The
-palette studies are visual references, not a replacement navigation design.
+and `#60A5FA` blue. Show the logo on the groups list and the join screen, not on
+group, expense, repayment, creation, or settings screens.
+
+### Screens and navigation
+
+Follow the agreed phone design. App screens use one narrow column on every
+device.
+
+The groups list has the logo, the name and a Join button in its header, a
+large Your groups title, and one card per group showing its name, people
+count, You’re and the member name, and your balance per currency as a signed
+amount, Settled with a check when every balance is zero, or Choose who you are.
+Show N groups you left expands the left groups, and New group is pinned at the
+foot. New group is a page with a large title, Group name and Your name in this
+group, a note that the invite link comes right away, and a pinned Create group
+action that shows Creating… with a spinner while it works.
+
+A group opens on one screen, without tabs. Its fixed header has the group name,
+which opens the groups list, the sync line when offline, and a bell opening
+Activity, and a gear button beside the bell opening Group settings. Settings
+contains the Group name field and Leave group, with Save group name shown only
+after the name changes. Back discards unsaved edits; leaving keeps its
+confirmation sheet. Below the group header, the page is one scroll area with two sections styled
+alike, each a heading over one card of rows: Balances, with Invite at the end
+of its heading, then Expenses. No list scrolls on its own. The balances card
+lists people and ends with an Add a person line. It has three levels. By
+default it shows everyone, unless that would leave no room for the Expenses
+heading and the first two expenses; then it shows the people who fit,
+followed by a faded, centered “···”, which jumps back to the top and shows everyone, and the Add a
+person line waits until everyone shows. Scrolling shrinks
+the card along with the scroll, so the expenses stay right below: the Add a
+person line goes first, then a person who would be partly cut gives way to
+the “···” item, which takes the room left and shrinks with it, until only
+the Balances heading is left, pinned at the top. People always show whole.
+The Expenses heading pins right under it while the expenses scroll; tapping
+it scrolls until the expenses start there. Tapping the heading scrolls
+smoothly back to the top. Showing everyone lists them in the page with a
+faded “···” as the last item, which scrolls back to the top and shows fewer again, and the heading stays pinned once it
+reaches the top.
+Expenses and recorded repayments are listed newest first, each opening their
+editor, with + Add expense floating at the foot, including before the first
+expense and after the last one is removed. Keep the same label and position;
+show no empty-expenses illustration or message. An unassigned installation is asked
+to tap its name in the balances.
+
+Tapping a person opens their details (see above), and their Settle up opens the
+payments in the group's plan that involve them, per currency, each From → To
+with its amount and Record, plus Record a different payment. Tapping a payment
+opens the repayment form filled in. The repayment form is a page with Cancel and
+Record (Save when changing one), then a sentence, “Jonas paid you”, whose names
+open the people in place, a large amount with its currency, a caption saying
+whether it is the full amount owed, and earlier repayments, each opening in the
+form with Remove repayment. Cancel and Record return to where the form was
+opened, such as Settle up.
+
+The expense editor follows the original Splitnext form: Cancel, Add (Edit
+expense when changing one), and Save in the header; Paid by opening the names
+in place; a large centered monospaced amount with its currency symbol and an
+editable currency code; Split between; then Occasion. Show the member's actual
+name with a You badge rather than replacing it with You. Each split row shows
+the person's name and calculated amount, an increase arrow, and a checkbox at
+one share or a decrease arrow above one share or for a fixed amount. Excluded
+people stay in place with an empty checkbox. Arrows adjust whole shares and
+reduce equivalent share counts together. Tapping a person's amount edits a
+fixed value, shown in blue; everybody else divides the remainder by their
+shares. Clearing the fixed value restores one share; increasing a fixed person's
+share returns it to the next whole proportional share, while decreasing it
+excludes them. Keep one person sharing the remainder. Show the equal split
+caption, such as 28.20 each · 5 people, or Custom split · 5 people when amounts are fixed
+or weights differ. Preserve both fixed amounts and weights when reopening and
+saving an expense. Invalid precision or amounts above the total retain their
+input and prevent saving. Changing an expense adds Remove expense below.
+Expense rows have no inline remove action.
+
+Activity is one chronological list grouped by day, without filters, below a
+Needs your review block (see Conflict-notice experience). Each entry names who
+did what, with Undo or, for removals, Restore where safe.
+
+Details, Settle up, forms and Activity are pages with Back to where they were
+opened. Every screen is in browser Back/Forward history, and repayment drafts
+survive screen changes. Opening or switching groups starts on the group screen
+with the balances expanded.
 
 ### Group summaries
 
@@ -171,19 +241,22 @@ from an ordinary expense's payer and allocation. Settlements affect balances
 but do not count as spending. They record money already paid outside the app;
 recording requires no recipient approval and never executes a payment.
 
-Settle up suggests transfers from net balances separately within each
-currency. A suggestion may bypass an intermediate debtor: if Ana owes Ben
-EUR 20 and Ben owes Cara EUR 20, suggest Ana pays Cara EUR 20. Produce a small,
-deterministic set of transfers; exact global minimization is not required.
+Settle up plans the fewest payments that settle the whole group, separately
+within each currency, and may skip people in the middle: if Ana owes Ben EUR 20
+and Ben owes Cara EUR 20, Ana pays Cara EUR 20. The plan is exact for up to 14
+people with a balance in a currency and falls back to a deterministic greedy
+plan above that. A person's Settle up shows only the plan's payments involving
+them; settle-up suggestions are not shown on the group screen.
 
-Tapping a suggestion opens a short review with sender, recipient, and currency
-prefilled, an editable amount, and Record repayment. A secondary Record
-another repayment action allows manual entry. A repayment may be any positive
-amount between two distinct ledger members, including partial repayments and
-overpayments. An overpayment reverses the remaining balance normally. A removed
-member with an outstanding balance remains available for repayment without
-being restored to the active member list; this is an exception to excluding
-removed members from new activity, not permission to add new expenses for them.
+Picking a payment opens the repayment form with payer, recipient, amount, and
+currency filled in and the amount editable for a partial payment. Record a
+different payment opens the same form for any other repayment. A repayment may
+be any positive amount between two distinct ledger members, including partial
+repayments and overpayments. An overpayment reverses the remaining balance
+normally. A removed member with an outstanding balance remains available for
+repayment without being restored to the active member list; this is an
+exception to excluding removed members from new activity, not permission to
+add new expenses for them.
 
 Any participant can record, edit, remove, or restore any settlement, including
 offline. Apply the expense lifecycle's intent and conflict rules: edit against
@@ -216,23 +289,18 @@ An undo creates a new visible Activity entry identifying who reversed which
 action. The reversal can itself be undone while safe. Never delete, rewrite,
 or hide the original audit event as the implementation of undo.
 
-### Important foreground notifications
+### Activity bell
 
-Notify only when another access identity changes the current preferred
-member's balance, or changes monetary details of or removes an expense or
-settlement originally recorded by this identity. Compare identities, not
-preferred-member names, when suppressing this installation's own actions.
-Routine joins, renames, and other changes remain in Activity without a toast.
+Changes from other people never pop up. The bell in the group header shows a
+count of new Activity entries from other access identities plus this device's
+changes waiting for review. Compare identities, not preferred-member names, when
+leaving out this installation's own actions. The first time a group's Activity
+loads on an installation, everything already there counts as seen.
 
-These notifications apply to the currently open group only. Deduplicate repeated
-synchronization delivery, combine several fresh changes into one compact
-summary, and do not replay a backlog on startup or reconnect. Existing pending,
-offline, failed-sync, and conflict feedback remains independently visible;
-those signals must not be suppressed by the foreground-activity filter.
-
-The web release uses foreground notifications. Background push is deferred to
-native releases; browser push and native push infrastructure are not required
-by these slices.
+Opening Activity highlights new entries with a New tag; Mark all seen clears
+them and the count. Seen positions are kept per group on the installation.
+Pending, offline, failed-sync and review feedback stay independently visible.
+Background push is deferred to native releases.
 
 ### Replacement scope
 
@@ -345,7 +413,9 @@ operations remain available without opening an editor, including offline.
   ordinal is never part of the name and disappears once the name is unique.
 - Any participant may add or rename a member.
 - Removing a member hides it when any expense names it, removed expenses
-  included, and deletes it otherwise (ADR 0018). Both are kept in the group:
+  included, and deletes it otherwise (ADR 0018). The app offers it only once
+  the member's balance is zero in every currency, calling it Hide or Remove
+  accordingly. Both are kept in the group:
   historical references remain valid, and neither is offered for new activity.
   A hidden member still appears in a currency's balances while it is not zero.
 - An expense that arrives after its member was removed still applies; a
@@ -360,11 +430,14 @@ operations remain available without opening an editor, including offline.
   same member.
 - Joining or rejoining as someone new adds a new member, even when an
   existing member has the same name; choosing an existing member is a
-  separate choice in the join flow.
-- App member rows show the preferred member through the selected person icon,
-  without actor-handle subtitles. When an identity selects a member already
-  preferred by someone else, the UI names those actor handles in a warning
-  but allows the choice.
+  separate choice in the join flow. Label the new-member option Someone else,
+  with a dashed outline and a plus icon to distinguish it from existing names.
+  Keep it a radio choice; selecting it reveals Your name.
+- App member rows show the preferred member with a You label, without
+  actor-handle subtitles. Selecting a member already preferred by someone else
+  needs no confirmation; the UI warns afterward that the name is already taken
+  on another device. Use Taken consistently for preferred-member choices in
+  app labels, presence captions, and warnings; the choice stays nonexclusive.
 - Joining normally requires selecting an active member or creating one, so the
   new identity initially has a preferred member. Being unassigned remains valid
   after leaving or after that member is removed.
@@ -376,7 +449,7 @@ operations remain available without opening an editor, including offline.
 - Production PWA clients should be able to use IndexedDB and React Native
   clients should be able to use SQLite. Synchronization logic must depend on a
   storage interface rather than either database.
-- Ordinary group, member, and future expense edits may be queued offline and
+- Ordinary group, member, expense, and repayment edits may be queued offline and
   projected optimistically with the same deterministic rules used by the
   server.
 - Actions that establish or deliberately stop authority require an online
@@ -446,9 +519,11 @@ a later rejection produces a new notice.
 
 - The client stores rejected and superseded outcomes locally together with the
   original command.
-- If a synchronization contains one or more unsuccessful commands, the UI shows
-  one summary notification and marks each affected group, member, expense, or
-  other target.
+- Changes waiting for review count on the group's Activity bell and appear
+  first in Activity under Needs your review, each resolved there with Apply
+  again or Dismiss. An affected expense or repayment shows a small orange dot.
+  No other review status shows elsewhere; with nothing left, Activity says All
+  caught up.
 - Target details explain the intended change, the authoritative result, and the
   reason. When available, they also identify the other actor whose change
   superseded it.
@@ -507,12 +582,16 @@ a later rejection produces a new notice.
   it, with a client-generated invite id and token reused for retries. Successful
   updates return 200 and current metadata. Retrying an old replacement never
   restores its token or overwrites a newer link, and returns the current link's
-  metadata. Preview uses POST /groups/{groupId}/invite/preview.
+  metadata. Preview uses POST /invites/preview with the code alone, or
+  POST /groups/{groupId}/invite/preview for an earlier link.
 - Redeeming a valid link atomically issues a permanent group access grant and
   lets the identity select an active member or create its preferred member.
 - Regenerating a link never removes access already issued through it.
-- Join URLs have the form `/join/{groupId}#{token}`. The token follows `#` so
-  ordinary page requests and referrers omit it.
+- Join URLs have the form `/j#{code}`, where the code is 12 random letters and
+  digits (about 71 bits) that alone identify the group (ADR 0024). The code
+  follows `#` so ordinary page requests and referrers omit it. Links made
+  earlier, `/join/{groupId}#{token}` with a 43-character token, keep working
+  until the link is replaced.
 - The invite link belongs to the group. Every participant receives the same
   current token in authenticated creation, join, and synchronization responses
   and can copy or share it without regenerating it. Clients retain it with the
@@ -523,16 +602,18 @@ a later rejection produces a new notice.
   Public invite previews, audit history, and diagnostic logs omit tokens.
 - Before joining, a link holder can preview the group name and its active
   members to choose who they are or join as someone new. The preview marks
-  members whose names a current participant already uses (In use); choosing
-  one is still allowed. Show available names first and In use names last,
-  preserving their order within each set. Fade unselected In use choices
+  members whose names are already taken on another device (Taken); choosing
+  one is still allowed. Show available names first and Taken names last,
+  preserving their order within each set. Fade unselected Taken choices
   slightly; selecting one restores the full selected highlight. Apply the
   same ordering and styling when rejoining.
 - Opening an invite for a group this installation already actively participates
   in opens that group directly, preserving its preferred member and clearing
   the token from the URL. No preview or Open group confirmation is shown, and
-  the token need not still be current because access is permanent. Leave the
-  `/join/{groupId}` entry route available for future native app handoff.
+  the token need not still be current because access is permanent. A short
+  link is matched against the groups stored on the installation, so it opens a
+  joined group offline too. Leave the `/j` and `/join/{groupId}` entry routes
+  available for future native app handoff.
   New participants and identities that left still choose a member before joining.
 - Any participant can regenerate the link; there are no roles.
 
@@ -565,7 +646,7 @@ Expenses are accepted behavior; settlements remain deferred.
   never net them into a single number. Expenses in the same currency combine
   normally. There is no combined converted total or exchange-rate dependency.
 - A recorded settlement includes its amount and currency and reduces only the
-  corresponding currency balances. Settlement suggestions keep currencies
+  corresponding currency balances. The settle-up plan keeps currencies
   separate, with no automatic cross-currency offset or conversion.
 - The first expense version has one payer, but the persisted model and money
   module must be extendable to multiple payers without redefining an expense.

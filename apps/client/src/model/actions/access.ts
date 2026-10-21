@@ -96,7 +96,7 @@ export const accessActions = {
         'An invite link, as shared.',
       ),
     }),
-    example: { link: 'https://splitnext.app/join/uy9ogmKJRD2VRfbN4PDsAw#…' },
+    example: { link: 'https://splitnext.app/j#Xk3m9QpL2vT7' },
     requires: ['online'],
     unavailable: (context, input) =>
       input && !parseInviteLink(input.link)
@@ -110,11 +110,18 @@ export const accessActions = {
       const check = ui.startInviteCheck(input.link);
 
       try {
-        if (
-          await host.openJoinedGroup(parsed.group_id, () =>
-            ui.inviteCheckIsCurrent(check),
-          )
-        ) {
+        const current = () => ui.inviteCheckIsCurrent(check);
+
+        if (parsed.group_id && (await host.openJoinedGroup(parsed.group_id, current))) {
+          ui.openedInvite(check);
+
+          return { opened: true };
+        }
+
+        // A short link names no group; its preview does.
+        const preview = await host.client.previewInvite(parsed.group_id, parsed.token);
+
+        if (!parsed.group_id && (await host.openJoinedGroup(preview.group.id, current))) {
           ui.openedInvite(check);
 
           return { opened: true };
@@ -122,12 +129,9 @@ export const accessActions = {
 
         const result: InviteCheck = {
           opened: false,
-          groupId: parsed.group_id,
+          groupId: preview.group.id,
           token: parsed.token,
-          preview: await host.client.previewInvite(
-            parsed.group_id,
-            parsed.token,
-          ),
+          preview,
         };
 
         ui.checkedInvite(input.link, result.token, result.preview, check);
@@ -182,7 +186,7 @@ export const accessActions = {
     input: empty,
     example: {},
     requires: ['online', 'openGroup'],
-    confirm: () => 'The current link will stop working.',
+    confirm: () => 'The old link will stop working. Everyone already in the group keeps their access.',
     run: (host) => host.regenerateInvite(),
   }),
   leaveGroup: defineAction({

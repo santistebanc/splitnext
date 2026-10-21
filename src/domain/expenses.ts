@@ -80,7 +80,7 @@ export function expenseMemberIds(expense: Pick<Expense, 'paid' | 'parts'> | Expe
 
 /** Whether any expense names the member, removed expenses included. */
 export function memberHasRecords(snapshot: GroupSnapshot, memberId: string): boolean {
-  return snapshot.expenses.some((expense) => expenseMemberIds(expense).includes(memberId));
+  return snapshot.expenses.some((expense) => expenseMemberIds(expense).includes(memberId)) || snapshot.settlements.some((record) => record.from_member_id === memberId || record.to_member_id === memberId);
 }
 
 /**
@@ -172,5 +172,5 @@ export function keepNamedMembers(snapshot: GroupSnapshot, memberIds: readonly st
 
 /** Balances per currency from the expenses that are not removed; currencies never combine. */
 export function groupBalances(snapshot: GroupSnapshot): Record<CurrencyCode, CurrencyBalances> {
-  return balances(snapshot.expenses.filter((expense) => expense.status === 'active'));
+  return balances(snapshot.expenses.filter((expense) => expense.status === 'active'), snapshot.settlements.filter((record) => record.status === 'active'));
 }

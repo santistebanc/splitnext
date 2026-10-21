@@ -57,9 +57,9 @@ existing sync SDK and domain contracts.
 The public site has a concise product homepage and a distinct, direct join
 route. Invite recipients should arrive at the join flow, not have to navigate
 through marketing content first. Use one domain with the homepage at `/`, the
-web app under `/app`, and group invites under `/join/{groupId}`. Invite URLs
-retain the existing token fragment format so the token is not sent in ordinary
-HTTP requests.
+web app under `/app`, and group invites under `/j#{code}`, with earlier links
+under `/join/{groupId}`. The code stays in the fragment so it is not sent in
+ordinary HTTP requests.
 
 ## Navigation and delivery
 
@@ -213,12 +213,12 @@ Show the name ordinal wherever a member name appears.
 
 ## Synchronization feedback
 
-Show a contextual banner while the installation is offline, the server is
-unreachable, or supported changes are waiting to synchronize. Hide it after
-synchronization succeeds. Keep supported edits usable offline. Rejected or
-superseded changes show one summary and local notices on the affected items,
-as required by the existing product specification. Use a compact status line
-with a pending count; show manual Retry only when the server is unreachable.
+Show one short line under the group name while the installation is offline
+or the server is unreachable, with the number of changes saved on this device;
+show manual Retry only when the server is unreachable. Show nothing once
+synchronized, and no banners. Keep supported edits usable offline. Rejected or
+superseded changes count on the Activity bell and are reviewed in Activity, as
+required by the existing product specification.
 
 Creating, joining, leaving, and managing invitations require an online server
 decision. Show their offline state in context while preserving entered

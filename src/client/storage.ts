@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { auditEventSchema } from '../domain/audit';
 import { joinGroupRequestSchema } from '../domain/access';
 import { commandOutcomeSchema, groupCommandSchema } from '../domain/commands';
 import {
@@ -26,6 +27,8 @@ const clientGroupReplicaSchema = z.object({
   group_id: identifierSchema,
   revision: z.number().int().positive(),
   snapshot: groupSnapshotSchema,
+  // Absent until Activity is first fetched; independent of the snapshot revision.
+  activity: z.array(auditEventSchema).optional(),
   outbox: z.array(pendingCommandSchema),
   notices: z.array(clientNoticeSchema),
   last_synced_at: z.iso.datetime().nullable(),

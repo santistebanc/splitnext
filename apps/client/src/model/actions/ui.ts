@@ -1,12 +1,89 @@
 import { z } from 'zod';
-import { formatInviteLink } from '@splitnext/client';
-import { expenseSplits, suggestedCurrency } from '../expenses';
-import { draftFields, viewFits, viewNames } from '../uiState';
+import { formatAmount, formatInviteLink, repaymentMembers, settlementSuggestions } from '@splitnext/client';
+import { newActivity } from '../activity';
+import { canExcludeExpensePart, decreaseExpenseShare, fixExpenseAmount, increaseExpenseShare, suggestedCurrency } from '../expenses';
+import { draftFields, groupViews, personFits, viewFits, viewNames } from '../uiState';
 import { workflowGuard, type WorkflowIntent } from '../workflow';
-import { unavailable, editorLock, navigationLock, defineAction, openSnapshot, requireExpense, requireOpenable, requireMember, requireNotice, requireJoin, joinMembers, requireConfirmation, requireInvite, memberResource, noticeResources, empty, choice, type ActionHost, type ActionPlatform } from './define';
+import { requireSettlement, unavailable, editorLock, navigationLock, defineAction, openSnapshot, requireExpense, requireOpenable, requireMember, requireNotice, requireJoin, joinMembers, requireConfirmation, requireInvite, memberResource, noticeResources, empty, choice, type ActionHost, type ActionPlatform } from './define';
 
 /** Navigation, drafts, local review state, device copy and share, and confirmation decisions. */
 export const uiActions = {
+  showGroup: defineAction({
+    workflow: 'navigate', group: 'UI', description: 'Show the group screen: balances and expenses.', input: empty, example: {}, requires: ['openGroup'],
+    run: async (host, input, ui) => ui.show('home'),
+  }),
+  showPerson: defineAction({
+    workflow: 'navigate', group: 'UI', description: 'Open a person’s details: balances, what they are made of, and their actions.',
+    input: z.object({ memberId: choice('repaymentMember', 'The person to show.') }), example: { memberId: 'member-1' }, requires: ['openGroup'],
+    unavailable: ({ state }, input) => personFits(state, input?.memberId) || (!input && repaymentMembers(openSnapshot(state)).length) ? null : unavailable('member_not_found', 'Choose someone in this group.'),
+    run: async (host, input, ui) => ui.show('person', 'push', { person: input.memberId }),
+  }),
+  showSettleUp: defineAction({
+    workflow: 'navigate', group: 'UI', description: 'Open the payments in the group’s settle-up plan that involve a person.',
+    input: z.object({ memberId: choice('repaymentMember', 'The person to settle up.') }), example: { memberId: 'member-1' }, requires: ['openGroup'],
+    unavailable: ({ state }, input) => {
+      const snapshot = openSnapshot(state);
+
+      if (input && !personFits(state, input.memberId)) return unavailable('member_not_found', 'Choose someone in this group.');
+
+      return snapshot && settlementSuggestions(snapshot).some((entry) => !input || entry.from_member_id === input.memberId || entry.to_member_id === input.memberId)
+        ? null : unavailable('member_settled', 'Nothing is left to settle.');
+    },
+    run: async (host, input, ui) => ui.show('settle', 'push', { person: input.memberId }),
+  }),
+  setBalancesExpanded: defineAction({
+    group: 'UI', description: 'Show everyone in the balances, or only as many as leave room for the first expenses.', input: z.object({ expanded: z.boolean() }), example: { expanded: false }, requires: ['openGroup'],
+    run: async (host, input, ui) => ui.update({ balancesExpanded: input.expanded }),
+  }),
+  markActivitySeen: defineAction({
+    group: 'UI', description: 'Mark every Activity change from other people as seen on this device.', input: empty, example: {}, requires: ['openGroup'],
+    unavailable: ({ state, ui }) => newActivity(state.group, state.group ? ui.activitySeen[state.group.group_id] : undefined).length ? null : unavailable('nothing_new', 'Nothing new in Activity.'),
+    run: async (host, input, ui) => {
+      const group = host.snapshot().group;
+      const latest = group?.activity.at(-1)?.sequence;
+
+      if (group && latest !== undefined) ui.markActivitySeen(group.group_id, latest);
+    },
+  }),
+  dismissRemoval: defineAction({
+    group: 'UI', description: 'Close the undo offer for a member removed on this device.', input: empty, example: {},
+    unavailable: ({ ui }) => ui.removal ? null : unavailable('nothing_removed', 'No removal to undo.'),
+    run: async (host, input, ui) => ui.update({ removal: null }),
+  }),
+  showActivity: defineAction({
+    workflow: 'navigate', group: 'UI', description: 'Open the group Activity.', input: empty, example: {}, requires: ['openGroup'], run: async (host, input, ui) => ui.show('activity'),
+  }),
+  refreshActivity: defineAction({
+    group: 'UI', description: 'Read Activity independently from snapshot synchronization.', input: empty, example: {}, requires: ['openGroup'],
+    unavailable: ({ state }) => state.group ? null : unavailable('group_not_found', 'Open a group first.'),
+    run: async (host) => {
+      if (!host.client.activity) return;
+      const id = host.snapshot().group?.group_id;
+
+      if (id) await host.client.activity(id);
+    },
+  }),
+  showSettlement: defineAction({
+    workflow: 'draft', group: 'UI', description: 'Open a recorded repayment for editing.', input: z.object({ settlementId: choice('settlement', 'The repayment to change.') }), example: { settlementId: 'settlement-1' }, requires: ['openGroup'],
+    unavailable: ({ state }, input) => requireSettlement(state, input?.settlementId),
+    run: async (host, input, ui) => {
+      const entry = openSnapshot(host.snapshot())?.settlements.find((item) => item.id === input.settlementId);
+
+      if (!entry) throw new Error('settlement_not_found');
+      ui.changeRepayment({ manual: false, settlementId: entry.id, expectedVersion: entry.version, from: entry.from_member_id, to: entry.to_member_id, currency: entry.currency, amount: formatAmount(entry.amount, entry.currency) });
+      ui.show('settlements');
+    },
+  }),
+  showSettlements: defineAction({
+    workflow: 'navigate', group: 'UI', description: 'Open repayment suggestions and recorded repayments.', input: empty, example: {}, requires: ['openGroup'],
+    run: async (host, input, ui) => ui.show('settlements'),
+  }),
+  prepareRepayment: defineAction({
+    workflow: 'draft', group: 'UI', description: 'Review a suggested or manual repayment.',
+    input: z.object({ from: choice('repaymentMember', 'Who paid.'), to: choice('repaymentMember', 'Who received it.'), amount: z.string(), currency: z.string(), keepEditing: z.boolean().optional(), manual: z.boolean().optional() }),
+    example: { from: 'member-1', to: 'member-2', amount: '10.00', currency: 'EUR' }, requires: ['openGroup'],
+    run: async (host, input, ui) => ui.changeRepayment({ ...input, manual: input.manual ?? false, settlementId: input.keepEditing ? ui.snapshot().repayment.settlementId : null, expectedVersion: input.keepEditing ? ui.snapshot().repayment.expectedVersion : null }),
+  }),
   showCreateGroup: defineAction({
     workflow: 'navigate',
     group: 'UI',
@@ -41,16 +118,6 @@ export const uiActions = {
     requires: ['openGroup'],
     run: async (host, input, ui) => ui.show('invite'),
   }),
-  showNotices: defineAction({
-    workflow: 'navigate',
-    group: 'UI',
-    description: 'Open changes that need review.',
-    input: empty,
-    example: {},
-    requires: ['selectedGroup'],
-    unavailable: ({ state }) => requireNotice(state),
-    run: async (host, input, ui) => ui.show('notices'),
-  }),
   showRejoin: defineAction({
     workflow: 'navigate',
     group: 'UI',
@@ -74,7 +141,7 @@ export const uiActions = {
       ui.view !== 'home'
         ? null
         : unavailable('panel_not_open', 'No form or panel is open.'),
-    run: async (host, input, ui) => ui.show('home'),
+    run: async (host, input, ui) => ui.back(),
   }),
   showHomepage: defineAction({
     workflow: 'navigate',
@@ -101,6 +168,8 @@ export const uiActions = {
     description: 'Restore a view when using Back or Forward.',
     input: z.object({
       view: z.enum(viewNames),
+      trail: z.array(z.enum(groupViews)).optional(),
+      person: z.string().optional(),
       groupId: choice(
         'group',
         'The group to show, or omit for the groups list.',
@@ -115,7 +184,10 @@ export const uiActions = {
 
       // History can outlive a group's state, such as an invite sheet for a
       // group since left; a panel without its group restores the group view.
-      ui.show(viewFits(input.view, host.snapshot()) ? input.view : 'home', 'restore');
+      const person = input.person ?? null;
+
+      if (viewFits(input.view, host.snapshot(), person)) ui.show(input.view, 'restore', { person, trail: input.trail?.filter((view) => viewFits(view, host.snapshot(), person)) ?? [] });
+      else ui.show('home', 'restore');
     },
   }),
   changeDraft: defineAction({
@@ -138,7 +210,9 @@ export const uiActions = {
               ? 'joinName'
               : input.field.startsWith('create.')
                 ? 'createDraft'
-                : input.field.startsWith('expense.')
+                : input.field.startsWith('repayment.')
+                  ? 'draft'
+                  : input.field.startsWith('expense.')
                   ? 'expenseDraft'
                   : 'settingsDraft';
 
@@ -148,7 +222,7 @@ export const uiActions = {
 
       if (!input)
         return ui.memberEdit ||
-          ['create', 'settings', 'expense', 'join', 'rejoin'].includes(ui.view)
+          ['create', 'settings', 'expense', 'join', 'rejoin', 'settlements'].includes(ui.view)
           ? null
           : unavailable('form_not_open', 'Open a form or edit a member first.');
 
@@ -209,14 +283,6 @@ export const uiActions = {
     run: async (host, input, ui) =>
       ui.update({ showLeftGroups: input.visible }),
   }),
-  setNoticeSummaryVisible: defineAction({
-    group: 'UI',
-    description: 'Show or hide the changes-to-review banner.',
-    input: z.object({ visible: z.boolean() }),
-    example: { visible: false },
-    run: async (host, input, ui) =>
-      ui.update({ showNoticeSummary: input.visible }),
-  }),
   showExpense: defineAction({
     workflow: 'navigate',
     group: 'UI',
@@ -244,51 +310,80 @@ export const uiActions = {
     workflow: 'expenseDraft',
     group: 'UI',
     description: 'Include a member in the expense being entered, or leave them out.',
-    input: z.object({ memberId: choice('member', 'The member to include or leave out.') }),
+    input: z.object({ memberId: choice('expenseMember', 'The member to include or leave out.') }),
     example: { memberId: 'member-2' },
     requires: ['openGroup'],
-    unavailable: ({ state, ui }, input) =>
-      input && ui.expense.participants.includes(input.memberId) ? null : requireMember(state, input?.memberId),
+    unavailable: ({ state, ui }, input) => {
+      if (!input) return ui.expense.parts.length ? null : requireMember(state);
+
+      if (!ui.expense.parts.some((part) => part.member_id === input.memberId)) return requireMember(state, input.memberId);
+
+      return canExcludeExpensePart(ui.expense, input.memberId) ? null : unavailable('last_share', 'Keep one person sharing the remainder.');
+    },
     run: async (host, input, ui) => {
-      const members = openSnapshot(host.snapshot())?.members ?? [];
-
       ui.changeExpense((draft) => {
-        const included = draft.participants.includes(input.memberId);
-        const chosen = included ? draft.participants.filter((memberId) => memberId !== input.memberId) : [...draft.participants, input.memberId];
+        const included = draft.parts.some((part) => part.member_id === input.memberId);
 
-        // Group order keeps rows in place as people are included.
-        return { participants: members.flatMap((member) => (chosen.includes(member.id) ? [member.id] : [])) };
+        return { parts: included ? draft.parts.filter((part) => part.member_id !== input.memberId) : increaseExpenseShare(draft, input.memberId) };
       });
     },
   }),
-  setExpenseSplit: defineAction({
+  increaseExpenseShare: defineAction({
     workflow: 'expenseDraft',
     group: 'UI',
-    description: 'Split the expense being entered equally, by shares, or by amounts.',
-    input: z.object({ split: z.enum(expenseSplits).meta({ description: 'How to divide the expense.' }) }),
-    example: { split: 'shares' },
+    description: 'Increase a participant’s shares, include someone, or return a fixed amount to shares.',
+    input: z.object({ memberId: choice('expenseMember', 'The person whose share increases.') }),
+    example: { memberId: 'member-2' },
     requires: ['openGroup'],
-    run: async (host, input, ui) =>
-      ui.changeExpense((draft) => (draft.split === input.split ? {} : { split: input.split, values: {} })),
+    unavailable: ({ state, ui }, input) => {
+      if (!input) return ui.expense.parts.length ? null : requireMember(state);
+      const part = ui.expense.parts.find((entry) => entry.member_id === input?.memberId);
+
+      if (!part) return requireMember(state, input?.memberId);
+
+      return part.kind === 'shares' && part.shares >= 1_000_000 ? unavailable('share_limit', 'Use at most 1000000 shares.') : null;
+    },
+    run: async (host, input, ui) => ui.changeExpense((draft) => ({ parts: increaseExpenseShare(draft, input.memberId) })),
   }),
-  setExpenseValue: defineAction({
+  decreaseExpenseShare: defineAction({
     workflow: 'expenseDraft',
     group: 'UI',
-    description: 'Enter a participant’s shares or amount for the expense being entered.',
-    input: z.object({
-      memberId: choice('member', 'The participant.'),
-      value: z.string().meta({ description: 'Shares, such as 2, or an amount, such as 12.50; blank shares what is left.' }),
-    }),
-    example: { memberId: 'member-2', value: '2' },
+    description: 'Decrease a participant’s shares, or exclude a fixed person or someone at one share.',
+    input: z.object({ memberId: choice('expenseMember', 'The person whose share decreases.') }),
+    example: { memberId: 'member-2' },
     requires: ['openGroup'],
-    unavailable: ({ ui }, input) =>
-      ui.expense.split === 'equal'
-        ? unavailable('split_equal', 'Split by shares or amounts first.')
-        : input && !ui.expense.participants.includes(input.memberId)
-          ? unavailable('not_participant', 'Include this member first.')
-          : null,
+    unavailable: ({ ui }, input) => {
+      if (!input) return ui.expense.parts.length ? null : unavailable('not_participant', 'Include a person first.');
+      const part = ui.expense.parts.find((entry) => entry.member_id === input?.memberId);
+
+      if (!part) return unavailable('not_participant', 'Include this person first.');
+
+      return (part.kind === 'shares' && part.shares > 1) || canExcludeExpensePart(ui.expense, part.member_id)
+        ? null : unavailable('last_share', 'Keep one person sharing the remainder.');
+    },
+    run: async (host, input, ui) => ui.changeExpense((draft) => ({ parts: decreaseExpenseShare(draft, input.memberId) })),
+  }),
+  setExpenseFixedAmount: defineAction({
+    workflow: 'expenseDraft',
+    group: 'UI',
+    description: 'Fix one participant’s amount while the others divide the remainder by shares; clear it to return to one share.',
+    input: z.object({
+      memberId: choice('expenseMember', 'The participant.'),
+      amount: z.string().meta({ description: 'An amount, such as 12.50; blank returns this person to one share.' }),
+    }),
+    example: { memberId: 'member-2', amount: '12.50' },
+    requires: ['openGroup'],
+    unavailable: ({ ui }, input) => {
+      if (!input) return ui.expense.parts.length ? null : unavailable('not_participant', 'Include a person first.');
+      const part = ui.expense.parts.find((entry) => entry.member_id === input?.memberId);
+
+      if (!part) return unavailable('not_participant', 'Include this person first.');
+
+      return part.kind === 'shares' && input?.amount.trim() && !canExcludeExpensePart(ui.expense, part.member_id)
+        ? unavailable('last_share', 'Keep one person sharing the remainder.') : null;
+    },
     run: async (host, input, ui) =>
-      ui.changeExpense((draft) => ({ values: { ...draft.values, [input.memberId]: input.value } })),
+      ui.changeExpense((draft) => ({ parts: fixExpenseAmount(draft, input.memberId, input.amount) })),
   }),
   beginAddMember: defineAction({
     waitsFor: () => [editorLock],
@@ -408,7 +503,10 @@ export const uiActions = {
       await host.openGroup(input.groupId);
 
       if (host.snapshot().group?.hidden) ui.showJoin('', true);
-      else ui.show('home');
+      else {
+        ui.update({ balancesExpanded: false });
+        ui.show('home');
+      }
     },
   }),
   showGroups: defineAction({

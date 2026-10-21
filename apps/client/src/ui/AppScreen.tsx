@@ -1,32 +1,45 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { Keyboard, Pressable, Text, View } from 'react-native';
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Keyboard, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { z } from 'zod';
+import { parseInviteLink } from '@splitnext/client';
 import { AppController } from '../model/controller';
 import { createDispatcher } from '../model/actions';
 import { browserActionPlatform } from './browserPlatform';
 import { createBrowserApp } from '../model/browser';
 import { ViewTransition } from './ViewTransition';
-import { CreateGroup } from './CreateGroup';
+import { SyncStatus } from './ConnectionStatus';
+import { CreateGroup, CreateGroupFooter } from './CreateGroup';
 import { Frame } from './Frame';
-import { ExpenseEditor } from './ExpenseEditor';
-import { GroupSettings } from './GroupSettings';
-import { GroupsView } from './GroupsView';
-import { GroupView } from './GroupView';
-import { InvitePanel } from './InvitePanel';
-import { JoinGroup } from './JoinGroup';
-import { NoticesPanel } from './NoticesPanel';
-import { Sheet } from './Sheet';
-import { SheetOverlay } from './SheetOverlay';
+import { ExpenseControls, ExpenseEditor, ExpenseEditorHeader } from './ExpenseEditor';
+import { AddExpenseButton } from './ExpenseList';
+import { ActivityHeader, ActivityPanel } from './ActivityPanel';
+import { PersonDetails, PersonHeader } from './PersonView';
+import { SettleUp, SettleUpHeader } from './SettleUp';
+import { GroupSettings, GroupSettingsFooter } from './GroupSettings';
+import { GroupsFooter, GroupsHeader, GroupsView, WelcomeView } from './GroupsView';
+import { Toast } from './Toast';
+import { useActivityFeed } from './useActivityFeed';
+import { SettlementsHeader, SettlementsPanel } from './SettlementsPanel';
+import { GroupHeader, GroupView } from './GroupView';
+import { InviteSheet } from './InvitePanel';
+import { useBalancesLayout } from './BalancesPanel';
+import { CompactProgressContext, createCompactProgress } from './pageScroll';
+import { JoinGroup, JoinGroupFooter, type JoinCalls } from './JoinGroup';
 import { navigationSchema } from './navigation';
 import { Devtools } from '../devtools/Devtools';
-import { ActionsProvider } from './useActionCall';
-import { useSheetKeyboard } from './useSheetKeyboard';
-import { useCompactLayout, useTouchInput } from './useVisibleViewport';
-import { Button, ErrorMessage, errorMessage, s, useAction } from './components';
+import { ActionsProvider, useActionCall, useActions, useUiState } from './useActionCall';
+import { useCompactLayout } from './useVisibleViewport';
+import { BackButton, Button, ErrorMessage, ScreenHeader, errorMessage, s, useAction } from './components';
+import type { UiState } from '../model/uiState';
 
-type ScreenProps = { incomingGroupId?: string };
+/** An invite link opened the app: a long link names its group, a short one only its code. */
+type ScreenProps = { incomingGroupId?: string; invite?: boolean };
 
-type AppProps = { controller: AppController; incomingGroupId?: string };
+type AppProps = { controller: AppController; invite?: boolean };
+
+/** What a screen shows: a fixed header, its content, and at most one main action. */
+type Screen = { header?: ReactNode; body: ReactNode; footer?: ReactNode; ruledFooter?: boolean };
 
 export function AppScreen(props: ScreenProps) {
   const [controller, setController] = useState<AppController | null>(null);
@@ -49,11 +62,10 @@ export function AppScreen(props: ScreenProps) {
 
         await current.start(navigator.onLine);
 
-        if (
-          !cancelled &&
-          props.incomingGroupId &&
-          (await current.openJoinedGroup(props.incomingGroupId))
-        ) {
+        const code = props.invite ? parseInviteLink(window.location.href)?.token : undefined;
+        const joined = props.incomingGroupId ?? (code ? await current.groupWithInvite(code) : null);
+
+        if (!cancelled && joined && (await current.openJoinedGroup(joined))) {
           enterApp();
 
           return;
@@ -77,13 +89,13 @@ export function AppScreen(props: ScreenProps) {
       cancelled = true;
       current?.dispose();
     };
-  }, [attempt, props.incomingGroupId]);
+  }, [attempt, props.incomingGroupId, props.invite]);
 
   if (!controller) {
     return (
       <Frame>
         {error ? (
-          <View style={s.main}>
+          <View style={[s.stack, { paddingTop: 32 }]}>
             <Text style={s.heading}>Let’s try that again</Text>
             <ErrorMessage message={error} />
             <Button
@@ -112,22 +124,29 @@ export function LoadingGroups() {
       accessibilityLabel="Opening your groups…"
       accessibilityLiveRegion="polite"
       aria-busy
-      style={s.stack}
+      style={{ gap: 10 }}
     >
-      <View style={[s.skeleton, s.skeletonTitle]} />
-      <View style={[s.card, s.listCard]}>
-        {[0, 1, 2].map((row) => (
-          <View key={row} style={s.person}>
-            <View style={[s.avatar, s.skeleton]} />
-            <View style={s.personText}>
-              <View style={[s.skeleton, s.skeletonLine]} />
-              <View style={[s.skeleton, s.skeletonShort]} />
-            </View>
-          </View>
-        ))}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 20, paddingBottom: 8 }}>
+        <View style={[s.skeleton, { width: 32, height: 32, borderRadius: 9 }]} />
+        <View style={[s.skeleton, { width: 110, height: 22 }]} />
       </View>
+      <View style={[s.skeleton, { width: 210, height: 36, marginTop: 20, marginBottom: 6 }]} />
+      {[0, 1, 2].map((row) => (
+        <View key={row} style={s.groupCard}>
+          <View style={[s.skeleton, s.skeletonLine]} />
+          <View style={[s.skeleton, s.skeletonShort]} />
+        </View>
+      ))}
     </View>
   );
+}
+
+/** The join screen's body and pinned button share these two calls' progress and errors. */
+function WithJoinCalls(props: { children: (calls: JoinCalls) => ReactNode }) {
+  const previewing = useActionCall();
+  const joining = useActionCall();
+
+  return <>{props.children({ previewing, joining })}</>;
 }
 
 function enterApp(): void {
@@ -141,9 +160,35 @@ function enterApp(): void {
   router.replace('/app');
 }
 
+/** Where the browser history entry for a screen leads back to. */
+function historyEntry(ui: UiState, groupId: string | null) {
+  return { splitnext: true, view: ui.view, trail: ui.trail, person: ui.person, groupId };
+}
+
+/** The undo offer for a member removed on this device; it closes itself after a while. */
+function RemovalToast() {
+  const ui = useUiState();
+  const undo = useActionCall();
+  const removal = ui.removal;
+  const actions = useActions();
+
+  useEffect(() => {
+    if (!removal) return;
+    const timer = setTimeout(() => { void actions.dispatch('dismissRemoval', {}, { origin: 'timer' }); }, 8000);
+
+    return () => clearTimeout(timer);
+  }, [removal?.id]);
+
+  return (
+    <Toast
+      message={removal ? `${removal.name} ${removal.hidden ? 'hidden' : 'removed'}.` : null}
+      action={removal && undo.can('restoreMember', { memberId: removal.memberId }) ? { text: 'Undo', onPress: () => { void undo.call('restoreMember', { memberId: removal.memberId }); } } : undefined}
+    />
+  );
+}
+
 function ReadyApp(props: AppProps) {
   const mobile = useCompactLayout();
-  const touch = useTouchInput();
   const app = props.controller;
   const state = useSyncExternalStore(app.subscribe, app.snapshot, app.snapshot);
 
@@ -151,7 +196,8 @@ function ReadyApp(props: AppProps) {
     () =>
       createDispatcher(app, {
         ...browserActionPlatform(),
-        initialLink: props.incomingGroupId ? window.location.href : '',
+        initialLink: props.invite ? window.location.href : '',
+        seenStorage: browserSeenStorage,
       }),
     [app],
   );
@@ -170,23 +216,11 @@ function ReadyApp(props: AppProps) {
     actions.executions.snapshot,
   );
 
+  useActivityFeed(app, state);
   const view = ui.view;
-  const noticeSummary = ui.showNoticeSummary;
   const initialLink = ui.join.link;
 
-  const noticeKey =
-    state.group?.notices.map((notice) => notice.command.command_id).join(',') ??
-    '';
-
   const action = useAction();
-
-  useEffect(() => {
-    void actions.dispatch(
-      'setNoticeSummaryVisible',
-      { visible: true },
-      { origin: 'lifecycle' },
-    );
-  }, [noticeKey]);
 
   useEffect(() => {
     const online = () => {
@@ -210,14 +244,7 @@ function ReadyApp(props: AppProps) {
   }, [app]);
 
   useEffect(() => {
-    window.history.replaceState(
-      {
-        splitnext: true,
-        view: ui.view,
-        groupId: app.snapshot().group?.group_id ?? null,
-      },
-      '',
-    );
+    window.history.replaceState(historyEntry(ui, app.snapshot().group?.group_id ?? null), '');
 
     const back = (event: PopStateEvent) => {
       const parsed = navigationSchema.safeParse(event.state);
@@ -231,7 +258,7 @@ function ReadyApp(props: AppProps) {
       void action.run(async () => {
         const outcome = await actions.dispatch(
           'restoreNavigation',
-          { view: next.view, groupId: next.groupId ?? undefined },
+          { view: next.view, trail: next.trail, person: next.person ?? undefined, groupId: next.groupId ?? undefined },
           { origin: 'history' },
         );
 
@@ -247,182 +274,181 @@ function ReadyApp(props: AppProps) {
   useEffect(() => {
     Keyboard.dismiss();
 
-    const entry = {
-      splitnext: true,
-      view: ui.view,
-      groupId: app.snapshot().group?.group_id ?? null,
-    };
+    const entry = historyEntry(ui, app.snapshot().group?.group_id ?? null);
 
     if (ui.navigation.mode === 'push')
       window.history.pushState(entry, '', window.location.href);
     else window.history.replaceState(entry, '', window.location.href);
 
     // Leaving the join page for a group or the groups list drops the invite URL.
-    if (props.incomingGroupId && ui.view === 'home') enterApp();
+    if (props.invite && ui.view === 'home') enterApp();
   }, [ui.navigation.revision]);
 
-  function close(): void {
-    void actions.dispatch('closePanel', {}, { origin: 'ui' });
-  }
+  const balances = useBalancesLayout();
+  const compact = useMemo(createCompactProgress, []);
 
   const group = state.group;
+  const open = Boolean(group?.projected_snapshot);
 
   const pending = state.groups.reduce(
     (count, entry) => count + entry.pending_commands,
     0,
   );
 
-  const notices = group?.notices.length ?? 0;
-
   // Background refreshes and history navigation have no button to sit beside,
-  // so their failures join the connection status at the top of the page.
+  // so their failures appear at the top of the page.
   const backgroundError =
     action.error ?? (state.syncError ? errorMessage(state.syncError) : null);
 
-  const isFormPage = (mobile || touch) && (view === 'settings' || view === 'expense');
+  const onGroupScreen = open && (view === 'home' || view === 'invite');
+  const joined = Boolean(group && !group.hidden);
+  const addsExpenses = open && view === 'home' && joined;
 
-  const isSheet =
-    !isFormPage && ['invite', 'settings', 'expense', 'notices'].includes(view);
+  function retry(): void {
+    void action.run(async () => {
+      const outcome = await actions.dispatch('refreshGroups', {}, { origin: 'ui' });
 
-  useSheetKeyboard(isSheet, close);
+      if (outcome.status === 'failed') throw new Error(outcome.error);
+    });
+  }
 
-  const pageKey =
-    isFormPage || ['create', 'join', 'rejoin'].includes(view)
-      ? view
-      : (group?.group_id ?? 'groups');
+  function dispatch(name: 'closePanel' | 'showGroups'): void {
+    void actions.dispatch(name, {}, { origin: 'ui' });
+  }
+
+  // Each screen has a fixed header, its content, and at most one main action.
+  function screenFor(join: JoinCalls): Screen {
+    if (view === 'create')
+      return {
+        header: <ScreenHeader title="New group" start={<BackButton label="Back to groups" disabled={!actions.availability('showGroups', {}).available} onPress={() => dispatch('showGroups')} />} />,
+        body: <CreateGroup app={app} />,
+        footer: <CreateGroupFooter app={app} />,
+      };
+
+    if (view === 'join' || view === 'rejoin') {
+      const joinProps = { app, initialLink, rejoining: view === 'rejoin', ...join };
+
+      return {
+        header: <ScreenHeader start={<BackButton label="Back" disabled={!actions.availability('closePanel', {}).available} onPress={() => dispatch('closePanel')} />} />,
+        body: <JoinGroup {...joinProps} />,
+        footer: <JoinGroupFooter {...joinProps} />,
+        ruledFooter: true,
+      };
+    }
+
+    if ((!open || !group) && !state.groups.length) return { body: <WelcomeView /> };
+
+    if (!open || !group)
+      return {
+        header: <GroupsHeader />,
+        body: (
+          <>
+            <SyncStatus online={state.online} reachable={state.reachable} pending={pending} busy={action.busy} onRetry={retry} />
+            <GroupsView app={app} />
+          </>
+        ),
+        footer: <GroupsFooter />,
+      };
+
+    switch (view) {
+      case 'expense':
+        return {
+          header: (
+            <>
+              <ExpenseEditorHeader app={app} />
+              <ExpenseControls app={app} />
+            </>
+          ),
+          body: <ExpenseEditor app={app} />,
+        };
+      case 'settlements':
+        return { header: <SettlementsHeader />, body: <SettlementsPanel replica={group} /> };
+      case 'person':
+        return { header: <PersonHeader app={app} />, body: <PersonDetails app={app} /> };
+      case 'settle':
+        return { header: <SettleUpHeader app={app} />, body: <SettleUp app={app} /> };
+      case 'activity':
+        return { header: <ActivityHeader app={app} />, body: <ActivityPanel replica={group} /> };
+      case 'settings':
+        return {
+          header: <ScreenHeader title="Group settings" context={group.projected_snapshot?.group.name} start={<BackButton label="Back to group" disabled={!actions.availability('closePanel', {}).available} onPress={() => dispatch('closePanel')} />} />,
+          body: <GroupSettings app={app} />,
+          footer: <GroupSettingsFooter />,
+        };
+      default:
+        return {
+          header: <GroupHeader app={app} pending={pending} busy={action.busy} onRetry={retry} onLayout={balances.measureHeader} />,
+          body: (
+            <>
+              <GroupView app={app} layout={balances} />
+              {view === 'invite' ? <InviteSheet app={app} /> : null}
+            </>
+          ),
+          footer: addsExpenses ? <View pointerEvents="box-none" style={{ alignItems: 'flex-end' }}><AddExpenseButton /></View> : undefined,
+        };
+    }
+  }
+
+  const pageKey = onGroupScreen ? `group:${group?.group_id}` : `${view}:${group?.group_id ?? ''}:${ui.person ?? ''}`;
 
   return (
     <ActionsProvider value={actions}>
-      <View style={s.page}>
-        <Frame
-          navigationDisabled={!actions.availability('showGroups', {}).available}
-          onHomepage={() => {
-            void actions.dispatch('showHomepage', {}, { origin: 'ui' });
-          }}
-          onGroups={
-            // Create and join pages have their own Back action.
-            !['create', 'join', 'rejoin'].includes(view) &&
-            !isFormPage &&
-            (group || view !== 'home')
-              ? () => {
-                  void actions.dispatch('showGroups', {}, { origin: 'ui' });
-                }
-              : undefined
-          }
-        >
-          <ViewTransition key={pageKey} mobile={mobile}>
-            {!state.online || !state.reachable || pending > 0 ? (
-              <View
-                accessibilityLiveRegion="polite"
-                style={[s.banner, s.between]}
-              >
-                <Text style={s.body}>
-                  {!state.online
-                    ? 'Offline'
-                    : !state.reachable
-                      ? 'Connection unavailable'
-                      : 'Syncing…'}
-                  {pending > 0 ? ` · ${pending} pending` : ''}
-                </Text>
-                {state.online && !state.reachable ? (
-                  <Button
-                    quiet
-                    disabled={action.busy}
-                    onPress={() => {
-                      void action.run(async () => {
-                        const outcome = await actions.dispatch(
-                          'refreshGroups',
-                          {},
-                          { origin: 'ui' },
-                        );
+      <CompactProgressContext.Provider value={compact}>
+        <WithJoinCalls>
+          {(join) => {
+            const screen = screenFor(join);
 
-                        if (outcome.status === 'failed')
-                          throw new Error(outcome.error);
-                      });
-                    }}
-                  >
-                    Retry
-                  </Button>
-                ) : null}
+            return (
+              <View style={s.page}>
+                <Frame
+                  header={screen.header}
+                  footer={screen.footer}
+                  floatingFooter={addsExpenses}
+                  ruledFooter={screen.ruledFooter}
+                  scrollKey={pageKey}
+                  onScroll={(y) => {
+                    compact.follow(y);
+
+                    if (onGroupScreen) balances.scroll.set(y);
+                  }}
+                  scrollControl={onGroupScreen ? balances.scrollControl : undefined}
+                >
+                  <ViewTransition key={pageKey} mobile={mobile}>
+                    <ErrorMessage message={backgroundError} />
+                    {screen.body}
+                  </ViewTransition>
+                </Frame>
+                <RemovalToast />
+                <Devtools />
               </View>
-            ) : null}
-            {backgroundError ? (
-              <View style={[s.banner, s.errorBanner]}>
-                <ErrorMessage message={backgroundError} />
-              </View>
-            ) : null}
-            {notices > 0 && noticeSummary ? (
-              <View style={s.banner}>
-                <View style={s.row}>
-                  <Button
-                    secondary
-                    onPress={() => {
-                      void actions.dispatch(
-                        'showNotices',
-                        {},
-                        { origin: 'ui' },
-                      );
-                    }}
-                  >
-                    Review changes · {notices}
-                  </Button>
-                  <Button
-                    quiet
-                    onPress={() => {
-                      void actions.dispatch(
-                        'setNoticeSummaryVisible',
-                        { visible: false },
-                        { origin: 'ui' },
-                      );
-                    }}
-                  >
-                    Hide
-                  </Button>
-                </View>
-              </View>
-            ) : null}
-            {view === 'create' ? (
-              <CreateGroup app={app} />
-            ) : view === 'join' || view === 'rejoin' ? (
-              <JoinGroup
-                app={app}
-                initialLink={initialLink}
-                rejoining={view === 'rejoin'}
-              />
-            ) : isFormPage && view === 'expense' ? (
-              <ExpenseEditor app={app} fullPage />
-            ) : isFormPage ? (
-              <GroupSettings app={app} fullPage />
-            ) : group?.projected_snapshot ? (
-              <GroupView app={app} showReview={!noticeSummary} />
-            ) : (
-              <GroupsView app={app} />
-            )}
-          </ViewTransition>
-          <SheetOverlay visible={isSheet} onClose={close}>
-            <View style={[s.overlay, mobile && s.mobileOverlay]}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Close popup"
-                onPress={close}
-                style={s.backdrop}
-              />
-              <Sheet mobile={mobile}>
-                {view === 'invite' ? (
-                  <InvitePanel app={app} />
-                ) : view === 'settings' ? (
-                  <GroupSettings app={app} />
-                ) : view === 'expense' ? (
-                  <ExpenseEditor app={app} />
-                ) : view === 'notices' ? (
-                  <NoticesPanel app={app} />
-                ) : null}
-              </Sheet>
-            </View>
-          </SheetOverlay>
-        </Frame>
-        <Devtools />
-      </View>
+            );
+          }}
+        </WithJoinCalls>
+      </CompactProgressContext.Provider>
     </ActionsProvider>
   );
 }
+
+/** How far this installation has seen each group's Activity, kept in localStorage. */
+const browserSeenStorage = {
+  read(): Record<string, number> {
+    try {
+      const parsed = seenSchema.safeParse(JSON.parse(localStorage.getItem(activitySeenKey) ?? '{}'));
+
+      return parsed.success ? parsed.data : {};
+    } catch {
+      return {};
+    }
+  },
+  write(seen: Record<string, number>): void {
+    try {
+      localStorage.setItem(activitySeenKey, JSON.stringify(seen));
+    } catch {
+      // Seen markers are a convenience; a full store only shows items as new again.
+    }
+  },
+};
+
+const activitySeenKey = 'splitnext.activity-seen.v1';
+
+const seenSchema = z.record(z.string(), z.number().int());

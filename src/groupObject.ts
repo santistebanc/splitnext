@@ -107,6 +107,10 @@ export class GroupObject extends DurableObject<Env> {
     return this.store.create(initializeGroup(parsed.data));
   }
 
+  groupActivity(identityId: string) {
+    return this.store.activity(identifierSchema.parse(identityId));
+  }
+
   syncGroup(command: SyncGroupCommand) {
     const parsed = syncGroupCommandSchema.safeParse(command);
 

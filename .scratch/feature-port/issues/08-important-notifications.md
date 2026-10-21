@@ -1,6 +1,6 @@
 # Notify only about important foreground changes
 
-Status: ready-for-agent
+Status: resolved
 Depends on: 03-record-settlements, 05-activity
 
 See [the feature-port spec](../spec.md) and
@@ -27,3 +27,5 @@ See [the feature-port spec](../spec.md) and
 
 Agreed during the source-app inventory and specification interview.
 
+
+Implemented identity-based important-change selection, foreground connection baselines, deduplication and burst summaries. Two-device browser coverage verifies fresh delivery and quiet reconnect catch-up. Final full check passed: 299 unit tests and 17 browser tests. Mobile screenshots verify compact review, long-name wrapping and groups-list-only branding.

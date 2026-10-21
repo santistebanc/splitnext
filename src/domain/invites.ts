@@ -1,11 +1,22 @@
 import { z } from 'zod';
 import { base64url, identifierSchema } from './ids';
 
+const codeAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
 /**
- * A 256-bit secret encoded as unpadded base64url. The creating client
- * generates it, so a retried creation reuses the same link.
+ * A short invite code: 12 letters and digits, about 71 random bits. It alone
+ * identifies the group, so links stay short (ADR 0024).
  */
-export const inviteTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+export const inviteCodeSchema = z.string().regex(/^[A-Za-z0-9]{12}$/);
+
+/**
+ * An invite secret. The creating client generates it, so a retried creation
+ * reuses the same link. New links use a short code; groups created earlier
+ * keep their 256-bit base64url token until the link is replaced.
+ */
+export const inviteTokenSchema = z
+  .string()
+  .regex(/^(?:[A-Za-z0-9]{12}|[A-Za-z0-9_-]{43})$/);
 
 /** Attribution retained in history without copying invitation secrets. */
 export const inviteMetadataSchema = z.object({
@@ -96,24 +107,38 @@ export async function hashInviteToken(token: string): Promise<string> {
   return base64url(new Uint8Array(digest));
 }
 
-/** Keeps the token after `#`, so browsers never send it to any server. */
+/**
+ * Keeps the secret after `#`, so browsers never send it to any server: a code
+ * as `/j#{code}`, an earlier token as `/join/{groupId}#{token}`.
+ */
 export function formatInviteLink(
   appUrl: string,
   groupId: string,
   token: string,
 ): string {
-  return `${appUrl.replace(/\/$/, '')}/join/${groupId}#${token}`;
+  const base = appUrl.replace(/\/$/, '');
+
+  return inviteCodeSchema.safeParse(token).success
+    ? `${base}/j#${token}`
+    : `${base}/join/${groupId}#${token}`;
 }
 
-export function parseInviteLink(
-  link: string,
-): { group_id: string; token: string } | null {
+/** An invite link's secret, and its group when the link names one. */
+export type ParsedInviteLink = { group_id: string | null; token: string };
+
+export function parseInviteLink(link: string): ParsedInviteLink | null {
   let url: URL;
 
   try {
     url = new URL(link.trim());
   } catch {
     return null;
+  }
+
+  if (/^\/j\/?$/.test(url.pathname)) {
+    const code = inviteCodeSchema.safeParse(url.hash.slice(1));
+
+    return code.success ? { group_id: null, token: code.data } : null;
   }
 
   const groupId = identifierSchema.safeParse(
@@ -131,8 +156,16 @@ export function isInviteFailure(code: string): code is InviteFailure {
   return inviteFailureCodes.some((failure) => failure === code);
 }
 
+/** A new invite code, each character drawn uniformly from letters and digits. */
 export function createInviteToken(): string {
-  return inviteTokenSchema.parse(
-    base64url(crypto.getRandomValues(new Uint8Array(32))),
-  );
+  let code = '';
+
+  while (code.length < 12) {
+    for (const byte of crypto.getRandomValues(new Uint8Array(16))) {
+      // 248 is the largest multiple of 62 below 256, so no character is favoured.
+      if (byte < 248 && code.length < 12) code += codeAlphabet[byte % 62];
+    }
+  }
+
+  return inviteCodeSchema.parse(code);
 }

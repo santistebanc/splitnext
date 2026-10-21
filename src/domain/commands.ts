@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import type { AuditEvent } from './audit';
+import { changeUndo, undoChangeCommandSchema } from './commands/changeUndo';
+import { settlementRestore, restoreSettlementCommandSchema } from './commands/settlementRestore';
+import { settlementRemove, removeSettlementCommandSchema } from './commands/settlementRemove';
+import { settlementEdit, editSettlementCommandSchema } from './commands/settlementEdit';
+import { settlementRecord, recordSettlementCommandSchema } from './commands/settlementRecord';
 import type { GroupSnapshot } from './sync';
 import type { CommandDefinition, CommandTransition } from './commands/define';
 import type { CommandTarget } from './commands/outcomes';
@@ -42,6 +48,11 @@ export type { RecordExpenseCommand } from './commands/expenseRecord';
 export type { EditExpenseCommand } from './commands/expenseEdit';
 
 export const groupCommandSchema = z.discriminatedUnion('type', [
+  editSettlementCommandSchema,
+  removeSettlementCommandSchema,
+  restoreSettlementCommandSchema,
+  undoChangeCommandSchema,
+  recordSettlementCommandSchema,
   renameGroupCommandSchema,
   createMemberCommandSchema,
   renameMemberCommandSchema,
@@ -58,6 +69,11 @@ export const groupCommandSchema = z.discriminatedUnion('type', [
 export type GroupCommand = z.output<typeof groupCommandSchema>;
 
 const registered = {
+  'settlement.edit': settlementEdit,
+  'settlement.remove': settlementRemove,
+  'settlement.restore': settlementRestore,
+  'change.undo': changeUndo,
+  'settlement.record': settlementRecord,
   'group.rename': groupRename,
   'member.create': memberCreate,
   'member.rename': memberRename,
@@ -91,8 +107,9 @@ export function applyGroupCommand(
   identityId: string,
   command: GroupCommand,
   appliedAt: string,
+  history: readonly AuditEvent[] = [],
 ): CommandTransition {
-  return apply(command.type, command, snapshot, identityId, appliedAt);
+  return apply(command.type, command, snapshot, identityId, appliedAt, history);
 }
 
 function apply<T extends keyof CommandMap>(
@@ -101,8 +118,9 @@ function apply<T extends keyof CommandMap>(
   snapshot: GroupSnapshot,
   identityId: string,
   appliedAt: string,
+  history: readonly AuditEvent[],
 ): CommandTransition {
-  return definitions[type].apply(snapshot, identityId, command, appliedAt);
+  return definitions[type].apply(snapshot, identityId, command, appliedAt, history);
 }
 
 export function commandTarget(

@@ -17,7 +17,7 @@ import {
   parseSchema,
   type FormValues,
 } from './form';
-import { devtoolsKey, resolveDevtools } from './toggle';
+import { resolveDevtools } from './toggle';
 import { DevtoolsOverlay } from './DevtoolsOverlay';
 
 type Tab = 'actions' | 'map' | 'log' | 'state';
@@ -61,7 +61,7 @@ export function Devtools() {
 }
 
 /**
- * Reads `?devtools` and the remembered choice after mounting, off by default.
+ * Reads `?devtools` after mounting, off by default.
  * Only when switched on does it ask whether this build may show devtools, so
  * ordinary visits make no extra request.
  */
@@ -71,14 +71,7 @@ function useDevtoolsEnabled(): boolean {
   useEffect(() => {
     let mounted = true;
 
-    const setting = resolveDevtools(
-      window.location.search,
-      localStorage.getItem(devtoolsKey),
-    );
-
-    if (setting.remember) localStorage.setItem(devtoolsKey, setting.remember);
-
-    if (setting.enabled)
+    if (resolveDevtools(window.location.search))
       void devtoolsAllowed().then((allowed) => {
         if (mounted) setEnabled(allowed);
       });
@@ -501,7 +494,10 @@ function StateTab() {
             },
             memberEdit: ui.memberEdit,
             showLeftGroups: ui.showLeftGroups,
-            showNoticeSummary: ui.showNoticeSummary,
+            trail: ui.trail,
+            person: ui.person,
+            balancesExpanded: ui.balancesExpanded,
+            removal: ui.removal,
             copiedInviteId: ui.copiedInviteId,
             confirmation: ui.confirmation,
           },
@@ -541,7 +537,7 @@ function capitalize(value: string): string {
 const ds = StyleSheet.create({
   launcher: {
     position: 'absolute',
-    right: 16,
+    left: 16,
     bottom: 16,
     width: 48,
     height: 48,
@@ -581,7 +577,7 @@ const ds = StyleSheet.create({
   },
   tabs: { flexDirection: 'row', gap: 4 },
   tab: { paddingHorizontal: 10, paddingVertical: 12 },
-  tabSelected: { borderBottomWidth: 2, borderColor: colors.green },
+  tabSelected: { borderBottomWidth: 2, borderColor: colors.online },
   tabText: { color: colors.muted, fontSize: 14, fontWeight: '500' },
   tabTextSelected: { color: colors.ink },
   body: { padding: 12 },
@@ -596,9 +592,9 @@ const ds = StyleSheet.create({
     borderBottomWidth: 2,
     borderColor: 'transparent',
   },
-  groupTabSelected: { borderColor: colors.green },
+  groupTabSelected: { borderColor: colors.online },
   groupTabText: { color: colors.muted, fontSize: 13, fontWeight: '500' },
-  groupTabTextSelected: { color: colors.green, fontWeight: '700' },
+  groupTabTextSelected: { color: colors.online, fontWeight: '700' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   chip: {
     paddingHorizontal: 8,
@@ -619,7 +615,7 @@ const ds = StyleSheet.create({
   },
   failed: { color: colors.red },
   pending: { color: '#8a5a00' },
-  done: { color: colors.green },
+  done: { color: colors.online },
   logEntry: {
     gap: 2,
     paddingVertical: 6,

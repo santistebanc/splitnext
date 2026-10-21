@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { activeMembers, memberLabel, nameOrdinals, preferredMember, formatInviteLink } from '@splitnext/client';
+import { repaymentMembers, activeMembers, memberLabel, nameOrdinals, preferredMember, formatInviteLink } from '@splitnext/client';
 import { currentExpenses, expenseLabel, recentCurrencies } from './expenses';
 import type { AppState } from './controller';
 import type { UiState } from './uiState';
@@ -7,8 +7,8 @@ import type { UiState } from './uiState';
 export type InputState = AppState & { ui?: UiState };
 
 export const valueSources = [
-  'member', 'preferredMember', 'removedMember', 'expense', 'removedExpense', 'currency', 'group', 'notice', 'inviteLink',
-  'memberName', 'groupName', 'joinMember', 'confirmation',
+  'activity', 'settlement', 'removedSettlement', 'repaymentMember', 'member', 'preferredMember', 'removedMember', 'expense', 'removedExpense', 'currency', 'group', 'notice', 'inviteLink',
+  'memberName', 'groupName', 'joinMember', 'confirmation', 'expenseMember',
 ] as const;
 
 export const valueSourceSchema = z.enum(valueSources);
@@ -47,11 +47,21 @@ export function sourceOptions(
             label: memberLabel(member.display_name, member.name_ordinal),
           }))
         : members.map((member) => ({ value: member.id, label: label(member) }));
+    case 'activity':
+      return (group?.activity ?? []).map((event) => ({ value: event.id, label: event.change.action }));
+    case 'settlement':
+    case 'removedSettlement':
+      return (snapshot?.settlements ?? []).filter((entry) => entry.status === (source === 'settlement' ? 'active' : 'removed')).map((entry) => ({ value: entry.id, label: `${entry.amount} ${entry.currency}` }));
+    case 'repaymentMember':
+      return repaymentMembers(snapshot).map((member) => ({ value: member.id, label: label(member) }));
     case 'member':
       return members.map((member) => ({
         value: member.id,
         label: `${label(member)}${member.id === you ? ' (you)' : ''}`,
       }));
+    case 'expenseMember':
+      return (snapshot?.members ?? []).filter((member) => member.status === 'active' || state.ui?.expense.parts.some((part) => part.member_id === member.id))
+        .map((member) => ({ value: member.id, label: label(member) }));
     case 'preferredMember':
       return [...members]
         .sort((a, b) => Number(a.id === you) - Number(b.id === you))

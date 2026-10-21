@@ -1,3 +1,4 @@
+import { settlementSuggestions } from '../src/domain/settlements';
 import { describe, expect, it } from 'vitest';
 import { applyGroupCommand, type GroupCommand } from '../src/domain/commands';
 import { groupBalances, roundingBurden } from '../src/domain/expenses';
@@ -33,6 +34,7 @@ function start(): GroupSnapshot {
       id: memberId, display_name: ['Ana', 'Ben', 'Cy'][index] ?? '', status: 'active', created_at: at, updated_at: at,
     })),
     expenses: [],
+          settlements: [],
     access_grants: [{ identity_id: me, actor_handle: 'User 1', preferred_member_id: ana, granted_at: at, hidden_at: null }],
     invite: { id: id('invite'), created_by_identity_id: me, created_at: at, token: 't'.repeat(43) },
   };
@@ -134,5 +136,32 @@ describe('expenses in a group', () => {
     expect(sum('EUR')).toBe(0);
     expect(sum('JPY')).toBe(0);
     expect(balances.EUR?.[ana]).toBe(100 - 33 - (extrasOf(group, 'one')?.includes(ana) ? 1 : 0));
+  });
+});
+
+
+describe('repayments', () => {
+  it('simplifies a debt chain without changing spending, rounding or another currency', () => {
+    let group = start();
+
+    for (const [payer, consumer] of [[ana, ben], [ben, cy]] as const) {
+      group = run(group, { command_id: commandId(), type: 'expense.record', payload: { expense_id: commandId(), description: 'Loaned cost', currency: 'EUR', total: 1000, paid_by: payer, parts: [{ kind: 'shares', member_id: consumer, shares: 1 }] } });
+    }
+
+    group = run(group, thirds('yen', 99, 'JPY'));
+    const before = group;
+    const suggestion = settlementSuggestions(group).find((entry) => entry.currency === 'EUR');
+
+    expect(suggestion).toEqual({ from_member_id: cy, to_member_id: ana, amount: 1000, currency: 'EUR' });
+    expect(group.expenses).toHaveLength(3);
+
+    if (!suggestion) throw new Error('missing suggestion');
+
+    for (const amount of [300, 900]) group = run(group, { command_id: commandId(), type: 'settlement.record', payload: { ...suggestion, settlement_id: commandId(), amount } });
+
+    expect(groupBalances(group).EUR).toEqual({ [ana]: -200, [ben]: 0, [cy]: 200 });
+    expect(groupBalances(group).JPY).toEqual(groupBalances(before).JPY);
+    expect(group.expenses).toEqual(before.expenses);
+    expect(roundingBurden(group, 'EUR')).toEqual(roundingBurden(before, 'EUR'));
   });
 });

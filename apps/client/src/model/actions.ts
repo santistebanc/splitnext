@@ -91,12 +91,18 @@ export function createDispatcher(
     () => host.snapshot(),
     () => host.lastYouName(),
     options.initialLink,
+    options.seenStorage,
   );
 
   // A panel whose group went away returns to the groups list, unless a
   // navigation still running is about to choose the next view itself.
   host.subscribe?.(() => {
     if (!executions.snapshot().some((entry) => entry.resources.includes(navigationLock))) ui.fitToApp();
+    // A group's first Activity on this installation is all seen, so no backlog counts as new.
+    const group = host.snapshot().group;
+    const latest = group?.activity.at(-1)?.sequence;
+
+    if (group && latest !== undefined && ui.snapshot().activitySeen[group.group_id] === undefined) ui.markActivitySeen(group.group_id, latest);
   });
 
   // Collected in every build from the start, for devtools and support reports.

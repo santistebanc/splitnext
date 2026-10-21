@@ -326,6 +326,36 @@ describe('group invite links', () => {
     expect(await unknown.json()).toEqual({ error: 'invite_invalid' });
   });
 
+  it('previews a short link from its code alone and tells a replaced code apart', async () => {
+    const fixture = await createFixture();
+    const first = await regenerateInvite(fixture);
+    const preview = await previewCode(fixture, first.token);
+
+    expect(preview.status).toBe(200);
+    expect(await preview.json()).toMatchObject({ group: { id: fixture.groupId, name: 'Berlin flat' } });
+
+    await regenerateInvite(fixture);
+
+    const replaced = await previewCode(fixture, first.token);
+    const unknown = await previewCode(fixture, createInviteToken());
+
+    expect(replaced.status).toBe(403);
+    expect(await replaced.json()).toEqual({ error: 'invite_replaced' });
+    expect(unknown.status).toBe(403);
+    expect(await unknown.json()).toEqual({ error: 'invite_invalid' });
+  });
+
+  it('refuses a code that already opens another group', async () => {
+    const fixture = await createFixture();
+    const other = await createFixture();
+    const { token } = await regenerateInvite(fixture);
+    const response = await putInvite(other, { invite_id: createIdentifier(), token });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'idempotency_conflict' });
+    expect(await (await previewCode(fixture, token)).json()).toMatchObject({ group: { id: fixture.groupId } });
+  });
+
   it('shares the token in authorized snapshots and omits it from previews', async () => {
     const fixture = await createFixture();
     const { token } = await regenerateInvite(fixture);
@@ -562,6 +592,14 @@ function previewInvite(fixture: Fixture, token: string) {
       body: JSON.stringify({ token }),
     },
   );
+}
+
+function previewCode(fixture: Fixture, token: string) {
+  return exports.default.fetch('https://splitnext.test/invites/preview', {
+    method: 'POST',
+    headers: requestHeaders(fixture.joiner.deviceSecret),
+    body: JSON.stringify({ token }),
+  });
 }
 
 function join(

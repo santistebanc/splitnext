@@ -1,108 +1,134 @@
-import { joinedParticipants, preferredMember } from '@splitnext/client';
-import { Text, View } from 'react-native';
-import { Button, s } from './components';
-import { Balances, ExpenseList } from './ExpenseList';
-import { MemberList, type MemberListApp } from './MemberList';
-import { useActionCall, useActions } from './useActionCall';
-import { useCompactLayout } from './useVisibleViewport';
+import { useContext } from 'react';
+import { Pressable, Text, View } from 'react-native';
+import { attentionCount } from '../model/activity';
+import { BalancesHold, GroupBalances, type BalancesLayout } from './BalancesPanel';
+import { Button, ErrorMessage, ScreenHeader, colors, s } from './components';
+import { CompactProgressContext } from './pageScroll';
+import { SyncStatus } from './ConnectionStatus';
+import { ExpenseList } from './ExpenseList';
+import { BellIcon, ChevronDownIcon, SettingsIcon } from './icons';
+import type { MemberListApp } from './MemberList';
+import { fontFamily } from './theme';
+import { useActionCall, useActions, useUiState } from './useActionCall';
 
-type GroupViewProps = {
-  app: MemberListApp;
-  showReview: boolean;
-};
+type GroupViewProps = { app: MemberListApp };
 
-/** The open group: its name, invite action, balances, expenses, and Members list. */
-export function GroupView(props: GroupViewProps) {
-  const mobile = useCompactLayout();
-  const action = useActionCall();
+/** The bell that opens Activity, with a count of new changes from others and changes to review. */
+export function ActivityBell(props: { app: MemberListApp }) {
+  const open = useActionCall();
+  const ui = useUiState();
+  const replica = props.app.snapshot().group;
+  const { fresh, review } = attentionCount(replica, replica ? ui.activitySeen[replica.group_id] : undefined);
+  const count = fresh + review;
+
+  const label = count
+    ? `Activity: ${[fresh ? `${fresh} new ${fresh === 1 ? 'update' : 'updates'}` : '', review ? `${review} ${review === 1 ? 'change' : 'changes'} to review` : ''].filter(Boolean).join(', ')}`
+    : 'Activity, no new updates';
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={!open.can('showActivity')}
+      onPress={() => { void open.call('showActivity', {}); }}
+      style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, (pressed || !open.can('showActivity')) && s.dim]}
+    >
+      <BellIcon />
+      {count ? (
+        <View aria-hidden style={{ position: 'absolute', top: 4, right: 2, minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: 999, borderWidth: 2, borderColor: colors.background, backgroundColor: colors.alert, alignItems: 'center', justifyContent: 'center' }}>
+          <Text testID="activity-count" style={{ fontFamily, fontSize: 11, fontWeight: '700', color: colors.actionInk }}>{count}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+/**
+ * The group screen's fixed top: the group name, which opens the group list,
+ * a status line only while offline, the Activity bell, and group settings.
+ */
+export function GroupHeader(props: { app: MemberListApp; pending: number; busy: boolean; onRetry: () => void; onLayout?: (height: number) => void }) {
+  const compact = useContext(CompactProgressContext);
   const actions = useActions();
+  const settings = useActionCall();
+  const state = props.app.snapshot();
+  const replica = state.group;
+  const name = replica?.projected_snapshot?.group.name ?? '';
+  const canLeave = actions.availability('showGroups', {}).available;
+  const open = Boolean(replica && !replica.hidden);
+
+  return (
+    <View
+      onLayout={(event) => {
+        // The balances fit the room below the full header; shrinking it only adds room.
+        if (!compact.get()) props.onLayout?.(event.nativeEvent.layout.height);
+      }}
+    >
+      <ScreenHeader
+        heading={(
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${name}. Switch group`}
+            accessibilityState={{ disabled: !canLeave }}
+            disabled={!canLeave}
+            onPress={() => { void actions.dispatch('showGroups', {}, { origin: 'ui' }); }}
+            style={({ pressed }) => [{ alignSelf: 'flex-start', maxWidth: '100%', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4 }, (pressed || !canLeave) && s.dim]}
+          >
+            <Text accessibilityRole="header" numberOfLines={1} style={[s.screenTitle, { flexShrink: 1 }]}>{name}</Text>
+            <ChevronDownIcon size={20} color={colors.muted} />
+          </Pressable>
+        )}
+        end={open ? (
+          <>
+            <ActivityBell app={props.app} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Group settings"
+              accessibilityState={{ disabled: !settings.can('showSettings') }}
+              disabled={!settings.can('showSettings')}
+              onPress={() => { void settings.call('showSettings', {}); }}
+              style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, (pressed || !settings.can('showSettings')) && s.dim]}
+            >
+              <SettingsIcon />
+            </Pressable>
+          </>
+        ) : undefined}
+      />
+      <View style={{ paddingLeft: 8 }}>
+        <SyncStatus online={state.online} reachable={state.reachable} pending={props.pending} busy={props.busy} onRetry={props.onRetry} />
+      </View>
+    </View>
+  );
+}
+
+/**
+ * The group screen's content, one scrolling page: the Balances section, then
+ * expenses and repayments; or rejoining a group left here.
+ */
+export function GroupView(props: GroupViewProps & { layout: BalancesLayout }) {
+  const action = useActionCall();
+  const showAll = useUiState().balancesExpanded && Boolean(props.layout.plan?.truncated);
   const replica = props.app.snapshot().group;
   const snapshot = replica?.projected_snapshot;
 
   if (!snapshot || !replica) return null;
 
-  const identityId = replica.session?.identity.id;
-
-  const you = preferredMember(snapshot, identityId);
-
-  // Inviting stays the primary action until someone else has joined.
-  const othersJoined = joinedParticipants(snapshot).some((grant) => grant.identity_id !== identityId);
+  if (replica.hidden)
+    return (
+      <View style={s.prompt}>
+        <Text style={s.body}>You left this group.</Text>
+        <Button disabled={!action.can('showRejoin')} onPress={() => { void action.call('showRejoin', {}); }}>
+          Rejoin group
+        </Button>
+        <ErrorMessage message={action.error} />
+      </View>
+    );
 
   return (
-    <>
-      <View style={s.groupHeader}>
-        <View style={s.groupTitle}>
-          <Text
-            accessibilityRole="header"
-            style={[s.title, mobile && s.mobileTitle]}
-          >
-            {snapshot.group.name}
-          </Text>
-        </View>
-        {!replica.hidden ? (
-          <Button
-            quiet
-            label="Group settings"
-            disabled={!actions.availability('showSettings', {}).available}
-            onPress={() => {
-              void action.call('showSettings', {});
-            }}
-          >
-            Settings
-          </Button>
-        ) : null}
-      </View>
-      {replica.hidden ? (
-        <View style={s.prompt}>
-          <Text style={s.body}>You left this group.</Text>
-          <Button
-            disabled={!actions.availability('showRejoin', {}).available}
-            onPress={() => {
-              void action.call('showRejoin', {});
-            }}
-          >
-            Rejoin group
-          </Button>
-        </View>
-      ) : (
-        <>
-          {replica.notices.length && props.showReview ? (
-            <Button
-              secondary
-              disabled={!actions.availability('showNotices', {}).available}
-              onPress={() => {
-                void action.call('showNotices', {});
-              }}
-            >
-              Review changes · {replica.notices.length}
-            </Button>
-          ) : null}
-          <Button
-            secondary={othersJoined}
-            disabled={!actions.availability('showInvite', {}).available}
-            onPress={() => {
-              void action.call('showInvite', {});
-            }}
-          >
-            Share invite
-          </Button>
-          {!you ? (
-            <View style={s.banner}>
-              <Text style={s.body}>
-                Which one is you? Tap the person icon beside your name.
-              </Text>
-            </View>
-          ) : null}
-          <Balances replica={replica} />
-          <ExpenseList replica={replica} />
-          <View style={[s.card, s.peopleCard]}>
-            <View style={s.between}>
-              <Text style={s.heading}>Members</Text>
-            </View>
-            <MemberList app={props.app} replica={replica} />
-          </View>
-        </>
-      )}
-    </>
+    <View>
+      <GroupBalances app={props.app} replica={replica} layout={props.layout} />
+      <ExpenseList replica={replica} stickyTop={props.layout.plan?.minimal} onHeadingPress={() => props.layout.scrollToExpenses(showAll)} />
+      <BalancesHold layout={props.layout} />
+    </View>
   );
 }

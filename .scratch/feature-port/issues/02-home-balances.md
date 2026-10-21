@@ -1,6 +1,6 @@
 # Show your separate currency balances on group rows
 
-Status: ready-for-agent
+Status: resolved
 Depends on: None
 
 See [the feature-port spec](../spec.md) and
@@ -23,4 +23,9 @@ See [the feature-port spec](../spec.md) and
 ## Comments
 
 Agreed during the source-app inventory and specification interview.
+
+Group summaries derive nonzero per-currency amounts from the same local
+projection used by the open group. Uncached/left groups do not claim to be
+settled. Browser coverage exercises multiple currencies, offline display,
+zero balances and removal of the preferred member.
 
