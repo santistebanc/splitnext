@@ -1,6 +1,8 @@
-# Issue tracker: Local Markdown
+# Issue tracker: GitHub and local working notes
 
-Issues and specs for this repo live as markdown files in `.scratch/`.
+Factory tickets and approved implementation briefs live in GitHub Issues at `santistebanc/splitnext`. Use GitHub labels, dependencies, and comments for factory state and handoffs. Publish new factory tickets there.
+
+The conventions below describe historical tickets and local working notes in `.scratch/`; do not automatically migrate or dispatch them. An explicitly supplied local file remains readable as a spec or note.
 
 ## Conventions
 
