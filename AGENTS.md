@@ -27,7 +27,7 @@ If a decision changes, update the relevant document in the same slice.
   `test/groupCommandRules.test.ts`. When a generated test finds a failure, keep
   its shrunk steps in that file's `examples`.
 - Run `npm run check` after each slice and leave it uncommitted for inspection.
-  Commit only when asked. Pushes run `npm run check:fast` through the tracked
+  Commit only when asked. For an assigned factory ticket (`FACTORY_WORKER=1`), the approved agent brief authorizes commits and a PR on that ticket branch. Pushes run `npm run check:fast` through the tracked
   pre-push hook; CI runs the full check.
 - Do not add compatibility code for discarded pre-production designs or erase
   remote data without explicit permission.
@@ -36,12 +36,16 @@ If a decision changes, update the relevant document in the same slice.
 
 ### Issue tracker
 
-Issues and specs live as local markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+Factory tickets live in GitHub Issues for `santistebanc/splitnext`; labels carry their status. Local `.scratch/<feature>/` files remain working notes and historical specs. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-The five default triage roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), recorded as `Status:` lines. See `docs/agents/triage-labels.md`.
+The five default triage roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), recorded as GitHub labels for factory tickets and `Status:` lines for historical local tickets. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
 Single-context: `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Factory boundaries
+
+Use local Worker/D1 state and offline fixtures for verification. Production deployment, remote migrations, remote data changes, and real financial transactions require an explicit owner decision. Run `npm run check:fast` during development and `npm run check` before opening the PR; CI repeats the full check.
