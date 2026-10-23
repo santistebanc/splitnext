@@ -1,15 +1,5 @@
-# Software factory checks use local state only. Production deploys remain owner actions.
-[commands]
-setup = "npm ci"
-check = "npm run check:fast"
-test = "npm run check"
-
-[paths]
-ui = ["apps/client/**"]
-heavy = ["e2e/**", "showcase/**"]
-
-[rules]
-live_network = false
+# Factory settings for this repo. Production deploys remain owner actions.
+# Development previews come from factory config/development.toml unless a [development] table is added here.
 
 [protection]
 required_checks = ["check"]

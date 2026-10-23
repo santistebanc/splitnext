@@ -35,7 +35,7 @@ If a decision changes, update the relevant document in the same slice.
 
 ### Issue tracker
 
-Factory tickets live in GitHub Issues for `santistebanc/splitnext`; labels carry their status. Local `.scratch/<feature>/` files remain working notes and historical specs. See `docs/agents/issue-tracker.md`.
+Factory tickets live in GitHub Issues for `santistebanc/splitnext`; labels carry their status. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
