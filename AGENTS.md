@@ -26,8 +26,7 @@ If a decision changes, update the relevant document in the same slice.
   `test/syncConvergence.test.ts` and a row per outcome in
   `test/groupCommandRules.test.ts`. When a generated test finds a failure, keep
   its shrunk steps in that file's `examples`.
-- Use focused TDD and relevant checks during iteration. Save meaningful recoverable commits automatically. Run `npm run check:fast` before publishing implementation evidence, and `npm run check` on the combined integration branch; CI repeats the full check.
-- Use the installed factory skill for thread-owned workspaces, isolated previews and automatic ticket reconciliation. Several workspaces may contribute to one ticket. Integration PRs combine coherent implemented requirements rather than matching one ticket each.
+- Use focused TDD and relevant checks during iteration. Save meaningful recoverable commits automatically. Run `npm run check:fast` while iterating and `npm run check` before opening a PR; CI repeats the full check.
 - Do not add compatibility code for discarded pre-production designs or erase
   remote data without explicit permission.
 
@@ -35,16 +34,12 @@ If a decision changes, update the relevant document in the same slice.
 
 ### Issue tracker
 
-Factory tickets live in GitHub Issues for `santistebanc/splitnext`; labels carry their status. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Progress labels and independent question, blocker and pause conditions are described in `docs/agents/triage-labels.md`.
+Tickets live in GitHub Issues for `santistebanc/splitnext`. See `docs/agents/issue-tracker.md`.
 
 ### Domain docs
 
 Single-context: `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
-## Factory boundaries
+## Boundaries
 
 Use local Worker/D1 state and offline fixtures for verification. Production deployment, remote migrations, remote data changes, and real financial transactions require an explicit owner decision. Run `npm run check:fast` during development and `npm run check` before opening the PR; CI repeats the full check.
