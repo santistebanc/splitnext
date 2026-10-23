@@ -14,4 +14,4 @@ GitHub labels carry progress; the project board mirrors them.
 | Replaced with linked successors | `status:superseded` |
 | Explicitly declined by owner | `status:declined` |
 
-Conditions are independent: `needs-info` asks for an owner decision, `factory:blocked` records a blocker, and `factory:paused` stops automatic work. Types are `bug`, `enhancement` and `chore`. Size is optional scheduling guidance. Historical local notes retain their old status vocabulary.
+Conditions are independent: `needs-info` asks for an owner decision, `factory:blocked` records a blocker, and `factory:paused` stops automatic work. Types are `bug`, `enhancement` and `chore`. Size is optional scheduling guidance.
