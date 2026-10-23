@@ -1,6 +1,0 @@
-# Factory settings for this repo. Production deploys remain owner actions.
-# Development previews come from factory config/development.toml unless a [development] table is added here.
-
-[protection]
-required_checks = ["check"]
-required_approvals = 0
