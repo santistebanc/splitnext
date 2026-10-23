@@ -26,9 +26,8 @@ If a decision changes, update the relevant document in the same slice.
   `test/syncConvergence.test.ts` and a row per outcome in
   `test/groupCommandRules.test.ts`. When a generated test finds a failure, keep
   its shrunk steps in that file's `examples`.
-- Run `npm run check` after each slice and leave it uncommitted for inspection.
-  Commit only when asked. For an assigned factory ticket (`FACTORY_WORKER=1`), the approved agent brief authorizes commits and a PR on that ticket branch. Pushes run `npm run check:fast` through the tracked
-  pre-push hook; CI runs the full check.
+- Use focused TDD and relevant checks during iteration. Save meaningful recoverable commits automatically. Run `npm run check:fast` before publishing implementation evidence, and `npm run check` on the combined integration branch; CI repeats the full check.
+- Use the installed factory skill for thread-owned workspaces, isolated previews and automatic ticket reconciliation. Several workspaces may contribute to one ticket. Integration PRs combine coherent implemented requirements rather than matching one ticket each.
 - Do not add compatibility code for discarded pre-production designs or erase
   remote data without explicit permission.
 
@@ -40,7 +39,7 @@ Factory tickets live in GitHub Issues for `santistebanc/splitnext`; labels carry
 
 ### Triage labels
 
-The five default triage roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), recorded as GitHub labels for factory tickets and `Status:` lines for historical local tickets. See `docs/agents/triage-labels.md`.
+Progress labels and independent question, blocker and pause conditions are described in `docs/agents/triage-labels.md`.
 
 ### Domain docs
 

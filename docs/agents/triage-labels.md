@@ -1,15 +1,17 @@
-# Triage Labels
+# Ticket progress and conditions
 
-The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
+GitHub labels carry progress; the project board mirrors them.
 
-| Label in mattpocock/skills | Label in our tracker | Meaning                                  |
-| -------------------------- | -------------------- | ---------------------------------------- |
-| `needs-triage`             | `needs-triage`       | Maintainer needs to evaluate this issue  |
-| `needs-info`               | `needs-info`         | Waiting on reporter for more information |
-| `ready-for-agent`          | `ready-for-agent`    | Fully specified, ready for an AFK agent  |
-| `ready-for-human`          | `ready-for-human`    | Requires human implementation            |
-| `wontfix`                  | `wontfix`            | Will not be actioned                     |
+| Progress | Label |
+| --- | --- |
+| New intent | `status:inbox` |
+| Retained for later | `status:backlog` |
+| Queued and ready | `status:ready` |
+| Being developed | `status:in-progress` |
+| Focused implementation verified | `status:implemented` |
+| Included in an integration PR | `status:integrating` |
+| Integrated into the shared version | `status:done` |
+| Replaced with linked successors | `status:superseded` |
+| Explicitly declined by owner | `status:declined` |
 
-When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
-
-Edit the "Label in our tracker" column to match whatever vocabulary you actually use.
+Conditions are independent: `needs-info` asks for an owner decision, `factory:blocked` records a blocker, and `factory:paused` stops automatic work. Types are `bug`, `enhancement` and `chore`. Size is optional scheduling guidance. Historical local notes retain their old status vocabulary.
