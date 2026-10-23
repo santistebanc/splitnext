@@ -1,6 +1,8 @@
-# Issue tracker: GitHub and local working notes
+# Issue tracker
 
-Factory tickets and approved implementation briefs live in GitHub Issues at `santistebanc/splitnext`. Use GitHub labels, dependencies, and comments for factory state and handoffs. Publish new factory tickets there.
+GitHub Issues at `santistebanc/splitnext` is authoritative for requirements, status, decisions and evidence. Use the installed factory skill and coordinator for ticket edits, splits, consolidation and contribution records. Preserve stable requirement IDs and history; declining a requirement needs an explicit owner decision.
+
+When a skill asks to publish or fetch a ticket, use GitHub. Thread workspaces consult shared tickets and record scoped contributions; tickets are independent of workspaces. A commit is a save checkpoint. Focused implementation evidence precedes grouped integration PRs and full checks.
 
 The conventions below describe historical tickets and local working notes in `.scratch/`; do not automatically migrate or dispatch them. An explicitly supplied local file remains readable as a spec or note.
 
@@ -11,14 +13,6 @@ The conventions below describe historical tickets and local working notes in `.s
 - Implementation issues are one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01`, never a single combined tickets file
 - Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
-
-## When a skill says "publish to the issue tracker"
-
-Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).
-
-## When a skill says "fetch the relevant ticket"
-
-Read the file at the referenced path. The user will normally pass the path or the issue number directly.
 
 ## Wayfinding operations
 
