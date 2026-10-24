@@ -172,10 +172,12 @@ lists people and ends with an Add a person line. It has three levels. By
 default it shows everyone, unless that would leave no room for the Expenses
 heading and the first two expenses; then it shows the people who fit,
 followed by a faded, centered “···”, which jumps back to the top and shows everyone, and the Add a
-person line waits until everyone shows. Scrolling shrinks
+person line waits until everyone shows. Expenses follow the card with only
+the disclosure button's lower half and normal section spacing below it;
+unused viewport room is not reserved. Scrolling shrinks
 the card along with the scroll, so the expenses stay right below: the Add a
 person line goes first, then a person who would be partly cut gives way to
-the “···” item, which takes the room left and shrinks with it, until only
+the “···” item, which shrinks with it, until only
 the Balances heading is left, pinned at the top. People always show whole.
 The Expenses heading pins right under it while the expenses scroll; tapping
 it scrolls until the expenses start there. Tapping the heading scrolls

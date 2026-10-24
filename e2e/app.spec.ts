@@ -766,6 +766,17 @@ test('shows as many balances as leave room for two expenses, shrinks them to you
   await expect(field(page, 'Add a person')).toHaveCount(0);
   await expect(button(page, 'Change Dinner · 60.00 EUR')).toBeInViewport();
   await expect(button(page, 'Change Museum · 60.00 EUR')).toBeInViewport();
+
+  // Ending at a whole person must not reserve the unused part of the viewport.
+  // Expenses follow the disclosure with just the normal section spacing.
+  const expensesGap = async () => {
+    const more = await showAll.boundingBox();
+    const expenses = await heading(page, 'Expenses').boundingBox();
+
+    return more && expenses ? expenses.y - (more.y + more.height) : Number.POSITIVE_INFINITY;
+  };
+
+  await expect.poll(expensesGap).toBeLessThanOrEqual(24);
   await page.screenshot({ path: testInfo.outputPath('mobile-top.png') });
 
   // The page is the only scroll area: the pinned balances belong to it.
@@ -898,4 +909,12 @@ test('shows as many balances as leave room for two expenses, shrinks them to you
   await expect(showAll).toBeVisible();
   await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBe(0);
   expect(await scroller.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await expect.poll(expensesGap).toBeLessThanOrEqual(24);
+
+  // The gap follows the card rather than growing with the available viewport.
+  for (const viewport of [{ width: 390, height: 760 }, { width: 320, height: 640 }, { width: 1100, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    await expect(showAll).toBeVisible();
+    await expect.poll(expensesGap).toBeLessThanOrEqual(24);
+  }
 });

@@ -67,8 +67,9 @@ position in a small store that only the balances read, so scrolling
 re-renders nothing else. At the default level the section is a `StickyTop`
 (CSS sticky on the web) inside the page, followed by a spacer of its height;
 its card's height follows the scroll, cut from the bottom until only the
-heading is left; whole people show, and the “···” item takes the room a
-partly cut person would have, so it stays part of the page's one scroll area.
+heading is left; whole people show, with only the lower half of the “···”
+button reserved below the card. Expenses follow with the normal section
+spacing rather than filling the unused viewport allowance.
 `AppUiState.balancesExpanded` is Show all: the section is then in the page,
 and a `StickyTop` with only the heading appears once it reaches the top.
 Tapping the heading calls `Frame`'s `scrollControl` to scroll smoothly to

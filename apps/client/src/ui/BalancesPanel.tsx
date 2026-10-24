@@ -87,8 +87,8 @@ function planFor(geometry: Geometry, viewport: number): Plan {
   const shown = truncated ? Math.max(1, Math.min(geometry.rows.length - 1, fitting)) : geometry.rows.length;
   const list = truncated ? (geometry.rows[shown - 1] ?? 0) : everyone;
   const card = truncated ? list : list + geometry.footer;
-  // The card ends at a whole person; the base keeps the rest of the room, so the expenses start in the same place.
-  const base = truncated ? Math.max(moreHeight / 2, room - list) : 0;
+  // End at the last whole person, reserving only the disclosure's lower half.
+  const base = truncated ? moreHeight / 2 : 0;
   const minimal = geometry.heading;
 
   return { shown, truncated, list, card, base, full: minimal + card + padBottom + base, minimal };
@@ -312,8 +312,8 @@ function BalancesHeading(props: BalancesProps & { measuring?: boolean }) {
 /**
  * Everyone, and the Add a person line once everyone shows. When not everyone
  * fits, a floating “···” button on the card's bottom edge shows everyone, and
- * listed in full, it shows fewer again. An empty base below the card keeps the
- * room the card leaves when it ends at a whole person. Given a height, the
+ * listed in full, it shows fewer again. A small base below the card holds the
+ * button's lower half, so expenses follow the last person closely. Given a height, the
  * section's space is cut to it from the bottom: the base goes first, then the
  * Add a person line, then the list; the button rides the card's edge and fades
  * out as the card closes.
@@ -342,7 +342,7 @@ function BalancesCard(props: BalancesProps & { card?: number | undefined }) {
   const [opened, setOpened] = useState(false);
   const [closing, setClosing] = useState<Closing | null>(null);
   const eased = closing ? easeInOut(closing.progress) : 0;
-  // Listed in full, the base only holds the button's lower half; closing, it grows to the default level's.
+  // Both levels hold only the button's lower half below the card.
   const base = card !== undefined && cardHeight !== undefined ? card - cardHeight : closing ? between(closing.base, eased) : fewer ? moreHeight / 2 : 0;
   const moreOpacity = cardHeight === undefined ? 1 : Math.min(1, Math.max(0, (cardHeight - moreHeight / 2) / (2 * moreHeight)));
   const fullList = rows.at(-1) ?? 0;
@@ -487,7 +487,7 @@ function BalancesCard(props: BalancesProps & { card?: number | undefined }) {
           </View>
         ) : null}
       </View>
-      {/* Empty, holding the room the card leaves so the expenses do not move. */}
+      {/* Room for the disclosure's lower half. */}
       {base > 0 ? <View aria-hidden style={{ height: base }} /> : null}
       <ErrorMessage message={toggle.error} />
     </>
