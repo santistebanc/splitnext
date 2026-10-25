@@ -1,5 +1,7 @@
-import { Pressable, Text, View } from 'react-native';
-import { colors, s } from './components';
+import { useEffect, useState } from 'react';
+import { Pressable, Text } from 'react-native';
+import { Button, ErrorMessage, colors, s } from './components';
+import { Drawer } from './Drawer';
 import { WifiIcon } from './icons';
 import { fontFamily } from './theme';
 
@@ -8,28 +10,40 @@ function saved(pending: number): string {
 }
 
 /**
- * A short line under the group name, only while offline or when the server
- * cannot be reached, with Retry for the latter. Synced shows nothing.
+ * A header icon while disconnected. Tap for connection details, locally saved
+ * changes, and Retry when the network is available. Synced shows nothing.
  */
-export function SyncStatus(props: { online: boolean; reachable: boolean; pending: number; busy: boolean; onRetry: () => void }) {
-  if (props.online && props.reachable) return null;
+export function SyncStatus(props: { online: boolean; reachable: boolean; pending: number; busy: boolean; onRetry: () => void; retryError?: string | null }) {
+  const [expanded, setExpanded] = useState(false);
+  const connected = props.online && props.reachable;
+  const label = `${props.online ? 'Can’t reach splitnext' : 'Offline'}${saved(props.pending)}`;
+
+  useEffect(() => {
+    if (connected) setExpanded(false);
+  }, [connected]);
+
+  if (connected) return null;
 
   return (
-    <View role="status" accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 24 }}>
-      <WifiIcon off size={15} color={colors.soft} strokeWidth={2} />
-      <Text style={{ flexShrink: 1, fontFamily, fontSize: 13, fontWeight: '600', color: colors.soft }}>
-        {props.online ? 'Can’t reach splitnext' : 'Offline'}{saved(props.pending)}
-      </Text>
-      {props.online ? (
-        <Pressable
-          accessibilityRole="button"
-          disabled={props.busy}
-          onPress={props.onRetry}
-          style={({ pressed }) => [{ height: 32, paddingHorizontal: 6, justifyContent: 'center' }, (pressed || props.busy) && s.dim]}
-        >
-          <Text style={{ fontFamily, fontSize: 13, fontWeight: '600', color: colors.action }}>Retry</Text>
-        </Pressable>
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${label}. Connection details`}
+        accessibilityLiveRegion="polite"
+        accessibilityState={{ expanded }}
+        onPress={() => setExpanded(true)}
+        style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && s.dim]}
+      >
+        <WifiIcon off size={22} color={colors.soft} />
+      </Pressable>
+      {expanded ? (
+        <Drawer title="Connection" onClose={() => setExpanded(false)}>
+          <Text role="status" accessibilityLiveRegion="polite" style={{ fontFamily, fontSize: 16, fontWeight: '600', color: colors.ink }}>{label}</Text>
+          <Text style={s.body}>Changes saved here sync automatically when you reconnect.</Text>
+          <ErrorMessage message={props.retryError ?? null} />
+          {props.online ? <Button disabled={props.busy} onPress={props.onRetry}>Retry</Button> : null}
+        </Drawer>
       ) : null}
-    </View>
+    </>
   );
 }
