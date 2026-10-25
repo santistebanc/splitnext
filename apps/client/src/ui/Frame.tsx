@@ -27,8 +27,9 @@ type FrameProps = {
   floatingFooter?: boolean;
   /** A rule above the pinned footer, for screens whose content scrolls under it. */
   ruledFooter?: boolean | undefined;
-  /** Follows the content's scroll position, including the one restored when the screen opens, such as to shrink the balances. */
-  onScroll?: ((y: number) => void) | undefined;
+  /** Content offset and the space released by its header. Collapse follows their
+   * sum, which stays fixed when header reflow clamps the scroll position. */
+  onScroll?: ((y: number, headerCollapse: number) => void) | undefined;
   /** Receives a way to scroll the content, smoothly unless told not to, such as back to the top. */
   scrollControl?: { current: ((y: number, animated?: boolean) => void) | null } | undefined;
 };
@@ -53,6 +54,8 @@ export function Frame(props: FrameProps) {
   }, [control]);
   const positions = useRef(new Map<string, number>());
   const scrollKey = props.scrollKey ?? 'page';
+  const headerSize = useRef({ key: scrollKey, full: 0, current: 0 });
+  const scrolled = useRef(0);
   const homepage = usePathname() === '/';
   const floating = Boolean(props.footer && props.floatingFooter);
 
@@ -64,8 +67,9 @@ export function Frame(props: FrameProps) {
     const restored = positions.current.get(scrollKey) ?? 0;
 
     restoring.current = true;
+    scrolled.current = restored;
     scroll.current?.scrollTo({ y: restored, animated: false });
-    props.onScroll?.(restored);
+    props.onScroll?.(restored, 0);
 
     const frame = requestAnimationFrame(() => {
       restoring.current = false;
@@ -98,7 +102,25 @@ export function Frame(props: FrameProps) {
     <View style={[s.page, visibleHeight !== null && { maxHeight: visibleHeight }]}>
       {props.status ? <View onLayout={(event) => props.onStatusLayout?.(event.nativeEvent.layout.height)}>{props.status}</View> : null}
       {props.header ? (
-        <View style={s.screenHeaderBar}>
+        <View
+          style={s.screenHeaderBar}
+          onLayout={(event) => {
+            const height = event.nativeEvent.layout.height;
+            const previous = headerSize.current;
+            // Resizing the header can clamp scrollTop before its scroll event.
+            // Read the current position so that forced movement is cancelled by
+            // the equal change in header height, rather than reversing collapse.
+            const node: unknown = Platform.OS === 'web' ? scroll.current?.getScrollableNode() : null;
+            const y = Platform.OS === 'web' && node instanceof HTMLElement ? node.scrollTop : scrolled.current;
+
+            headerSize.current = { key: scrollKey, full: previous.key === scrollKey && y > 0 ? Math.max(previous.full, height) : height, current: height };
+
+            if (restoring.current) return;
+
+            scrolled.current = y;
+            props.onScroll?.(y, headerSize.current.full - height);
+          }}
+        >
           <View style={s.screenColumn}>{props.header}</View>
         </View>
       ) : null}
@@ -107,8 +129,12 @@ export function Frame(props: FrameProps) {
           ref={scroll}
           onScroll={(event) => {
             if (restoring.current) return;
-            positions.current.set(scrollKey, event.nativeEvent.contentOffset.y);
-            props.onScroll?.(event.nativeEvent.contentOffset.y);
+            const y = event.nativeEvent.contentOffset.y;
+            const header = headerSize.current;
+
+            scrolled.current = y;
+            positions.current.set(scrollKey, y);
+            props.onScroll?.(y, y > 0 && header.key === scrollKey ? header.full - header.current : 0);
           }}
           scrollEventThrottle={16}
           nativeID="splitnext-page"

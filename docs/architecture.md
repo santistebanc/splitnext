@@ -70,8 +70,13 @@ only after a change, and Leave group with its confirmation sheet. Below the
 group header, `Frame`'s one `ScrollView` is
 the only scroll area on every screen.
 On the web its scroll anchoring is disabled: automatic anchor adjustments
-during header resizing would feed back into compact progress and cause
-the expense header to oscillate at the bottom of a nearly full split list.
+during header resizing would feed back into compact progress.
+Header collapse follows content travel: the scroll offset plus the measured
+height released by the header. At the bottom, shrinking the header can force
+the scroll offset down by the same amount; this leaves content travel unchanged
+instead of reversing the collapse and making the header oscillate. The collapse
+distance exceeds the header's height change so expanding back to the top also
+converges. Each screen measures its own full header height.
 The group screen's content is `GroupBalances` and `ExpenseList`, sections sharing `SectionHeading` and the
 same card rows. `useBalancesLayout` measures the Balances heading, each row,
 and the Add a person line, plans the default level from the window and header
