@@ -52,9 +52,13 @@ no expenses or repayments, without an empty-expenses message; the expense and re
 save from their headers.
 
 A group has one screen (`home`) without tabs. `GroupHeader` holds the group
-name, which opens the groups list, `SyncStatus` only while offline or
+name, which opens the groups list, a `SyncStatus` icon only while offline or
 unreachable, the `ActivityBell`, and a gear button opening `settings`
-(`GroupSettings`). Settings contains the group name field, Save group name
+(`GroupSettings`). The same connection icon is in `GroupsHeader`. Tapping it
+opens a `Drawer` with the connection state, locally queued change count, and
+Retry when online. Reconnecting closes it and hides the icon. Background
+network/offline errors use this status rather than a second banner; other
+background errors remain visible. Settings contains the group name field, Save group name
 only after a change, and Leave group with its confirmation sheet. Below the
 group header, `Frame`'s one `ScrollView` is
 the only scroll area on every screen; the group screen's content is

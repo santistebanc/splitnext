@@ -45,9 +45,9 @@ export function ActivityBell(props: { app: MemberListApp }) {
 
 /**
  * The group screen's fixed top: the group name, which opens the group list,
- * a status line only while offline, the Activity bell, and group settings.
+ * a connection icon while disconnected, the Activity bell, and group settings.
  */
-export function GroupHeader(props: { app: MemberListApp; pending: number; busy: boolean; onRetry: () => void; onLayout?: (height: number) => void }) {
+export function GroupHeader(props: { app: MemberListApp; pending: number; busy: boolean; onRetry: () => void; retryError?: string | null; onLayout?: (height: number) => void }) {
   const compact = useContext(CompactProgressContext);
   const actions = useActions();
   const settings = useActionCall();
@@ -80,6 +80,7 @@ export function GroupHeader(props: { app: MemberListApp; pending: number; busy: 
         )}
         end={open ? (
           <>
+            <SyncStatus online={state.online} reachable={state.reachable} pending={props.pending} busy={props.busy} onRetry={props.onRetry} retryError={props.retryError ?? null} />
             <ActivityBell app={props.app} />
             <Pressable
               accessibilityRole="button"
@@ -94,9 +95,6 @@ export function GroupHeader(props: { app: MemberListApp; pending: number; busy: 
           </>
         ) : undefined}
       />
-      <View style={{ paddingLeft: 8 }}>
-        <SyncStatus online={state.online} reachable={state.reachable} pending={props.pending} busy={props.busy} onRetry={props.onRetry} />
-      </View>
     </View>
   );
 }

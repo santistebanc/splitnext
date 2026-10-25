@@ -52,9 +52,13 @@ save actions before a name changes. Use precise control labels rather than
 static explanatory paragraphs in app screens. Keep access-recovery
 details in the product documentation and the current beta scope on the homepage. Keep URL handling
 for public entry points and browser navigation. While offline, or while the
-server cannot be reached, show one short line under the group name and on the
-groups list, such as Offline · 2 changes saved here, or Can’t reach splitnext
-with an inline Retry. Show nothing once synchronized, and no banners or pills.
+server cannot be reached, show a small connection icon in the group and
+groups-list headers. Its accessible label includes the connection state and
+number of changes saved here. Tapping it opens connection details with that
+status and Retry when the network is available. Close the details and hide
+the icon on reconnect. Background connection failures do not show a banner;
+keep failures of actions requiring a connection beside those actions, and
+keep storage, protocol, and other background errors visible.
 Keep rejected/superseded changes for review as described below. Add expense remains
 absent until supported, then becomes the primary group action without requiring
 invitation acceptance. See [the app plan](./app-product-plan.md).
@@ -161,7 +165,7 @@ group, a note that the invite link comes right away, and a pinned Create group
 action that shows Creating… with a spinner while it works.
 
 A group opens on one screen, without tabs. Its fixed header has the group name,
-which opens the groups list, the sync line when offline, and a bell opening
+which opens the groups list, a connection icon when offline, and a bell opening
 Activity, and a gear button beside the bell opening Group settings. Settings
 contains the Group name field and Leave group, with Save group name shown only
 after the name changes. Back discards unsaved edits; leaving keeps its

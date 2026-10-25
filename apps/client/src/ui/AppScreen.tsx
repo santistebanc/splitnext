@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } fr
 import { Keyboard, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { z } from 'zod';
-import { parseInviteLink } from '@splitnext/client';
+import { clientErrorKind, parseInviteLink } from '@splitnext/client';
 import { AppController } from '../model/controller';
 import { createDispatcher } from '../model/actions';
 import { browserActionPlatform } from './browserPlatform';
@@ -221,6 +221,7 @@ function ReadyApp(props: AppProps) {
   const initialLink = ui.join.link;
 
   const action = useAction();
+  const connection = useAction();
 
   useEffect(() => {
     const online = () => {
@@ -295,17 +296,17 @@ function ReadyApp(props: AppProps) {
     0,
   );
 
-  // Background refreshes and history navigation have no button to sit beside,
-  // so their failures appear at the top of the page.
+  // Connection failures belong to the header icon. Keep other background and
+  // navigation failures visible, including storage and protocol errors.
   const backgroundError =
-    action.error ?? (state.syncError ? errorMessage(state.syncError) : null);
+    action.error ?? (state.syncError && !['network', 'offline'].includes(clientErrorKind(state.syncError)) ? errorMessage(state.syncError) : null);
 
   const onGroupScreen = open && (view === 'home' || view === 'invite');
   const joined = Boolean(group && !group.hidden);
   const addsExpenses = open && view === 'home' && joined;
 
   function retry(): void {
-    void action.run(async () => {
+    void connection.run(async () => {
       const outcome = await actions.dispatch('refreshGroups', {}, { origin: 'ui' });
 
       if (outcome.status === 'failed') throw new Error(outcome.error);
@@ -340,13 +341,8 @@ function ReadyApp(props: AppProps) {
 
     if (!open || !group)
       return {
-        header: <GroupsHeader />,
-        body: (
-          <>
-            <SyncStatus online={state.online} reachable={state.reachable} pending={pending} busy={action.busy} onRetry={retry} />
-            <GroupsView app={app} />
-          </>
-        ),
+        header: <GroupsHeader connectionStatus={<SyncStatus online={state.online} reachable={state.reachable} pending={pending} busy={connection.busy} onRetry={retry} retryError={connection.error} />} />,
+        body: <GroupsView app={app} />,
         footer: <GroupsFooter />,
       };
 
@@ -377,7 +373,7 @@ function ReadyApp(props: AppProps) {
         };
       default:
         return {
-          header: <GroupHeader app={app} pending={pending} busy={action.busy} onRetry={retry} onLayout={balances.measureHeader} />,
+          header: <GroupHeader app={app} pending={pending} busy={connection.busy} onRetry={retry} retryError={connection.error} onLayout={balances.measureHeader} />,
           body: (
             <>
               <GroupView app={app} layout={balances} />

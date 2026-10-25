@@ -607,17 +607,67 @@ test('returns to the groups list while an invite check is still running', async 
 test('keeps offline edits pending and delivers them on reconnect', async ({ page, context }) => {
   await createGroup(page, 'Trip', 'Ana');
   await addMember(page, 'Ben');
+  const balancesTop = (await heading(page, 'Balances').boundingBox())!.y;
+
   await goOffline(page, context);
+  await expect(button(page, 'Offline. Connection details')).toBeVisible();
+  expect(Math.abs((await heading(page, 'Balances').boundingBox())!.y - balancesTop)).toBeLessThanOrEqual(1);
+  await expect(page.getByRole('alert')).toHaveCount(0);
   await person(page, 'Ben').click();
   await button(page, 'Rename Ben').click();
   await field(page, 'Name').fill('Benjamin');
   await field(page, 'Name').press('Enter');
   await expect(heading(page, 'Benjamin')).toBeVisible();
   await button(page, 'Back to Trip').click();
+  await button(page, 'Offline · 1 change saved here. Connection details').click();
+  await expect(page.getByRole('dialog', { name: 'Connection' })).toBeVisible();
   await expect(page.getByText('Offline · 1 change saved here', { exact: true })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  await button(page, 'Trip. Switch group').click();
+  await expect(button(page, 'Offline · 1 change saved here. Connection details')).toBeVisible();
+  await button(page, 'Offline · 1 change saved here. Connection details').click();
+  await expect(page.getByRole('dialog', { name: 'Connection' })).toBeVisible();
+  await expect(button(page, 'Retry')).toHaveCount(0);
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  await button(page, 'Open Trip').click();
   await goOnline(page, context);
-  await expect(page.getByText(/saved here/)).toHaveCount(0, { timeout: 15_000 });
+  await expect(button(page, /Connection details$/)).toHaveCount(0, { timeout: 15_000 });
   await expect(person(page, 'Benjamin')).toBeVisible();
+});
+
+test('puts server connection failures and retry in the header details', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 760 });
+  await createGroup(page, 'Connection test', 'Ana');
+  const balancesTop = (await heading(page, 'Balances').boundingBox())!.y;
+  let attempts = 0;
+
+  await page.route('**/identity/groups', async (route) => {
+    attempts++;
+    await route.abort();
+  });
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect(button(page, 'Can’t reach splitnext. Connection details')).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  expect(Math.abs((await heading(page, 'Balances').boundingBox())!.y - balancesTop)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('connection-header.png') });
+  await button(page, 'Can’t reach splitnext. Connection details').click();
+  const dialog = page.getByRole('dialog', { name: 'Connection' });
+
+  await expect(dialog.getByText('Can’t reach splitnext', { exact: true })).toBeVisible();
+  const beforeRetry = attempts;
+
+  await dialog.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect.poll(() => attempts).toBeGreaterThan(beforeRetry);
+  await page.unroute('**/identity/groups');
+  await dialog.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(button(page, /Connection details$/)).toHaveCount(0);
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+
+  // An HTTP/server failure is not silently hidden as a connection issue.
+  await page.route('**/identity/groups', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'internal_error' }) }));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect(page.getByRole('alert')).toBeVisible();
 });
 
 test('leaves after confirming and rejoins as an existing member', async ({ page }) => {
