@@ -403,8 +403,8 @@ function ReadyApp(props: AppProps) {
                   floatingFooter={addsExpenses}
                   ruledFooter={screen.ruledFooter}
                   scrollKey={pageKey}
-                  onScroll={(y) => {
-                    compact.follow(y);
+                  onScroll={(y, headerCollapse) => {
+                    compact.follow(y + headerCollapse);
 
                     if (onGroupScreen) balances.scroll.set(y);
                   }}

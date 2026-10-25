@@ -28,8 +28,9 @@ export function createValueStore() {
 
 export type ValueStore = ReturnType<typeof createValueStore>;
 
-/** How far the page scrolls while a screen's fixed top shrinks to its compact size. */
-const shrinkDistance = 64;
+/** Content travel, including the header's own collapse. Larger than its shrink
+ * so expanding back to the top converges rather than amplifying layout changes. */
+const shrinkDistance = 128;
 
 /** The largest change followed at once: a finger or trackpad moves the page in steps this small. */
 const followedStep = 0.15;

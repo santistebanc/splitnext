@@ -1054,10 +1054,11 @@ test('keeps the expense header steady at the bottom of the split list', async ({
   for (const name of ['Ben', 'Cy', 'Dana', 'Eli', 'Fran', 'Gus']) await addMember(page, name);
 
   await button(page, 'Add expense').click();
-  await field(page, 'Amount').evaluate((input) => input.blur());
+  const amount = field(page, 'Amount');
+  const scroller = page.locator('#splitnext-page');
 
   const scenarios = [
-    ...[540, 600, 640, 680, 740].map((height) => ({ height, focused: false, reduced: false })),
+    ...[500, 540, 560, 580, 600, 620, 640, 660, 740].map((height) => ({ height, focused: false, reduced: false })),
     { height: 540, focused: true, reduced: false },
     { height: 540, focused: false, reduced: true },
   ];
@@ -1068,29 +1069,52 @@ test('keeps the expense header steady at the bottom of the split list', async ({
     await page.setViewportSize({ width: 390, height });
     await page.emulateMedia({ reducedMotion: reduced ? 'reduce' : 'no-preference' });
 
-    if (focused) await field(page, 'Amount').focus();
-    else await field(page, 'Amount').evaluate((input) => input.blur());
+    if (focused) await amount.focus();
+    else await amount.evaluate((input) => input.blur());
 
-    const samples = await page.evaluate(() => new Promise<{ top: number; header: number }[]>((resolve) => {
+    await scroller.evaluate((node) => { node.scrollTop = 0; });
+    await expect(amount).toHaveCSS('height', '64px');
+
+    const box = (await scroller.boundingBox())!;
+
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+
+    const collecting = page.evaluate(() => new Promise<{ elapsed: number; top: number; header: number }[]>((resolve) => {
       const scroller = document.getElementById('splitnext-page')!;
       const start = performance.now();
-      const samples: { top: number; header: number }[] = [];
+      const samples: { elapsed: number; top: number; header: number }[] = [];
 
-      scroller.scrollTop = scroller.scrollHeight;
       (function frame() {
-        // Ignore the initial collapse; the header must settle after scrolling stops.
-        if (performance.now() - start > 600) samples.push({ top: scroller.scrollTop, header: scroller.getBoundingClientRect().top });
+        const elapsed = performance.now() - start;
 
-        if (performance.now() - start < 1400) requestAnimationFrame(frame);
+        samples.push({ elapsed, top: scroller.scrollTop, header: scroller.getBoundingClientRect().top });
+
+        if (elapsed < 1500) requestAnimationFrame(frame);
         else resolve(samples);
       })();
     }));
 
-    const headers = samples.map((sample) => sample.header);
-    const positions = samples.map((sample) => sample.top);
+    // Repeated real wheel input catches reflow at the bottom during collapse;
+    // jumping once and sampling only after it settles missed this feedback loop.
+    for (let step = 0; step < 8; step++) {
+      await page.mouse.wheel(0, 25);
+      await page.waitForTimeout(50);
+    }
 
-    expect(Math.max(...headers) - Math.min(...headers), JSON.stringify({ scenario, samples })).toBeLessThanOrEqual(1);
-    expect(Math.max(...positions) - Math.min(...positions), JSON.stringify({ scenario, samples })).toBeLessThanOrEqual(1);
+    const samples = await collecting;
+    const reversals = samples.slice(1).map((sample, index) => sample.header - samples[index]!.header);
+    const settled = samples.filter((sample) => sample.elapsed > 900);
+    const headers = settled.map((sample) => sample.header);
+    const positions = settled.map((sample) => sample.top);
+    const detail = JSON.stringify({ scenario, reversal: Math.max(...reversals), settled });
+
+    expect(Math.max(...reversals), detail).toBeLessThanOrEqual(1);
+    expect(Math.max(...headers) - Math.min(...headers), detail).toBeLessThanOrEqual(1);
+    expect(Math.max(...positions) - Math.min(...positions), detail).toBeLessThanOrEqual(1);
+
+    for (let step = 0; step < 8; step++) await page.mouse.wheel(0, -25);
+
+    await expect(amount).toHaveCSS('height', '64px');
   }
 });
 
