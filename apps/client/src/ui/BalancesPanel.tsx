@@ -228,7 +228,11 @@ export function GroupBalances(props: BalancesProps) {
   // with whatever is being typed in it.
   return (
     <>
-      {showAll ? <PinnedHeading {...props} /> : null}
+      <StickyTop height={plan?.minimal} layer={3}>
+        <View style={{ backgroundColor: colors.background }}>
+          <BalancesHeading {...props} />
+        </View>
+      </StickyTop>
       <BalancesSection {...props} pinned={!showAll} />
       {/* Holds the section's place: pinned, the section above takes no room in the page. */}
       {showAll ? null : <View style={{ height: plan?.full ?? 0 }} />}
@@ -248,7 +252,8 @@ function BalancesSection(props: BalancesProps & { pinned: boolean }) {
   return (
     <StickyTop height={height} pinned={props.pinned}>
       <View role="region" aria-label="Balances" nativeID="balances" style={[{ paddingBottom: padBottom }, props.pinned && { flex: 1, backgroundColor: colors.background }]}>
-        <BalancesHeading {...props} />
+        {/* The one sticky heading above owns this space at both levels. */}
+        <View aria-hidden style={{ height: plan?.minimal ?? 0 }} />
         {/* The room below the card closes last, as the heading pins alone. */}
         <BalancesCard {...props} card={plan && height !== undefined ? Math.max(0, height - plan.minimal - padBottom) : undefined} />
       </View>
@@ -256,30 +261,13 @@ function BalancesSection(props: BalancesProps & { pinned: boolean }) {
   );
 }
 
-/** Shown in full, the heading alone, pinned once it reaches the top. */
-function PinnedHeading(props: BalancesProps) {
-  const { plan, scroll } = props.layout;
-  const scrolled = useSyncExternalStore(scroll.subscribe, scroll.get, scroll.get);
-
-  if (!plan || scrolled <= 0) return null;
-
-  return (
-    <StickyTop height={plan.minimal}>
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <BalancesHeading {...props} measuring={false} />
-      </View>
-    </StickyTop>
-  );
-}
-
 /** “Balances” with Invite at its end; tapping the title scrolls back to the top. */
-function BalancesHeading(props: BalancesProps & { measuring?: boolean }) {
+function BalancesHeading(props: BalancesProps) {
   const invite = useActionCall();
-  const measuring = props.measuring ?? true;
   const you = preferredMember(props.replica.projected_snapshot, props.replica.session?.identity.id);
 
   return (
-    <View onLayout={measuring ? (event) => props.layout.measure({ heading: event.nativeEvent.layout.height }) : undefined}>
+    <View onLayout={(event) => props.layout.measure({ heading: event.nativeEvent.layout.height })}>
       <SectionHeading
         title="Balances"
         onPress={() => props.layout.scrollToTop()}

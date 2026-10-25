@@ -70,8 +70,10 @@ its card's height follows the scroll, cut from the bottom until only the
 heading is left; whole people show, with only the lower half of the “···”
 button reserved below the card. Expenses follow with the normal section
 spacing rather than filling the unused viewport allowance.
-`AppUiState.balancesExpanded` is Show all: the section is then in the page,
-and a `StickyTop` with only the heading appears once it reaches the top.
+One `StickyTop` holds the Balances heading and Invite action in both levels,
+above the card's layer; a measured placeholder keeps their space in the
+section. `AppUiState.balancesExpanded` is Show all: the card then flows with
+the page beneath the same heading, without mounting a second heading.
 Tapping the heading calls `Frame`'s `scrollControl` to scroll smoothly to
 the top. The Expenses heading is a `StickyTop` offset by the pinned Balances
 heading, and tapping it scrolls the expenses up to it. `ExpenseList` shows expenses and
