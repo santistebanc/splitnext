@@ -47,7 +47,9 @@ Creating a link does not imply anyone has joined.
 Use a calm visual direction and animated state-driven views. Use compact mobile
 layouts with clear labels and usable touch targets.
 Drawers share the currency picker's compact scale: 15px body and action text,
-48px rows and buttons, and smaller 18px titles, including confirmation sheets.
+48px rows and buttons. Screen headers, standalone page titles, drawer titles,
+and confirmation titles share one 18px title style. Titles keep the same size
+when scrolling; header spacing and context labels can still compact.
 Draw textbox keyboard focus
 outlines inside the field's edge so scroll containers and inline actions cannot
 clip them. Avoid repeated explanatory text, duplicate actions, unsupported controls, and rename
@@ -105,7 +107,7 @@ repayment behind the balance, one row each, newest first, grouped by currency,
 and end each currency with a Balance row; the rows add up exactly to it.
 
 Every app screen is a page on every device: a fixed header with Back or Cancel,
-an optional centered title or a large page title below it, an optional end
+an optional compact title or a matching page title below it, an optional end
 action such as Save, and at most one main action pinned at the foot of the
 screen. The invite link and the confirmation of leaving a group open as bottom
 sheets over the page. Keep draft fields mounted when the keyboard
@@ -208,7 +210,9 @@ opens the repayment form filled in. The repayment form is a page with Cancel and
 Record (Save when changing one), then a sentence, “Jonas paid you”, whose names
 open the people in place, a large amount with its currency, a caption saying
 whether it is the full amount owed, and earlier repayments, each opening in the
-form with Remove repayment. Cancel and Record return to where the form was
+form. Editing a saved repayment shows a short Delete action beside Save in
+the header, with no second delete action in the body. New repayments have no
+Delete action. Cancel and Record return to where the form was
 opened, such as Settle up.
 
 The expense editor follows the original Splitnext form: Cancel, Add (Edit

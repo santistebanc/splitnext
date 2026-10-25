@@ -200,10 +200,10 @@ export function SectionHeader(props: { title: string; children?: ReactNode }) {
   );
 }
 
-/** A large page title, for screens whose header holds only a back button. */
-export function PageTitle(props: { children: ReactNode; size?: number }) {
+/** A page title matching the size used in screen headers and drawers. */
+export function PageTitle(props: { children: ReactNode }) {
   return (
-    <Text accessibilityRole="header" style={[s.pageTitle, props.size ? { fontSize: props.size, lineHeight: props.size * 1.15 } : null]}>
+    <Text accessibilityRole="header" style={s.pageTitle}>
       {props.children}
     </Text>
   );
@@ -213,7 +213,7 @@ export function PageTitle(props: { children: ReactNode; size?: number }) {
  * A screen's fixed header, the same height on every screen: a back or text
  * action, the title with what it belongs to named quietly above it, and
  * actions at the end. It shrinks as the page scrolls, its context fading
- * out and its title scaling down from its left edge. A heading that is more
+ * out while its title keeps the same size. A heading that is more
  * than text stands in for the title and styles its text with `s.screenTitle`.
  */
 export function ScreenHeader(props: { title?: string; heading?: ReactNode; context?: string | undefined; start?: ReactNode; end?: ReactNode }) {
@@ -226,7 +226,7 @@ export function ScreenHeader(props: { title?: string; heading?: ReactNode; conte
         {props.context ? (
           <Text numberOfLines={1} style={[s.screenContext, { height: between(16, 0, progress), opacity: 1 - progress }]}>{props.context}</Text>
         ) : null}
-        <View style={[s.screenHeaderScale, { transform: [{ scale: between(1, compactTitleScale, progress) }] }]}>
+        <View style={s.screenHeaderTitleContent}>
           {props.heading ?? (props.title ? (
             <Text accessibilityRole="header" numberOfLines={1} style={s.screenTitle}>
               {props.title}
@@ -245,9 +245,6 @@ export function ScreenHeader(props: { title?: string; heading?: ReactNode; conte
  * of sight at that same edge.
  */
 export const headerGap = 8;
-
-/** How large a screen title draws once the page has scrolled: 19px against its full 24px. */
-const compactTitleScale = 19 / 24;
 
 type HeaderActionProps = { label: string; onPress: () => void; disabled?: boolean };
 
@@ -470,6 +467,9 @@ const caps = {
   textTransform: 'uppercase',
 } as const;
 
+/** One title scale for screen headers, page titles, and dialogs. */
+const viewTitle = { color: colors.ink, fontFamily: displayFamily, fontSize: 18, lineHeight: 24, fontWeight: '700' } as const;
+
 export const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.background },
   wrap: {
@@ -497,24 +497,10 @@ export const s = StyleSheet.create({
   /** Without a back button the title lines up with the page's own text. */
   screenHeaderInset: { paddingLeft: 8 },
   screenHeaderEnd: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  screenHeaderScale: { alignSelf: 'flex-start', maxWidth: '100%', transformOrigin: 'left center' },
+  screenHeaderTitleContent: { alignSelf: 'flex-start', maxWidth: '100%' },
   screenContext: { color: colors.muted, fontFamily, fontSize: 12, lineHeight: 16 },
-  screenTitle: {
-    color: colors.ink,
-    fontFamily: displayFamily,
-    fontSize: 24,
-    lineHeight: 30,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  pageTitle: {
-    color: colors.ink,
-    fontFamily: displayFamily,
-    fontSize: 34,
-    lineHeight: 39,
-    fontWeight: '700',
-    letterSpacing: -0.7,
-  },
+  screenTitle: viewTitle,
+  pageTitle: viewTitle,
   navIcon: {
     width: 44,
     height: 44,
@@ -524,7 +510,7 @@ export const s = StyleSheet.create({
   },
   navIconEnd: { marginLeft: 0 },
   headerAction: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 12 },
-  headerActionText: { color: colors.ink, fontFamily, fontSize: 16, fontWeight: '400' },
+  headerActionText: { color: colors.ink, fontFamily, fontSize: 15, fontWeight: '400' },
   headerPrimary: { backgroundColor: colors.action, paddingHorizontal: 18, borderRadius: 999 },
   headerPrimaryIdle: { backgroundColor: colors.actionBusy },
   headerPrimaryText: { color: colors.actionInk, fontWeight: '600' },
@@ -606,13 +592,7 @@ export const s = StyleSheet.create({
     letterSpacing: -0.7,
   },
   subtitle: { color: colors.muted, fontFamily, fontSize: 15, lineHeight: 22 },
-  heading: {
-    color: colors.ink,
-    fontFamily: displayFamily,
-    fontSize: 24,
-    lineHeight: 29,
-    fontWeight: '700',
-  },
+  heading: viewTitle,
   body: { color: colors.ink, fontFamily, fontSize: 15, lineHeight: 22 },
   caption: { color: colors.muted, fontFamily, fontSize: 13, lineHeight: 18 },
   /** Amounts and codes in the monospaced face. */
@@ -961,7 +941,7 @@ export const s = StyleSheet.create({
   backdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   /** Wider screens show a drawer as a popup in the middle. */
   overlayCentered: { justifyContent: 'center', padding: 24 },
-  drawerTitle: { fontFamily: displayFamily, fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.ink },
+  drawerTitle: viewTitle,
   drawer: { maxHeight: '88%', paddingTop: 20, gap: 14 },
   popup: { maxWidth: 440, maxHeight: '80%', borderRadius: 24, paddingBottom: 24 },
   drawerClose: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },

@@ -6,7 +6,7 @@ import { BrandMark } from './BrandMark';
 import { Button, EmptyState, ErrorMessage, FooterButton, ScreenHeader, s } from './components';
 import { signedMoney } from './ExpenseList';
 import { CheckIcon, ChevronDownIcon, LinkIcon, PeopleIcon, PlusIcon } from './icons';
-import { colors, displayFamily, fontFamily, monoFamily } from './theme';
+import { colors, fontFamily, monoFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 export type GroupsViewApp = Pick<AppController, 'snapshot'>;
@@ -74,7 +74,7 @@ export function WelcomeView() {
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 36, paddingVertical: 48 }}>
       <View style={{ alignItems: 'center', gap: 16 }}>
         <BrandMark size={128} />
-        <Text accessibilityRole="header" style={{ fontFamily: displayFamily, fontWeight: '700', fontSize: 32, letterSpacing: -0.4, color: colors.ink }}>splitnext</Text>
+        <Text accessibilityRole="header" style={s.screenTitle}>splitnext</Text>
       </View>
       <View style={{ width: '100%', maxWidth: 320, gap: 10 }}>
         <Button

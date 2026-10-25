@@ -152,6 +152,34 @@ test('creates a group, adds people inline, and manages a person from their detai
   await expect(page.getByTestId('toast')).toHaveCount(0);
 });
 
+test('uses the same compact title size across app views', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 760 });
+  await createGroup(page, 'Headers', 'Ana');
+  await expect(heading(page, 'Headers')).toHaveCSS('font-size', '18px');
+  await addMember(page, 'Ben');
+  await addExpense(page, 'Lunch', '20', 'EUR');
+  await person(page, 'Ben').click();
+  await expect(heading(page, 'Ben')).toHaveCSS('font-size', '18px');
+  await button(page, 'Settle up, 1 payment').click();
+  await expect(heading(page, 'Settle up')).toHaveCSS('font-size', '18px');
+  await button(page, 'Back to Ben').click();
+  await button(page, 'Back to Headers').click();
+  await bell(page).click();
+  await expect(heading(page, 'Activity')).toHaveCSS('font-size', '18px');
+  await button(page, 'Back to Headers').click();
+  await button(page, 'Group settings').click();
+  await expect(heading(page, 'Group settings')).toHaveCSS('font-size', '18px');
+  await page.screenshot({ path: testInfo.outputPath('settings-header.png') });
+  await button(page, 'Back to group').click();
+  await button(page, 'Headers. Switch group').click();
+  await expect(page.getByText('splitnext', { exact: true })).toHaveCSS('font-size', '18px');
+  await button(page, 'New group').click();
+  await expect(heading(page, 'New group')).toHaveCSS('font-size', '18px');
+  await button(page, 'Back to groups').click();
+  await button(page, 'Join with an invite link').click();
+  await expect(heading(page, 'Join a group')).toHaveCSS('font-size', '18px');
+});
+
 test('keeps the fixed theme and group-list branding when offline', async ({ page, context }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
@@ -889,13 +917,15 @@ test('records planned and other repayments offline', async ({ page, context }) =
   await expect(page.getByText(/saved here/)).toHaveCount(0);
 });
 
-test('edits and removes a repayment offline', async ({ page, context }) => {
+test('edits and removes a repayment offline', async ({ page, context }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 760 });
   await createGroup(page, 'Repayment changes', 'Ana');
   await addMember(page, 'Ben');
   await addExpense(page, 'Lunch', '24', 'EUR');
   await person(page, 'Ben').click();
   await button(page, 'Settle up, 1 payment').click();
   await button(page, 'Ben pays you 12.00 EUR. Record this payment').click();
+  await expect(button(page, 'Delete')).toHaveCount(0);
   await button(page, 'Record repayment').click();
   await expect(page.getByText('All settled up', { exact: true })).toBeVisible();
   await button(page, 'Back to Ben').click();
@@ -908,7 +938,19 @@ test('edits and removes a repayment offline', async ({ page, context }) => {
   await expect(button(page, 'Change repayment: Ben paid you back 15.00 EUR')).toBeVisible();
   await expect(button(page, 'Ben, +3.00 EUR. Show details')).toBeVisible();
   await button(page, 'Change repayment: Ben paid you back 15.00 EUR').click();
-  await button(page, 'Remove repayment 15.00 EUR').click();
+  const remove = button(page, 'Delete');
+  const save = button(page, 'Save repayment');
+
+  await expect(remove).toBeVisible();
+  const removeBox = (await remove.boundingBox())!;
+  const saveBox = (await save.boundingBox())!;
+
+  await expect(remove).toHaveText('Delete');
+  await expect(button(page, /^Remove repayment/)).toHaveCount(0);
+  expect(Math.abs(removeBox.y + removeBox.height / 2 - (saveBox.y + saveBox.height / 2))).toBeLessThanOrEqual(1);
+  expect(removeBox.y + removeBox.height).toBeLessThan((await field(page, 'Amount').boundingBox())!.y);
+  await page.screenshot({ path: testInfo.outputPath('repayment-header.png') });
+  await remove.click();
   await expect(heading(page, 'Repayment changes')).toBeVisible();
   await expect(button(page, /^Change repayment:/)).toHaveCount(0);
   await expect(button(page, 'Ben, −12.00 EUR. Show details')).toBeVisible();
@@ -1009,6 +1051,7 @@ test('counts changes from others on the bell without pop-ups and marks them seen
 test('shows as many balances as leave room for two expenses, shrinks them to your row on scroll, and shows all on request', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 640 });
   await createGroup(page, 'Long trip', 'Ana');
+  const titleHeight = (await heading(page, 'Long trip').boundingBox())!.height;
 
   for (const name of ['Ben', 'Cy', 'Dana', 'Eli', 'Fran', 'Gus', 'Hana', 'Ida']) await addMember(page, name);
 
@@ -1151,6 +1194,7 @@ test('shows as many balances as leave room for two expenses, shrinks them to you
   await scroller.evaluate((node) => { node.scrollTop = node.scrollHeight; });
   await expect(rows).toHaveCount(0);
   await expect(balancesHeading).toBeInViewport();
+  expect((await heading(page, 'Long trip').boundingBox())!.height).toBe(titleHeight);
   await expect(button(page, 'Invite people')).toBeInViewport();
   await expect(heading(page, 'Expenses')).toBeInViewport();
   await expect.poll(async () => {
