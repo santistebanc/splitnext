@@ -280,21 +280,22 @@ function reversibleEvent(change: import('../src/domain/audit').AuditChange | nul
   return auditEventSchema.parse({ ...editedEvent, id: id(label), sequence, target, change });
 }
 
-it('undoes member removal without restoring preferred-member selections', () => {
+it('rejects undo of member removal', () => {
   const removed = applyGroupCommand(snapshot, me, remove(ana), later);
   const event = reversibleEvent(removed.audit, { kind: 'member', id: ana }, 'removed-ana');
   const result = applyGroupCommand(removed.snapshot, other, { command_id: commandId, type: 'change.undo', payload: { event_id: event.id } }, later, [event]);
-  expect(result.status).toBe('applied');
-  expect(result.snapshot.members.find((member) => member.id === ana)?.status).toBe('active');
+  expect(result.status).toBe('rejected');
+  expect(result.reason).toBe('undo_not_supported');
+  expect(result.snapshot.members.find((member) => member.id === ana)?.status).toBe('hidden');
   expect(result.snapshot.access_grants.find((grant) => grant.identity_id === me)?.preferred_member_id).toBeNull();
 });
 
 const memberAddition = reversibleEvent({ action: 'member.created', before: null, after: member(cy, 'Cy') }, { kind: 'member', id: cy }, 'added-cy');
 
 const referenceRows = [
-  { situation: 'undoes an unreferenced member addition', kind: 'none', status: 'applied', reason: null },
-  { situation: 'blocks undo of a member named by a removed expense', kind: 'expense', status: 'superseded', reason: 'undo_member_referenced' },
-  { situation: 'blocks undo of a member named by a removed repayment', kind: 'settlement', status: 'superseded', reason: 'undo_member_referenced' },
+  { situation: 'blocks undo of an unreferenced member addition', kind: 'none', status: 'rejected', reason: 'undo_not_supported' },
+  { situation: 'blocks undo of a member named by a removed expense', kind: 'expense', status: 'rejected', reason: 'undo_not_supported' },
+  { situation: 'blocks undo of a member named by a removed repayment', kind: 'settlement', status: 'rejected', reason: 'undo_not_supported' },
 ];
 
 it.each(referenceRows)('$situation', (row) => {
@@ -317,6 +318,29 @@ it('never offers reversal of creation, access changes or invite replacement', ()
   const unsupported = reversibleEvent({ action: 'group.left', before: grant(me, ana), after: grant(me, null, later) }, { kind: 'group', id: snapshot.group.id }, 'left-group');
   const result = applyGroupCommand(snapshot, me, { command_id: commandId, type: 'change.undo', payload: { event_id: unsupported.id } }, later, [unsupported]);
   expect(result.reason).toBe('undo_not_supported');
+});
+
+it.each([
+  { label: 'addition', memberId: id('new-person'), command: create(id('new-person'), 'New person') },
+  { label: 'rename', memberId: cy, command: renameMember(cy, 'Cynthia', 'Cy') },
+  { label: 'removal', memberId: cy, command: remove(cy) },
+  { label: 'restoration', memberId: old, command: restore(old) },
+])('does not allow undo of member $label', ({ label, memberId, command }) => {
+  const applied = applyGroupCommand(snapshot, me, command, later);
+
+  expect(applied.status).toBe('applied');
+  const event = reversibleEvent(applied.audit, { kind: 'member', id: memberId }, `member-${label}`);
+  const result = applyGroupCommand(applied.snapshot, other, { command_id: commandId, type: 'change.undo', payload: { event_id: event.id } }, later, [event]);
+
+  expect({ status: result.status, reason: result.reason }).toEqual({ status: 'rejected', reason: 'undo_not_supported' });
+  expect(result.snapshot).toEqual(applied.snapshot);
+});
+
+it('does not allow undo of an earlier member reversal', () => {
+  const event = reversibleEvent({ action: 'change.undone', reverses_event_id: memberAddition.id, before: { kind: 'member', member: member(cy, 'Cy') }, after: { kind: 'member', member: member(cy, 'Cy', 'deleted') } }, { kind: 'member', id: cy }, 'member-reversal');
+  const result = applyGroupCommand(snapshot, me, { command_id: commandId, type: 'change.undo', payload: { event_id: event.id } }, later, [event]);
+
+  expect({ status: result.status, reason: result.reason }).toEqual({ status: 'rejected', reason: 'undo_not_supported' });
 });
 
 
