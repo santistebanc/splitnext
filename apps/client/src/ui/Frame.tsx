@@ -8,6 +8,10 @@ import {
   useVisibleViewportHeight,
 } from './useVisibleViewport';
 
+// Header reflow must not anchor the scroll position and feed back into its
+// compact progress, especially when the split list just reaches the bottom.
+const scrollStyle = Platform.OS === 'web' ? { ...s.page, overflowAnchor: 'none' } : s.page;
+
 type FrameProps = {
   children: ReactNode;
   /** Independent scroll positions for sibling views, such as the group screen and a person. */
@@ -108,7 +112,7 @@ export function Frame(props: FrameProps) {
           }}
           scrollEventThrottle={16}
           nativeID="splitnext-page"
-          style={s.page}
+          style={scrollStyle}
           contentContainerStyle={{ flexGrow: 1 }}
           keyboardShouldPersistTaps="handled"
         >

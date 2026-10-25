@@ -68,8 +68,11 @@ caret, accepts dot/comma entry, and rejects ambiguous pasted amounts.
 Settings contains the group name field, Save group name
 only after a change, and Leave group with its confirmation sheet. Below the
 group header, `Frame`'s one `ScrollView` is
-the only scroll area on every screen; the group screen's content is
-`GroupBalances` and `ExpenseList`, sections sharing `SectionHeading` and the
+the only scroll area on every screen.
+On the web its scroll anchoring is disabled: automatic anchor adjustments
+during header resizing would feed back into compact progress and cause
+the expense header to oscillate at the bottom of a nearly full split list.
+The group screen's content is `GroupBalances` and `ExpenseList`, sections sharing `SectionHeading` and the
 same card rows. `useBalancesLayout` measures the Balances heading, each row,
 and the Add a person line, plans the default level from the window and header
 heights (people that leave room for the Expenses heading, two expenses, and
