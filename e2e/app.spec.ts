@@ -282,6 +282,52 @@ test('records, changes, and removes an expense with balances per currency', asyn
   await expect(person(page, 'Ben')).toHaveCount(0);
 });
 
+test('keeps zero-amount split rows simple and aligned, then restores their controls', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 760 });
+  await createGroup(page, 'Zero amount', 'Ana');
+  await addMember(page, 'Ben');
+  await addMember(page, 'A person with a long name');
+  await button(page, 'Add expense').click();
+
+  for (const amount of ['', '0', '0.00']) {
+    await field(page, 'Amount').fill(amount);
+    await expect(button(page, /^(Increase|Decrease) share for /)).toHaveCount(0);
+    await expect(button(page, /^Amount for /)).toHaveCount(0);
+    await expect(page.getByRole('checkbox')).toHaveCount(3);
+  }
+
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 760 });
+    const checks = [];
+
+    for (const name of ['Ana', 'Ben', 'A person with a long name']) {
+      const label = await page.getByText(name, { exact: true }).boundingBox();
+      const check = await page.getByRole('checkbox', { name: `${name} shares this expense`, exact: true }).boundingBox();
+
+      expect(label).not.toBeNull();
+      expect(check).not.toBeNull();
+      expect(Math.abs(label!.y + label!.height / 2 - (check!.y + check!.height / 2))).toBeLessThanOrEqual(1);
+      checks.push(check!.x);
+    }
+
+    expect(new Set(checks).size).toBe(1);
+  }
+
+  await page.screenshot({ path: testInfo.outputPath('zero-amount-split.png') });
+  await field(page, 'Amount').fill('100');
+  await expect(button(page, 'Increase share for Ana')).toBeVisible();
+  await expect(button(page, /^Amount for Ana:/)).toBeVisible();
+  await button(page, 'Increase share for Ana').click();
+  await expect(button(page, 'Decrease share for Ana')).toBeVisible();
+  await field(page, 'Amount').fill('0');
+  await expect(button(page, /^(Increase|Decrease) share for /)).toHaveCount(0);
+  await expect(button(page, /^Amount for /)).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: 'Ana shares this expense' })).toBeChecked();
+  await field(page, 'Amount').fill('100');
+  await expect(button(page, 'Decrease share for Ana')).toBeVisible();
+  await expect(button(page, 'Amount for Ana: 50.00 USD. Change amount')).toBeVisible();
+});
+
 test('mixes fixed amounts and weighted shares, preserves them offline, and clears a fixed amount back to shares', async ({ page, context }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await createGroup(page, 'Mixed splits', 'Ana');
@@ -814,9 +860,38 @@ test('shows as many balances as leave room for two expenses, shrinks them to you
   expect(await scroller.evaluate((node) => node.scrollTop)).toBe(0);
   await expect(person(page, 'Ida')).toBeInViewport();
 
+  // Small scrolls must not show the pinned heading over a second flowing copy.
+  for (const scrollTop of [1, 12, 24, 80, 0]) {
+    await scroller.evaluate((node, top) => { node.scrollTop = top; }, scrollTop);
+    await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBe(scrollTop);
+    await expect(heading(page, 'Balances')).toHaveCount(1);
+    await expect(button(page, 'Invite people')).toHaveCount(1);
+    await expect(heading(page, 'Balances')).toBeInViewport();
+  }
+
+  await scroller.evaluate((node) => { node.scrollTop = 12; });
+  await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBe(12);
+  await page.screenshot({ path: testInfo.outputPath('mobile-expanded-scrolled.png') });
+
   // Showing fewer from further down closes the card while scrolling back up: “···” glides to where it rests, without a jump.
   await scroller.evaluate((node) => { node.scrollTop = node.scrollHeight; });
   await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+
+  // Let the preceding scroll's compact-header motion settle before measuring the close.
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    let previous: number | undefined;
+    let stable = 0;
+
+    (function frame() {
+      const top = document.querySelector('[aria-label="Show fewer people"]')?.getBoundingClientRect().top;
+
+      stable = top === previous ? stable + 1 : 0;
+      previous = top;
+
+      if (stable >= 3) resolve();
+      else requestAnimationFrame(frame);
+    })();
+  }));
 
   const path = await page.evaluate(() => new Promise<number[]>((resolve) => {
     const more = () => document.querySelector<HTMLElement>('[aria-label="Show fewer people"], [aria-label^="Show all"]');

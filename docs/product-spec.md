@@ -204,7 +204,11 @@ The expense editor follows the original Splitnext form: Cancel, Add (Edit
 expense when changing one), and Save in the header; Paid by opening the names
 in place; a large centered monospaced amount with its currency symbol and an
 editable currency code; Split between; then Occasion. Show the member's actual
-name with a You badge rather than replacing it with You. Each split row shows
+name with a You badge rather than replacing it with You. While the total is
+empty or zero, split rows show only the vertically centered name, You badge,
+and participation checkbox. Share arrows and per-person amounts appear once
+a positive total is entered, preserving any existing shares or fixed amounts.
+Each split row then shows
 the person's name and calculated amount, an increase arrow, and a checkbox at
 one share or a decrease arrow above one share or for a fixed amount. Excluded
 people stay in place with an empty checkbox. Arrows adjust whole shares and
