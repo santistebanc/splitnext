@@ -46,8 +46,8 @@ export const uiActions = {
     },
   }),
   dismissRemoval: defineAction({
-    group: 'UI', description: 'Close the undo offer for a member removed on this device.', input: empty, example: {},
-    unavailable: ({ ui }) => ui.removal ? null : unavailable('nothing_removed', 'No removal to undo.'),
+    group: 'UI', description: 'Close the notification for a member removed on this device.', input: empty, example: {},
+    unavailable: ({ ui }) => ui.removal ? null : unavailable('nothing_removed', 'No removal notification.'),
     run: async (host, input, ui) => ui.update({ removal: null }),
   }),
   showActivity: defineAction({

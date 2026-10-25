@@ -196,7 +196,7 @@ export const ledgerActions = {
 
       if (ui.snapshot().memberEdit?.memberId === input.memberId)
         ui.finishMemberEdit();
-      // The toast offers the member back either way.
+      // Confirm whether the member was hidden or removed.
       ui.removed(input.memberId, name, hidden);
     },
   }),

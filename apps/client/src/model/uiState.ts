@@ -43,7 +43,6 @@ export type MemberEdit = {
   expectedName: string;
 };
 
-/** A member just removed on this device, offered back by the undo toast. */
 /** A member just taken out of the group: hidden when expenses or repayments name them, removed otherwise. */
 export type Removal = { id: number; memberId: string; name: string; hidden: boolean };
 
@@ -187,7 +186,7 @@ export class AppUiState {
     this.patch({ activitySeen });
   }
 
-  /** Remembers a member removed here, so the toast can offer it back. */
+  /** Remembers a member removed here for the brief removal notification. */
   removed(memberId: string, name: string, hidden: boolean): void {
     this.patch({ removal: { id: ++this.removalSequence, memberId, name, hidden } });
   }

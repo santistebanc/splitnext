@@ -175,10 +175,11 @@ function RepaymentRow(props: { replica: Replica; settlement: Settlement; first: 
   );
 }
 
-/** Add expense: a blue pill, floating at the foot of the group screen. */
-export function AddExpenseButton() {
+/** Add expense floats at the foot of the screen, yielding emphasis to Invite during setup. */
+export function AddExpenseButton(props: { secondary?: boolean }) {
   const add = useActionCall();
   const editingMember = useUiState().memberEdit !== null;
+  const ink = props.secondary ? colors.action : colors.actionInk;
 
   // A floating button would cover a name being typed above the keyboard.
   if (editingMember) return null;
@@ -190,13 +191,13 @@ export function AddExpenseButton() {
         disabled={!add.can('showExpense', {})}
         onPress={() => { void add.call('showExpense', {}); }}
         style={({ pressed }) => [
-          { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, paddingLeft: 16, paddingRight: 20, borderRadius: 999, backgroundColor: colors.action, boxShadow: '0 6px 18px rgba(16, 22, 29, 0.2)' },
+          { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, paddingLeft: 16, paddingRight: 20, borderRadius: 999, backgroundColor: props.secondary ? colors.actionSoft : colors.action, boxShadow: '0 6px 18px rgba(16, 22, 29, 0.2)' },
           !add.can('showExpense', {}) && s.dim,
           pressed && s.pressed,
         ]}
       >
-        <PlusIcon size={20} color={colors.actionInk} strokeWidth={2.2} />
-        <Text style={{ fontFamily, fontSize: 16, fontWeight: '600', color: colors.actionInk }}>Add expense</Text>
+        <PlusIcon size={20} color={ink} strokeWidth={2.2} />
+        <Text style={{ fontFamily, fontSize: 16, fontWeight: '600', color: ink }}>Add expense</Text>
       </Pressable>
       <ErrorMessage message={add.error} />
     </>

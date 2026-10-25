@@ -20,7 +20,7 @@ export function Drawer(props: { title: string; onClose: () => void; full?: boole
         <Pressable accessibilityLabel="Close" style={s.backdrop} onPress={props.onClose} />
         <View role="dialog" aria-modal aria-label={props.title} style={[s.sheet, s.drawer, !compact && s.popup, props.full && { height: compact ? s.drawer.maxHeight : s.popup.maxHeight }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text accessibilityRole="header" numberOfLines={1} style={[s.screenTitle, { flex: 1 }]}>{props.title}</Text>
+            <Text accessibilityRole="header" numberOfLines={1} style={[s.drawerTitle, { flex: 1 }]}>{props.title}</Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Close"

@@ -52,13 +52,17 @@ no expenses or repayments, without an empty-expenses message; the expense and re
 save from their headers.
 
 A group has one screen (`home`) without tabs. `GroupHeader` holds the group
-name, which opens the groups list, a `SyncStatus` icon only while offline or
-unreachable, the `ActivityBell`, and a gear button opening `settings`
-(`GroupSettings`). The same connection icon is in `GroupsHeader`. Tapping it
+name, which opens the groups list, the `ActivityBell`, and a gear button opening `settings`
+(`GroupSettings`). `Frame` holds a thin `SyncStatus` strip above the header
+across all views while offline or unreachable. Its measured height reduces
+the available room used by `useBalancesLayout`. Tapping it
 opens a `Drawer` with the connection state, locally queued change count, and
-Retry when online. Reconnecting closes it and hides the icon. Background
+Retry when online. Reconnecting closes it and hides the strip. Background
 network/offline errors use this status rather than a second banner; other
-background errors remain visible. Settings contains the group name field, Save group name
+background errors remain visible. The web `AmountInput` uses
+`react-number-format` to keep fixed currency precision while managing the
+caret, accepts dot/comma entry, and rejects ambiguous pasted amounts.
+Settings contains the group name field, Save group name
 only after a change, and Leave group with its confirmation sheet. Below the
 group header, `Frame`'s one `ScrollView` is
 the only scroll area on every screen; the group screen's content is
@@ -73,7 +77,10 @@ re-renders nothing else. At the default level the section is a `StickyTop`
 its card's height follows the scroll, cut from the bottom until only the
 heading is left; whole people show, with only the lower half of the “···”
 button reserved below the card. Expenses follow with the normal section
-spacing rather than filling the unused viewport allowance.
+spacing rather than filling the unused viewport allowance. Invite people
+uses the solid action color while there are no active expenses, with Add
+expense using the soft action color; once an expense exists they swap emphasis
+without changing their labels, position, or size.
 One `StickyTop` holds the Balances heading and Invite action in both levels,
 above the card's layer; a measured placeholder keeps their space in the
 section. `AppUiState.balancesExpanded` is Show all: the card then flows with
@@ -88,7 +95,7 @@ records the views a page was opened from, so Back, Cancel, and saving return
 there, and history restores the trail with the view and the person. Invite
 opens `InviteSheet` as a bottom sheet over the group screen; leaving a group
 confirms in a `ConfirmSheet`. Removing a member sets `AppUiState.removal`,
-which `RemovalToast` shows with Undo until it is dismissed or times out. The
+which `RemovalToast` shows without an Undo action until it is dismissed or times out. The
 original split-S mark is rendered by `ui/BrandMark.tsx` on the groups list and
 the join screen. The browser favicon uses the same artwork. Appearance assets
 are served locally and precached; their contents contribute to the service
@@ -631,6 +638,6 @@ Activity is read through GET /groups/{groupId}/activity after group authorizatio
 
 Undo is a retry-safe change.undo command naming a canonical audit event. The server resolves that event inside its transaction; clients project it from their cached history. Expense and settlement reversals compare the affected record version and restore the exact saved details, increasing the version. Each reversal appends a change.undone event with a link to its source, and can itself be reversed. Unrelated state changes do not affect eligibility.
 
-Group and member reversals compare their affected state and the latest audit event for that target, including intervening changes that returned to an earlier value. Undoing a member addition also checks all retained expense and settlement references. Reversing removal restores the member without restoring cleared preferred-member choices. Group creation, access changes and invite replacement have no reversal.
+Group renames compare their affected state and the latest audit event for that target, including intervening changes that returned to an earlier value. Member actions and earlier member reversals have no reversible effect: Activity offers no Undo and the shared client/server rules reject `change.undo` for them. Restoring a member remains a separate manual action. Group creation, access changes and invite replacement have no reversal.
 
 The Activity bell refreshes canonical Activity for the open group on each new revision while connected (`useActivityFeed`). It counts visible events from other identities after the installation's seen sequence for that group, plus the replica's conflict notices. `AppUiState.activitySeen` keeps seen sequences per group in localStorage through a `SeenStorage` adapter; the first Activity read for a group sets the baseline, so existing history never counts as new. `markActivitySeen` advances it. Conflict notices are reviewed in Activity's Needs your review block, and affected expenses and repayments show a dot; nothing else shows review status. Sync errors and outbox indicators stay independent.

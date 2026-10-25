@@ -1,6 +1,6 @@
 import { Modal, Pressable, Text, View } from 'react-native';
 import { Button, s } from './components';
-import { colors, displayFamily, fontFamily } from './theme';
+import { colors, fontFamily } from './theme';
 
 type ConfirmSheetProps = {
   title: string;
@@ -19,7 +19,7 @@ export function ConfirmSheet(props: ConfirmSheetProps) {
       <View style={s.overlay}>
         <Pressable accessibilityLabel="Cancel" style={s.backdrop} onPress={props.onCancel} />
         <View role="dialog" aria-modal aria-label={props.title} style={s.sheet}>
-          <Text accessibilityRole="header" style={{ fontFamily: displayFamily, fontSize: 24, lineHeight: 29, fontWeight: '700', color: colors.ink }}>
+          <Text accessibilityRole="header" style={s.drawerTitle}>
             {props.title}
           </Text>
           <Text style={{ fontFamily, fontSize: 15, lineHeight: 22, color: colors.soft }}>{props.message}</Text>

@@ -4,7 +4,6 @@ import { attentionCount } from '../model/activity';
 import { BalancesHold, GroupBalances, type BalancesLayout } from './BalancesPanel';
 import { Button, ErrorMessage, ScreenHeader, colors, s } from './components';
 import { CompactProgressContext } from './pageScroll';
-import { SyncStatus } from './ConnectionStatus';
 import { ExpenseList } from './ExpenseList';
 import { BellIcon, ChevronDownIcon, SettingsIcon } from './icons';
 import type { MemberListApp } from './MemberList';
@@ -45,9 +44,9 @@ export function ActivityBell(props: { app: MemberListApp }) {
 
 /**
  * The group screen's fixed top: the group name, which opens the group list,
- * a connection icon while disconnected, the Activity bell, and group settings.
+ * the Activity bell, and group settings. Connection status belongs to Frame.
  */
-export function GroupHeader(props: { app: MemberListApp; pending: number; busy: boolean; onRetry: () => void; retryError?: string | null; onLayout?: (height: number) => void }) {
+export function GroupHeader(props: { app: MemberListApp; onLayout?: (height: number) => void }) {
   const compact = useContext(CompactProgressContext);
   const actions = useActions();
   const settings = useActionCall();
@@ -80,7 +79,6 @@ export function GroupHeader(props: { app: MemberListApp; pending: number; busy: 
         )}
         end={open ? (
           <>
-            <SyncStatus online={state.online} reachable={state.reachable} pending={props.pending} busy={props.busy} onRetry={props.onRetry} retryError={props.retryError ?? null} />
             <ActivityBell app={props.app} />
             <Pressable
               accessibilityRole="button"

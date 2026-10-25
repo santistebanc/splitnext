@@ -4,7 +4,7 @@ import { reversibleEffect, undoProblem, undoExplanation, type ClientReplicaState
 import { describeActivity, newActivity, visibleActivity, type ActivityKind } from '../model/activity';
 import { reviewDetail, reviewTitle } from '../model/notices';
 import { ErrorMessage, colors, s } from './components';
-import { CheckIcon, GridIcon, InfoIcon, PersonIcon, ReceiptIcon, RepayIcon, UndoIcon, WarningIcon } from './icons';
+import { GridIcon, InfoIcon, PersonIcon, ReceiptIcon, RepayIcon, UndoIcon, WarningIcon } from './icons';
 import type { MemberListApp } from './MemberList';
 import { BackHeader } from './PersonView';
 import { StickyTop } from './StickyTop';
@@ -122,13 +122,7 @@ function NeedsReview(props: { replica: ClientReplicaState }) {
     void action.call(name, { commandId });
   }
 
-  if (!notices.length)
-    return (
-      <View role="status" style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 4, paddingHorizontal: 4 }}>
-        <CheckIcon size={16} color={colors.settled} strokeWidth={2.4} />
-        <Text style={{ fontFamily, fontSize: 14, fontWeight: '600', color: colors.settled }}>All caught up. Every change from this device is in.</Text>
-      </View>
-    );
+  if (!notices.length) return null;
 
   return (
     <View role="region" aria-label="Needs your review" style={{ paddingBottom: 8 }}>

@@ -7,6 +7,7 @@ import { GroupSettings } from '../ui/GroupSettings';
 import { GroupsView } from '../ui/GroupsView';
 import { GroupHeader, GroupView } from '../ui/GroupView';
 import { useBalancesLayout } from '../ui/BalancesPanel';
+import { SyncStatus } from '../ui/ConnectionStatus';
 import { InviteSheet } from '../ui/InvitePanel';
 import { JoinGroup, JoinGroupFooter, type JoinCalls } from '../ui/JoinGroup';
 import { ActivityPanel } from '../ui/ActivityPanel';
@@ -93,10 +94,14 @@ function ScreenDemo(props: ScreenDemoProps) {
 /** The group screen's header and content, sharing the balances layout as the app does. */
 function GroupScreenDemo(props: { app: FakeApp; onRetry: () => void }) {
   const layout = useBalancesLayout();
+  const state = props.app.snapshot();
 
   return (
     <>
-      <GroupHeader app={props.app} pending={0} busy={false} onRetry={props.onRetry} onLayout={layout.measureHeader} />
+      <View onLayout={(event) => layout.measureStatus(event.nativeEvent.layout.height)}>
+        <SyncStatus online={state.online} reachable={state.reachable} pending={0} busy={false} onRetry={props.onRetry} />
+      </View>
+      <GroupHeader app={props.app} onLayout={layout.measureHeader} />
       <GroupView app={props.app} layout={layout} />
     </>
   );

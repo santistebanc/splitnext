@@ -14,6 +14,9 @@ type FrameProps = {
   scrollKey?: string;
   /** A fixed screen header above the scrolling content. */
   header?: ReactNode;
+  /** App-wide connection status, fixed above every screen's header. */
+  status?: ReactNode;
+  onStatusLayout?: ((height: number) => void) | undefined;
   /** The screen's one main action, pinned below the content. */
   footer?: ReactNode;
   /** Whether the footer floats over the content instead of taking its own bar. */
@@ -89,6 +92,7 @@ export function Frame(props: FrameProps) {
 
   return (
     <View style={[s.page, visibleHeight !== null && { maxHeight: visibleHeight }]}>
+      {props.status ? <View onLayout={(event) => props.onStatusLayout?.(event.nativeEvent.layout.height)}>{props.status}</View> : null}
       {props.header ? (
         <View style={s.screenHeaderBar}>
           <View style={s.screenColumn}>{props.header}</View>

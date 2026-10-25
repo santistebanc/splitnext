@@ -170,7 +170,7 @@ export function Choice(props: ChoiceProps) {
 }
 
 /** A radio row with a round marker, as on the join screen. */
-export function RadioRow(props: { label: string; selected: boolean; onPress: () => void; disabled?: boolean; accessibilityLabel?: string; children?: ReactNode; style?: StyleProp<ViewStyle> }) {
+export function RadioRow(props: { label: string; selected: boolean; onPress: () => void; disabled?: boolean; accessibilityLabel?: string; children?: ReactNode; style?: StyleProp<ViewStyle>; compact?: boolean }) {
   return (
     <Pressable
       accessibilityRole="radio"
@@ -179,10 +179,10 @@ export function RadioRow(props: { label: string; selected: boolean; onPress: () 
       aria-checked={props.selected}
       disabled={props.disabled}
       onPress={props.onPress}
-      style={({ pressed }) => [s.radioRow, props.style, props.selected && s.radioRowSelected, pressed && s.pressed]}
+      style={({ pressed }) => [s.radioRow, props.compact && { minHeight: 48 }, props.style, props.selected && s.radioRowSelected, pressed && s.pressed]}
     >
       <View style={[s.radioDot, props.selected && s.radioDotSelected]} />
-      <Text numberOfLines={1} style={s.radioLabel}>{props.label}</Text>
+      <Text numberOfLines={1} style={[s.radioLabel, props.compact && { fontSize: 15 }]}>{props.label}</Text>
       {props.children}
     </Pressable>
   );
@@ -961,6 +961,7 @@ export const s = StyleSheet.create({
   backdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   /** Wider screens show a drawer as a popup in the middle. */
   overlayCentered: { justifyContent: 'center', padding: 24 },
+  drawerTitle: { fontFamily: displayFamily, fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.ink },
   drawer: { maxHeight: '88%', paddingTop: 20, gap: 14 },
   popup: { maxWidth: 440, maxHeight: '80%', borderRadius: 24, paddingBottom: 24 },
   drawerClose: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
