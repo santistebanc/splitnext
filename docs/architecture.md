@@ -49,7 +49,10 @@ at the foot or floating over the content. The groups list pins New group; New
 group pins Create group; the join screen pins Open link or Join as the chosen
 name; the group screen always floats + Add expense, including when there are
 no expenses or repayments, without an empty-expenses message; the expense and repayment forms
-save from their headers.
+save from their headers. Screen, page, and drawer titles share the 18px
+`viewTitle` style; scrolling compacts header spacing and context without
+scaling the title. A saved repayment also has a short Delete header action,
+using the existing removal action and returning to its opening view.
 
 A group has one screen (`home`) without tabs. `GroupHeader` holds the group
 name, which opens the groups list, the `ActivityBell`, and a gear button opening `settings`

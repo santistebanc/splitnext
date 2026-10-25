@@ -54,7 +54,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
             placeholder="Name"
             autoFocus
             onSave={finishRename}
-            style={[s.screenTitle, { flex: 1, minWidth: 0, height: 36, paddingHorizontal: 8, borderRadius: 10, borderWidth: 2, borderColor: colors.action, backgroundColor: colors.surface, fontSize: 20 }]}
+            style={[s.screenTitle, { flex: 1, minWidth: 0, height: 36, paddingHorizontal: 8, borderRadius: 10, borderWidth: 2, borderColor: colors.action, backgroundColor: colors.surface }]}
           />
           <Pressable
             accessibilityRole="button"

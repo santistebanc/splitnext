@@ -95,7 +95,7 @@ function LinkEntry(props: JoinGroupProps) {
         <View style={{ width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: broken ? colors.danger : colors.actionSoft }}>
           <LinkIcon size={30} broken={broken} color={broken ? colors.owes : colors.action} />
         </View>
-        <PageTitle size={30}>{broken ? 'This invite link doesn’t work' : 'Join a group'}</PageTitle>
+        <PageTitle>{broken ? 'This invite link doesn’t work' : 'Join a group'}</PageTitle>
         <Text style={{ fontFamily, fontSize: 16, lineHeight: 24, color: colors.soft }}>
           {broken ? 'It may have been replaced by someone in the group. Ask them for the current link.' : 'Paste the invite link someone in the group sent you.'}
         </Text>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { formatAmount, parseAmount, preferredMember, repaymentMembers, settlementSuggestions, type ClientReplicaState } from '@splitnext/client';
 import { memberName, moneyLabel, recentCurrencies } from '../model/expenses';
-import { Button, ErrorMessage, HeaderAction, RadioRow, ScreenHeader, colors, s } from './components';
+import { ErrorMessage, HeaderAction, RadioRow, ScreenHeader, colors, s } from './components';
 import { CurrencyPicker } from './CurrencyPicker';
 import { Drawer } from './Drawer';
 import { ChevronDownIcon } from './icons';
@@ -16,11 +16,12 @@ function personName(snapshot: Snapshot, memberId: string, you: string | undefine
   return memberId === you ? (capital ? 'You' : 'you') : memberName(snapshot, memberId);
 }
 
-/** The repayment form's header: Cancel, and Record or Save. */
+/** The repayment form's header: Cancel, Delete for a saved repayment, and Record or Save. */
 export function SettlementsHeader() {
   const draft = useUiState().repayment;
   const back = useActionCall();
   const save = useActionCall();
+  const remove = useActionCall();
   const editing = Boolean(draft.settlementId);
   const ready = editing ? save.can('saveRepayment') : save.can('recordSettlement', draft);
 
@@ -32,20 +33,33 @@ export function SettlementsHeader() {
     <>
       <ScreenHeader
         start={<HeaderAction text="Cancel" label="Cancel" disabled={!back.can('closePanel')} onPress={done} />}
-        end={
-          <HeaderAction
-            primary
-            text={editing ? 'Save' : 'Record'}
-            label={editing ? 'Save repayment' : 'Record repayment'}
-            disabled={!ready}
-            onPress={() => {
-              if (editing) void save.call('saveRepayment', {}, done);
-              else void save.call('recordSettlement', draft, done);
-            }}
-          />
-        }
+        end={(
+          <>
+            {draft.settlementId ? (
+              <HeaderAction
+                danger
+                text="Delete"
+                label="Delete"
+                disabled={!remove.can('removeSettlement', { settlementId: draft.settlementId })}
+                onPress={() => {
+                  if (draft.settlementId) void remove.call('removeSettlement', { settlementId: draft.settlementId }, done);
+                }}
+              />
+            ) : null}
+            <HeaderAction
+              primary
+              text={editing ? 'Save' : 'Record'}
+              label={editing ? 'Save repayment' : 'Record repayment'}
+              disabled={!ready}
+              onPress={() => {
+                if (editing) void save.call('saveRepayment', {}, done);
+                else void save.call('recordSettlement', draft, done);
+              }}
+            />
+          </>
+        )}
       />
-      <ErrorMessage message={back.error ?? save.error} />
+      <ErrorMessage message={back.error ?? save.error ?? remove.error} />
     </>
   );
 }
@@ -78,7 +92,6 @@ export function SettlementsPanel(props: { replica: ClientReplicaState }) {
   const you = preferredMember(snapshot, props.replica.session?.identity.id)?.id;
   const eligible = new Set(repaymentMembers(snapshot).map((member) => member.id));
   const members = snapshot.members.filter((member) => eligible.has(member.id) || (draft.settlementId && [draft.from, draft.to].includes(member.id))).map((member) => member.id);
-  const editing = draft.settlementId ? snapshot.settlements.find((entry) => entry.id === draft.settlementId) : undefined;
   const owed = settlementSuggestions(snapshot).find((entry) => entry.from_member_id === draft.from && entry.to_member_id === draft.to && entry.currency === draft.currency);
   const full = owed && parseAmount(draft.amount, draft.currency) === owed.amount;
 
@@ -143,20 +156,6 @@ export function SettlementsPanel(props: { replica: ClientReplicaState }) {
         </Text>
       </View>
 
-      {editing ? (
-        <View style={{ flexDirection: 'row' }}>
-          <Button
-            danger
-            label={`Remove repayment ${moneyLabel(editing.amount, editing.currency)}`}
-            disabled={!action.can('removeSettlement', { settlementId: draft.settlementId })}
-            onPress={() => {
-              if (draft.settlementId) void action.call('removeSettlement', { settlementId: draft.settlementId }, () => { void actions.dispatch('closePanel', {}, { origin: 'ui' }); });
-            }}
-          >
-            Remove repayment
-          </Button>
-        </View>
-      ) : null}
       <ErrorMessage message={action.error} />
 
       <RepaymentHistory replica={props.replica} />
