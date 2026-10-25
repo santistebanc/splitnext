@@ -137,14 +137,17 @@ test('creates a group, adds people inline, and manages a person from their detai
   await button(page, 'Back to Trip').click();
   await expect(button(page, 'Benjamin (you), no expenses yet. Show details')).toBeVisible();
 
-  // Removing is immediate; the toast offers Undo.
+  // Removing is immediate; restoring a member is a separate manual action.
   await addMember(page, 'Cy');
   await person(page, 'Cy').click();
   await button(page, 'Remove Cy').click();
   await expect(heading(page, 'Trip')).toBeVisible();
   await expect(person(page, 'Cy')).toHaveCount(0);
   await expect(page.getByTestId('toast')).toHaveText('Cy removed.');
-  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toHaveCount(0);
+  await bell(page).click();
+  await button(page, 'Restore member').click();
+  await button(page, 'Back to Trip').click();
   await expect(person(page, 'Cy')).toBeVisible();
   await expect(page.getByTestId('toast')).toHaveCount(0);
 });
@@ -176,7 +179,7 @@ test('keeps the fixed theme and group-list branding when offline', async ({ page
   await context.setOffline(true);
   await page.reload();
   await expect(heading(page, 'Paper trip')).toBeVisible();
-  await expect(page.getByRole('status').filter({ hasText: /^Offline/ })).toBeVisible();
+  await expect(button(page, /^Offline.*\. Connection details$/)).toBeVisible();
   await expect(page.getByTestId('splitnext-logo')).toHaveCount(0);
   await person(page, 'Ana').click();
   await expect(page.getByText('Offline · taken on 1 device', { exact: true })).toBeVisible();
@@ -225,6 +228,36 @@ test('shows separate currency summaries offline and keeps people who still owe o
   await expect(button(page, 'Hide Ana')).toBeDisabled();
   await expect(page.getByText('Settle up first to hide yourself.', { exact: true })).toBeVisible();
   await button(page, 'Back to Currencies').click();
+});
+
+test('emphasizes inviting in an empty group without moving the action', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 760 });
+  await createGroup(page, 'New trip', 'Ana');
+  const invite = button(page, 'Invite people');
+  const add = button(page, 'Add expense');
+
+  await expect(invite).toHaveText('Invite people');
+  await expect(invite).toHaveCSS('background-color', 'rgb(27, 95, 193)');
+  await expect(invite.getByText('Invite people', { exact: true })).toHaveCSS('color', 'rgb(255, 255, 255)');
+  await expect(add).toHaveCSS('background-color', 'rgb(230, 239, 252)');
+  const before = await invite.boundingBox();
+
+  await invite.click();
+  await expect(page.getByRole('dialog', { name: 'Invite people' })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  await page.screenshot({ path: testInfo.outputPath('empty-group-invite.png') });
+  await addExpense(page, 'Lunch', '20', 'EUR');
+  await expect(invite).toHaveCSS('background-color', 'rgb(230, 239, 252)');
+  await expect(add).toHaveCSS('background-color', 'rgb(27, 95, 193)');
+  await expect.poll(async () => {
+    const after = (await invite.boundingBox())!;
+
+    return Math.max(...(['x', 'y', 'width', 'height'] as const).map((key) => Math.abs(after[key] - before![key])));
+  }).toBeLessThanOrEqual(1);
+  await expect(invite).toHaveText('Invite people');
+  await page.screenshot({ path: testInfo.outputPath('active-group-invite.png') });
+  await invite.click();
+  await expect(page.getByRole('dialog', { name: 'Invite people' })).toBeVisible();
 });
 
 test('records, changes, and removes an expense with balances per currency', async ({ page }) => {
@@ -282,6 +315,51 @@ test('records, changes, and removes an expense with balances per currency', asyn
   await expect(person(page, 'Ben')).toHaveCount(0);
 });
 
+test('keeps the expense amount formatted while typing and accepts dots or commas', async ({ page }) => {
+  await createGroup(page, 'Amounts', 'Ana');
+  await button(page, 'Add expense').click();
+  const amount = field(page, 'Amount');
+
+  for (const [entered, formatted] of [['12', '12.00'], ['12.5', '12.50'], ['12,5', '12.50'], ['.5', '0.50'], ['0', '0.00']]) {
+    await amount.fill(entered!);
+    await expect(amount).toHaveValue(formatted!);
+    await expect(amount).toBeFocused();
+  }
+
+  for (const invalid of ['abc', '-12', '1e3', '12..5', '1,234.56']) {
+    await amount.fill('');
+    await amount.fill(invalid);
+    await expect(amount).toHaveValue('');
+  }
+
+  await amount.pressSequentially('12a3');
+  await expect(amount).toHaveValue('123.00');
+  await amount.pressSequentially(',5');
+  await expect(amount).toHaveValue('123.50');
+  await amount.pressSequentially('6');
+  await expect(amount).toHaveValue('123.56');
+  await amount.press('Backspace');
+  await expect(amount).toHaveValue('123.50');
+  await amount.evaluate((input: HTMLInputElement) => input.setSelectionRange(1, 2));
+  await amount.pressSequentially('9');
+  await expect(amount).toHaveValue('193.50');
+  await field(page, 'Description').fill('Lunch');
+
+  // Other currencies retain their own minor-unit precision.
+  await chooseCurrency(page, 'JPY');
+  await amount.fill('42');
+  await field(page, 'Description').click();
+  await expect(amount).toHaveValue('42');
+  await chooseCurrency(page, 'KWD');
+  await amount.fill('42,5');
+  await field(page, 'Description').click();
+  await expect(amount).toHaveValue('42.500');
+  await chooseCurrency(page, 'EUR');
+  await amount.fill('12,5');
+  await button(page, 'Save').click();
+  await expect(button(page, 'Change Lunch · 12.50 EUR')).toBeVisible();
+});
+
 test('keeps zero-amount split rows simple and aligned, then restores their controls', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Zero amount', 'Ana');
@@ -316,6 +394,7 @@ test('keeps zero-amount split rows simple and aligned, then restores their contr
   await page.screenshot({ path: testInfo.outputPath('zero-amount-split.png') });
   await field(page, 'Amount').fill('100');
   await expect(button(page, 'Increase share for Ana')).toBeVisible();
+  await expect(page.getByText('Describe the expense.', { exact: true })).toHaveCount(0);
   await expect(button(page, /^Amount for Ana:/)).toBeVisible();
   await button(page, 'Increase share for Ana').click();
   await expect(button(page, 'Decrease share for Ana')).toBeVisible();
@@ -326,6 +405,36 @@ test('keeps zero-amount split rows simple and aligned, then restores their contr
   await field(page, 'Amount').fill('100');
   await expect(button(page, 'Decrease share for Ana')).toBeVisible();
   await expect(button(page, 'Amount for Ana: 50.00 USD. Change amount')).toBeVisible();
+});
+
+test('aligns split controls in columns for weighted, fixed, and excluded people', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 760 });
+  await createGroup(page, 'Columns', 'Ana');
+  await addMember(page, 'Benjamin Alexander');
+  await addMember(page, 'Cy');
+  await button(page, 'Add expense').click();
+  await field(page, 'Amount').fill('100');
+  await button(page, 'Increase share for Ana').click();
+  await button(page, /^Amount for Cy:/).click();
+  await field(page, 'Amount for Cy').fill('10');
+  await field(page, 'Amount for Cy').press('Enter');
+  await page.getByRole('checkbox', { name: 'Benjamin Alexander shares this expense' }).click();
+
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 760 });
+    const up = await button(page, 'Increase share for Ana').boundingBox();
+    const amount = await button(page, /^Amount for Ana:/).boundingBox();
+    const end = await button(page, 'Decrease share for Ana').boundingBox();
+
+    expect((await button(page, 'Increase share for Cy').boundingBox())!.x).toBe(up!.x);
+    expect((await button(page, /^Amount for Cy:/).boundingBox())!.x).toBe(amount!.x);
+    expect((await button(page, /^Amount for Cy:/).boundingBox())!.width).toBe(amount!.width);
+    expect((await button(page, 'Decrease share for Cy').boundingBox())!.x).toBe(end!.x);
+    expect((await page.getByRole('checkbox', { name: 'Benjamin Alexander shares this expense' }).boundingBox())!.x).toBe(end!.x);
+    expect((await page.getByText('Benjamin Alexander', { exact: true }).boundingBox())!.x).toBe((await page.getByText('Ana', { exact: true }).boundingBox())!.x);
+  }
+
+  await page.screenshot({ path: testInfo.outputPath('split-columns.png') });
 });
 
 test('mixes fixed amounts and weighted shares, preserves them offline, and clears a fixed amount back to shares', async ({ page, context }) => {
@@ -347,7 +456,14 @@ test('mixes fixed amounts and weighted shares, preserves them offline, and clear
   await page.getByRole('radio', { name: 'EUR, Euro' }).click();
   await expect(button(page, 'Currency: EUR. Change currency')).toBeVisible();
   await field(page, 'Description').fill('Mixed dinner');
+  const checkboxIcon = page.getByRole('checkbox', { name: 'Cy shares this expense' }).locator('svg');
+  const checkboxFill = await checkboxIcon.evaluate((icon) => getComputedStyle(icon.parentElement!).backgroundColor);
+
+  await expect(button(page, 'Increase share for Ana').locator('svg').locator('..')).toHaveCSS('background-color', checkboxFill);
+  expect(await button(page, 'Increase share for Ana').locator('svg').getAttribute('stroke')).toBe(await checkboxIcon.getAttribute('stroke'));
   await button(page, 'Increase share for Ana').click();
+  await expect(button(page, 'Decrease share for Ana').locator('svg').locator('..')).toHaveCSS('background-color', checkboxFill);
+  expect(await button(page, 'Decrease share for Ana').locator('svg').getAttribute('stroke')).toBe(await checkboxIcon.getAttribute('stroke'));
   await button(page, 'Increase share for Ana').click();
   await button(page, 'Increase share for Ben').click();
   await expect(page.getByTestId('split-summary')).toHaveText('Custom split · 3 people');
@@ -464,8 +580,44 @@ test('explains a balance and settles it with the fewest payments', async ({ page
   await button(page, 'Hide Ben').click();
   await expect(page.getByTestId('toast')).toHaveText('Ben hidden.');
   await expect(person(page, 'Ben')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toHaveCount(0);
+  await bell(page).click();
+  await button(page, 'Restore member').click();
+  await button(page, 'Back to Settle').click();
   await expect(person(page, 'Ben')).toBeVisible();
+});
+
+test('keeps drawer titles and controls at the currency drawer scale', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 760 });
+  await createGroup(page, 'Drawers', 'Ana');
+  await addMember(page, 'Ben');
+  await button(page, 'Add expense').click();
+  await button(page, 'Currency: USD. Change currency').click();
+  const currency = page.getByRole('dialog', { name: 'Currency' });
+  const referenceSize = await currency.getByText('US Dollar', { exact: true }).evaluate((text) => getComputedStyle(text).fontSize);
+  const referenceHeight = (await currency.getByRole('radio', { name: 'USD, US Dollar', exact: true }).boundingBox())!.height;
+
+  await expect(currency.getByRole('heading', { name: 'Currency', exact: true })).toHaveCSS('font-size', '18px');
+  await currency.getByRole('radio', { name: 'USD, US Dollar', exact: true }).click();
+  await button(page, 'Paid by Ana (you). Change payer').click();
+  const payer = page.getByRole('dialog', { name: 'Paid by' });
+
+  await expect(payer.getByText('Ben', { exact: true })).toHaveCSS('font-size', referenceSize);
+  expect((await payer.getByRole('radio', { name: 'Ben', exact: true }).boundingBox())!.height).toBe(referenceHeight);
+  await page.screenshot({ path: testInfo.outputPath('payer-drawer.png') });
+  await payer.getByRole('button', { name: 'Close', exact: true }).click();
+  await button(page, 'Cancel').click();
+  await button(page, 'Invite people').click();
+  const invite = page.getByRole('dialog', { name: 'Invite people' });
+
+  await expect(invite.getByRole('heading', { name: 'Invite people', exact: true })).toHaveCSS('font-size', '18px');
+  await expect(invite.getByText('Replace link', { exact: true })).toHaveCSS('font-size', referenceSize);
+  expect((await invite.getByRole('button', { name: 'Replace link', exact: true }).boundingBox())!.height).toBe(referenceHeight);
+  await page.screenshot({ path: testInfo.outputPath('invite-drawer.png') });
+  await invite.getByRole('button', { name: 'Close', exact: true }).click();
+  await button(page, 'Group settings').click();
+  await button(page, 'Leave group on this device').click();
+  await expect(page.getByRole('dialog', { name: 'Leave this group?' }).getByRole('heading', { name: 'Leave this group?', exact: true })).toHaveCSS('font-size', '18px');
 });
 
 test('renames the group, copies the invite link by tapping it, and replaces it after confirming', async ({ page, context }) => {
@@ -607,13 +759,25 @@ test('returns to the groups list while an invite check is still running', async 
 test('keeps offline edits pending and delivers them on reconnect', async ({ page, context }) => {
   await createGroup(page, 'Trip', 'Ana');
   await addMember(page, 'Ben');
-  const balancesTop = (await heading(page, 'Balances').boundingBox())!.y;
+  const headerTop = (await button(page, 'Trip. Switch group').boundingBox())!.y;
 
   await goOffline(page, context);
   await expect(button(page, 'Offline. Connection details')).toBeVisible();
-  expect(Math.abs((await heading(page, 'Balances').boundingBox())!.y - balancesTop)).toBeLessThanOrEqual(1);
+  const strip = button(page, /Connection details$/);
+  const stripBounds = (await strip.boundingBox())!;
+
+  expect(stripBounds.y).toBe(0);
+  expect(stripBounds.height).toBeLessThanOrEqual(32);
+  expect(Math.abs((await button(page, 'Trip. Switch group').boundingBox())!.y - headerTop - stripBounds.height)).toBeLessThanOrEqual(1);
+  await expect(strip).toHaveText('Offline');
   await expect(page.getByRole('alert')).toHaveCount(0);
+  await button(page, 'Add expense').click();
+  await expect(field(page, 'Amount')).toBeVisible();
+  await expect(strip).toHaveText('Offline');
+  expect((await strip.boundingBox())!.y).toBe(0);
+  await button(page, 'Cancel').click();
   await person(page, 'Ben').click();
+  await expect(strip).toHaveText('Offline');
   await button(page, 'Rename Ben').click();
   await field(page, 'Name').fill('Benjamin');
   await field(page, 'Name').press('Enter');
@@ -621,15 +785,19 @@ test('keeps offline edits pending and delivers them on reconnect', async ({ page
   await button(page, 'Back to Trip').click();
   await button(page, 'Offline · 1 change saved here. Connection details').click();
   await expect(page.getByRole('dialog', { name: 'Connection' })).toBeVisible();
-  await expect(page.getByText('Offline · 1 change saved here', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Connection' }).getByText('Offline · 1 change saved here', { exact: true })).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
   await button(page, 'Trip. Switch group').click();
   await expect(button(page, 'Offline · 1 change saved here. Connection details')).toBeVisible();
+  await expect(strip).toHaveText('Offline · 1 change saved here');
   await button(page, 'Offline · 1 change saved here. Connection details').click();
   await expect(page.getByRole('dialog', { name: 'Connection' })).toBeVisible();
   await expect(button(page, 'Retry')).toHaveCount(0);
   await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
   await button(page, 'Open Trip').click();
+  await button(page, 'Group settings').click();
+  await expect(strip).toHaveText('Offline · 1 change saved here');
+  await button(page, 'Back to group').click();
   await goOnline(page, context);
   await expect(button(page, /Connection details$/)).toHaveCount(0, { timeout: 15_000 });
   await expect(person(page, 'Benjamin')).toBeVisible();
@@ -638,7 +806,7 @@ test('keeps offline edits pending and delivers them on reconnect', async ({ page
 test('puts server connection failures and retry in the header details', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Connection test', 'Ana');
-  const balancesTop = (await heading(page, 'Balances').boundingBox())!.y;
+  const headerTop = (await button(page, 'Connection test. Switch group').boundingBox())!.y;
   let attempts = 0;
 
   await page.route('**/identity/groups', async (route) => {
@@ -648,7 +816,14 @@ test('puts server connection failures and retry in the header details', async ({
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await expect(button(page, 'Can’t reach splitnext. Connection details')).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
-  expect(Math.abs((await heading(page, 'Balances').boundingBox())!.y - balancesTop)).toBeLessThanOrEqual(1);
+  const strip = button(page, /Connection details$/);
+
+  await expect(strip).toHaveText('Can’t reach splitnext');
+  const stripBounds = (await strip.boundingBox())!;
+
+  expect(stripBounds.y).toBe(0);
+  expect(stripBounds.height).toBeLessThanOrEqual(32);
+  expect(Math.abs((await button(page, 'Connection test. Switch group').boundingBox())!.y - headerTop - stripBounds.height)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('connection-header.png') });
   await button(page, 'Can’t reach splitnext. Connection details').click();
   const dialog = page.getByRole('dialog', { name: 'Connection' });
@@ -666,7 +841,7 @@ test('puts server connection failures and retry in the header details', async ({
 
   // An HTTP/server failure is not silently hidden as a connection issue.
   await page.route('**/identity/groups', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'internal_error' }) }));
-  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.reload();
   await expect(page.getByRole('alert')).toBeVisible();
 });
 
@@ -747,7 +922,7 @@ test('reads Activity offline and restores a removed expense', async ({ page, con
   await button(page, 'Delete Dinner · 24.00 EUR').click();
   await bell(page).click();
   await expect(heading(page, 'Activity')).toBeVisible();
-  await expect(page.getByText('All caught up. Every change from this device is in.')).toBeVisible();
+  await expect(page.getByText('All caught up. Every change from this device is in.')).toHaveCount(0);
   await expect(page.getByText('You created the group', { exact: true })).toBeVisible();
   await expect(page.getByText('You removed Dinner', { exact: true })).toBeVisible();
   await expect(page.getByText(/changed who they are/)).toHaveCount(0);
@@ -782,7 +957,7 @@ test('undoes a money change and then reverses that undo through Activity', async
   await expect(button(page, 'Change repayment: Ben paid you back 12.00 EUR')).toBeVisible();
 });
 
-test('safely undoes member addition and group rename while excluded actions have no Undo', async ({ page }) => {
+test('keeps member actions out of Undo while group rename remains reversible', async ({ page }) => {
   await createGroup(page, 'Original name', 'Ana');
   await addMember(page, 'Ben');
   await button(page, 'Group settings').click();
@@ -792,12 +967,12 @@ test('safely undoes member addition and group rename while excluded actions have
   await bell(page).click();
   await button(page, 'Undo: You renamed the group').click();
   await expect(page.getByText('You undid a change', { exact: true })).toBeVisible();
-  await button(page, 'Undo: You added Ben').click();
-  await expect(page.getByText('You undid a change', { exact: true })).toHaveCount(2);
+  await expect(button(page, 'Undo: You added Ben')).toHaveCount(0);
+  await expect(page.getByText('You undid a change', { exact: true })).toHaveCount(1);
   await expect(button(page, 'Undo: You created the group')).toHaveCount(0);
   await button(page, 'Back to Original name').click();
   await expect(heading(page, 'Original name')).toBeVisible();
-  await expect(person(page, 'Ben')).toHaveCount(0);
+  await expect(person(page, 'Ben')).toBeVisible();
 });
 
 test('counts changes from others on the bell without pop-ups and marks them seen', async ({ page, browser }) => {
@@ -1011,7 +1186,11 @@ test('shows as many balances as leave room for two expenses, shrinks them to you
   await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBe(0);
 
   // Show all lists everyone in the page under the pinned heading, and Show fewer goes back.
-  await showAll.click();
+  // Click the visible sticky control without locator auto-scrolling its flow spacer.
+  await expect(showAll).toBeInViewport();
+  const resting = (await showAll.boundingBox())!;
+
+  await page.mouse.click(resting.x + resting.width / 2, resting.y + resting.height / 2);
   await expect(person(page, 'Gus')).toBeVisible();
   await expect(button(page, 'Show fewer people')).toBeVisible();
   await expect(field(page, 'Add a person')).toBeVisible();

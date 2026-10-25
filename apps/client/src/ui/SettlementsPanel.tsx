@@ -108,6 +108,7 @@ export function SettlementsPanel(props: { replica: ClientReplicaState }) {
               <View accessibilityRole="radiogroup" accessibilityLabel={picking === 'from' ? 'Paid by' : 'Paid to'} style={{ gap: 6 }}>
                 {members.map((memberId) => (
                   <RadioRow
+                    compact
                     key={memberId}
                     label={`${memberName(snapshot, memberId)}${memberId === you ? ' (you)' : ''}`}
                     selected={(picking === 'from' ? draft.from : draft.to) === memberId}

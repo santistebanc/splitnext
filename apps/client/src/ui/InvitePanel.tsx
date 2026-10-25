@@ -98,19 +98,19 @@ export function InviteSheet(props: { app: InvitePanelApp }) {
                 accessibilityLabel="Share link"
                 disabled={!action.can('shareInviteLink')}
                 onPress={() => { void action.call('shareInviteLink', {}); }}
-                style={({ pressed }) => [{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, borderRadius: 14, backgroundColor: colors.action }, pressed && s.dim]}
+                style={({ pressed }) => [{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: 12, backgroundColor: colors.action }, pressed && s.dim]}
               >
-                <ShareIcon color={colors.actionInk} />
-                <Text style={{ fontFamily, fontSize: 16, fontWeight: '600', color: colors.actionInk }}>Share</Text>
+                <ShareIcon size={18} color={colors.actionInk} />
+                <Text style={{ fontFamily, fontSize: 15, fontWeight: '600', color: colors.actionInk }}>Share</Text>
               </Pressable>
             ) : null}
             <Pressable
               accessibilityRole="button"
               disabled={!replace.can('regenerateInvite')}
               onPress={() => { void replace.call('regenerateInvite', {}); }}
-              style={({ pressed }) => [{ flex: 1, alignItems: 'center', justifyContent: 'center', height: 52, borderRadius: 14, borderWidth: 1, borderColor: colors.field, backgroundColor: colors.surface }, (pressed || !replace.can('regenerateInvite')) && s.dim]}
+              style={({ pressed }) => [{ flex: 1, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 12, borderWidth: 1, borderColor: colors.field, backgroundColor: colors.surface }, (pressed || !replace.can('regenerateInvite')) && s.dim]}
             >
-              <Text style={{ fontFamily, fontSize: 16, fontWeight: '600', color: colors.ink }}>{replace.busy ? 'Replacing…' : 'Replace link'}</Text>
+              <Text style={{ fontFamily, fontSize: 15, fontWeight: '600', color: colors.ink }}>{replace.busy ? 'Replacing…' : 'Replace link'}</Text>
             </Pressable>
           </View>
           {!online ? <Text style={s.caption}>Connect to replace the link.</Text> : null}

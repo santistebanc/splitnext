@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import type { ClientGroupSummary } from '@splitnext/client';
 import type { AppController } from '../model/controller';
@@ -35,7 +34,7 @@ export function GroupsFooter() {
 }
 
 /** The logo, the name, and Join, above the groups list. */
-export function GroupsHeader(props: { connectionStatus?: ReactNode }) {
+export function GroupsHeader() {
   const join = useActionCall();
 
   return (
@@ -48,21 +47,18 @@ export function GroupsHeader(props: { connectionStatus?: ReactNode }) {
           </View>
         )}
         end={(
-          <>
-            {props.connectionStatus}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Join with an invite link"
-              disabled={!join.can('showJoinGroup', {})}
-              onPress={() => {
-                void join.call('showJoinGroup', {});
-              }}
-              style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 44, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }, (pressed || !join.can('showJoinGroup', {})) && s.dim]}
-            >
-              <LinkIcon />
-              <Text style={{ fontFamily, fontSize: 14, fontWeight: '500', color: colors.ink }}>Join</Text>
-            </Pressable>
-          </>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Join with an invite link"
+            disabled={!join.can('showJoinGroup', {})}
+            onPress={() => {
+              void join.call('showJoinGroup', {});
+            }}
+            style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 44, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }, (pressed || !join.can('showJoinGroup', {})) && s.dim]}
+          >
+            <LinkIcon />
+            <Text style={{ fontFamily, fontSize: 14, fontWeight: '500', color: colors.ink }}>Join</Text>
+          </Pressable>
         )}
       />
       <ErrorMessage message={join.error} />

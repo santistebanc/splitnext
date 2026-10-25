@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { z } from 'zod';
 import { clientErrorKind, parseInviteLink } from '@splitnext/client';
 import { AppController } from '../model/controller';
+import { currentExpenses } from '../model/expenses';
 import { createDispatcher } from '../model/actions';
 import { browserActionPlatform } from './browserPlatform';
 import { createBrowserApp } from '../model/browser';
@@ -165,10 +166,9 @@ function historyEntry(ui: UiState, groupId: string | null) {
   return { splitnext: true, view: ui.view, trail: ui.trail, person: ui.person, groupId };
 }
 
-/** The undo offer for a member removed on this device; it closes itself after a while. */
+/** A brief confirmation that a member was removed on this device. */
 function RemovalToast() {
   const ui = useUiState();
-  const undo = useActionCall();
   const removal = ui.removal;
   const actions = useActions();
 
@@ -182,7 +182,6 @@ function RemovalToast() {
   return (
     <Toast
       message={removal ? `${removal.name} ${removal.hidden ? 'hidden' : 'removed'}.` : null}
-      action={removal && undo.can('restoreMember', { memberId: removal.memberId }) ? { text: 'Undo', onPress: () => { void undo.call('restoreMember', { memberId: removal.memberId }); } } : undefined}
     />
   );
 }
@@ -341,7 +340,7 @@ function ReadyApp(props: AppProps) {
 
     if (!open || !group)
       return {
-        header: <GroupsHeader connectionStatus={<SyncStatus online={state.online} reachable={state.reachable} pending={pending} busy={connection.busy} onRetry={retry} retryError={connection.error} />} />,
+        header: <GroupsHeader />,
         body: <GroupsView app={app} />,
         footer: <GroupsFooter />,
       };
@@ -373,14 +372,14 @@ function ReadyApp(props: AppProps) {
         };
       default:
         return {
-          header: <GroupHeader app={app} pending={pending} busy={connection.busy} onRetry={retry} retryError={connection.error} onLayout={balances.measureHeader} />,
+          header: <GroupHeader app={app} onLayout={balances.measureHeader} />,
           body: (
             <>
               <GroupView app={app} layout={balances} />
               {view === 'invite' ? <InviteSheet app={app} /> : null}
             </>
           ),
-          footer: addsExpenses ? <View pointerEvents="box-none" style={{ alignItems: 'flex-end' }}><AddExpenseButton /></View> : undefined,
+          footer: addsExpenses ? <View pointerEvents="box-none" style={{ alignItems: 'flex-end' }}><AddExpenseButton secondary={!currentExpenses(group?.projected_snapshot).length} /></View> : undefined,
         };
     }
   }
@@ -397,6 +396,8 @@ function ReadyApp(props: AppProps) {
             return (
               <View style={s.page}>
                 <Frame
+                  status={<SyncStatus online={state.online} reachable={state.reachable} pending={pending} busy={connection.busy} onRetry={retry} retryError={connection.error} />}
+                  onStatusLayout={balances.measureStatus}
                   header={screen.header}
                   footer={screen.footer}
                   floatingFooter={addsExpenses}

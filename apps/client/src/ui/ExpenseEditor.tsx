@@ -5,6 +5,7 @@ import type { AppController } from '../model/controller';
 import { entryFromDraft, expenseLabel, memberName, previewAllocation, recentCurrencies, type ExpenseDraft, type ExpenseDraftPart } from '../model/expenses';
 import { ErrorMessage, HeaderAction, RadioRow, ScreenHeader, colors, s } from './components';
 import { CurrencyPicker } from './CurrencyPicker';
+import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { Drawer } from './Drawer';
 import { between, useCompactProgress } from './pageScroll';
 import { CheckIcon, ChevronUpIcon, ChevronDownIcon } from './icons';
@@ -61,6 +62,9 @@ function splitSummary(draft: ExpenseDraft, preview: Map<string, number>): string
   return each !== undefined ? `${formatAmount(each, draft.currency)} each · ${people}` : 'Enter an amount to split';
 }
 
+/** A soft, solid fill shared by selected split checkboxes and share arrows. */
+const splitControlFill = { backgroundColor: colors.actionSoft, borderColor: colors.actionSoft };
+
 /** An arrow in a box the shape of the row's checkbox, with a full touch target around it. */
 function ShareArrow(props: { up: boolean; label: string; disabled: boolean; onPress: () => void }) {
   const Icon = props.up ? ChevronUpIcon : ChevronDownIcon;
@@ -72,9 +76,9 @@ function ShareArrow(props: { up: boolean; label: string; disabled: boolean; onPr
       accessibilityState={{ disabled: props.disabled }}
       disabled={props.disabled}
       onPress={props.onPress}
-      style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, (pressed || props.disabled) && s.dim]}
+      style={({ pressed }) => [{ width: 44, height: 44, flexShrink: 0, alignItems: 'center', justifyContent: 'center' }, (pressed || props.disabled) && s.dim]}
     >
-      <View style={s.checkbox}>
+      <View style={[s.checkbox, splitControlFill]}>
         <Icon size={16} color={colors.action} />
       </View>
     </Pressable>
@@ -101,60 +105,62 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
           <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily, fontSize: 16, lineHeight: 24, color: included ? colors.ink : colors.faint }}>{props.name}</Text>
           {props.you ? <YouBadge /> : null}
         </View>
-        {props.hasAmount ? (
-          <>
-            {included ? (
-              <ShareArrow up label={`Increase share for ${props.name}`} disabled={!edit.can('increaseExpenseShare', member)} onPress={() => { void edit.call('increaseExpenseShare', member); }} />
-            ) : <View style={{ width: 44 }} />}
-            <View style={{ width: 88, minHeight: 44, justifyContent: 'center' }}>
-              {included && editing ? (
-                <TextInput
-                  accessibilityLabel={`Amount for ${props.name}`}
-                  autoFocus
-                  selectTextOnFocus
-                  inputMode="decimal"
-                  value={fixed ? value : ''}
-                  editable={edit.can('setExpenseFixedAmount', { memberId: props.memberId, amount: '' })}
-                  onChangeText={(amount) => { void edit.call('setExpenseFixedAmount', { memberId: props.memberId, amount }); }}
-                  onBlur={() => setEditing(false)}
-                  onSubmitEditing={() => setEditing(false)}
-                  returnKeyType="done"
-                  style={[s.input, { paddingHorizontal: 4, height: 44, fontSize: 14, textAlign: 'right', fontFamily: monoFamily, color: colors.action }]}
-                />
-              ) : included ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Amount for ${props.name}: ${shown} ${props.currency}${fixed ? ', fixed' : ''}. Change amount`}
-                  accessibilityState={{ disabled: !canFix }}
-                  disabled={!canFix}
-                  onPress={() => { void edit.call('setExpenseFixedAmount', fixing, () => setEditing(true)); }}
-                  style={({ pressed }) => [{ minHeight: 44, justifyContent: 'center' }, pressed && s.dim]}
-                >
-                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ textAlign: 'right', fontFamily: monoFamily, fontSize: 14, lineHeight: 20, fontWeight: '600', color: fixed ? colors.action : colors.muted }}>
-                    {`${currencySymbol(props.currency)} ${shown}`}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-          </>
-        ) : null}
-        {props.hasAmount && (fixed || (props.part?.kind === 'shares' && props.part.shares > 1)) ? (
-          <ShareArrow up={false} label={`Decrease share for ${props.name}`} disabled={!edit.can('decreaseExpenseShare', member)} onPress={() => { void edit.call('decreaseExpenseShare', member); }} />
-        ) : (
-          <Pressable
-            accessibilityRole="checkbox"
-            accessibilityLabel={`${props.name} shares this expense`}
-            accessibilityState={{ checked: included, disabled: !edit.can('toggleExpenseParticipant', member) }}
-            aria-checked={included}
-            disabled={!edit.can('toggleExpenseParticipant', member)}
-            onPress={() => { void edit.call('toggleExpenseParticipant', member); }}
-            style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, (pressed || !edit.can('toggleExpenseParticipant', member)) && s.dim]}
-          >
-            <View style={[s.checkbox, included && s.checked]}>
-              {included ? <CheckIcon size={16} color={colors.actionInk} strokeWidth={2.2} /> : null}
-            </View>
-          </Pressable>
-        )}
+        <View style={{ width: props.hasAmount ? 176 : 44, flexShrink: 0, flexDirection: 'row', alignItems: 'center' }}>
+          {props.hasAmount ? (
+            <>
+              {included ? (
+                <ShareArrow up label={`Increase share for ${props.name}`} disabled={!edit.can('increaseExpenseShare', member)} onPress={() => { void edit.call('increaseExpenseShare', member); }} />
+              ) : <View style={{ width: 44 }} />}
+              <View style={{ width: 88, flexShrink: 0, minHeight: 44, justifyContent: 'center' }}>
+                {included && editing ? (
+                  <TextInput
+                    accessibilityLabel={`Amount for ${props.name}`}
+                    autoFocus
+                    selectTextOnFocus
+                    inputMode="decimal"
+                    value={fixed ? value : ''}
+                    editable={edit.can('setExpenseFixedAmount', { memberId: props.memberId, amount: '' })}
+                    onChangeText={(amount) => { void edit.call('setExpenseFixedAmount', { memberId: props.memberId, amount }); }}
+                    onBlur={() => setEditing(false)}
+                    onSubmitEditing={() => setEditing(false)}
+                    returnKeyType="done"
+                    style={[s.input, { paddingHorizontal: 4, height: 44, fontSize: 14, textAlign: 'right', fontFamily: monoFamily, color: colors.action }]}
+                  />
+                ) : included ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Amount for ${props.name}: ${shown} ${props.currency}${fixed ? ', fixed' : ''}. Change amount`}
+                    accessibilityState={{ disabled: !canFix }}
+                    disabled={!canFix}
+                    onPress={() => { void edit.call('setExpenseFixedAmount', fixing, () => setEditing(true)); }}
+                    style={({ pressed }) => [{ minHeight: 44, justifyContent: 'center' }, pressed && s.dim]}
+                  >
+                    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ textAlign: 'right', fontFamily: monoFamily, fontSize: 14, lineHeight: 20, fontWeight: '600', color: fixed ? colors.action : colors.muted }}>
+                      {`${currencySymbol(props.currency)} ${shown}`}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </>
+          ) : null}
+          {props.hasAmount && (fixed || (props.part?.kind === 'shares' && props.part.shares > 1)) ? (
+            <ShareArrow up={false} label={`Decrease share for ${props.name}`} disabled={!edit.can('decreaseExpenseShare', member)} onPress={() => { void edit.call('decreaseExpenseShare', member); }} />
+          ) : (
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityLabel={`${props.name} shares this expense`}
+              accessibilityState={{ checked: included, disabled: !edit.can('toggleExpenseParticipant', member) }}
+              aria-checked={included}
+              disabled={!edit.can('toggleExpenseParticipant', member)}
+              onPress={() => { void edit.call('toggleExpenseParticipant', member); }}
+              style={({ pressed }) => [{ width: 44, height: 44, flexShrink: 0, alignItems: 'center', justifyContent: 'center' }, (pressed || !edit.can('toggleExpenseParticipant', member)) && s.dim]}
+            >
+              <View style={[s.checkbox, included && splitControlFill]}>
+                {included ? <CheckIcon size={16} color={colors.action} strokeWidth={2.2} /> : null}
+              </View>
+            </Pressable>
+          )}
+        </View>
       </View>
       <ErrorMessage message={edit.error} />
     </View>
@@ -170,7 +176,7 @@ export function ExpenseControls(props: ExpenseEditorProps) {
   const snapshot = replica?.projected_snapshot;
   const you = preferredMember(snapshot, replica?.session?.identity.id)?.id;
   const draft = useUiState().expense;
-  const amount = useRef<TextInput>(null);
+  const amount = useRef<AmountInputHandle>(null);
   const progress = useCompactProgress();
 
   // A new expense starts in its amount; changing one waits for a tap. Opening
@@ -201,18 +207,14 @@ export function ExpenseControls(props: ExpenseEditorProps) {
     <View style={{ gap: between(14, 8, progress), paddingTop: between(8, 2, progress), paddingBottom: 4, paddingHorizontal: 8 }}>
       <View style={{ gap: between(8, 6, progress) }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <TextInput
-            ref={amount}
-            accessibilityLabel="Amount"
-            placeholder="0.00"
-            placeholderTextColor={colors.control}
-            inputMode="decimal"
+          <AmountInput
+            inputRef={amount}
             value={draft.amount}
+            currency={draft.currency}
             onChangeText={(value) => change('expense.amount', value)}
-            returnKeyType="done"
             onSubmitEditing={submit}
-            // Its text and focus outline line up with the description's.
-            style={[s.amountInput, { marginLeft: 0, paddingHorizontal: 15, height: between(64, 40, progress), fontSize: between(44, 28, progress) }]}
+            height={between(64, 40, progress)}
+            fontSize={between(44, 28, progress)}
           />
           <CurrencyPicker height={between(44, 34, progress)} value={draft.currency} recent={recentCurrencies(snapshot)} onChange={(value) => change('expense.currency', value)} />
         </View>
@@ -251,6 +253,7 @@ export function ExpenseControls(props: ExpenseEditorProps) {
               <View accessibilityRole="radiogroup" accessibilityLabel="Paid by" style={{ gap: 6 }}>
                 {payers.map((member) => (
                   <RadioRow
+                    compact
                     key={member.id}
                     label={`${memberName(snapshot, member.id)}${member.id === you ? ' (you)' : ''}`}
                     accessibilityLabel={memberName(snapshot, member.id)}
@@ -288,7 +291,7 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
   const preview = previewAllocation(snapshot, draft);
   const entry = entryFromDraft(draft);
   const hasAmount = (parseAmount(draft.amount, draft.currency) ?? 0) > 0;
-  const started = Boolean(draft.description.trim() || draft.amount.trim());
+  const described = Boolean(draft.description.trim());
 
   return (
     <View style={{ gap: 12, paddingHorizontal: 4, paddingBottom: 24 }}>
@@ -298,7 +301,7 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
         ))}
       </View>
 
-      {started && !entry.ok ? <Text style={s.caption}>{entry.problem}</Text> : null}
+      {described && !entry.ok ? <Text style={s.caption}>{entry.problem}</Text> : null}
       {!activeMembers(snapshot).length ? <Text style={s.caption}>Add a member first.</Text> : null}
     </View>
   );

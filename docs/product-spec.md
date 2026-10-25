@@ -45,18 +45,21 @@ Tap the link to copy it changes to Copied with a checkmark after copying.
 Creating a link does not imply anyone has joined.
 
 Use a calm visual direction and animated state-driven views. Use compact mobile
-layouts with clear labels and usable touch targets. Draw textbox keyboard focus
+layouts with clear labels and usable touch targets.
+Drawers share the currency picker's compact scale: 15px body and action text,
+48px rows and buttons, and smaller 18px titles, including confirmation sheets.
+Draw textbox keyboard focus
 outlines inside the field's edge so scroll containers and inline actions cannot
 clip them. Avoid repeated explanatory text, duplicate actions, unsupported controls, and rename
 save actions before a name changes. Use precise control labels rather than
 static explanatory paragraphs in app screens. Keep access-recovery
 details in the product documentation and the current beta scope on the homepage. Keep URL handling
 for public entry points and browser navigation. While offline, or while the
-server cannot be reached, show a small connection icon in the group and
-groups-list headers. Its accessible label includes the connection state and
-number of changes saved here. Tapping it opens connection details with that
-status and Retry when the network is available. Close the details and hide
-the icon on reconnect. Background connection failures do not show a banner;
+server cannot be reached, show a thin, neutral strip above the header in
+every view. It stays outside the scrolling content, showing Offline or
+Can’t reach splitnext and the number of changes saved here. Tapping it opens
+connection details with that status and Retry when the network is available.
+Close the details and hide the strip on reconnect. Background connection failures do not show a second banner;
 keep failures of actions requiring a connection beside those actions, and
 keep storage, protocol, and other background errors visible.
 Keep rejected/superseded changes for review as described below. Add expense remains
@@ -94,7 +97,7 @@ zero balance in every currency can be taken out; otherwise the action is
 disabled with Settle up first. It is called Hide when any expense or repayment
 has named them, removed ones included, since they are kept for history, and
 Remove otherwise. Either is immediate, without a confirmation, including the
-current you member. A toast names the person, hidden or removed, with Undo,
+current you member. A toast names the person, hidden or removed, without Undo,
 and Activity can restore them later. A hidden member who has a balance again,
 such as from an offline change, stays in the balances marked removed, with
 Restore in their details. Below the actions, the details list every current expense and
@@ -165,13 +168,17 @@ group, a note that the invite link comes right away, and a pinned Create group
 action that shows Creating… with a spinner while it works.
 
 A group opens on one screen, without tabs. Its fixed header has the group name,
-which opens the groups list, a connection icon when offline, and a bell opening
+which opens the groups list, and a bell opening
 Activity, and a gear button beside the bell opening Group settings. Settings
 contains the Group name field and Leave group, with Save group name shown only
 after the name changes. Back discards unsaved edits; leaving keeps its
 confirmation sheet. Below the group header, the page is one scroll area with two sections styled
-alike, each a heading over one card of rows: Balances, with Invite at the end
-of its heading, then Expenses. No list scrolls on its own. The balances card
+alike, each a heading over one card of rows: Balances, with Invite people at the end
+of its heading, then Expenses. While there are no active expenses, Invite people
+is solid brand blue with white text, and Add expense uses a quieter blue fill.
+Once an expense exists, Invite people becomes the quieter button and Add
+expense takes the solid fill. Both keep the same label, position, and size.
+No list scrolls on its own. The balances card
 lists people and ends with an Add a person line. It has three levels. By
 default it shows everyone, unless that would leave no room for the Expenses
 heading and the first two expenses; then it shows the people who fit,
@@ -207,14 +214,21 @@ opened, such as Settle up.
 The expense editor follows the original Splitnext form: Cancel, Add (Edit
 expense when changing one), and Save in the header; Paid by opening the names
 in place; a large centered monospaced amount with its currency symbol and an
-editable currency code; Split between; then Occasion. Show the member's actual
+editable currency code; Split between; then Occasion. The amount accepts
+digits and a decimal dot or comma, displaying a dot and fixed decimal places
+after each keystroke (two for EUR/USD, the currency's minor-unit precision
+otherwise). Keep the caret usable for insertion, replacement, and deletion.
+Reject ambiguous or over-precise pasted amounts. Show the member's actual
 name with a You badge rather than replacing it with You. While the total is
 empty or zero, split rows show only the vertically centered name, You badge,
 and participation checkbox. Share arrows and per-person amounts appear once
 a positive total is entered, preserving any existing shares or fixed amounts.
 Each split row then shows
 the person's name and calculated amount, an increase arrow, and a checkbox at
-one share or a decrease arrow above one share or for a fixed amount. Excluded
+one share or a decrease arrow above one share or for a fixed amount. Share
+arrows and selected checkboxes use the same soft solid blue fill and darker
+blue icons. Keep names, up arrows, right-aligned amounts, and down arrows or
+checkboxes in consistent columns, including excluded people. Excluded
 people stay in place with an empty checkbox. Arrows adjust whole shares and
 reduce equivalent share counts together. Tapping a person's amount edits a
 fixed value, shown in blue; everybody else divides the remainder by their
@@ -224,7 +238,9 @@ excludes them. Keep one person sharing the remainder. Show the equal split
 caption, such as 28.20 each · 5 people, or Custom split · 5 people when amounts are fixed
 or weights differ. Preserve both fixed amounts and weights when reopening and
 saving an expense. Invalid precision or amounts above the total retain their
-input and prevent saving. Changing an expense adds Remove expense below.
+input and prevent saving. Do not show a bottom-of-page prompt asking for a
+description; Save remains unavailable until the required fields are filled.
+Changing an expense adds Remove expense below.
 Expense rows have no inline remove action.
 
 Activity is one chronological list grouped by day, without filters, below a
@@ -284,10 +300,11 @@ replacement. Presence and preferred-member selections do not appear in the
 feed. Existing append-only audit attribution remains authoritative.
 
 Any participant may undo another participant's reversible action, without a
-time limit, while it remains safe. Group creation, joining, leaving, and invite
-replacement have no Undo. Undoing a member addition is blocked once an expense
-or settlement references that member. Historical references remain relevant
-even when their records are removed.
+time limit, while it remains safe. Member additions, renames, removals,
+restorations, and earlier member reversals have no Undo, in either Activity
+or the member-removal toast. These simple changes can be corrected manually.
+Group creation, joining, leaving, and invite replacement also have no Undo.
+Expenses, repayments, and group renames retain safe Undo.
 
 An undo cannot overwrite a later change to the affected information. Explain
 why an action cannot currently be undone. Unrelated changes elsewhere in the
@@ -532,8 +549,8 @@ a later rejection produces a new notice.
 - Changes waiting for review count on the group's Activity bell and appear
   first in Activity under Needs your review, each resolved there with Apply
   again or Dismiss. An affected expense or repayment shows a small orange dot.
-  No other review status shows elsewhere; with nothing left, Activity says All
-  caught up.
+  No other review status shows elsewhere. With nothing left to review, omit
+  this section and show the Activity history directly.
 - Target details explain the intended change, the authoritative result, and the
   reason. When available, they also identify the other actor whose change
   superseded it.
