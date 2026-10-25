@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,8 +15,13 @@ for (const target of [assets, server]) {
     throw new Error('Build output escaped the repository');
   }
 
-  await rm(target, { recursive: true, force: true });
   await mkdir(target, { recursive: true });
+
+  // A running Windows dev server may hold the output directory open.
+  // Replace its contents while keeping the directory itself available.
+  for (const entry of await readdir(target)) {
+    await rm(join(target, entry), { recursive: true, force: true });
+  }
 }
 
 await cp(join(root, 'apps', 'client', 'dist', 'client'), assets, {

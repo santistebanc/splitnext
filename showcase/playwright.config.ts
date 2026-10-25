@@ -25,7 +25,7 @@ export default defineConfig({
   },
   webServer: {
     command: [
-      `rm -rf ${state}`,
+      `node -e "require('node:fs').rmSync('${state}', { recursive: true, force: true })"`,
       `wrangler d1 migrations apply INDEX --local --persist-to ${state}`,
       `wrangler dev --port ${port} --persist-to ${state}`,
     ].join(' && '),

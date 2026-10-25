@@ -12,7 +12,7 @@ import { addExpense, addMember, baseURL, bell, button, createGroup, field, headi
 const flows = {
   start: { order: 1, title: 'Getting started', summary: 'A fresh install opens on the welcome screen. Create a group, then add people right in the balances.' },
   expenses: { order: 2, title: 'Recording expenses', summary: 'Enter an amount, pick who paid, and split it equally, by shares, or by exact amounts, in any currency.' },
-  people: { order: 3, title: 'People in a group', summary: 'Open someone to see how their balance adds up, rename them, or remove someone new with Undo.' },
+  people: { order: 3, title: 'People in a group', summary: 'Open someone to see how their balance adds up, rename them, or remove someone who has no records.' },
   settle: { order: 4, title: 'Settling up', summary: 'The plan shows the fewest payments. Record a planned payment in full or in part, then change it later.' },
   invite: { order: 5, title: 'Renaming and inviting', summary: 'Rename the group, copy its invite link, and replace the link when it has gone too far.' },
   join: { order: 6, title: 'Joining from an invite', summary: 'A second device opens the link, sees who is already in the group, and joins as someone new.' },
@@ -313,12 +313,11 @@ test('people in a group', async ({ browser }) => {
   await expect(heading(page, 'Eli')).toBeVisible();
   await shot(rec, 'person-new', 'Someone in no expense yet');
 
-  await step(rec, 'Remove them, then undo');
+  await step(rec, 'Remove someone with no records');
   await tap(rec, button(page, 'Remove Eli'));
   await expect(page.getByTestId('toast')).toHaveText('Eli removed.');
-  await shot(rec, 'toast-removed', 'Removed, with Undo');
-  await tap(rec, page.getByRole('button', { name: 'Undo', exact: true }));
-  await expect(person(page, 'Eli')).toBeVisible();
+  await shot(rec, 'toast-removed', 'Person removed');
+  await expect(person(page, 'Eli')).toHaveCount(0);
   await pause(rec, 800);
   await finish(rec);
 });
@@ -574,8 +573,12 @@ test('working offline', async ({ browser }) => {
   await landOn(rec, 'Trip');
   await step(rec, 'The connection drops');
   await setOnline(rec, false);
-  await expect(page.getByRole('status').filter({ hasText: /^Offline/ })).toBeVisible();
+  await expect(button(page, /^Offline.*Connection details$/)).toBeVisible();
   await shot(rec, 'offline', 'Offline');
+  await step(rec, 'Open connection details');
+  await tap(rec, button(page, /^Offline.*Connection details$/));
+  await shot(rec, 'offline-details', 'Connection details');
+  await tap(rec, page.getByRole('dialog', { name: 'Connection' }).getByRole('button', { name: 'Close', exact: true }));
 
   await step(rec, 'Keep making changes');
   await tap(rec, person(page, 'Ben'));
