@@ -1048,6 +1048,52 @@ test('counts changes from others on the bell without pop-ups and marks them seen
   await visitorContext.close();
 });
 
+test('keeps the expense header steady at the bottom of the split list', async ({ page }) => {
+  await createGroup(page, 'Steady form', 'Ana');
+
+  for (const name of ['Ben', 'Cy', 'Dana', 'Eli', 'Fran', 'Gus']) await addMember(page, name);
+
+  await button(page, 'Add expense').click();
+  await field(page, 'Amount').evaluate((input) => input.blur());
+
+  const scenarios = [
+    ...[540, 600, 640, 680, 740].map((height) => ({ height, focused: false, reduced: false })),
+    { height: 540, focused: true, reduced: false },
+    { height: 540, focused: false, reduced: true },
+  ];
+
+  for (const scenario of scenarios) {
+    const { height, focused, reduced } = scenario;
+
+    await page.setViewportSize({ width: 390, height });
+    await page.emulateMedia({ reducedMotion: reduced ? 'reduce' : 'no-preference' });
+
+    if (focused) await field(page, 'Amount').focus();
+    else await field(page, 'Amount').evaluate((input) => input.blur());
+
+    const samples = await page.evaluate(() => new Promise<{ top: number; header: number }[]>((resolve) => {
+      const scroller = document.getElementById('splitnext-page')!;
+      const start = performance.now();
+      const samples: { top: number; header: number }[] = [];
+
+      scroller.scrollTop = scroller.scrollHeight;
+      (function frame() {
+        // Ignore the initial collapse; the header must settle after scrolling stops.
+        if (performance.now() - start > 600) samples.push({ top: scroller.scrollTop, header: scroller.getBoundingClientRect().top });
+
+        if (performance.now() - start < 1400) requestAnimationFrame(frame);
+        else resolve(samples);
+      })();
+    }));
+
+    const headers = samples.map((sample) => sample.header);
+    const positions = samples.map((sample) => sample.top);
+
+    expect(Math.max(...headers) - Math.min(...headers), JSON.stringify({ scenario, samples })).toBeLessThanOrEqual(1);
+    expect(Math.max(...positions) - Math.min(...positions), JSON.stringify({ scenario, samples })).toBeLessThanOrEqual(1);
+  }
+});
+
 test('shows as many balances as leave room for two expenses, shrinks them to your row on scroll, and shows all on request', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 640 });
   await createGroup(page, 'Long trip', 'Ana');
