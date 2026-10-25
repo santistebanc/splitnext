@@ -205,8 +205,7 @@ test('balances and people', async ({ browser }) => {
   await spot(page, page.getByText('No expenses yet', { exact: true }), 'person-no-expenses', 'People', 'No expenses yet', 'In no expense or repayment, instead of a balance.');
   await spot(page, button(page, 'Remove Dee'), 'person-remove', 'People', 'Remove', 'Someone in no expense or repayment is removed outright; anyone else is hidden.');
   await button(page, 'Remove Dee').click();
-  await spot(page, page.getByTestId('toast').locator('..'), 'toast-removed', 'Group screen', 'Removed, with Undo', 'Right after removing someone, for a few seconds.');
-  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await spot(page, page.getByTestId('toast').locator('..'), 'toast-removed', 'Group screen', 'Person removed', 'Right after removing someone with no records, for a few seconds.');
   await context.close();
 });
 
@@ -249,15 +248,15 @@ test('settling up', async ({ browser }) => {
 
   await button(page, 'Back to Ben').click();
   await spot(page, page.getByText('Settled · EUR', { exact: true }).locator('..'), 'person-settled', 'People', 'Settled', 'In expenses, with a numeric zero in each settled currency.');
-  await button(page, 'Hide Ben').click();
-  await spot(page, page.getByTestId('toast').locator('..'), 'toast-hidden', 'Group screen', 'Hidden, with Undo', 'Right after hiding someone settled who has history.');
-  await page.getByRole('button', { name: 'Undo', exact: true }).click();
-  await expect(person(page, 'Ben')).toBeVisible();
-
+  await button(page, 'Back to Weekend').click();
   await spot(page, person(page, 'Ben'), 'balance-settled', 'Balances', 'Settled person', 'A numeric zero in each currency with records; people with no expenses keep a blank amount.');
   await spot(page, button(page, /^Change repayment: Ben paid you back 30\.00 EUR/), 'row-repayment', 'Group screen', 'Repayment row', 'A recorded repayment, listed with the expenses in a quieter amount.');
   await button(page, /^Change repayment: Ben paid you back 30\.00 EUR/).click();
-  await spot(page, button(page, /^Remove repayment/), 'repay-remove', 'Settling up', 'Remove repayment', 'Opening a recorded repayment to change it.');
+  await spot(page, button(page, 'Delete'), 'repay-remove', 'Settling up', 'Delete repayment', 'Opening a recorded repayment to change it.');
+  await button(page, 'Cancel').click();
+  await person(page, 'Ben').click();
+  await button(page, 'Hide Ben').click();
+  await spot(page, page.getByTestId('toast').locator('..'), 'toast-hidden', 'Group screen', 'Person hidden', 'Right after hiding someone settled who has history.');
   await context.close();
 });
 
@@ -276,7 +275,7 @@ test('expense form', async ({ browser }) => {
   await openGroup(page, 'Trip');
   await button(page, 'Add expense').click();
   await field(page, 'Amount').fill('30');
-  await spot(page, page.getByText('Describe the expense.'), 'expense-describe', 'Expense form', 'Describe the expense', 'Something is typed but there is no description yet.');
+  await spot(page, field(page, 'Description'), 'expense-describe', 'Expense form', 'Description required', 'An amount is entered, but Save stays unavailable until the expense has a description.');
   await spot(page, button(page, 'Save'), 'expense-save-disabled', 'Expense form', 'Save, unavailable', 'Until the expense is complete.');
   await field(page, 'Description').fill('Dinner');
   await button(page, /^Currency: .*\. Change currency$/).click();
@@ -337,13 +336,16 @@ test('offline and unreachable', async ({ browser }) => {
 
   await openGroup(page, 'Trip');
   await setOffline(context, page, true);
-  await spot(page, page.getByRole('status').filter({ hasText: /^Offline/ }), 'sync-offline', 'Offline and sync', 'Offline', 'Under the group name while the device is offline.');
+  await spot(page, button(page, /^Offline.*Connection details$/), 'sync-offline', 'Offline and sync', 'Offline', 'The connection strip above the screen header while the device is offline.');
+  await button(page, /^Offline.*Connection details$/).click();
+  await spot(page, page.getByRole('dialog', { name: 'Connection' }), 'sync-details', 'Offline and sync', 'Connection details', 'Tap the connection strip to see how locally saved changes sync.');
+  await page.getByRole('dialog', { name: 'Connection' }).getByRole('button', { name: 'Close', exact: true }).click();
   await person(page, 'Ben').click();
   await button(page, 'Rename Ben').click();
   await field(page, 'Name').fill('Benjamin');
   await field(page, 'Name').press('Enter');
   await button(page, 'Back to Trip').click();
-  await spot(page, page.getByRole('status').filter({ hasText: /saved here/ }), 'sync-pending', 'Offline and sync', 'Changes saved here', 'Offline with changes waiting to be sent.');
+  await spot(page, button(page, /^Offline.*saved here.*Connection details$/), 'sync-pending', 'Offline and sync', 'Changes saved here', 'Offline with changes waiting to be sent.');
   await person(page, 'Ana').click();
   await spot(page, page.getByText(/^Offline · taken on/), 'person-offline-you', 'People', 'Offline presence', 'Your own page while this device is offline.');
   await button(page, 'Back to Trip').click();
@@ -353,7 +355,7 @@ test('offline and unreachable', async ({ browser }) => {
 
   await button(page, 'Trip. Switch group').click();
   await spot(page, page.getByText('1 change waiting'), 'groups-waiting', 'Welcome and groups', 'Changes waiting', 'A group card with changes not sent yet.');
-  await spot(page, page.getByRole('status').filter({ hasText: /^Offline/ }), 'groups-offline', 'Offline and sync', 'Offline, on the groups list', 'The same status line above the list.');
+  await spot(page, button(page, /^Offline.*Connection details$/), 'groups-offline', 'Offline and sync', 'Offline, on the groups list', 'The same connection strip above the list.');
   await button(page, 'Join with an invite link').click();
   await spot(page, page.getByText('You’re offline. Connect to open the link.'), 'join-link-offline', 'Joining', 'Offline, before a link', 'Opening a link needs a connection.');
   await button(page, 'Back').click();
@@ -369,11 +371,13 @@ test('offline and unreachable', async ({ browser }) => {
   await field(page, 'Name').fill('Ben');
   await field(page, 'Name').press('Enter');
   await button(page, 'Back to Trip').click();
-  await spot(page, page.getByRole('status').filter({ hasText: /^Can’t reach splitnext/ }), 'sync-unreachable', 'Offline and sync', 'Can’t reach splitnext, with Retry', 'Online, but the server does not answer.');
+  await spot(page, button(page, /^Can’t reach splitnext.*Connection details$/), 'sync-unreachable', 'Offline and sync', 'Can’t reach splitnext', 'Online, but the server does not answer. Tap for connection details and Retry.');
+  await button(page, /^Can’t reach splitnext.*Connection details$/).click();
+  await spot(page, button(page, 'Retry'), 'sync-retry', 'Offline and sync', 'Retry connection', 'Connection details offer Retry when the device is online.');
 
   await page.unroute(/\/groups\/[^/]+\/sync/);
   await page.route(/\/groups\/[^/]+\/sync/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: 'not json' }));
-  await page.getByRole('status').getByRole('button', { name: 'Retry' }).click();
+  await button(page, 'Retry').click();
   await spot(page, page.getByRole('alert').first(), 'sync-error', 'App', 'A failed sync', 'The server answered with something unreadable: the reason, above the screen.');
   await page.unroute(/\/groups\/[^/]+\/sync/);
   await context.close();
@@ -606,7 +610,7 @@ test('activity', async ({ browser }) => {
     await button(page, 'Back to Ben').click();
     await button(page, 'Back to History').click();
     await button(page, /^Change repayment: /).click();
-    await button(page, /^Remove repayment/).click();
+    await button(page, 'Delete').click();
     await expect(heading(page, 'History')).toBeVisible();
     await button(page, 'Change Taxi · 18.00 EUR').click();
     await button(page, 'Delete Taxi · 18.00 EUR').click();
@@ -623,7 +627,6 @@ test('activity', async ({ browser }) => {
   await openGroup(page, 'Porto');
   await bell(page).click();
   await expect(heading(page, 'Activity')).toBeVisible();
-  await spot(page, page.getByText(/^All caught up/), 'activity-caught-up', 'Activity', 'All caught up', 'Every change from this device was applied.');
   await spot(page, activityEntry(page, 'You renamed the group').first(), 'activity-group', 'Activity', 'Group change', 'Grey grid icon: the group itself changed.');
   await spot(page, button(page, 'Undo: You renamed the group'), 'activity-undo', 'Activity', 'Undo', 'The change can be reversed safely.');
   await spot(page, activityEntry(page, 'You removed Dee').first(), 'activity-people', 'Activity', 'People change', 'Purple person icon: someone was added, renamed, or removed.');
