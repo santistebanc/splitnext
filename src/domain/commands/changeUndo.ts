@@ -34,17 +34,6 @@ export const changeUndo = defineCommand<Command, IntentOf<Command>>({
         audit: { action: 'change.undone', reverses_event_id: event.id, before: { kind: 'group', group: snapshot.group }, after: { kind: 'group', group } } };
     }
 
-    if (desired.kind === 'member' && effect.after.kind === 'member') {
-      const current = snapshot.members.find((entry) => entry.id === desired.member.id);
-
-      if (!current) return rejected(snapshot, target, 'undo_changed');
-      const member = { ...desired.member, updated_at: at };
-      const access_grants = member.status === 'active' ? snapshot.access_grants : snapshot.access_grants.map((grant) => grant.preferred_member_id === member.id ? { ...grant, preferred_member_id: null } : grant);
-
-      return { snapshot: { ...snapshot, members: snapshot.members.map((entry) => entry.id === member.id ? member : entry), access_grants }, status: 'applied', reason: null, target, serverState: { kind: 'member', member },
-        audit: { action: 'change.undone', reverses_event_id: event.id, before: { kind: 'member', member: current }, after: { kind: 'member', member } } };
-    }
-
     if (desired.kind === 'expense' && effect.after.kind === 'expense') {
       const current = snapshot.expenses.find((entry) => entry.id === desired.expense.id);
 
