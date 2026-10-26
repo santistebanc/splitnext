@@ -615,6 +615,38 @@ test('explains a balance and settles it with the fewest payments', async ({ page
   await expect(person(page, 'Ben')).toBeVisible();
 });
 
+test('settles up the whole group from the balances', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 760 });
+  await createGroup(page, 'Whole group', 'Ana');
+  await addMember(page, 'Ben');
+  await addMember(page, 'Cy');
+  await expect(button(page, 'Settle up the group')).toHaveCount(0);
+  await addExpense(page, 'Dinner', '90', 'EUR');
+  await addExpense(page, 'Taxi', '30', 'EUR', 'Ben');
+
+  // Settle up and Invite share the heading row, even on a narrow screen.
+  const settle = (await button(page, 'Settle up the group').boundingBox())!;
+  const invite = (await button(page, 'Invite people').boundingBox())!;
+  expect(Math.abs(settle.y - invite.y)).toBeLessThanOrEqual(1);
+  expect(invite.x + invite.width).toBeLessThanOrEqual(320);
+
+  // Every payment in the plan, including ones you are not part of.
+  await button(page, 'Settle up the group').click();
+  await expect(heading(page, 'Settle up')).toBeVisible();
+  await expect(page.getByText('These payments settle everyone completely. Tap one once it’s paid.', { exact: true })).toBeVisible();
+  await expect(button(page, 'Cy pays you 40.00 EUR. Record this payment')).toBeVisible();
+  await expect(button(page, 'Ben pays you 10.00 EUR. Record this payment')).toBeVisible();
+
+  await button(page, 'Ben pays you 10.00 EUR. Record this payment').click();
+  await button(page, 'Record repayment').click();
+  await expect(button(page, 'Ben pays you 10.00 EUR. Record this payment')).toHaveCount(0);
+  await button(page, 'Cy pays you 40.00 EUR. Record this payment').click();
+  await button(page, 'Record repayment').click();
+  await expect(page.getByText('Everyone is settled up.', { exact: true })).toBeVisible();
+  await button(page, 'Back to Whole group').click();
+  await expect(button(page, 'Settle up the group')).toHaveCount(0);
+});
+
 test('keeps drawer titles and controls at the currency drawer scale', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Drawers', 'Ana');

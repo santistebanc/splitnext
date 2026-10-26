@@ -95,8 +95,10 @@ export function personFits(app: AppState, memberId: string | null | undefined): 
 export function viewFits(view: ViewName, app: AppState, person: string | null = null): boolean {
   switch (view) {
     case 'person':
-    case 'settle':
       return personFits(app, person);
+    case 'settle':
+      // Without a person, Settle up shows the whole group's plan.
+      return person ? personFits(app, person) : groupIsOpen(app);
     case 'settings':
     case 'expense':
     case 'settlements':
