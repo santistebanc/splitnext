@@ -90,7 +90,9 @@ npm run dev
 `npm install` also points git at the tracked hooks in `.githooks/`. The
 development command applies pending migrations to the local D1 database,
 exports the Expo web client, and starts the API and server-rendered entry
-pages on port 8787 with debug inspection on.
+pages on port 8787 with debug inspection on. It refuses to start while
+something already listens on 8787, since a second server in one checkout
+leaves both unresponsive.
 
 - `http://localhost:8787/` is the homepage and `/app` the app.
 - `/app?devtools` opens the in-app development panel; `/components` the
