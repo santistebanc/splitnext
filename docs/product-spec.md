@@ -64,9 +64,9 @@ connection details with that status and Retry when the network is available.
 Close the details and hide the strip on reconnect. Background connection failures do not show a second banner;
 keep failures of actions requiring a connection beside those actions, and
 keep storage, protocol, and other background errors visible.
-Keep rejected/superseded changes for review as described below. Add expense remains
-absent until supported, then becomes the primary group action without requiring
-invitation acceptance. See [the app plan](./app-product-plan.md).
+Keep rejected/superseded changes for review as described below. Add expense is
+the primary group action and does not require invitation acceptance. See
+[the app plan](./app-product-plan.md) for product direction.
 
 The balances list everyone in the group with their balance per currency, you
 first on a tinted row with a blue You label, then everyone else from most
@@ -650,7 +650,7 @@ a later rejection produces a new notice.
 
 ## Expenses and money
 
-Expenses are accepted behavior; settlements remain deferred.
+Expenses and settlements are accepted behavior.
 
 - Each expense records a required description, its original amount, an
   explicit currency code, its payer, and allocations in that currency. It has
