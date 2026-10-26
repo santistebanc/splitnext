@@ -100,8 +100,9 @@ Tapping the heading calls `Frame`'s `scrollControl` to scroll smoothly to
 the top. The Expenses heading is a `StickyTop` offset by the pinned Balances
 heading, and tapping it scrolls the expenses up to it. `ExpenseList` shows expenses and
 repayments newest first. Tapping a person opens
-`person` (`PersonDetails`), whose Settle up opens `settle` (`SettleUp`), whose
-payments open the repayment form (`settlements`) filled in. `AppUiState.trail`
+`person` (`PersonDetails`), whose Settle up opens `settle` (`SettleUp`) for that
+person; the Balances heading's Settle up opens it with no person, for the
+whole group. Its payments open the repayment form (`settlements`) filled in. `AppUiState.trail`
 records the views a page was opened from, so Back, Cancel, and saving return
 there, and history restores the trail with the view and the person. Invite
 opens `InviteSheet` as a bottom sheet over the group screen; leaving a group
@@ -154,7 +155,7 @@ worker's release cache key.
 - Forms are pages with keyboard-aware scrolling on every device. Member
   editing is allowed on the group screen and in person details.
 - Settle up shows the payments in `planTransfers` (`src/domain/settlements.ts`)
-  that involve one person. The plan has the fewest payments per currency: it
+  that involve one person, or all of them for the whole group. The plan has the fewest payments per currency: it
   splits nonzero balances into as many zero-sum sets as possible with a bitmask
   search for up to 14 people, and settles each set greedily; larger groups use
   the greedy plan alone. Picking a payment opens the repayment form filled in;

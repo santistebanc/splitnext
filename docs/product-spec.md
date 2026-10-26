@@ -180,6 +180,8 @@ of its heading, then Expenses. While there are no active expenses, Invite people
 is solid brand blue with white text, and Add expense uses a quieter blue fill.
 Once an expense exists, Invite people becomes the quieter button and Add
 expense takes the solid fill. Both keep the same label, position, and size.
+While the group's plan has any payment, a quieter Settle up button sits before
+Invite people in the Balances heading and opens Settle up for the whole group.
 No list scrolls on its own. The balances card
 lists people and ends with an Add a person line. It has three levels. By
 default it shows everyone, unless that would leave no room for the Expenses
@@ -276,7 +278,8 @@ within each currency, and may skip people in the middle: if Ana owes Ben EUR 20
 and Ben owes Cara EUR 20, Ana pays Cara EUR 20. The plan is exact for up to 14
 people with a balance in a currency and falls back to a deterministic greedy
 plan above that. A person's Settle up shows only the plan's payments involving
-them; settle-up suggestions are not shown on the group screen.
+them; the group's Settle up, opened from the Balances heading, shows every
+payment in the plan. The payments themselves are not listed on the group screen.
 
 Picking a payment opens the repayment form with payer, recipient, amount, and
 currency filled in and the amount editable for a partial payment. Record a

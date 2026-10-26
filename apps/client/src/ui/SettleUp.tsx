@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native';
-import { formatAmount, memberSettlements, preferredMember, repaymentMembers } from '@splitnext/client';
+import { formatAmount, memberSettlements, preferredMember, repaymentMembers, settlementSuggestions } from '@splitnext/client';
 import { memberName, moneyLabel } from '../model/expenses';
 import { ErrorMessage, colors, s } from './components';
 import { useRepaymentForm } from './ExpenseList';
@@ -9,17 +9,18 @@ import { BackHeader } from './PersonView';
 import { fontFamily, monoFamily } from './theme';
 import { useUiState } from './useActionCall';
 
-/** The settle-up header: back to the person it settles, named above the title. */
+/** The settle-up header: back to the person it settles, or the group, named above the title. */
 export function SettleUpHeader(props: { app: MemberListApp }) {
   const person = useUiState().person;
-  const name = person ? memberName(props.app.snapshot().group?.projected_snapshot, person) : '';
+  const snapshot = props.app.snapshot().group?.projected_snapshot;
+  const name = person ? memberName(snapshot, person) : snapshot?.group.name ?? '';
 
   return <BackHeader context={name} title="Settle up" />;
 }
 
 /**
- * The payments in the group's settle-up plan that involve one person, per
- * currency. Each opens the repayment form filled in; the amount stays
+ * The payments in the group's settle-up plan, per currency: all of them, or
+ * those involving one person. Each opens the repayment form filled in; the amount stays
  * editable for a partial payment.
  */
 export function SettleUp(props: { app: MemberListApp }) {
@@ -28,18 +29,20 @@ export function SettleUp(props: { app: MemberListApp }) {
   const snapshot = replica?.projected_snapshot;
   const repayment = useRepaymentForm();
 
-  if (!snapshot || !replica || !person) return null;
+  if (!snapshot || !replica) return null;
   const you = preferredMember(snapshot, replica.session?.identity.id)?.id;
-  const name = memberName(snapshot, person);
+  const name = person ? memberName(snapshot, person) : 'everyone';
   const label = (memberId: string) => (memberId === you ? 'You' : memberName(snapshot, memberId));
-  const payments = memberSettlements(snapshot, person);
+  const payments = person ? memberSettlements(snapshot, person) : settlementSuggestions(snapshot);
   const currencies = [...new Set(payments.map((entry) => entry.currency))];
-  const other = you && you !== person ? you : repaymentMembers(snapshot).find((member) => member.id !== person)?.id ?? '';
+  // A different payment starts from the person, or from you for the whole group.
+  const from = person ?? you ?? repaymentMembers(snapshot)[0]?.id ?? '';
+  const other = you && you !== from ? you : repaymentMembers(snapshot).find((member) => member.id !== from)?.id ?? '';
 
   return (
     <View style={{ gap: 18, paddingBottom: 32 }}>
       <Text style={{ paddingHorizontal: 4, fontFamily, fontSize: 15, lineHeight: 22, color: colors.soft }}>
-        {payments.length ? `These payments settle ${name} completely. Tap one once it’s paid.` : `${name} is settled up.`}
+        {payments.length ? `These payments settle ${name} completely. Tap one once it’s paid.` : person ? `${name} is settled up.` : 'Everyone is settled up.'}
       </Text>
 
       {!payments.length ? (
@@ -84,11 +87,11 @@ export function SettleUp(props: { app: MemberListApp }) {
 
       <Pressable
         accessibilityRole="button"
-        disabled={repayment.action.busy || !other}
+        disabled={repayment.action.busy || !from || !other}
         onPress={() => {
-          const owes = payments[0];
+          const owes = payments.find((entry) => entry.from_member_id === from || entry.to_member_id === from);
 
-          repayment.open({ from: person, to: owes ? (owes.from_member_id === person ? owes.to_member_id : owes.from_member_id) : other, amount: '', currency: owes?.currency ?? currencies[0] ?? 'EUR', manual: true });
+          repayment.open({ from, to: owes ? (owes.from_member_id === from ? owes.to_member_id : owes.from_member_id) : other, amount: '', currency: owes?.currency ?? currencies[0] ?? 'EUR', manual: true });
         }}
         style={({ pressed }) => [{ alignSelf: 'flex-start', minHeight: 44, paddingHorizontal: 4, justifyContent: 'center' }, (pressed || !other) && s.dim]}
       >

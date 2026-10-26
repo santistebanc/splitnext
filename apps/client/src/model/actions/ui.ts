@@ -19,17 +19,18 @@ export const uiActions = {
     run: async (host, input, ui) => ui.show('person', 'push', { person: input.memberId }),
   }),
   showSettleUp: defineAction({
-    workflow: 'navigate', group: 'UI', description: 'Open the payments in the group’s settle-up plan that involve a person.',
-    input: z.object({ memberId: choice('repaymentMember', 'The person to settle up.') }), example: { memberId: 'member-1' }, requires: ['openGroup'],
+    workflow: 'navigate', group: 'UI', description: 'Open the payments in the group’s settle-up plan, or only those involving a person.',
+    input: z.object({ memberId: choice('repaymentMember', 'The person to settle up; omit it for the whole group.').optional() }), example: { memberId: 'member-1' }, requires: ['openGroup'],
     unavailable: ({ state }, input) => {
       const snapshot = openSnapshot(state);
+      const memberId = input?.memberId;
 
-      if (input && !personFits(state, input.memberId)) return unavailable('member_not_found', 'Choose someone in this group.');
+      if (memberId && !personFits(state, memberId)) return unavailable('member_not_found', 'Choose someone in this group.');
 
-      return snapshot && settlementSuggestions(snapshot).some((entry) => !input || entry.from_member_id === input.memberId || entry.to_member_id === input.memberId)
+      return snapshot && settlementSuggestions(snapshot).some((entry) => !memberId || entry.from_member_id === memberId || entry.to_member_id === memberId)
         ? null : unavailable('member_settled', 'Nothing is left to settle.');
     },
-    run: async (host, input, ui) => ui.show('settle', 'push', { person: input.memberId }),
+    run: async (host, input, ui) => ui.show('settle', 'push', { person: input.memberId ?? null }),
   }),
   setBalancesExpanded: defineAction({
     group: 'UI', description: 'Show everyone in the balances, or only as many as leave room for the first expenses.', input: z.object({ expanded: z.boolean() }), example: { expanded: false }, requires: ['openGroup'],

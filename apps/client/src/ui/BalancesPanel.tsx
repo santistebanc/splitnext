@@ -263,9 +263,13 @@ function BalancesSection(props: BalancesProps & { pinned: boolean }) {
   );
 }
 
-/** “Balances” with Invite at its end; tapping the title scrolls back to the top. */
+/**
+ * “Balances” with Settle up, while anything is left to settle, and Invite at
+ * its end; tapping the title scrolls back to the top.
+ */
 function BalancesHeading(props: BalancesProps) {
   const invite = useActionCall();
+  const settle = useActionCall();
   const you = preferredMember(props.replica.projected_snapshot, props.replica.session?.identity.id);
   const empty = !currentExpenses(props.replica.projected_snapshot).length;
   const ink = empty ? colors.actionInk : colors.action;
@@ -276,27 +280,40 @@ function BalancesHeading(props: BalancesProps) {
         title="Balances"
         onPress={() => props.layout.scrollToTop()}
         end={
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Invite people"
-            disabled={!invite.can('showInvite')}
-            onPress={() => { void invite.call('showInvite', {}); }}
-            hitSlop={6}
-            style={({ pressed }) => [
-              // Invite leads setup, then yields emphasis without moving or resizing.
-              { flexDirection: 'row', alignItems: 'center', gap: 4, height: 32, paddingLeft: 10, paddingRight: 12, borderRadius: 999, backgroundColor: empty ? colors.action : colors.actionSoft },
-              (pressed || !invite.can('showInvite')) && s.dim,
-            ]}
-          >
-            <PlusIcon size={14} color={ink} strokeWidth={2.6} />
-            <Text style={{ fontFamily, fontSize: 14, fontWeight: '600', color: ink }}>Invite people</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {settle.can('showSettleUp', {}) ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Settle up the group"
+                onPress={() => { void settle.call('showSettleUp', {}); }}
+                hitSlop={6}
+                style={({ pressed }) => [{ justifyContent: 'center', height: 32, paddingHorizontal: 12, borderRadius: 999, backgroundColor: colors.actionSoft }, pressed && s.dim]}
+              >
+                <Text style={{ fontFamily, fontSize: 14, fontWeight: '600', color: colors.action }}>Settle up</Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Invite people"
+              disabled={!invite.can('showInvite')}
+              onPress={() => { void invite.call('showInvite', {}); }}
+              hitSlop={6}
+              style={({ pressed }) => [
+                // Invite leads setup, then yields emphasis without moving or resizing.
+                { flexDirection: 'row', alignItems: 'center', gap: 4, height: 32, paddingLeft: 10, paddingRight: 12, borderRadius: 999, backgroundColor: empty ? colors.action : colors.actionSoft },
+                (pressed || !invite.can('showInvite')) && s.dim,
+              ]}
+            >
+              <PlusIcon size={14} color={ink} strokeWidth={2.6} />
+              <Text style={{ fontFamily, fontSize: 14, fontWeight: '600', color: ink }}>Invite people</Text>
+            </Pressable>
+          </View>
         }
       />
       {!you ? (
         <Text style={{ paddingHorizontal: 4, paddingBottom: 6, fontFamily, fontSize: 13, color: colors.warningInk }}>Tap your name to choose who you are.</Text>
       ) : null}
-      <ErrorMessage message={invite.error} />
+      <ErrorMessage message={invite.error ?? settle.error} />
     </View>
   );
 }
