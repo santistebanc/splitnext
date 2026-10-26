@@ -42,4 +42,6 @@ Single-context: `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/agents
 
 ## Boundaries
 
+A dev server may already be running on port 8787: reuse it instead of starting another. A second `wrangler dev` in this checkout leaves both hung. For a separate server, use another worktree, port and `--persist-to` directory, as `playwright.config.ts` does.
+
 Use local Worker/D1 state and offline fixtures for verification. Production deployment, remote migrations, remote data changes, and real financial transactions require an explicit owner decision. Run `npm run check:fast` during development and `npm run check` before opening the PR; CI repeats the full check.
