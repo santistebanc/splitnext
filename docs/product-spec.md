@@ -96,10 +96,11 @@ once.
 
 Tapping a person opens their details: back to the group, their name large with
 "you" when it is you, a pencil that edits the name in place (committing on
-leaving the field or Enter; an empty name restores the saved name), and This is
-me, which makes that member you on this device without asking first; when
-another device already has the name taken, an inline warning says so
-afterward. Below the name: their presence, then their balance as a large
+leaving the field or Enter; an empty name restores the saved name). Below the
+name: their presence, with This is me at the end of that line, which makes
+that member you on this device without asking first; when another device
+already has the name taken, an inline warning says so afterward. Then their
+balance as a large
 figure over its bar, labelled Owes, Gets back, Settled for a numeric zero, or
 No expenses yet when no current expense or repayment names them. Settle up is
 pinned at the foot while they are in a payment of the group's plan. The

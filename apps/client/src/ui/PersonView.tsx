@@ -94,28 +94,15 @@ export function PersonHeader(props: { app: MemberListApp }) {
                 <Text ref={morph(replica && memberId ? `pname-${replica.group_id}-${memberId}` : null)} accessibilityRole="header" numberOfLines={1} style={[titleStyle(progress), { flexShrink: 1 }]}>{name}</Text>
                 {isYou ? <Text style={{ fontFamily, fontSize: 15, fontWeight: '500', color: colors.muted }}>you</Text> : null}
                 {active && memberId ? (
-                  <View style={{ marginLeft: 'auto', marginRight: -10, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Rename ${name}`}
-                      disabled={!edit.can('beginEditMember', { memberId })}
-                      onPress={() => { void edit.call('beginEditMember', { memberId }); }}
-                      style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !edit.can('beginEditMember', { memberId }) && s.dim]}
-                    >
-                      <PencilIcon size={18} color={colors.ink} />
-                    </Pressable>
-                    {!isYou ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`I’m ${name}`}
-                        disabled={!claim.can('setPreferredMember', { memberId })}
-                        onPress={() => { void claim.call('setPreferredMember', { memberId }); }}
-                        style={({ pressed }) => [{ height: 44, justifyContent: 'center', paddingHorizontal: 10 }, pressed && s.pressed]}
-                      >
-                        <Text style={[s.headerActionText, s.link, { fontSize: 14 }]}>This is me</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Rename ${name}`}
+                    disabled={!edit.can('beginEditMember', { memberId })}
+                    onPress={() => { void edit.call('beginEditMember', { memberId }); }}
+                    style={({ pressed }) => [{ marginLeft: 'auto', marginRight: -12, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !edit.can('beginEditMember', { memberId }) && s.dim]}
+                  >
+                    <PencilIcon size={18} color={colors.ink} />
+                  </Pressable>
                 ) : null}
               </>
             )}
@@ -125,7 +112,20 @@ export function PersonHeader(props: { app: MemberListApp }) {
           <View style={{ gap: 6 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: between(8, 2, progress) }}>
               <MemberIcon participants={participants} size={6} />
-              <Text style={s.caption}>{active ? presenceText(participants) : 'Removed · still in balances until settled'}</Text>
+              <Text style={[s.caption, { flexShrink: 1 }]}>{active ? presenceText(participants) : 'Removed · still in balances until settled'}</Text>
+              {/* Taking the name sits beside whether anyone has taken it. */}
+              {active && memberId && !isYou ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`I’m ${name}`}
+                  disabled={!claim.can('setPreferredMember', { memberId })}
+                  onPress={() => { void claim.call('setPreferredMember', { memberId }); }}
+                  hitSlop={{ top: 8, bottom: 8 }}
+                  style={({ pressed }) => [{ marginLeft: 'auto', height: 28, justifyContent: 'center', paddingLeft: 12 }, pressed && s.pressed]}
+                >
+                  <Text style={[s.headerActionText, s.link, { fontSize: 14 }]}>This is me</Text>
+                </Pressable>
+              ) : null}
             </View>
             <View style={{ paddingTop: between(18, 8, progress) }}>
               <BalanceFigure amount={first?.amount ?? 0} currency={first?.currency ?? 'XXX'} max={largestBalance(snapshot)} label={label} size={between(30, 20, progress)} bar={between(12, 8, progress)} morph={replica && memberId && first ? (isYou ? `gamt-${replica.group_id}-${first.currency}` : `pamt-${replica.group_id}-${memberId}-${first.currency}`) : null} barMorph={replica && memberId && first ? (isYou ? `gbar-${replica.group_id}-${first.currency}` : `pbar-${replica.group_id}-${memberId}-${first.currency}`) : null} />

@@ -143,6 +143,13 @@ test('creates a group, adds people inline, and manages a person from their detai
   await field(page, 'Name').press('Enter');
   await expect(heading(page, 'Benjamin')).toBeVisible();
 
+  // This is me sits at the end of the line saying whether the name is taken.
+  const claim = (await button(page, 'I’m Benjamin').boundingBox())!;
+  const presence = (await page.getByText('Not taken on any device', { exact: true }).boundingBox())!;
+
+  expect(Math.abs(claim.y + claim.height / 2 - (presence.y + presence.height / 2))).toBeLessThanOrEqual(2);
+  expect(claim.x).toBeGreaterThan(presence.x + presence.width);
+
   // Choosing someone as you needs no confirmation.
   await button(page, 'I’m Benjamin').click();
   await expect(button(page, 'I’m Benjamin')).toHaveCount(0);
