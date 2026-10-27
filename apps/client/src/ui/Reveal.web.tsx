@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useReducer, useRef, useState, type ReactNode } from 'react';
 import { easeOut } from './theme';
 
 /**
@@ -12,6 +12,7 @@ export function Reveal(props: { children: ReactNode }) {
   const last = useRef<ReactNode>(null);
   const shown = useRef(present);
   const [closing, setClosing] = useState(false);
+  const [, rerender] = useReducer((count: number) => count + 1, 0);
 
   if (present) last.current = props.children;
 
@@ -24,7 +25,11 @@ export function Reveal(props: { children: ReactNode }) {
     if (!node || was === present) return;
 
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      if (!present) last.current = null;
+      // This render still showed the closed content; render again without it.
+      if (!present) {
+        last.current = null;
+        rerender();
+      }
 
       return;
     }

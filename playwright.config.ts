@@ -18,6 +18,9 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${port}`,
     viewport: { width: 1100, height: 900 },
+    // Screens change at once, so assertions never meet the copies a morph
+    // flies over the new screen; one test turns motion back on.
+    reducedMotion: 'reduce',
     trace: 'retain-on-failure',
   },
   webServer: {

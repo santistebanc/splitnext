@@ -14,5 +14,4 @@ Both fonts are distributed under the SIL Open Font License, in
 All fonts are served locally, without runtime requests to Google or another
 font CDN, and the service worker precaches them for offline use.
 
-The favicon in `../icon.svg` and the shared `src/ui/BrandMark.tsx` artwork
-come from the earlier Splitnext app.
+The favicon in `../icon.svg` comes from the earlier Splitnext app.
