@@ -357,9 +357,11 @@ test('keeps split rows aligned without an amount, then shows each share', async 
   await addMember(page, 'A person with a long name');
   await button(page, 'Add expense').click();
 
+  // Without an amount, each row shows only its checkbox.
   for (const amount of ['', '0', '0.00']) {
     await field(page, 'Amount').fill(amount);
     await expect(button(page, /^Amount for /)).toHaveCount(0);
+    await expect(button(page, /^(Increase|Decrease) share for /)).toHaveCount(0);
     await expect(page.getByRole('checkbox')).toHaveCount(3);
   }
 
@@ -384,6 +386,14 @@ test('keeps split rows aligned without an amount, then shows each share', async 
   await button(page, 'Increase share for Ana').click();
   await expect(button(page, 'Amount for Ana: 45.00. Change amount')).toBeVisible();
   await expect(page.getByTestId('split-summary')).toHaveText('3 people');
+
+  // Clearing the amount hides + and − again, even for Ana's second share, and
+  // a valid amount brings them back.
+  await field(page, 'Amount').fill('0');
+  await expect(button(page, /^(Increase|Decrease) share for /)).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: 'Ana shares this expense' })).toBeChecked();
+  await field(page, 'Amount').fill('90');
+  await expect(button(page, 'Decrease share for Ana')).toBeVisible();
   await button(page, 'Split equally').click();
   await expect(button(page, 'Amount for Ana: 30.00. Change amount')).toBeVisible();
   await expect(page.getByTestId('split-summary')).toHaveText('30.00 each');

@@ -100,8 +100,11 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
   const canToggle = edit.can('toggleExpenseParticipant', member);
   // As in the earlier app: the checkbox becomes − once someone has more than
   // one share or a fixed amount, and + shows while it changes the split.
-  const stepping = included && (fixed || shares > 1);
-  const canIncrease = included && (fixed || props.sharing > 1);
+  // Until the expense has an amount there is nothing to divide, so only the
+  // checkbox shows; the empty columns keep their room.
+  const dividing = included && props.hasAmount;
+  const stepping = dividing && (fixed || shares > 1);
+  const canIncrease = dividing && (fixed || props.sharing > 1);
 
   // Fixing the amount shows the field before editing starts, so autoFocus
   // would come too late; focus it once editing begins.
@@ -123,7 +126,7 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
           ) : null}
         </View>
         <View style={{ width: 72, alignItems: 'flex-end' }}>
-          {!included ? null : editing || fixed ? (
+          {!dividing ? null : editing || fixed ? (
             <TextInput
               ref={input}
               accessibilityLabel={`Amount for ${props.name}`}
@@ -141,14 +144,14 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
           ) : (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={props.hasAmount ? `Amount for ${props.name}: ${shown}. Change amount` : `${props.name}: no amount`}
+              accessibilityLabel={`Amount for ${props.name}: ${shown}. Change amount`}
               accessibilityState={{ disabled: !canFix }}
               disabled={!canFix}
               onPress={() => { void edit.call('setExpenseFixedAmount', fixing, () => setEditing(true)); }}
               style={({ pressed }) => [{ height: 44, justifyContent: 'center' }, pressed && s.pressed]}
             >
               <Text numberOfLines={1} style={{ textAlign: 'right', fontFamily: monoFamily, fontSize: 15, fontWeight: '500', color: colors.ink }}>
-                {props.hasAmount ? shown : '—'}
+                {shown}
               </Text>
             </Pressable>
           )}
