@@ -230,9 +230,8 @@ test('settling up', async ({ browser }) => {
   await spot(page, page.getByText(/^Full amount you owe/), 'repay-full', 'Settling up', 'The full planned amount', 'The amount matches what the plan says is owed.');
   await field(page, 'Amount').fill('12');
   await spot(page, page.getByText(/^You owe 30\.00/), 'repay-partial', 'Settling up', 'Part of a planned payment', 'The amount differs from the plan, which is named for comparison.');
-  await button(page, 'Paid to Ben. Change').click();
-  await spot(page, page.getByRole('radiogroup', { name: 'Paid to' }), 'repay-picker', 'Settling up', 'Choosing who was paid', 'After tapping a name in the sentence.');
-  await page.getByRole('radio', { name: /^Cy/ }).click();
+  await spot(page, page.getByRole('combobox', { name: 'Paid to', exact: true }), 'repay-picker', 'Settling up', 'Choosing who was paid', 'The recipient dropdown in the payment sentence.');
+  await page.getByRole('combobox', { name: 'Paid to', exact: true }).selectOption({ label: 'Cy' });
   await spot(page, page.getByText('Paid outside splitnext.', { exact: true }), 'repay-manual', 'Settling up', 'A payment outside the plan', 'Nobody in the plan owes this pair.');
   await button(page, 'Cancel').click();
 
