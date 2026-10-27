@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import { groupNameSchema, preferredMember, repaymentMembers } from '@splitnext/client';
+import { groupNameSchema, memberHasRecords, preferredMember, repaymentMembers } from '@splitnext/client';
 import { attentionCount } from '../model/activity';
 import { hasRecords } from '../model/breakdown';
 import { balanceRows, memberName, moneyLabel } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
 import { BackButton, BalanceBar, Button, ErrorMessage, ScreenHeader, balanceColor, colors, s, signedFigure, titleStyle } from './components';
 import { ExpenseList } from './ExpenseList';
-import { PencilIcon } from './icons';
+import { CloseIcon, PencilIcon } from './icons';
 import { InvitePanel } from './InvitePanel';
 import { AddPersonRow, MemberIcon, type MemberListApp, type Replica } from './MemberList';
 import { useCompactProgress } from './pageScroll';
@@ -181,6 +181,10 @@ function orderedMembers<Member extends { id: string }>(members: readonly Member[
 /** One person: presence, name, their balance as a bar, and the figure. */
 function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: string; removed: boolean; you: boolean; balances: { currency: string; amount: number }[]; recorded: boolean; max: number }) {
   const open = useActionCall();
+  const remove = useActionCall();
+  // As in their details: only someone no expense or repayment has named, removed ones included.
+  const snapshot = props.replica.projected_snapshot;
+  const removable = !props.removed && snapshot !== null && !memberHasRecords(snapshot, props.memberId);
   const name = memberName(props.replica.projected_snapshot, props.memberId);
   const state = props.app.snapshot();
   const participants = participantMarkers(props.replica, props.memberId, props.app.client.presence(props.replica.group_id), state.online && state.reachable);
@@ -192,12 +196,13 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
 
   return (
     <View>
+      <View style={[{ flexDirection: 'row', alignItems: 'stretch', marginHorizontal: -24 }, s.ruled, props.you && { backgroundColor: colors.youRow }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${name}${props.you ? ' (you)' : ''}${props.removed ? ', removed' : ''}, ${amounts.join(', ') || (props.recorded ? 'settled' : 'no expenses yet')}. Show details`}
         disabled={!open.can('showPerson', { memberId: props.memberId })}
         onPress={() => { void open.call('showPerson', { memberId: props.memberId }); }}
-        style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', minHeight: 52, marginHorizontal: -24, paddingHorizontal: 24, gap: 8 }, s.ruled, props.you && { backgroundColor: colors.youRow }, pressed && s.rowPressed]}
+        style={({ pressed }) => [{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', minHeight: 52, paddingLeft: 24, paddingRight: removable ? 0 : 24, gap: 8 }, pressed && s.rowPressed]}
       >
         <View style={{ width: '34%', flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0 }}>
           <MemberIcon participants={participants} size={6} />
@@ -216,7 +221,20 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
           )) : null}
         </View>
       </Pressable>
-      <ErrorMessage message={open.error} />
+      {/* Someone no expense or repayment has named can go straight from here. */}
+      {removable ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Remove ${name}`}
+          disabled={!remove.can('removeMember', { memberId: props.memberId })}
+          onPress={() => { void remove.call('removeMember', { memberId: props.memberId }); }}
+          style={({ pressed }) => [{ width: 44, marginRight: 10, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !remove.can('removeMember', { memberId: props.memberId }) && s.dim]}
+        >
+          <CloseIcon size={16} color={colors.muted} />
+        </Pressable>
+      ) : null}
+      </View>
+      <ErrorMessage message={open.error ?? remove.error} />
     </View>
   );
 }

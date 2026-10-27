@@ -85,7 +85,9 @@ from a central ink line (orange to the left for what they owe, green to the
 right for what they get back, scaled to the largest balance), and the signed
 figure. Show a settled zero, such as 0.00, when the person has current
 records; leave the bar and figure blank only when no current expense or
-repayment names them.
+repayment names them. Someone no expense or repayment has ever named, removed
+ones included, has an X at the end of their row that removes them at once,
+like Remove in their details, without opening them.
 A presence marker beside each name shows a filled green dot when at least one
 identity selecting the name is connected, a ring when they are known to be
 disconnected, and a dashed ring when no identity selects the name. Person
