@@ -189,8 +189,11 @@ function orderedMembers<Member extends { id: string }>(members: readonly Member[
     balance(left.id) - balance(right.id));
 }
 
-/** One person: presence, name, their balance as a bar, and the figure. */
-function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: string; removed: boolean; you: boolean; balances: { currency: string; amount: number }[]; recorded: boolean; max: number }) {
+/**
+ * One person: presence, name, their balance as a bar, and the figure, in a
+ * column as wide as the group's widest figure so every bar's centre lines up.
+ */
+function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: string; removed: boolean; you: boolean; balances: { currency: string; amount: number }[]; recorded: boolean; max: number; figureWidth: number }) {
   const open = useActionCall();
   const remove = useActionCall();
   // As in their details: only someone no expense or repayment has named, removed ones included.
@@ -224,7 +227,7 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
         <View style={{ flex: 1, alignSelf: 'stretch' }}>
           {props.recorded ? <BalanceBar amount={first} max={props.max} morph={bar} /> : null}
         </View>
-        <View style={{ width: 84, alignItems: 'flex-end', gap: 6 }}>
+        <View style={{ width: props.figureWidth, alignItems: 'flex-end', gap: 6 }}>
           {props.balances.length ? props.balances.map((entry) => (
             <Text key={entry.currency} ref={morph(props.you ? `gamt-${props.replica.group_id}-${entry.currency}` : `pamt-${props.replica.group_id}-${props.memberId}-${entry.currency}`)} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} style={[s.amount, { color: balanceColor(entry.amount) }]}>
               {signedFigure(entry.amount, entry.currency)}
@@ -259,6 +262,9 @@ function People(props: { app: MemberListApp; replica: Replica }) {
   // Removed people stay while they owe or are owed.
   const members = orderedMembers(repaymentMembers(snapshot), owing, you?.id, recorded);
   const max = Math.max(0, ...[...owing.values()].map((entries) => Math.abs(entries[0]?.amount ?? 0)));
+  // A monospaced figure takes about 0.6 of its 15px size per character.
+  const longest = Math.max(0, ...[...owing.values()].flatMap((entries) => entries.map((entry) => signedFigure(entry.amount, entry.currency).length)));
+  const figureWidth = Math.max(84, Math.ceil(longest * 9.2));
 
   return (
     <View role="region" aria-label="Balances">
@@ -272,6 +278,7 @@ function People(props: { app: MemberListApp; replica: Replica }) {
           you={member.id === you?.id}
           balances={owing.get(member.id) ?? []}
           recorded={recorded(member.id)}
+          figureWidth={figureWidth}
           max={max}
         />
       ))}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { allocate, type AllocationPart, type Expense } from '../src/client';
-import { canExcludeExpensePart, decreaseExpenseShare, draftForExpense, entryFromDraft, fixExpenseAmount, increaseExpenseShare, previewAllocation, type ExpenseDraft } from '../apps/client/src/model/expenses';
+import { canExcludeExpensePart, decreaseExpenseShare, draftForExpense, entryFromDraft, fixExpenseAmount, groupDigits, increaseExpenseShare, moneyLabel, noCurrency, previewAllocation, type ExpenseDraft } from '../apps/client/src/model/expenses';
 import { scenarioReplica } from '../apps/client/src/workbench/memberListFixture';
 
 const replica = scenarioReplica({ members: ['Ana', 'Ben', 'Cy'], you: 'Ana', others: [], presence: 'realtime', othersOnline: false, connection: 'online' });
@@ -116,5 +116,22 @@ describe('expense draft', () => {
       expect(result.ok).toBe(true);
       expect(amounts(value).reduce((sum, portion) => sum + portion, 0)).toBe(entry.entry.total);
     }
+  });
+});
+
+describe('amounts as people read them', () => {
+  it('groups whole digits in threes with a space that does not break, and drafts stay plain', () => {
+    const shown = (minor: number) => moneyLabel(minor, noCurrency).replaceAll('\u00a0', ' ');
+
+    expect([1, 99_999, 100_000, 123_456_789, 4_825_000].map(shown)).toEqual(['0.01', '999.99', '1 000.00', '1 234 567.89', '48 250.00']);
+    expect(groupDigits('1200')).toBe('1\u00a0200');
+    expect(moneyLabel(123_456_789, noCurrency)).not.toContain(' ');
+
+    const expense: Expense = {
+      id: 'expense______________', version: 1, description: 'Yacht', currency: noCurrency, total: 123_456_789,
+      paid: [{ member_id: ana!, amount: 123_456_789 }], parts: [{ kind: 'shares', member_id: ana!, shares: 1 }], allocations: [], extras: [], status: 'active', created_at: '2026-10-20T12:00:00.000Z', updated_at: '2026-10-20T12:00:00.000Z',
+    };
+
+    expect(draftForExpense(snapshot, expense, noCurrency).amount).toBe('1234567.89');
   });
 });

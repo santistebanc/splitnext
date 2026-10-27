@@ -1,10 +1,27 @@
+import { useRef } from 'react';
 import { NumericFormat } from 'react-number-format';
 import { formatAmount, minorDigits } from '@splitnext/client';
+import { digitGroupSpace } from '../model/expenses';
 import { colors, monoFamily } from './theme';
 import type { AmountInputProps } from './AmountInput';
 
-/** Fixed decimal places with cursor-aware insertion, replacement, and deletion. */
+/** Typed text as a plain decimal: grouping spaces dropped, a comma read as the point. */
+function plainDecimal(text: string): string {
+  const replaced = text.replace(/\s/g, '').replace(',', '.');
+
+  return replaced.startsWith('.') ? `0${replaced}` : replaced;
+}
+
+/**
+ * Fixed decimal places with cursor-aware insertion, replacement, and
+ * deletion, and the whole digits grouped in threes as the amount is shown
+ * everywhere else.
+ */
 export function AmountInput(props: AmountInputProps) {
+  // What the field showed before the last keystroke, to go back to when it is refused.
+  const before = useRef<string | null>(null);
+  const remember = (event: { currentTarget: HTMLInputElement }) => { before.current = event.currentTarget.value; };
+
   return (
     <NumericFormat
       getInputRef={(input: HTMLInputElement) => { props.inputRef.current = input; }}
@@ -26,23 +43,27 @@ export function AmountInput(props: AmountInputProps) {
       decimalSeparator="."
       allowedDecimalSeparators={['.', ',']}
       allowNegative={false}
-      thousandSeparator={false}
+      thousandSeparator={digitGroupSpace}
+      onBeforeInput={remember}
       onChangeCapture={(event) => {
         const input = event.currentTarget;
         const original = input.value;
-        const replaced = original.replace(',', '.');
-        const decimal = replaced.startsWith('.') ? `0${replaced}` : replaced;
+        const decimal = plainDecimal(original);
         const caret = input.selectionStart ?? 0;
 
         if (!/^\d*(?:\.\d*)?$/.test(decimal)) {
           event.stopPropagation();
-          input.value = props.value;
-          const restored = Math.max(0, caret - (original.length - props.value.length));
+          const previous = before.current ?? props.value;
+
+          input.value = previous;
+          const restored = Math.max(0, caret - (original.length - previous.length));
 
           input.setSelectionRange(restored, restored);
-        } else if (decimal !== original) {
+        } else if (decimal !== original.replace(/\s/g, '')) {
+          // A comma or a leading point becomes the plain decimal; the caret
+          // keeps its place among the characters before it.
           input.value = decimal;
-          const nextCaret = caret + decimal.length - original.length;
+          const nextCaret = plainDecimal(original.slice(0, caret)).length;
 
           input.setSelectionRange(nextCaret, nextCaret);
         }
@@ -51,12 +72,15 @@ export function AmountInput(props: AmountInputProps) {
         if (source.source === 'event') props.onChangeText(value);
       }}
       onPaste={(event) => {
-        const text = event.clipboardData.getData('text').trim();
+        // Grouping spaces, such as in a figure copied from the app, are only formatting.
+        const text = event.clipboardData.getData('text').replace(/\s/g, '');
 
         // Reject ambiguous or over-precise pasted amounts rather than changing their meaning.
         if (!/^\d*(?:[.,]\d*)?$/.test(text) || (text.split(/[.,]/)[1]?.length ?? 0) > minorDigits(props.currency)) event.preventDefault();
       }}
       onKeyDown={(event) => {
+        remember(event);
+
         if (event.key === 'Enter') props.onSubmitEditing();
       }}
       style={{

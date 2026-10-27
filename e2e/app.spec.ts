@@ -444,6 +444,45 @@ test('keeps the expense amount formatted while typing and accepts dots or commas
   await expect(button(page, 'Change Lunch · 12.50')).toBeVisible();
 });
 
+test('groups the digits of large amounts in threes, as typed and as shown', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await createGroup(page, 'Big', 'Ana');
+  await addMember(page, 'Ben');
+  await button(page, 'Add expense').click();
+  const amount = field(page, 'Amount');
+  // Groups are separated by a space that never breaks a figure across lines.
+  const grouped = (text: string) => text.replaceAll(' ', '\u00a0');
+
+  await amount.pressSequentially('1234567');
+  await expect(amount).toHaveValue(grouped('1 234 567.00'));
+  await amount.pressSequentially(',8');
+  await expect(amount).toHaveValue(grouped('1 234 567.80'));
+
+  // Typing in the middle of a grouped figure keeps its place, and the groups move.
+  await amount.evaluate((input: HTMLInputElement) => input.setSelectionRange(1, 1));
+  await amount.pressSequentially('0');
+  await expect(amount).toHaveValue(grouped('10 234 567.80'));
+  await amount.pressSequentially('x');
+  await expect(amount).toHaveValue(grouped('10 234 567.80'));
+  await amount.press('Backspace');
+  await expect(amount).toHaveValue(grouped('1 234 567.80'));
+
+  // A grouped figure pasted back in is read as a plain amount.
+  await amount.fill('');
+  await page.evaluate(() => navigator.clipboard.writeText('2 500.25'));
+  await amount.focus();
+  await page.keyboard.press('Control+V');
+  await expect(amount).toHaveValue(grouped('2 500.25'));
+
+  await amount.fill('4321');
+  await field(page, 'Description').fill('Flights');
+  await expect(button(page, `Amount for Ana: ${grouped('2 160.50')}. Change amount`)).toBeVisible();
+  await button(page, 'Save').click();
+  await expect(button(page, `Change Flights · ${grouped('4 321.00')}`)).toBeVisible();
+  await expect(page.getByText(grouped('+2 160.50'), { exact: true })).toBeVisible();
+  await expect(page.getByText(grouped('−2 160.50'), { exact: true })).toBeVisible();
+});
+
 test('keeps split rows aligned without an amount, then shows each share', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Zero amount', 'Ana');

@@ -1,5 +1,5 @@
-import { formatAmount, type ClientReplicaState, type Expense } from '@splitnext/client';
-import { memberName } from './expenses';
+import type { ClientReplicaState, Expense } from '@splitnext/client';
+import { memberName, moneyLabel } from './expenses';
 
 type Snapshot = ClientReplicaState['projected_snapshot'];
 
@@ -26,7 +26,7 @@ function shareText(expense: Expense, memberId: string, payer: boolean): string {
   const allocation = expense.allocations.find((entry) => entry.member_id === memberId)?.amount ?? 0;
   const part = expense.parts.find((entry) => entry.member_id === memberId);
 
-  if (payer) return part ? `own share ${formatAmount(allocation, expense.currency)}` : 'not sharing it';
+  if (payer) return part ? `own share ${moneyLabel(allocation, expense.currency)}` : 'not sharing it';
 
   if (part?.kind === 'shares' && expense.parts.every((entry) => entry.kind === 'shares')) {
     const shares = expense.parts.reduce((sum, entry) => sum + (entry.kind === 'shares' ? entry.shares : 0), 0);
@@ -34,7 +34,7 @@ function shareText(expense: Expense, memberId: string, payer: boolean): string {
     return part.shares === 1 ? `share 1 of ${shares}` : `${part.shares} shares of ${shares}`;
   }
 
-  return `share ${formatAmount(allocation, expense.currency)}`;
+  return `share ${moneyLabel(allocation, expense.currency)}`;
 }
 
 /**
@@ -60,7 +60,7 @@ export function memberBreakdown(snapshot: Snapshot, memberId: string, name: (mem
       id: expense.id,
       at: expense.created_at,
       title: expense.description,
-      detail: `${payer ? name(payer) : 'Someone'} paid ${formatAmount(expense.total, expense.currency)} · ${shareText(expense, memberId, payer === memberId)}`,
+      detail: `${payer ? name(payer) : 'Someone'} paid ${moneyLabel(expense.total, expense.currency)} · ${shareText(expense, memberId, payer === memberId)}`,
       amount: paid - owed,
     });
   }
