@@ -6,7 +6,7 @@ import { BrandMark } from './BrandMark';
 import { between, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
 import { morph } from './ScreenMorph';
-import { BalanceBar, Button, ErrorMessage, FooterButton, ScreenHeader, balanceColor, s, signedFigure } from './components';
+import { BalanceBar, Button, ErrorMessage, FooterButton, ScreenHeader, balanceColor, s, signedFigure, titleStyle } from './components';
 import { TrashIcon } from './icons';
 import { colors, fontFamily, monoFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
@@ -61,7 +61,6 @@ export function GroupsHeader() {
   return (
     <>
       <ScreenHeader
-        start={<Text style={[s.headerActionText, { paddingLeft: 24, fontWeight: '700' }]}>splitnext</Text>}
         end={(
           <Pressable
             ref={joinToggle}
@@ -110,9 +109,11 @@ export function GroupsHeader() {
           </Reveal>
         )}
         heading={(
-          // The mark stands where a title would be, as large and shrinking the same way; it is still the screen's heading.
-          <View accessibilityRole="header" accessibilityLabel="Your groups" style={{ alignSelf: 'flex-start' }}>
+          // The mark and the name stand where a title would be, as large and
+          // shrinking the same way; together they are still the screen's heading.
+          <View accessibilityRole="header" accessibilityLabel="Your groups" style={{ flexDirection: 'row', alignItems: 'center', gap: between(12, 8, progress) }}>
             <BrandMark size={between(44, 24, progress)} />
+            <Text numberOfLines={1} style={titleStyle(progress)}>splitnext</Text>
           </View>
         )}
       />
