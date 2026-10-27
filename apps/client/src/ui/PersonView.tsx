@@ -165,8 +165,9 @@ export function PersonFooter(props: { app: MemberListApp }) {
 }
 
 /**
- * Below the person's balance: Hide or Remove once they are settled, Restore
- * once removed, and every expense and repayment their balance is made of.
+ * Below the person's balance: Remove while no expense or repayment names
+ * them, Restore once removed, and every expense and repayment their balance
+ * is made of.
  */
 export function PersonDetails(props: { app: MemberListApp }) {
   const ui = useUiState();
@@ -187,10 +188,9 @@ export function PersonDetails(props: { app: MemberListApp }) {
   const active = member.status === 'active';
   const name = memberName(snapshot, member.id);
   const others = participantsForMember(snapshot, member.id).filter((grant) => grant.identity_id !== identity).length;
-  const unsettled = personBalances(snapshot, member.id).some(({ amount }) => amount !== 0);
   const breakdown = memberBreakdown(snapshot, member.id, (id) => (id === you ? 'You' : memberName(snapshot, id)));
-  // Taking out someone any expense or repayment has named, removed ones included, hides them for history; anyone else is removed.
-  const hides = memberHasRecords(snapshot, member.id);
+  // Only someone no expense or repayment has named, removed ones included, can be removed here.
+  const hasRecords = memberHasRecords(snapshot, member.id);
 
   return (
     <View style={{ gap: 22, paddingTop: 12, paddingBottom: 12 }}>
@@ -202,11 +202,9 @@ export function PersonDetails(props: { app: MemberListApp }) {
         />
       ) : null}
       {active ? (
-        unsettled ? (
-          <Text style={s.caption}>Settle up first to hide {isYou ? 'yourself' : name}.</Text>
-        ) : (
-          <Button secondary label={`${hides ? 'Hide' : 'Remove'} ${name}`} disabled={!remove.can('removeMember', { memberId: member.id })} onPress={() => { void remove.call('removeMember', { memberId: member.id }); }}>
-            {hides ? 'Hide' : 'Remove'}
+        hasRecords ? null : (
+          <Button secondary label={`Remove ${name}`} disabled={!remove.can('removeMember', { memberId: member.id })} onPress={() => { void remove.call('removeMember', { memberId: member.id }); }}>
+            Remove
           </Button>
         )
       ) : (
