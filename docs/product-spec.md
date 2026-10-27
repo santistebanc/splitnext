@@ -189,7 +189,7 @@ member name, and a bin that asks in place before leaving the group on this
 device. Show N groups you left lists them with Rejoin, and New group is
 pinned at the foot. New group does not leave the list: it opens a drawer
 upward from the button, just tall enough for New group with Cancel and two
-compact fields, Group name (focused) and Your name, while the screen above
+compact labelled fields, Group name (focused) and Your name in this group, while the screen above
 dims. The button becomes Create group, grey until both names are filled and
 Creating… while it works. Your name starts as the last name used here, with
 the names you go by in your other groups offered under it, each once, to use

@@ -60,9 +60,8 @@ export function CreateGroup(props: CreateGroupProps) {
     <View style={{ gap: 12, paddingTop: 4 }}>
       <Field
         label="Group name"
-        hideLabel
         inputRef={nameInput}
-        placeholder="Group name"
+        placeholder="Lisbon trip"
         value={name}
         editable={actions.availability('changeDraft', { field: 'create.name', value: name }).available}
         onChangeText={(value) => {
@@ -77,7 +76,6 @@ export function CreateGroup(props: CreateGroupProps) {
       />
       <Field
         label="Your name in this group"
-        hideLabel
         inputRef={personInput}
         placeholder="Your name"
         value={person}
