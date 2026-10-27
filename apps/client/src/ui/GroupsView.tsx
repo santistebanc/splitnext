@@ -152,8 +152,8 @@ export function GroupsHeader() {
         heading={(
           // The mark and the name stand where a title would be, as large and
           // shrinking the same way; together they are still the screen's heading.
-          <View accessibilityRole="header" accessibilityLabel="Your groups" style={{ flexDirection: 'row', alignItems: 'center', gap: between(12, 8, progress) }}>
-            <BrandMark size={between(44, 24, progress)} />
+          <View accessibilityRole="header" accessibilityLabel="Your groups" style={{ flexDirection: 'row', alignItems: 'center', gap: between(10, 7, progress) }}>
+            <BrandMark size={between(34, 22, progress)} />
             <Text numberOfLines={1} style={titleStyle(progress)}>splitnext</Text>
           </View>
         )}

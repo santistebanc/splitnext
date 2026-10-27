@@ -60,7 +60,7 @@ Screens follow the agreed prototype, in one narrow column on every device.
 them out: a header (`ScreenHeader`: a first row with the back or Cancel action
 and actions at its end, then the large title, then anything `below` it such as
 the invite link or a balance), the scrolling content, and the main action
-pinned at the foot. The title is 42px and shrinks to 22px with compact
+pinned at the foot. The title is 32px and shrinks to 20px with compact
 progress (`titleStyle`), which follows 72px of content travel; screens that
 shrink more, such as the expense amount and the person's balance, read the
 same progress. The groups list pins New group, which opens the create form upward above

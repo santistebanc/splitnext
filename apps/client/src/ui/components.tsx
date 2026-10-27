@@ -266,11 +266,11 @@ export function ScreenHeader(props: { title?: string | undefined; heading?: Reac
 }
 
 /**
- * The large title's text at a scroll progress: 42px at rest, 22px compact.
+ * The large title's text at a scroll progress: 32px at rest, 20px compact.
  * Its line leaves room for descenders, which a one-line title would clip.
  */
 export function titleStyle(progress: number) {
-  const size = between(42, 22, progress);
+  const size = between(32, 20, progress);
 
   return { color: colors.ink, fontFamily: displayFamily, fontSize: size, lineHeight: size * 1.2, fontWeight: '700', letterSpacing: -0.03 * size } as const;
 }
@@ -558,7 +558,7 @@ export const s = StyleSheet.create({
   screenHeaderEnd: { flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: -12 },
   screenHeaderTitleContent: { alignSelf: 'flex-start', maxWidth: '100%' },
   screenContext: { color: colors.muted, fontFamily, fontSize: 13, lineHeight: 18 },
-  screenTitle: { color: colors.ink, fontFamily: displayFamily, fontSize: 42, lineHeight: 50, fontWeight: '700', letterSpacing: -1.26 },
+  screenTitle: { color: colors.ink, fontFamily: displayFamily, fontSize: 32, lineHeight: 38, fontWeight: '700', letterSpacing: -0.96 },
   pageTitle: viewTitle,
   /** The text back action: 44 high, its padding reaching the screen edge. */
   navIcon: { height: 44, justifyContent: 'center', paddingLeft: 24, paddingRight: 20 },

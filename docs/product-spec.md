@@ -48,7 +48,7 @@ Replace. Creating a link does not imply anyone has joined.
 
 Follow the agreed prototype (`Splitnext Prototype.dc.html`): ink on warm
 paper, square black actions, hairline-ruled rows instead of cards, and large
-titles. Every screen's title is 42px and shrinks to 22px as the page scrolls
+titles. Every screen's title is 32px and shrinks to 20px as the page scrolls
 under the header, with a hairline appearing below the header. Fields are bare
 text over an ink underline and show focus by their caret. Changing screens
 moves as the prototype does: parts shown on both screens fly from one place to

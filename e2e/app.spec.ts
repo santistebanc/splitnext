@@ -202,28 +202,28 @@ test('removes someone no expense names with the X on their row', async ({ page }
 test('uses one large title on every screen and opens the join field in place', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Headers', 'Ana');
-  await expect(heading(page, 'Headers')).toHaveCSS('font-size', '42px');
+  await expect(heading(page, 'Headers')).toHaveCSS('font-size', '32px');
   await addMember(page, 'Ben');
   await addExpense(page, 'Lunch', '20');
   await person(page, 'Ben').click();
-  await expect(heading(page, 'Ben')).toHaveCSS('font-size', '42px');
+  await expect(heading(page, 'Ben')).toHaveCSS('font-size', '32px');
   await button(page, 'Settle up, 1 payment').click();
-  await expect(heading(page, 'Settle up')).toHaveCSS('font-size', '42px');
+  await expect(heading(page, 'Settle up')).toHaveCSS('font-size', '32px');
   await button(page, 'Back to Ben').click();
   await button(page, 'Back to Headers').click();
   await bell(page).click();
-  await expect(heading(page, 'Activity')).toHaveCSS('font-size', '42px');
+  await expect(heading(page, 'Activity')).toHaveCSS('font-size', '32px');
   await button(page, 'Back to Headers').click();
   await button(page, 'Back to groups').click();
   // The groups list shows the mark, about as tall as a title, with the name
   // beside it at title size, instead of a title.
   await expect(page.getByText('Your groups', { exact: true })).toHaveCount(0);
-  await expect(page.getByTestId('splitnext-logo')).toHaveAttribute('height', '44');
+  await expect(page.getByTestId('splitnext-logo')).toHaveAttribute('height', '34');
   const name = page.getByText('splitnext', { exact: true });
   const logo = (await page.getByTestId('splitnext-logo').boundingBox())!;
   const nameBox = (await name.boundingBox())!;
 
-  await expect(name).toHaveCSS('font-size', '42px');
+  await expect(name).toHaveCSS('font-size', '32px');
   expect(nameBox.x).toBeGreaterThan(logo.x + logo.width);
   expect(nameBox.x - (logo.x + logo.width)).toBeLessThan(20);
   expect(Math.abs(nameBox.y + nameBox.height / 2 - (logo.y + logo.height / 2))).toBeLessThanOrEqual(3);
@@ -889,14 +889,14 @@ test('opens views at the top and restores context on returning or browsing histo
   const atTop = async () => { await expect.poll(position).toBe(0); };
 
   await scroller.evaluate((node) => { node.scrollTop = 160; });
-  await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '22px');
+  await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '20px');
   const groupPosition = await position();
 
   await person(page, 'Gus').click();
   await atTop();
-  await expect(heading(page, 'Gus')).toHaveCSS('font-size', '42px');
+  await expect(heading(page, 'Gus')).toHaveCSS('font-size', '32px');
   await scroller.evaluate((node) => { node.scrollTop = 150; });
-  await expect(heading(page, 'Gus')).toHaveCSS('font-size', '22px');
+  await expect(heading(page, 'Gus')).toHaveCSS('font-size', '20px');
   await button(page, 'Back to Scroll navigation').click();
   await expect.poll(position).toBeCloseTo(groupPosition, 0);
 
@@ -904,7 +904,7 @@ test('opens views at the top and restores context on returning or browsing histo
   await person(page, 'Gus').click();
   await atTop();
   await scroller.evaluate((node) => { node.scrollTop = 120; });
-  await expect(heading(page, 'Gus')).toHaveCSS('font-size', '22px');
+  await expect(heading(page, 'Gus')).toHaveCSS('font-size', '20px');
   const personPosition = await position();
 
   await page.goBack();
@@ -923,7 +923,7 @@ test('opens views at the top and restores context on returning or browsing histo
   await bell(page).click();
   await atTop();
   await scroller.evaluate((node) => { node.scrollTop = 200; });
-  await expect(heading(page, 'Activity')).toHaveCSS('font-size', '22px');
+  await expect(heading(page, 'Activity')).toHaveCSS('font-size', '20px');
   await button(page, 'Back to Scroll navigation').click();
   await bell(page).click();
   await atTop();
@@ -952,7 +952,7 @@ test('opens views at the top and restores context on returning or browsing histo
   await button(page, 'Save').click();
   await expect(heading(page, 'Scroll navigation')).toBeVisible();
   await expect.poll(position).toBeGreaterThan(0);
-  await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '22px');
+  await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '20px');
 });
 
 test('joins from a second device and shows changes on both through realtime', async ({ page, browser }) => {
@@ -1289,7 +1289,7 @@ test('puts the Activity scroll divider under the pinned day heading', async ({ p
   await expect(yesterday).toBeAttached();
   await expect(today).toHaveCSS('box-shadow', 'none');
   await scroller.evaluate((node) => { node.scrollTop = 150; });
-  await expect(title).toHaveCSS('font-size', '22px');
+  await expect(title).toHaveCSS('font-size', '20px');
   await expect(today).not.toHaveCSS('box-shadow', 'none');
   await expect(header).toHaveCSS('box-shadow', 'none');
   await expect(yesterday).toHaveCSS('box-shadow', 'none');
@@ -1305,7 +1305,7 @@ test('puts the Activity scroll divider under the pinned day heading', async ({ p
   await expect(header).toHaveCSS('box-shadow', 'none');
   await page.screenshot({ path: testInfo.outputPath('activity-yesterday-divider.png') });
   await scroller.evaluate((node) => { node.scrollTop = 0; });
-  await expect(title).toHaveCSS('font-size', '42px');
+  await expect(title).toHaveCSS('font-size', '32px');
   await expect(today).toHaveCSS('box-shadow', 'none');
 });
 
@@ -1508,9 +1508,9 @@ test('shrinks the large title as the page scrolls and grows it back at the top',
   const title = heading(page, 'Long trip');
 
   await scroller.evaluate((node) => { node.scrollTop = 0; });
-  await expect(title).toHaveCSS('font-size', '42px');
+  await expect(title).toHaveCSS('font-size', '32px');
   await scroller.evaluate((node) => { node.scrollTop = 200; });
-  await expect(title).toHaveCSS('font-size', '22px');
+  await expect(title).toHaveCSS('font-size', '20px');
   await expect(button(page, 'Add expense')).toBeInViewport();
 
   // The page is the only scroll area.
@@ -1519,7 +1519,7 @@ test('shrinks the large title as the page scrolls and grows it back at the top',
 
   expect(scrollAreas).toEqual(['splitnext-page']);
   await scroller.evaluate((node) => { node.scrollTop = 0; });
-  await expect(title).toHaveCSS('font-size', '42px');
+  await expect(title).toHaveCSS('font-size', '32px');
 });
 
 test('morphs between screens and leaves nothing behind', async ({ page }) => {
