@@ -234,10 +234,10 @@ place as a list of radio rows, with a "you" badge beside the preferred member
 whether or not they are the selected payer. Then the split: its caption (28.20
 each for an equal split, or 5 people for a custom one), a bar of each person's
 share in their colour, and one row per person,
-as in the earlier app: their colour, the name with "you", + for another share,
-their amount, and at the end a checkbox for whether they share it. The checkbox
-becomes − once they have more than one share or a fixed amount; − takes a
-share away, and on a fixed amount or the last share leaves them out. + shows
+their colour, the name with "you", − and + side by side for their shares,
+their amount, and at the end a checkbox for whether they share it, which
+always stays. − shows once they have more than one share or a fixed amount
+and takes a share away; on a fixed amount it leaves them out. + shows
 while it changes the split: on a fixed amount, or when more than one person
 divides by shares; on a fixed amount it returns them to the nearest whole
 shares. Tapping an amount fixes it in place, in a field formatted like the
