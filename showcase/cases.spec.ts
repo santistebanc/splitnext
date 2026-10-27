@@ -280,7 +280,7 @@ test('expense form', async ({ browser }) => {
 
   await button(page, /^Paid by .*Change payer$/).click();
   await spot(page, page.getByRole('radiogroup', { name: 'Paid by' }), 'expense-payer', 'Expense form', 'Choosing who paid', 'After tapping the payer.');
-  await page.getByRole('radio', { name: 'Ana', exact: true }).click();
+  await page.getByRole('radio', { name: 'Ana (you)', exact: true }).click();
 
   await page.getByRole('checkbox', { name: 'Cy shares this expense' }).click();
   await spot(page, page.getByRole('checkbox', { name: 'Cy shares this expense' }).locator('..'), 'expense-excluded', 'Expense form', 'Left out of the split', 'Unticked: greyed, with no share.');

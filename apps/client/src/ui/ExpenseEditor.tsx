@@ -3,7 +3,7 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { activeMembers, formatAmount, parseAmount, preferredMember } from '@splitnext/client';
 import type { AppController } from '../model/controller';
 import { entryFromDraft, expenseLabel, memberName, previewAllocation, type ExpenseDraft, type ExpenseDraftPart } from '../model/expenses';
-import { ErrorMessage, HeaderAction, RadioRow, ScreenHeader, colors, s } from './components';
+import { ErrorMessage, FooterButton, HeaderAction, RadioRow, ScreenHeader, colors, s } from './components';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { between, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
@@ -16,10 +16,9 @@ export type ExpenseEditorApp = Pick<AppController, 'snapshot'>;
 
 type ExpenseEditorProps = { app: ExpenseEditorApp };
 
-/** The editor's header: Cancel and Save, with Delete for a recorded expense. */
+/** The editor's header: Cancel, with Delete for a recorded expense. */
 export function ExpenseEditorHeader(props: ExpenseEditorProps) {
   const back = useActionCall();
-  const save = useActionCall();
   const remove = useActionCall();
   const draft = useUiState().expense;
   const expense = props.app.snapshot().group?.projected_snapshot?.expenses.find((entry) => entry.id === draft.expenseId);
@@ -28,14 +27,9 @@ export function ExpenseEditorHeader(props: ExpenseEditorProps) {
     <>
       <ScreenHeader
         start={<HeaderAction quiet text="Cancel" label="Cancel" disabled={!back.can('closePanel')} onPress={() => { void back.call('closePanel', {}); }} />}
-        end={(
-          <>
-            {expense ? (
-              <HeaderAction danger text="Delete" label={`Delete ${expenseLabel(expense)}`} disabled={!remove.can('removeExpense', { expenseId: expense.id })} onPress={() => { void remove.call('removeExpense', { expenseId: expense.id }, () => { void back.call('closePanel', {}); }); }} />
-            ) : null}
-            <HeaderAction primary text={save.busy ? 'Saving…' : 'Save'} label="Save" disabled={!save.can('saveExpense')} onPress={() => { void save.call('saveExpense', {}); }} />
-          </>
-        )}
+        end={expense ? (
+          <HeaderAction danger text="Delete" label={`Delete ${expenseLabel(expense)}`} disabled={!remove.can('removeExpense', { expenseId: expense.id })} onPress={() => { void remove.call('removeExpense', { expenseId: expense.id }, () => { void back.call('closePanel', {}); }); }} />
+        ) : null}
       />
       {expense ? (
         <Text testID="expense-timestamp" style={s.caption}>
@@ -43,7 +37,21 @@ export function ExpenseEditorHeader(props: ExpenseEditorProps) {
           {new Date(expense.updated_at).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
         </Text>
       ) : null}
-      <ErrorMessage message={back.error ?? save.error ?? remove.error} />
+      <ErrorMessage message={back.error ?? remove.error} />
+    </>
+  );
+}
+
+/** The shared main action, kept at the foot while the split scrolls. */
+export function ExpenseEditorFooter() {
+  const save = useActionCall();
+
+  return (
+    <>
+      <ErrorMessage message={save.error} />
+      <FooterButton label="Save" busy={save.busy} disabled={!save.can('saveExpense')} onPress={() => { void save.call('saveExpense', {}); }}>
+        {save.busy ? 'Saving…' : 'Save'}
+      </FooterButton>
     </>
   );
 }
@@ -293,13 +301,16 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
                 compact
                 key={member.id}
                 label={memberName(snapshot, member.id)}
+                accessibilityLabel={`${memberName(snapshot, member.id)}${member.id === you ? ' (you)' : ''}`}
                 selected={draft.paidBy === member.id}
                 style={{ borderTopWidth: 0, borderBottomWidth: 1, borderColor: colors.rule }}
                 onPress={() => {
                   setChoosingPayer(false);
                   void edit.call('chooseExpensePayer', { memberId: member.id });
                 }}
-              />
+              >
+                {member.id === you ? <YouBadge /> : null}
+              </RadioRow>
             ))}
           </View>
         ) : null}

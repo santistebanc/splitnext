@@ -66,8 +66,8 @@ shrink more, such as the expense amount and the person's balance, read the
 same progress. The groups list pins New group; New group pins Create group;
 the join screen pins Open link or Join as the chosen name; the group screen
 pins Add expense; a person pins Settle up while they are in a planned payment;
-the repayment form pins Record or Save. The expense editor saves from its
-header.
+the expense editor pins Save. The repayment form puts Record or Save in its
+header beside Cancel and Delete.
 
 `ScreenMorph` moves screens as the prototype does. It wraps `Frame` and, being
 a class component, measures the old screen in `getSnapshotBeforeUpdate` just
@@ -172,11 +172,13 @@ key.
   Save, and Delete for an existing repayment in the header. The web uses native
   select controls; member changes dispatch the same prepareRepayment action as
   other callers.
-  The expense editor has Cancel, Delete, and Save, a large amount and
-  description that shrink as the split scrolls, Paid by opening the names in
-  place, a bar of each person's share, and one row per
-  person with + for another share, an amount that can be fixed in place, and
-  a checkbox at the end that becomes − above one share or on a fixed amount.
+  The expense editor has Cancel and Delete in the header and Save in the
+  shared pinned footer, a large amount and description that shrink as the
+  split scrolls, Paid by opening the names in
+  place with a "you" badge for the preferred member, a bar of each person's
+  share, and one row per person with + for another share, an amount that can
+  be fixed in place, and a checkbox at the end that becomes − above one share
+  or on a fixed amount.
   `ExpenseDraft.parts` retains each person's whole shares or typed fixed amount
   independently. Per-person actions increase or decrease shares, include or
   exclude a person, and fix or clear an amount; the catalog protects the last
