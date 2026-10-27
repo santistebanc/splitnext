@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import { activeMembers, formatAmount, parseAmount, preferredMember } from '@splitnext/client';
+import { activeMembers, formatAmount, minorDigits, parseAmount, preferredMember } from '@splitnext/client';
 import type { AppController } from '../model/controller';
-import { entryFromDraft, expenseLabel, memberName, previewAllocation, type ExpenseDraft, type ExpenseDraftPart } from '../model/expenses';
+import { entryFromDraft, expenseLabel, memberName, moneyLabel, previewAllocation, type ExpenseDraft, type ExpenseDraftPart } from '../model/expenses';
 import { ErrorMessage, FooterButton, HeaderAction, RadioRow, ScreenHeader, colors, s } from './components';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { between, useCompactProgress } from './pageScroll';
@@ -65,7 +65,7 @@ function splitSummary(draft: ExpenseDraft, preview: Map<string, number>): string
   if (draft.parts.some((part) => part.kind === 'exact' || part.shares !== 1)) return people;
   const each = preview.get(draft.parts[0]!.member_id);
 
-  return each !== undefined ? `${formatAmount(each, draft.currency)} each` : 'Enter an amount to split';
+  return each !== undefined ? `${moneyLabel(each, draft.currency)} each` : 'Enter an amount to split';
 }
 
 /** A − or + beside a person's shares, with a full touch target. */
@@ -99,7 +99,7 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
   const shares = props.part?.kind === 'shares' ? props.part.shares : 1;
   const value = props.part?.kind === 'exact' ? props.part.amount : formatAmount(props.owed ?? 0, props.currency);
   const parsed = parseAmount(value, props.currency);
-  const shown = parsed === null ? value : formatAmount(parsed, props.currency);
+  const shown = parsed === null ? value : moneyLabel(parsed, props.currency);
   const fixing = { memberId: props.memberId, amount: value };
   const member = { memberId: props.memberId };
   const canFix = props.hasAmount && edit.can('setExpenseFixedAmount', fixing);
@@ -220,6 +220,11 @@ export function ExpenseControls() {
   }
 
   const titleSize = between(24, 18, progress);
+  // The amount as shown, grouped in threes, fits the width: up to "999 999.99"
+  // at full size, and longer figures in proportion.
+  const whole = Math.max(1, (draft.amount.split('.')[0] ?? '').length);
+  const shownLength = whole + Math.floor((whole - 1) / 3) + 1 + minorDigits(draft.currency);
+  const amountFit = Math.min(1, 10 / shownLength);
 
   return (
     <View style={{ paddingBottom: between(14, 6, progress) }}>
@@ -232,7 +237,7 @@ export function ExpenseControls() {
           onChangeText={(value) => change('expense.amount', value)}
           onSubmitEditing={submit}
           height={between(60, 36, progress)}
-          fontSize={between(56, 32, progress)}
+          fontSize={between(56, 32, progress) * amountFit}
         />
         </View>
       </View>

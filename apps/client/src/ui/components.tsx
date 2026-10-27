@@ -11,7 +11,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { formatAmount } from '@splitnext/client';
+import { moneyLabel } from '../model/expenses';
 import { between, useCompactProgress } from './pageScroll';
 import { AlertIcon, WarningIcon } from './icons';
 import { morph } from './ScreenMorph';
@@ -179,7 +179,7 @@ export function SectionHeading(props: { title: string; end?: ReactNode; onPress?
 
 /** A balance figure, such as "+12.50", "−12.50", or "0.00". */
 export function signedFigure(amount: number, currency: string): string {
-  return `${amount > 0 ? '+' : amount < 0 ? '−' : ''}${formatAmount(Math.abs(amount), currency)}`;
+  return `${amount > 0 ? '+' : amount < 0 ? '−' : ''}${moneyLabel(Math.abs(amount), currency)}`;
 }
 
 /** A balance's color: green when money comes back, orange when owed, grey when settled. */

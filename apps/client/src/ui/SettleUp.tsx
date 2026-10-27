@@ -65,7 +65,7 @@ export function SettleUp(props: { app: MemberListApp }) {
         {payments.map((entry) => {
           const payer = label(entry.from_member_id);
           const payee = label(entry.to_member_id);
-          const amount = formatAmount(entry.amount, entry.currency);
+          const amount = moneyLabel(entry.amount, entry.currency);
 
           return (
             <View key={`${entry.currency}:${entry.from_member_id}:${entry.to_member_id}`} style={[{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16 }, s.ruled]}>

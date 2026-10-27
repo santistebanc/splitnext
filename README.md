@@ -64,7 +64,8 @@ How it fits together, and the rules each part keeps, is in
   served Instrument Sans and Geist Mono fonts, and morphing screen changes on
   the web. Theme assets are precached with the app shell
   for offline reloads; changing a theme asset invalidates that cache.
-- Amounts are plain numbers with two decimals, never shown with a currency.
+- Amounts are plain numbers with two decimals, never shown with a currency,
+  and shown with their digits grouped in threes, such as 1 234.50.
   Expenses and repayments record the no-currency code XXX, and the ledger keeps
   any older real-currency records separate; see
   [ADR 0025](./docs/adr/0025-deal-in-plain-numbers-without-currency.md).
