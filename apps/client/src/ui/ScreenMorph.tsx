@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 /** Changes of screen; native shows the new screen at once. */
-export function ScreenMorph(props: { screen: string; depth: number; children: ReactNode }) {
+export function ScreenMorph(props: { screen: string; depth: number; sheet?: boolean; children: ReactNode }) {
   return <View style={{ flex: 1 }}>{props.children}</View>;
 }
 

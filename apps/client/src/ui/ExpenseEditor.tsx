@@ -211,7 +211,7 @@ export function ExpenseControls() {
   // waits a frame.
   useEffect(() => {
     if (draft.expenseId) return;
-    const frame = requestAnimationFrame(() => amount.current?.focus());
+    const frame = requestAnimationFrame(() => amount.current?.focus({ preventScroll: true }));
 
     return () => cancelAnimationFrame(frame);
   }, []);
