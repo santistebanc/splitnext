@@ -1,19 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { activeMembers, formatAmount, minorDigits, parseAmount, preferredMember } from '@splitnext/client';
-import type { AppController } from '../model/controller';
 import { entryFromDraft, expenseLabel, memberName, moneyLabel, previewAllocation, type ExpenseDraft, type ExpenseDraftPart } from '../model/expenses';
-import { ErrorMessage, FooterButton, HeaderAction, RadioRow, ScreenHeader, colors, s } from './components';
+import { ErrorMessage, FooterButton, HeaderAction, ScreenHeader, colors, s } from './components';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { between, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
 import { morph } from './ScreenMorph';
 import { whenLabel } from './relativeTime';
+import { participantMarkers } from '../model/memberPresentation';
+import { MemberIcon, type MemberListApp } from './MemberList';
 import { YouBadge } from './YouBadge';
 import { fontFamily, monoFamily, splitHues, withTransition } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
-export type ExpenseEditorApp = Pick<AppController, 'snapshot'>;
+/** The editor needs presence too, to show who is online among the payers. */
+export type ExpenseEditorApp = MemberListApp;
 
 type ExpenseEditorProps = { app: ExpenseEditorApp };
 
@@ -264,6 +266,36 @@ export function ExpenseControls() {
   );
 }
 
+/**
+ * One name to choose as who paid, drawn like their row in the balances: the
+ * whole width, tinted when it is you, with their presence, the name and
+ * “you”, and a check at the end on the one who paid.
+ */
+function PayerRow(props: { app: ExpenseEditorApp; memberId: string; you: boolean; selected: boolean; onPress: () => void }) {
+  const state = props.app.snapshot();
+  const replica = state.group;
+  const name = memberName(replica?.projected_snapshot, props.memberId);
+  const participants = replica ? participantMarkers(replica, props.memberId, props.app.client.presence(replica.group_id), state.online && state.reachable) : [];
+
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityLabel={`${name}${props.you ? ' (you)' : ''}`}
+      accessibilityState={{ checked: props.selected }}
+      aria-checked={props.selected}
+      onPress={props.onPress}
+      style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 52, marginHorizontal: -24, paddingHorizontal: 24, borderBottomWidth: 1, borderColor: colors.rule }, props.you && { backgroundColor: colors.youRow }, pressed && s.rowPressed]}
+    >
+      <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+        <MemberIcon participants={participants} size={6} />
+        <Text numberOfLines={1} style={[s.name, { flexShrink: 1 }]}>{name}</Text>
+        {props.you ? <YouBadge /> : null}
+      </View>
+      {props.selected ? <Text aria-hidden style={{ fontFamily, fontSize: 16, fontWeight: '600', color: colors.ink }}>✓</Text> : null}
+    </Pressable>
+  );
+}
+
 /** Who paid, opening the names in place, then how it is split. */
 export function ExpenseEditor(props: ExpenseEditorProps) {
   const replica = props.app.snapshot().group;
@@ -309,20 +341,17 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
         {choosingPayer ? (
           <View role="radiogroup" aria-label="Paid by">
             {payers.map((member) => (
-              <RadioRow
-                compact
+              <PayerRow
                 key={member.id}
-                label={memberName(snapshot, member.id)}
-                accessibilityLabel={`${memberName(snapshot, member.id)}${member.id === you ? ' (you)' : ''}`}
+                app={props.app}
+                memberId={member.id}
+                you={member.id === you}
                 selected={draft.paidBy === member.id}
-                style={{ borderTopWidth: 0, borderBottomWidth: 1, borderColor: colors.rule }}
                 onPress={() => {
                   setChoosingPayer(false);
                   void edit.call('chooseExpensePayer', { memberId: member.id });
                 }}
-              >
-                {member.id === you ? <YouBadge /> : null}
-              </RadioRow>
+              />
             ))}
           </View>
         ) : null}
