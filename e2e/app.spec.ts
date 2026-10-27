@@ -896,14 +896,14 @@ test('opens views at the top and restores context on returning or browsing histo
   const atTop = async () => { await expect.poll(position).toBe(0); };
 
   await scroller.evaluate((node) => { node.scrollTop = 160; });
-  await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '20px');
+  await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '18px');
   const groupPosition = await position();
 
   await person(page, 'Gus').click();
   await atTop();
   await expect(heading(page, 'Gus')).toHaveCSS('font-size', '32px');
   await scroller.evaluate((node) => { node.scrollTop = 150; });
-  await expect(heading(page, 'Gus')).toHaveCSS('font-size', '20px');
+  await expect(heading(page, 'Gus')).toHaveCSS('font-size', '18px');
   await button(page, 'Back to Scroll navigation').click();
   await expect.poll(position).toBeCloseTo(groupPosition, 0);
 
@@ -911,7 +911,7 @@ test('opens views at the top and restores context on returning or browsing histo
   await person(page, 'Gus').click();
   await atTop();
   await scroller.evaluate((node) => { node.scrollTop = 120; });
-  await expect(heading(page, 'Gus')).toHaveCSS('font-size', '20px');
+  await expect(heading(page, 'Gus')).toHaveCSS('font-size', '18px');
   const personPosition = await position();
 
   await page.goBack();
@@ -930,7 +930,7 @@ test('opens views at the top and restores context on returning or browsing histo
   await bell(page).click();
   await atTop();
   await scroller.evaluate((node) => { node.scrollTop = 200; });
-  await expect(heading(page, 'Activity')).toHaveCSS('font-size', '20px');
+  await expect(heading(page, 'Activity')).toHaveCSS('font-size', '18px');
   await button(page, 'Back to Scroll navigation').click();
   await bell(page).click();
   await atTop();
@@ -959,7 +959,7 @@ test('opens views at the top and restores context on returning or browsing histo
   await button(page, 'Save').click();
   await expect(heading(page, 'Scroll navigation')).toBeVisible();
   await expect.poll(position).toBeGreaterThan(0);
-  await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '20px');
+  await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '18px');
 });
 
 test('joins from a second device and shows changes on both through realtime', async ({ page, browser }) => {
@@ -1296,7 +1296,7 @@ test('puts the Activity scroll divider under the pinned day heading', async ({ p
   await expect(yesterday).toBeAttached();
   await expect(today).toHaveCSS('box-shadow', 'none');
   await scroller.evaluate((node) => { node.scrollTop = 150; });
-  await expect(title).toHaveCSS('font-size', '20px');
+  await expect(title).toHaveCSS('font-size', '18px');
   await expect(today).not.toHaveCSS('box-shadow', 'none');
   await expect(header).toHaveCSS('box-shadow', 'none');
   await expect(yesterday).toHaveCSS('box-shadow', 'none');
@@ -1517,7 +1517,7 @@ test('shrinks the large title as the page scrolls and grows it back at the top',
   await scroller.evaluate((node) => { node.scrollTop = 0; });
   await expect(title).toHaveCSS('font-size', '32px');
   await scroller.evaluate((node) => { node.scrollTop = 200; });
-  await expect(title).toHaveCSS('font-size', '20px');
+  await expect(title).toHaveCSS('font-size', '18px');
   await expect(button(page, 'Add expense')).toBeInViewport();
 
   // The page is the only scroll area.

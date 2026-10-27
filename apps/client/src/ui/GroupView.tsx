@@ -10,7 +10,7 @@ import { ExpenseList } from './ExpenseList';
 import { CloseIcon, PencilIcon } from './icons';
 import { InvitePanel } from './InvitePanel';
 import { AddPersonRow, MemberIcon, type MemberListApp, type Replica } from './MemberList';
-import { useCompactProgress } from './pageScroll';
+import { between, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
 import { morph } from './ScreenMorph';
 import { fontFamily } from './theme';
@@ -111,6 +111,7 @@ function GroupName(props: { name: string; groupId: string }) {
  */
 export function GroupHeader(props: { app: MemberListApp }) {
   const actions = useActions();
+  const progress = useCompactProgress();
   const invite = useActionCall();
   const inviteToggle = useRef<View>(null);
   const ui = useUiState();
@@ -129,7 +130,8 @@ export function GroupHeader(props: { app: MemberListApp }) {
       title={open ? undefined : name}
       below={open ? (
         <View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          {/* Folds away as the page scrolls, for more room, unless the invite is open under it. */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, height: inviting ? 44 : between(44, 0, progress), opacity: inviting ? 1 : 1 - progress, overflow: 'hidden' }}>
             <Text style={[s.caption, { fontSize: 14 }]}>{people === 1 ? '1 person' : `${people} people`}</Text>
             <Pressable
               ref={inviteToggle}

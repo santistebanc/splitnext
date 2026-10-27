@@ -245,14 +245,14 @@ export function ScreenHeader(props: { title?: string | undefined; heading?: Reac
   const progress = useCompactProgress();
 
   return (
-    <View style={[s.screenHeader, { paddingBottom: between(14, 6, progress), boxShadow: props.scrollRule === false ? 'none' : `0 1px 0 rgba(20, 20, 19, ${(0.14 * progress).toFixed(3)})` }]}>
+    <View style={[s.screenHeader, { paddingTop: between(4, 0, progress), paddingBottom: between(12, 4, progress), boxShadow: props.scrollRule === false ? 'none' : `0 1px 0 rgba(20, 20, 19, ${(0.14 * progress).toFixed(3)})` }]}>
       <View style={s.screenHeaderRow}>
         <View style={s.screenHeaderStart}>{props.start}</View>
         {props.end ? <View style={s.screenHeaderEnd}>{props.end}</View> : null}
       </View>
       {props.underRow}
       {props.heading ?? props.title ? (
-        <View style={[s.screenHeaderTitle, { paddingTop: between(16, 4, progress) }]}>
+        <View style={[s.screenHeaderTitle, { paddingTop: between(8, 0, progress) }]}>
           {props.heading ?? (
             <Text ref={morph(props.morph)} accessibilityRole="header" numberOfLines={1} style={titleStyle(progress)}>
               {props.title}
@@ -266,11 +266,11 @@ export function ScreenHeader(props: { title?: string | undefined; heading?: Reac
 }
 
 /**
- * The large title's text at a scroll progress: 32px at rest, 20px compact.
+ * The large title's text at a scroll progress: 32px at rest, 18px compact.
  * Its line leaves room for descenders, which a one-line title would clip.
  */
 export function titleStyle(progress: number) {
-  const size = between(32, 20, progress);
+  const size = between(32, 18, progress);
 
   return { color: colors.ink, fontFamily: displayFamily, fontSize: size, lineHeight: size * 1.2, fontWeight: '700', letterSpacing: -0.03 * size } as const;
 }
@@ -549,7 +549,7 @@ export const s = StyleSheet.create({
   appWrap: { maxWidth: 480, paddingHorizontal: 24 },
   screenColumn: { width: '100%', maxWidth: 480, alignSelf: 'center', paddingHorizontal: 24 },
   screenHeaderBar: { backgroundColor: colors.background, zIndex: 5 },
-  screenHeader: { paddingTop: 8 },
+  screenHeader: {},
   screenHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 44 },
   screenHeaderStart: { flexDirection: 'row', alignItems: 'center', marginLeft: -24, minWidth: 0, flexShrink: 1 },
   screenHeaderTitle: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },
@@ -896,15 +896,15 @@ export const s = StyleSheet.create({
   footerBar: {
     zIndex: 6,
     backgroundColor: colors.background,
-    paddingTop: 16,
-    paddingBottom: 34,
+    paddingTop: 10,
+    paddingBottom: 16,
   },
   footerBarRuled: {},
   footerInner: { gap: 10 },
   footerButton: {
     flexDirection: 'row',
     gap: 10,
-    height: 56,
+    height: 48,
     backgroundColor: colors.action,
     alignItems: 'center',
     justifyContent: 'center',
