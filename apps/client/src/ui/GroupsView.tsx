@@ -3,8 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import type { ClientGroupSummary } from '@splitnext/client';
 import type { AppController } from '../model/controller';
 import { BrandMark } from './BrandMark';
-import { Button, EmptyState, ErrorMessage, FooterButton, ScreenHeader, s } from './components';
-import { signedMoney } from './ExpenseList';
+import { Button, EmptyState, balanceColor, ErrorMessage, FooterButton, ScreenHeader, s, signedMoney } from './components';
 import { CheckIcon, ChevronDownIcon, LinkIcon, PeopleIcon, PlusIcon } from './icons';
 import { colors, fontFamily, monoFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
@@ -154,7 +153,7 @@ export function GroupsView(props: GroupsViewProps) {
             ) : balances.length ? (
               <View style={{ alignItems: 'flex-end', gap: 2 }}>
                 {balances.map(({ currency, amount }) => (
-                  <Text key={currency} style={{ fontFamily: monoFamily, fontSize: 17, fontWeight: '600', color: amount > 0 ? colors.owed : colors.owes }}>
+                  <Text key={currency} style={{ fontFamily: monoFamily, fontSize: 17, fontWeight: '600', color: balanceColor(amount) }}>
                     {signedMoney(amount, currency)}
                   </Text>
                 ))}
