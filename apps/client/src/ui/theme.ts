@@ -1,87 +1,92 @@
 /**
- * One fixed light palette: white cards on a cool grey page, near-black ink,
- * and one blue for actions. Blue and orange figures only mean money someone
- * gets back or owes; green means settled or online.
+ * One fixed light palette: near-black ink on warm paper, square black
+ * actions, and hairline rules instead of cards. Green figures and bars mean
+ * money someone gets back, orange money someone owes.
  */
 export const colors = {
-  /** The page behind cards. */
-  background: '#f2f4f6',
-  /** Cards, fields, and the bottom navigation. */
-  surface: '#ffffff',
-  ink: '#10161d',
-  /** Secondary text and section labels. */
-  muted: '#56606b',
-  /** Body copy that is quieter than ink but more than a caption. */
-  soft: '#39424c',
-  /** Text of an excluded or unavailable choice. */
-  faint: '#6b747e',
-  /** The one main action on a page, and links. */
-  action: '#1b5fc1',
-  actionInk: '#ffffff',
-  /** Quieter text on an action-blue surface. */
-  actionInkSoft: '#d6e6ff',
-  actionDark: '#134a99',
-  actionSoft: '#e6effc',
-  /** A main action that is working and cannot be pressed again. */
-  actionBusy: '#8fa9cf',
+  /** The page. */
+  background: '#f6f5f1',
+  /** Fields and panels; the page itself, since nothing sits on a card. */
+  surface: '#f6f5f1',
+  ink: '#141413',
+  /** Secondary text, labels, and quiet actions. */
+  muted: '#5c5b56',
+  /** Body copy that is quieter than ink. */
+  soft: '#5c5b56',
+  /** Text of an excluded or unavailable choice, and placeholders' rings. */
+  faint: '#8b8a83',
+  /** Placeholder text. */
+  placeholder: '#b9b7ae',
+  /** The one main action on a page: a black block. */
+  action: '#141413',
+  actionInk: '#f6f5f1',
+  actionInkSoft: '#dddbd3',
+  actionDark: '#000000',
+  actionSoft: '#eeece5',
+  /** A main action that cannot be pressed yet. */
+  actionBusy: '#dddbd3',
+  actionBusyInk: '#8b8a83',
   /** The row that is you, in a list of everyone. */
-  youRow: '#eef4fd',
-  /** Card edges. */
-  border: '#dde2e7',
-  /** Lines between rows inside a card. */
-  rule: '#e7ebef',
-  /** Field and secondary button edges. */
-  field: '#c9d0d7',
+  youRow: '#eeece5',
+  border: '#dddbd3',
+  /** Lines between rows. */
+  rule: '#dddbd3',
+  /** Underlines of fields and outlines of secondary buttons. */
+  field: '#141413',
   /** Unchecked boxes, unselected radios, and unclaimed markers. */
-  control: '#8a949e',
-  /** Segmented control tracks. */
-  track: '#e3e7eb',
-  /** Quiet information panels. */
-  pale: '#e8ecf0',
+  control: '#8b8a83',
+  /** The empty half of a balance bar. */
+  track: '#e7e5dd',
+  pale: '#eeece5',
   /** Someone gets money back. */
-  owed: '#1b5fc1',
+  owed: '#00683d',
   /** Someone owes money. */
-  owes: '#a9470c',
-  settled: '#2f5d3a',
-  settledSoft: '#e3f0e6',
-  online: '#2f7d4a',
-  warning: '#fff4e5',
+  owes: '#9c3a11',
+  /** Balance bars: money back, and money owed. */
+  owedBar: '#3db07c',
+  owesBar: '#df7752',
+  settled: '#5c5b56',
+  settledInk: '#195c2e',
+  settledSoft: '#e4eee6',
+  online: '#33854a',
+  warning: '#f6eadb',
   /** The edge of changes waiting for review. */
-  warningEdge: '#f3c9a8',
-  /** The bell's count and the dot on an expense waiting for review. */
-  alert: '#c2410c',
+  warningEdge: '#e2b48f',
+  /** The Activity count and marks on new entries. */
+  alert: '#cf6139',
   /** Activity entries that are new since last marked seen. */
-  fresh: '#f2f7fe',
-  /** People entries in Activity. */
-  peopleSoft: '#f1eafb',
-  peopleInk: '#5b3a8c',
+  fresh: '#eeece5',
+  peopleSoft: '#eeece5',
+  peopleInk: '#141413',
   /** The total row under a breakdown. */
-  totalRow: '#f8f9fa',
-  warningInk: '#6b3305',
-  danger: '#fdeee3',
-  dangerInk: '#7a3206',
-  /** The dark balance and invite cards. */
-  night: '#10161d',
-  nightOwed: '#8ec1ff',
+  totalRow: '#eeece5',
+  warningInk: '#9c3a11',
+  danger: '#f6e4dc',
+  dangerInk: '#9c3a11',
+  night: '#141413',
+  nightOwed: '#3db07c',
 };
 
-/**
- * Corner radii: small controls inside rows, fields and buttons, cards and
- * tiles, sheets and dialogs, and fully rounded pills.
- */
-export const radius = { small: 10, control: 12, card: 16, sheet: 24, pill: 999 } as const;
+/** One color per person in an expense's split bar, in member order. */
+export const splitHues = ['#3db07c', '#549de5', '#a584dc', '#d2833b', '#dd7577', '#00afb8'];
 
-/** Shadows: raised for a control lifted off its track, floating for anything over the page. */
+/** Everything is square; only dots and counts are round. */
+export const radius = { small: 0, control: 0, card: 0, sheet: 0, pill: 999 } as const;
+
+/** The only shadow: a hairline under a header once content scrolls beneath it. */
 export const shadows = {
-  raised: '0 1px 3px rgba(16, 22, 29, 0.15)',
-  floating: '0 6px 18px rgba(16, 22, 29, 0.18)',
+  raised: 'none',
+  floating: 'none',
 } as const;
 
-/** Body text, labels, and controls. */
-export const fontFamily = 'IBM Plex Sans';
+/** Body text, labels, controls, and titles. */
+export const fontFamily = 'Instrument Sans';
 
-/** Amounts, currency codes, and invite links. */
-export const monoFamily = 'IBM Plex Mono';
+/** Amounts and invite links. */
+export const monoFamily = 'Geist Mono';
 
-/** Page titles, group names, and empty-state titles. */
-export const displayFamily = 'Bricolage Grotesque';
+/** Page titles and group names. */
+export const displayFamily = 'Instrument Sans';
+
+/** The easing every movement shares: quick to start, long to settle. */
+export const easeOut = 'cubic-bezier(.22,.8,.16,1)';

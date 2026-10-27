@@ -13,23 +13,23 @@ import {
 
 import { formatAmount } from '@splitnext/client';
 import { between, useCompactProgress } from './pageScroll';
-import { AlertIcon, BackIcon, WarningIcon } from './icons';
-import { colors, displayFamily, fontFamily, monoFamily, radius, shadows } from './theme';
+import { AlertIcon, WarningIcon } from './icons';
+import { colors, displayFamily, fontFamily, monoFamily } from './theme';
 
 export { colors } from './theme';
 
 type ButtonProps = {
   children: ReactNode;
   onPress: () => void;
-  /** White with a grey edge, for the second choice beside a main action. */
+  /** Outlined in ink, for the second choice beside a main action. */
   secondary?: boolean;
-  /** Blue text without a background, for minor actions. */
+  /** Underlined text without a block, for minor actions. */
   quiet?: boolean;
   /** Orange text, for leaving or removing. */
   danger?: boolean;
-  /** Near-black, for confirming a change that cannot be taken back. */
+  /** A black block, for confirming a change that cannot be taken back. */
   dark?: boolean;
-  /** A compact button for actions inside rows and cards. */
+  /** A compact button for actions inside rows. */
   small?: boolean;
   disabled?: boolean;
   label?: string;
@@ -40,7 +40,7 @@ type ButtonProps = {
 };
 
 export function Button(props: ButtonProps) {
-  const filled = !props.secondary && !props.quiet && !props.danger && !props.dark;
+  const filled = !props.secondary && !props.quiet && !props.danger;
 
   return (
     <Pressable
@@ -56,7 +56,6 @@ export function Button(props: ButtonProps) {
         props.secondary && s.secondary,
         props.quiet && s.quiet,
         props.danger && s.danger,
-        props.dark && s.dark,
         pressed && !props.disabled && s.pressed,
         props.disabled && (filled ? s.busyButton : s.dim),
       ]}
@@ -66,9 +65,10 @@ export function Button(props: ButtonProps) {
         style={[
           s.buttonText,
           props.small && s.smallButtonText,
-          (props.secondary || props.danger) && s.inkText,
+          props.secondary && s.inkText,
           props.quiet && s.quietText,
           props.danger && s.dangerText,
+          filled && props.disabled && { color: colors.actionBusyInk },
         ]}
       >
         {props.children}
@@ -87,9 +87,9 @@ type FieldProps = TextInputProps & {
   figure?: boolean;
 };
 
+/** A bare field over an ink underline, as the prototype's forms use. */
 export function Field(props: FieldProps) {
   const { label, hideLabel, hint, trailing, inputRef, figure, ...input } = props;
-  const [focused, setFocused] = useState(false);
 
   return (
     <View style={s.field}>
@@ -99,16 +99,8 @@ export function Field(props: FieldProps) {
           {...input}
           ref={inputRef}
           accessibilityLabel={label}
-          placeholderTextColor={colors.control}
-          onFocus={(event) => {
-            setFocused(true);
-            input.onFocus?.(event);
-          }}
-          onBlur={(event) => {
-            setFocused(false);
-            input.onBlur?.(event);
-          }}
-          style={[s.input, figure && s.figureInput, focused && input.editable !== false && s.inputFocused, input.style]}
+          placeholderTextColor={colors.placeholder}
+          style={[s.input, figure && s.figureInput, input.style]}
         />
         {trailing}
       </View>
@@ -128,6 +120,7 @@ type ChoiceProps = {
   label?: string;
 };
 
+/** A square outlined choice that fills black when chosen. */
 export function Choice(props: ChoiceProps) {
   return (
     <Pressable
@@ -145,7 +138,7 @@ export function Choice(props: ChoiceProps) {
       {props.content ?? (
         <Text
           numberOfLines={1}
-          style={[s.chipText, props.segment && !props.selected && { color: colors.soft }, props.selected && !props.segment && s.chipTextSelected]}
+          style={[s.chipText, props.selected && s.chipTextSelected]}
         >
           {props.children}
         </Text>
@@ -154,7 +147,7 @@ export function Choice(props: ChoiceProps) {
   );
 }
 
-/** A radio row with a round marker, as on the join screen. */
+/** A row with a round marker that thickens when chosen, ruled above. */
 export function RadioRow(props: { label: string; selected: boolean; onPress: () => void; disabled?: boolean; accessibilityLabel?: string; children?: ReactNode; style?: StyleProp<ViewStyle>; compact?: boolean }) {
   return (
     <Pressable
@@ -164,16 +157,16 @@ export function RadioRow(props: { label: string; selected: boolean; onPress: () 
       aria-checked={props.selected}
       disabled={props.disabled}
       onPress={props.onPress}
-      style={({ pressed }) => [s.radioRow, props.compact && { minHeight: 48 }, props.style, props.selected && s.radioRowSelected, pressed && s.pressed]}
+      style={({ pressed }) => [s.radioRow, props.compact && { minHeight: 52 }, props.style, pressed && s.pressed, props.disabled && s.dim]}
     >
-      <View style={[s.radioDot, props.selected && s.radioDotSelected]} />
-      <Text numberOfLines={1} style={[s.radioLabel, props.compact && { fontSize: 15 }]}>{props.label}</Text>
+      <View style={[s.radioDot, props.compact && { width: 18, height: 18 }, props.selected && s.radioDotSelected]} />
+      <Text numberOfLines={1} style={[s.radioLabel, props.compact && { fontSize: 16 }]}>{props.label}</Text>
       {props.children}
     </Pressable>
   );
 }
 
-/** A section's title, such as Balances or a currency, with an optional action at its end. */
+/** A section's title, with an optional action at its end. */
 export function SectionHeading(props: { title: string; end?: ReactNode; onPress?: (() => void) | undefined; color?: string }) {
   return (
     <View style={s.sectionHeading}>
@@ -188,9 +181,32 @@ export function signedFigure(amount: number, currency: string): string {
   return `${amount > 0 ? '+' : amount < 0 ? '−' : ''}${formatAmount(Math.abs(amount), currency)}`;
 }
 
-/** A balance's color: blue when money comes back, orange when owed, green when settled. */
+/** A balance's color: green when money comes back, orange when owed, grey when settled. */
 export function balanceColor(amount: number): string {
   return amount > 0 ? colors.owed : amount < 0 ? colors.owes : colors.settled;
+}
+
+/**
+ * A balance as two halves meeting at an ink line: what someone owes grows
+ * left in orange, what they get back grows right in green, both as a share of
+ * the largest balance shown beside it.
+ */
+export function BalanceBar(props: { amount: number; max: number; height?: number; track?: boolean }) {
+  const share = props.max > 0 ? Math.min(1, Math.abs(props.amount) / props.max) : 0;
+  const width = `${share * 100}%` as const;
+  const half = { flex: 1, flexDirection: 'row', alignItems: 'center' } as const;
+  const grow = { height: props.track ? '100%' : (props.height ?? 14), transitionProperty: 'width', transitionDuration: '600ms', transitionTimingFunction: 'cubic-bezier(.22,.8,.16,1)' } as const;
+
+  return (
+    <View aria-hidden style={{ flexDirection: 'row', height: props.track ? (props.height ?? 6) : '100%', alignSelf: 'stretch' }}>
+      <View style={[half, { justifyContent: 'flex-end', borderRightWidth: 1.5, borderColor: colors.ink }, props.track && { backgroundColor: colors.track }]}>
+        <View style={[grow, { width: props.amount < 0 ? width : '0%', backgroundColor: colors.owesBar }]} />
+      </View>
+      <View style={[half, props.track && { backgroundColor: colors.track }]}>
+        <View style={[grow, { width: props.amount > 0 ? width : '0%', backgroundColor: colors.owedBar }]} />
+      </View>
+    </View>
+  );
 }
 
 /** A page title matching the size used in screen headers and drawers. */
@@ -203,46 +219,51 @@ export function PageTitle(props: { children: ReactNode }) {
 }
 
 /**
- * A screen's fixed header, the same height on every screen: a back or text
- * action, the title with what it belongs to named quietly above it, and
- * actions at the end. It shrinks as the page scrolls, its context fading
- * out while its title keeps the same size. A heading that is more
- * than text stands in for the title and styles its text with `s.screenTitle`.
+ * A screen's fixed header: a row with a text back action and actions at the
+ * end, then a large title that shrinks as the page scrolls under it, with a
+ * hairline appearing below. A heading that is more than text stands in for
+ * the title and styles its text with `titleStyle(progress)`.
  */
-export function ScreenHeader(props: { title?: string; heading?: ReactNode; context?: string | undefined; start?: ReactNode; end?: ReactNode }) {
+export function ScreenHeader(props: { title?: string | undefined; heading?: ReactNode; context?: string | undefined; start?: ReactNode; end?: ReactNode; below?: ReactNode }) {
   const progress = useCompactProgress();
 
   return (
-    <View style={[s.screenHeader, { minHeight: between(66, 52, progress), paddingTop: between(10, 4, progress) }]}>
-      {props.start}
-      <View style={[s.screenHeaderTitle, !props.start && s.screenHeaderInset]}>
-        {props.context ? (
-          <Text numberOfLines={1} style={[s.screenContext, { height: between(16, 0, progress), opacity: 1 - progress }]}>{props.context}</Text>
-        ) : null}
-        <View style={s.screenHeaderTitleContent}>
-          {props.heading ?? (props.title ? (
-            <Text accessibilityRole="header" numberOfLines={1} style={s.screenTitle}>
+    <View style={[s.screenHeader, { paddingBottom: between(14, 6, progress), boxShadow: `0 1px 0 rgba(20, 20, 19, ${(0.14 * progress).toFixed(3)})` }]}>
+      <View style={s.screenHeaderRow}>
+        <View style={s.screenHeaderStart}>{props.start}</View>
+        {props.end ? <View style={s.screenHeaderEnd}>{props.end}</View> : null}
+      </View>
+      {props.heading ?? props.title ? (
+        <View style={[s.screenHeaderTitle, { paddingTop: between(16, 4, progress) }]}>
+          {props.heading ?? (
+            <Text accessibilityRole="header" numberOfLines={1} style={titleStyle(progress)}>
               {props.title}
             </Text>
-          ) : null)}
+          )}
         </View>
-      </View>
-      {props.end ? <View style={s.screenHeaderEnd}>{props.end}</View> : null}
+      ) : null}
+      {props.below}
     </View>
   );
 }
 
-/**
- * The space a screen's fixed header keeps below itself. It belongs to the
- * header, so a screen's content starts right below it at rest and scrolls out
- * of sight at that same edge.
- */
-export const headerGap = 8;
+/** The large title's text at a scroll progress: 42px at rest, 22px compact. */
+export function titleStyle(progress: number) {
+  const size = between(42, 22, progress);
+
+  return { color: colors.ink, fontFamily: displayFamily, fontSize: size, lineHeight: size * 1.05, fontWeight: '700', letterSpacing: -0.03 * size } as const;
+}
+
+/** No gap below the header: its own padding and hairline separate it from the page. */
+export const headerGap = 0;
 
 type HeaderActionProps = { label: string; onPress: () => void; disabled?: boolean };
 
-/** The back chevron in a screen header; its label names where it goes. */
-export function BackButton(props: HeaderActionProps) {
+/** “‹ Groups”: where back goes, named in the header's first row. */
+export function BackButton(props: HeaderActionProps & { text?: string }) {
+  const named = props.label.replace(/^Back to /, '');
+  const text = props.text ?? (named === props.label ? 'Back' : named.charAt(0).toUpperCase() + named.slice(1));
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -252,13 +273,13 @@ export function BackButton(props: HeaderActionProps) {
       onPress={props.onPress}
       style={({ pressed }) => [s.navIcon, pressed && s.pressed, props.disabled && s.dim]}
     >
-      <BackIcon />
+      <Text numberOfLines={1} style={s.headerActionText}>‹ {text}</Text>
     </Pressable>
   );
 }
 
-/** A text action in a screen header, such as Cancel, or the filled Save beside it. */
-export function HeaderAction(props: HeaderActionProps & { text: string; danger?: boolean; primary?: boolean }) {
+/** A text action in a screen header, such as Cancel, or the black Save beside it. */
+export function HeaderAction(props: HeaderActionProps & { text: string; danger?: boolean; primary?: boolean; quiet?: boolean }) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -274,59 +295,59 @@ export function HeaderAction(props: HeaderActionProps & { text: string; danger?:
         !props.primary && props.disabled && s.dim,
       ]}
     >
-      <Text style={[s.headerActionText, props.primary && s.headerPrimaryText, props.danger && s.dangerText]}>{props.text}</Text>
+      <Text style={[s.headerActionText, props.quiet && { color: colors.muted }, props.primary && s.headerPrimaryText, props.primary && props.disabled && { color: colors.actionBusyInk }, props.danger && s.dangerText]}>{props.text}</Text>
     </Pressable>
   );
 }
 
-/** A centered empty state: a tinted icon, a short title, and one line of guidance. */
-export function EmptyState(props: { icon: ReactNode; title: string; text?: string; tone?: 'action' | 'settled' }) {
+/** A quiet empty state: a short title and one line of guidance, left aligned. */
+export function EmptyState(props: { icon?: ReactNode; title: string; text?: string; tone?: 'action' | 'settled' }) {
   return (
     <View style={s.emptyState}>
-      <View style={[s.emptyIcon, props.tone === 'settled' && s.emptyIconSettled]}>{props.icon}</View>
-      <Text style={s.emptyTitle}>{props.title}</Text>
+      <Text style={[s.emptyTitle, props.tone === 'settled' && { color: colors.settledInk }]}>{props.tone === 'settled' ? '✓ ' : ''}{props.title}</Text>
       {props.text ? <Text style={s.emptyText}>{props.text}</Text> : null}
     </View>
   );
 }
 
 /**
- * The screen's main action at the foot of the screen: a large blue button,
- * a greyed one with a spinner while it works.
+ * The screen's main action at the foot of the screen: a full-width black
+ * block, grey while it cannot be pressed, with a spinner while it works.
  */
 export function FooterButton(props: { children: ReactNode; onPress: () => void; disabled?: boolean; busy?: boolean; label?: string; icon?: ReactNode }) {
+  const idle = props.disabled || props.busy;
+
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={props.label}
-      accessibilityState={{ disabled: Boolean(props.disabled || props.busy), busy: Boolean(props.busy) }}
-      disabled={props.disabled || props.busy}
+      accessibilityState={{ disabled: Boolean(idle), busy: Boolean(props.busy) }}
+      disabled={idle}
       onPress={props.onPress}
       style={({ pressed }) => [
         s.footerButton,
-        (props.disabled || props.busy) && s.footerButtonIdle,
+        idle && s.footerButtonIdle,
         pressed && s.pressed,
       ]}
     >
-      {props.busy ? <ActivityIndicator size="small" color={colors.actionInk} /> : props.icon}
-      <Text style={s.footerButtonText}>{props.children}</Text>
+      {props.busy ? <ActivityIndicator size="small" color={colors.actionBusyInk} /> : props.icon}
+      <Text style={[s.footerButtonText, idle && { color: colors.actionBusyInk }]}>{props.children}</Text>
     </Pressable>
   );
 }
 
 /**
- * A rounded action, such as Invite people or Settle up: filled blue for the
- * step to take next, soft blue otherwise. Large, it floats over the page, as
- * Add expense does. Without onPress it only shows, as inside a pressable card.
+ * A text action, underlined, such as Invite people or Split equally. Filled,
+ * it is a black block instead, as Record is beside a planned payment.
  */
 export function Pill(props: { text: string; label?: string; onPress?: () => void; disabled?: boolean; filled?: boolean; large?: boolean; icon?: (color: string) => ReactNode }) {
-  const ink = props.filled ? colors.actionInk : colors.action;
-  const style = [s.pill, props.icon && s.pillWithIcon, props.large && s.largePill, props.filled && s.filledPill];
+  const ink = props.filled ? colors.actionInk : colors.ink;
+  const style = [s.pill, props.large && s.largePill, props.filled && s.filledPill];
 
   const content = (
     <>
       {props.icon?.(ink)}
-      <Text numberOfLines={1} style={[s.pillText, props.large && s.largePillText, { color: ink }]}>{props.text}</Text>
+      <Text numberOfLines={1} style={[s.pillText, props.large && s.largePillText, !props.filled && s.link, { color: ink }]}>{props.text}</Text>
     </>
   );
 
@@ -347,10 +368,7 @@ export function Pill(props: { text: string; label?: string; onPress?: () => void
   );
 }
 
-/**
- * A pressable row of a card of rows, such as an expense or a person. Rows
- * after the first are ruled; pressing tints the row.
- */
+/** A pressable row ruled above, such as an expense or a person. */
 export function ListRow(props: { label: string; onPress: () => void; disabled?: boolean; first?: boolean; style?: StyleProp<ViewStyle>; children: ReactNode }) {
   return (
     <Pressable
@@ -359,14 +377,14 @@ export function ListRow(props: { label: string; onPress: () => void; disabled?: 
       accessibilityState={{ disabled: Boolean(props.disabled) }}
       disabled={props.disabled}
       onPress={props.onPress}
-      style={({ pressed }) => [s.listRow, props.first === false && s.ruled, props.style, pressed && s.rowPressed]}
+      style={({ pressed }) => [s.listRow, props.style, pressed && s.rowPressed]}
     >
       {props.children}
     </Pressable>
   );
 }
 
-/** A small rounded label, such as Taken, To review, or You. */
+/** A small quiet label, such as Taken, To review, or you. */
 export function Tag(props: { children: string; tone?: 'neutral' | 'warning' | 'action' }) {
   return (
     <Text
@@ -382,11 +400,11 @@ export function Tag(props: { children: string; tone?: 'neutral' | 'warning' | 'a
 }
 
 /**
- * A tinted message panel: amber for something to look at, orange for a
- * failure. It shows its message, or richer content such as a button.
+ * A message ruled in ink at its start: orange for a failure or something to
+ * look at. It shows its message, or richer content such as a button.
  */
 export function Notice(props: { message?: string; children?: ReactNode; tone: 'warning' | 'danger' | 'info'; icon?: ReactNode; role?: 'alert' | 'status' }) {
-  const ink = props.tone === 'warning' ? colors.warningInk : props.tone === 'danger' ? colors.dangerInk : colors.soft;
+  const ink = props.tone === 'info' ? colors.ink : colors.dangerInk;
 
   return (
     <View
@@ -478,7 +496,7 @@ export function errorMessage(error: Error): string {
   }
 }
 
-/** A hairline between rows inside a card. */
+/** A hairline above a row. */
 const rule = {
   borderTopWidth: 1,
   borderColor: colors.rule,
@@ -489,12 +507,10 @@ const caps = {
   fontFamily,
   fontSize: 13,
   fontWeight: '600',
-  letterSpacing: 0.8,
-  textTransform: 'uppercase',
 } as const;
 
-/** One title scale for screen headers, page titles, and dialogs. */
-const viewTitle = { color: colors.ink, fontFamily: displayFamily, fontSize: 18, lineHeight: 24, fontWeight: '700' } as const;
+/** The compact title scale for drawers and dialogs. */
+const viewTitle = { color: colors.ink, fontFamily: displayFamily, fontSize: 22, lineHeight: 26, fontWeight: '700', letterSpacing: -0.6 } as const;
 
 export const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.background },
@@ -504,53 +520,35 @@ export const s = StyleSheet.create({
     alignSelf: 'center',
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingBottom: 32,
+    paddingBottom: 34,
   },
   /** App screens are one narrow column, like the phone app, on every device. */
-  appWrap: { maxWidth: 560, paddingHorizontal: 16 },
-  screenColumn: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 12 },
-  /** Content rests right below the bar and scrolls out of sight at the same place. */
-  screenHeaderBar: { paddingBottom: headerGap, backgroundColor: colors.background },
-  screenHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 66,
-    paddingTop: 10,
-    paddingBottom: 4,
-    gap: 8,
-  },
-  screenHeaderTitle: { flex: 1, minWidth: 0, justifyContent: 'center' },
-  /** Without a back button the title lines up with the page's own text. */
-  screenHeaderInset: { paddingLeft: 8 },
-  screenHeaderEnd: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  appWrap: { maxWidth: 480, paddingHorizontal: 24 },
+  screenColumn: { width: '100%', maxWidth: 480, alignSelf: 'center', paddingHorizontal: 24 },
+  screenHeaderBar: { backgroundColor: colors.background, zIndex: 5 },
+  screenHeader: { paddingTop: 8 },
+  screenHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 44 },
+  screenHeaderStart: { flexDirection: 'row', alignItems: 'center', marginLeft: -24, minWidth: 0, flexShrink: 1 },
+  screenHeaderTitle: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },
+  /** Kept for screens that still lay out their own title. */
+  screenHeaderInset: {},
+  screenHeaderEnd: { flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: -12 },
   screenHeaderTitleContent: { alignSelf: 'flex-start', maxWidth: '100%' },
-  screenContext: { color: colors.muted, fontFamily, fontSize: 12, lineHeight: 16 },
-  screenTitle: viewTitle,
+  screenContext: { color: colors.muted, fontFamily, fontSize: 13, lineHeight: 18 },
+  screenTitle: { color: colors.ink, fontFamily: displayFamily, fontSize: 42, lineHeight: 44, fontWeight: '700', letterSpacing: -1.26 },
   pageTitle: viewTitle,
-  navIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerAction: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: radius.control },
-  headerActionText: { color: colors.ink, fontFamily, fontSize: 15, fontWeight: '400' },
-  headerPrimary: { backgroundColor: colors.action, paddingHorizontal: 18, borderRadius: radius.pill },
+  /** The text back action: 44 high, its padding reaching the screen edge. */
+  navIcon: { height: 44, justifyContent: 'center', paddingLeft: 24, paddingRight: 20 },
+  headerAction: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 },
+  headerActionText: { color: colors.ink, fontFamily, fontSize: 15, fontWeight: '600' },
+  headerPrimary: { backgroundColor: colors.action, paddingHorizontal: 22, marginRight: 12 },
   headerPrimaryIdle: { backgroundColor: colors.actionBusy },
-  headerPrimaryText: { color: colors.actionInk, fontWeight: '600' },
-  emptyState: { alignItems: 'center', paddingTop: 72, paddingBottom: 24, paddingHorizontal: 24, gap: 12 },
-  emptyIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    backgroundColor: colors.actionSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyIconSettled: { borderRadius: 36, backgroundColor: colors.settledSoft },
-  emptyTitle: { color: colors.ink, fontFamily: displayFamily, fontSize: 26, lineHeight: 31, fontWeight: '700', textAlign: 'center' },
-  emptyText: { color: colors.muted, fontFamily, fontSize: 15, lineHeight: 22, textAlign: 'center', maxWidth: 310 },
+  headerPrimaryText: { color: colors.actionInk },
+  emptyState: { paddingVertical: 16, gap: 6, borderTopWidth: 1, borderColor: colors.rule },
+  emptyIcon: {},
+  emptyIconSettled: {},
+  emptyTitle: { color: colors.ink, fontFamily, fontSize: 18, lineHeight: 22, fontWeight: '600' },
+  emptyText: { color: colors.muted, fontFamily, fontSize: 15, lineHeight: 21 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -562,46 +560,44 @@ export const s = StyleSheet.create({
   brand: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
   brandText: {
     color: colors.ink,
-    fontFamily: displayFamily,
-    fontSize: 20,
+    fontFamily,
+    fontSize: 15,
     fontWeight: '700',
-    letterSpacing: -0.2,
   },
   beta: {
-    color: colors.actionDark,
+    color: colors.muted,
     fontFamily,
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.8,
-    backgroundColor: colors.actionSoft,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.pill,
-    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.rule,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
   main: {
     flexGrow: 1,
     width: '100%',
     maxWidth: 680,
     alignSelf: 'center',
-    paddingTop: 4,
-    gap: 16,
+    gap: 28,
   },
   wide: { maxWidth: 1040 },
   eyebrow: caps,
-  sectionHeading: { flexDirection: 'row', alignItems: 'center', minHeight: 28, paddingTop: 2, paddingBottom: 4, paddingHorizontal: 4 },
-  sectionTitle: { flex: 1, fontFamily, fontSize: 15, fontWeight: '600', color: colors.ink },
-  /** One row of a card of rows: compact, so more of the page fits on screen. */
-  listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingVertical: 6, paddingHorizontal: 16 },
-  rowPressed: { backgroundColor: colors.background },
-  /** A row's second line, smaller than a caption elsewhere. */
-  rowCaption: { color: colors.muted, fontFamily, fontSize: 12, lineHeight: 16 },
-  subtitle: { color: colors.muted, fontFamily, fontSize: 15, lineHeight: 22 },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', minHeight: 44 },
+  sectionTitle: { flex: 1, fontFamily, fontSize: 14, fontWeight: '600', color: colors.muted },
+  /** One row of a list, ruled above. */
+  listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingVertical: 14, ...rule },
+  rowPressed: { backgroundColor: colors.youRow },
+  /** A row's second line. */
+  rowCaption: { color: colors.muted, fontFamily, fontSize: 13, lineHeight: 17 },
+  subtitle: { color: colors.muted, fontFamily, fontSize: 15, lineHeight: 21 },
   heading: viewTitle,
-  body: { color: colors.ink, fontFamily, fontSize: 15, lineHeight: 22 },
+  body: { color: colors.ink, fontFamily, fontSize: 15, lineHeight: 21 },
   /** An explanation at the top of a screen or dialog, quieter than body text. */
-  lead: { color: colors.soft, fontFamily, fontSize: 15, lineHeight: 22 },
+  lead: { color: colors.muted, fontFamily, fontSize: 15, lineHeight: 21 },
   caption: { color: colors.muted, fontFamily, fontSize: 13, lineHeight: 18 },
+  link: { textDecorationLine: 'underline', },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -616,24 +612,15 @@ export const s = StyleSheet.create({
     gap: 12,
   },
   stack: { gap: 14 },
-  actions: { flexDirection: 'row', gap: 8 },
-  groupCard: {
-    gap: 14,
-    padding: 18,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  /** A white card holding rows separated by hairlines. */
-  listCard: { backgroundColor: colors.surface, borderRadius: radius.card, overflow: 'hidden' },
+  actions: { flexDirection: 'row', gap: 10 },
+  groupCard: { gap: 12, paddingVertical: 18, ...rule },
+  /** A list of rows, closed by a rule below the last. */
+  listCard: { borderBottomWidth: 1, borderColor: colors.rule },
   ruled: rule,
   prompt: {
-    padding: 16,
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: 14,
+    borderTopWidth: 1.5,
+    borderColor: colors.ink,
     gap: 12,
   },
   divider: { borderTopWidth: 1, borderColor: colors.rule },
@@ -644,16 +631,14 @@ export const s = StyleSheet.create({
     minHeight: 48,
     paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: radius.control,
     backgroundColor: colors.action,
     alignItems: 'center',
     justifyContent: 'center',
   },
   smallButton: {
-    minHeight: 40,
-    paddingHorizontal: 14,
+    minHeight: 44,
+    paddingHorizontal: 18,
     paddingVertical: 6,
-    borderRadius: radius.small,
   },
   growButton: { flex: 1 },
   buttonText: {
@@ -663,135 +648,114 @@ export const s = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  smallButtonText: { fontSize: 14 },
+  smallButtonText: { fontSize: 15 },
   inkText: { color: colors.ink },
-  secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.field },
-  quiet: { backgroundColor: 'transparent', paddingHorizontal: 6 },
-  quietText: { color: colors.action },
-  danger: { backgroundColor: 'transparent', paddingHorizontal: 6 },
+  secondary: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: colors.ink },
+  quiet: { backgroundColor: 'transparent', paddingHorizontal: 0, minHeight: 44 },
+  quietText: { color: colors.ink, textDecorationLine: 'underline', },
+  danger: { backgroundColor: 'transparent', paddingHorizontal: 0, minHeight: 44 },
   dangerText: { color: colors.owes },
   dark: { backgroundColor: colors.night },
-  pressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
-  pill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 32, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.actionSoft },
-  pillWithIcon: { paddingLeft: 10 },
-  largePill: { gap: 8, height: 48, paddingLeft: 16, paddingRight: 20, boxShadow: shadows.floating },
-  filledPill: { backgroundColor: colors.action },
-  pillText: { fontFamily, fontSize: 14, fontWeight: '600' },
+  pressed: { opacity: 0.7 },
+  pill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 44 },
+  pillWithIcon: {},
+  largePill: { height: 56, backgroundColor: colors.action, paddingHorizontal: 22 },
+  filledPill: { backgroundColor: colors.action, paddingHorizontal: 18 },
+  pillText: { fontFamily, fontSize: 15, fontWeight: '600' },
   largePillText: { fontSize: 16 },
-  dim: { opacity: 0.45 },
+  dim: { opacity: 0.4 },
   busyButton: { backgroundColor: colors.actionBusy },
   chip: {
-    minHeight: 44,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.field,
-    backgroundColor: colors.surface,
+    height: 48,
+    paddingHorizontal: 20,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  chipSelected: { backgroundColor: colors.night, borderColor: colors.night },
-  chipText: { color: colors.ink, fontFamily, fontSize: 14, fontWeight: '600' },
-  chipTextSelected: { color: colors.surface },
+  chipSelected: { backgroundColor: colors.ink },
+  chipText: { color: colors.ink, fontFamily, fontSize: 15, fontWeight: '600' },
+  chipTextSelected: { color: colors.actionInk },
   segment: {
     flex: 1,
-    minHeight: 40,
+    height: 44,
     paddingHorizontal: 8,
-    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  segmentSelected: {
-    backgroundColor: colors.surface,
-    boxShadow: shadows.raised,
-  },
+  segmentSelected: { backgroundColor: colors.ink },
   radioRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    minHeight: 52,
-    paddingHorizontal: 14,
-    borderRadius: radius.control,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    minHeight: 56,
+    ...rule,
   },
-  radioRowSelected: { borderWidth: 2, borderColor: colors.action, paddingHorizontal: 13 },
-  radioDot: { width: 20, height: 20, borderRadius: radius.small, borderWidth: 2, borderColor: colors.control },
-  radioDotSelected: { borderWidth: 6, borderColor: colors.action },
+  radioRowSelected: {},
+  radioDot: { width: 20, height: 20, borderRadius: 999, borderWidth: 1.5, borderColor: colors.control },
+  radioDotSelected: { borderWidth: 6, borderColor: colors.ink },
   radioLabel: { flex: 1, color: colors.ink, fontFamily, fontSize: 17, fontWeight: '500' },
   field: { gap: 8 },
-  fieldRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
+  fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1.5, borderColor: colors.ink },
   label: {
-    color: colors.ink,
+    color: colors.muted,
     fontFamily,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   input: {
     flex: 1,
     minWidth: 0,
     height: 52,
-    paddingHorizontal: 14,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.field,
-    borderRadius: radius.control,
+    paddingHorizontal: 0,
     color: colors.ink,
     fontFamily,
-    fontSize: 17,
+    fontSize: 20,
+    fontWeight: '500',
   },
-  inputFocused: { borderWidth: 2, borderColor: colors.action, paddingHorizontal: 13 },
-  /** A one-line text box in a form, such as an expense's description. */
+  inputFocused: {},
+  /** A one-line text box ruled below, such as an expense's description. */
   textInput: {
-    height: 48,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: colors.field,
-    borderRadius: radius.control,
-    backgroundColor: colors.surface,
+    height: 52,
+    paddingHorizontal: 0,
+    borderBottomWidth: 1.5,
+    borderColor: colors.ink,
     color: colors.ink,
     fontFamily,
     fontSize: 17,
+    fontWeight: '500',
   },
-  /**
-   * A large bare amount. Its padding gives the text and the focus outline
-   * room, and the matching negative margin keeps the figure aligned with the
-   * page.
-   */
+  /** A large bare amount over an ink underline. */
   amountInput: {
     flex: 1,
     minWidth: 0,
     height: 64,
-    marginLeft: -12,
-    paddingHorizontal: 12,
-    borderRadius: radius.control,
+    paddingHorizontal: 0,
     color: colors.ink,
     fontFamily: monoFamily,
-    fontSize: 44,
-    fontWeight: '600',
-    letterSpacing: -0.8,
+    fontSize: 56,
+    fontWeight: '500',
+    letterSpacing: -2.8,
   },
   figureInput: {
     height: 64,
     fontFamily: monoFamily,
     fontSize: 30,
-    fontWeight: '600',
+    fontWeight: '500',
   },
-  /** A white field-height button beside an input, such as Paste or a currency. */
+  /** A field-height outlined button beside an input, such as Paste. */
   fieldButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 14,
-    borderRadius: radius.control,
-    borderWidth: 1,
-    borderColor: colors.field,
-    backgroundColor: colors.surface,
+    height: 40,
+    paddingHorizontal: 16,
+    backgroundColor: colors.action,
   },
-  fieldButtonText: { color: colors.ink, fontFamily, fontSize: 15, fontWeight: '600' },
+  fieldButtonText: { color: colors.actionInk, fontFamily, fontSize: 14, fontWeight: '600' },
   copyButton: {
     width: 48,
     minHeight: 48,
@@ -807,8 +771,7 @@ export const s = StyleSheet.create({
     width: 12,
     height: 14,
     borderWidth: 1.5,
-    borderColor: colors.action,
-    borderRadius: 3,
+    borderColor: colors.ink,
   },
   copyFront: {
     position: 'absolute',
@@ -817,9 +780,8 @@ export const s = StyleSheet.create({
     width: 12,
     height: 14,
     borderWidth: 1.5,
-    borderColor: colors.action,
-    borderRadius: 3,
-    backgroundColor: colors.surface,
+    borderColor: colors.ink,
+    backgroundColor: colors.background,
   },
   notice: {
     flexDirection: 'row',
@@ -827,74 +789,67 @@ export const s = StyleSheet.create({
     gap: 10,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: radius.control,
+    borderLeftWidth: 3,
+    borderColor: colors.ink,
     backgroundColor: colors.pale,
   },
-  noticeWarning: { backgroundColor: colors.warning },
-  noticeDanger: { backgroundColor: colors.danger },
+  noticeWarning: { backgroundColor: colors.warning, borderColor: colors.owesBar },
+  noticeDanger: { backgroundColor: colors.danger, borderColor: colors.owes },
   noticeText: { flex: 1, fontFamily, fontSize: 14, lineHeight: 20, fontWeight: '500' },
   tag: {
-    color: colors.soft,
-    backgroundColor: colors.pale,
+    color: colors.muted,
     fontFamily,
     fontSize: 12,
-    fontWeight: '600',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    overflow: 'hidden',
+    fontWeight: '500',
   },
-  tagWarning: { color: colors.warningInk, backgroundColor: colors.warning, fontSize: 11, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
-  tagAction: { color: colors.actionInk, backgroundColor: colors.action, fontWeight: '700' },
-  name: { color: colors.ink, fontFamily, fontSize: 16, fontWeight: '500' },
+  tagWarning: { color: colors.warningInk, fontWeight: '600' },
+  tagAction: { color: colors.muted, fontSize: 11, fontWeight: '400' },
+  name: { color: colors.ink, fontFamily, fontSize: 16, fontWeight: '600' },
   memberNameInput: {
     height: 40,
     minWidth: 0,
-    marginLeft: -10,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: colors.field,
-    borderRadius: 8,
-    backgroundColor: colors.surface,
+    paddingHorizontal: 0,
+    borderBottomWidth: 1.5,
+    borderColor: colors.ink,
     color: colors.ink,
     fontFamily,
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  presenceDot: { width: 10, height: 10, borderRadius: 5 },
+  presenceDot: { width: 6, height: 6, borderRadius: 3 },
   presenceOnline: { backgroundColor: colors.online },
-  presenceOffline: { borderWidth: 2, borderColor: colors.muted },
-  presenceUnclaimed: { borderWidth: 2, borderStyle: 'dashed', borderColor: colors.control },
-  rowAction: { color: colors.action, fontFamily, fontSize: 14, fontWeight: '600' },
-  skeleton: { backgroundColor: colors.track, borderRadius: 8 },
-  skeletonLine: { width: '60%', height: 14 },
+  presenceOffline: { borderWidth: 1.5, borderColor: colors.muted },
+  presenceUnclaimed: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.control },
+  rowAction: { color: colors.ink, fontFamily, fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
+  skeleton: { backgroundColor: colors.track },
+  skeletonLine: { width: '60%', height: 16 },
   skeletonShort: { width: '35%', height: 12 },
   banner: {
     backgroundColor: colors.warning,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: radius.control,
+    borderLeftWidth: 3,
+    borderColor: colors.owesBar,
     gap: 6,
   },
-  chosen: { borderWidth: 2, borderColor: colors.action },
+  chosen: { borderWidth: 1.5, borderColor: colors.ink },
   amount: {
     color: colors.ink,
     fontFamily: monoFamily,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '500',
   },
   checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 7,
-    borderWidth: 2,
-    borderColor: colors.control,
+    width: 18,
+    height: 18,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(16, 22, 29, 0.45)',
+    backgroundColor: 'rgba(20, 20, 19, 0.4)',
     justifyContent: 'flex-end',
   },
   backdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
@@ -902,52 +857,49 @@ export const s = StyleSheet.create({
   overlayCentered: { justifyContent: 'center', padding: 24 },
   drawerTitle: viewTitle,
   drawer: { maxHeight: '88%', paddingTop: 20, gap: 14 },
-  popup: { maxWidth: 440, maxHeight: '80%', borderRadius: radius.sheet, paddingBottom: 24 },
-  drawerClose: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
+  popup: { maxWidth: 440, maxHeight: '80%', paddingBottom: 24 },
+  drawerClose: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   sheet: {
     width: '100%',
-    maxWidth: 560,
+    maxWidth: 480,
     alignSelf: 'center',
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.sheet,
-    borderTopRightRadius: radius.sheet,
+    backgroundColor: colors.background,
     paddingTop: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 32,
+    paddingHorizontal: 24,
+    paddingBottom: 34,
     gap: 12,
   },
   footerBar: {
     backgroundColor: colors.background,
-    paddingTop: 12,
-    paddingBottom: 28,
+    paddingTop: 16,
+    paddingBottom: 34,
   },
-  footerBarRuled: { borderTopWidth: 1, borderColor: colors.border },
-  footerInner: { gap: 12, paddingHorizontal: 16 },
+  footerBarRuled: {},
+  footerInner: { gap: 10 },
   footerButton: {
     flexDirection: 'row',
     gap: 10,
-    minHeight: 56,
-    borderRadius: radius.card,
+    height: 56,
     backgroundColor: colors.action,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
   footerButtonIdle: { backgroundColor: colors.actionBusy },
-  footerButtonText: { color: colors.actionInk, fontFamily, fontSize: 17, fontWeight: '600' },
-  mobileWrap: { paddingHorizontal: 16 },
+  footerButtonText: { color: colors.actionInk, fontFamily, fontSize: 16, fontWeight: '600' },
+  mobileWrap: { paddingHorizontal: 24 },
   mobileHeader: { minHeight: 56, paddingVertical: 6 },
-  mobileMain: { paddingTop: 0, gap: 14 },
+  mobileMain: { gap: 28 },
   hero: { paddingVertical: 56, gap: 22, maxWidth: 680 },
   mobileHero: { paddingVertical: 28, gap: 20 },
-  mobileHeroTitle: { fontSize: 46, lineHeight: 50, letterSpacing: -1.4 },
+  mobileHeroTitle: { fontSize: 46, lineHeight: 48, letterSpacing: -1.4 },
   heroTitle: {
     fontFamily: displayFamily,
     fontSize: 68,
-    lineHeight: 72,
+    lineHeight: 70,
     fontWeight: '700',
     letterSpacing: -2,
     color: colors.ink,
   },
-  heroAccent: { color: colors.action },
+  heroAccent: { color: colors.muted },
 });

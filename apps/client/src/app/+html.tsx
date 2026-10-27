@@ -25,9 +25,8 @@ export default function DocumentRoot(props: DocumentProps) {
         />
         <meta name="theme-color" content={colors.background} />
         <meta name="color-scheme" content="light" />
-        <link rel="preload" href="/assets/ibm-plex-sans.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-        <link rel="preload" href="/assets/ibm-plex-mono-600.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-        <link rel="preload" href="/assets/bricolage-grotesque.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/assets/instrument-sans.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/assets/geist-mono.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <link rel="manifest" href="/manifest.webmanifest" />
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
         <ScrollViewStyleReset />
@@ -36,14 +35,12 @@ export default function DocumentRoot(props: DocumentProps) {
         <style
           dangerouslySetInnerHTML={{
             __html:
-              '@font-face{font-family:"IBM Plex Sans";src:url(/assets/ibm-plex-sans.woff2) format("woff2");font-style:normal;font-weight:400 600;font-display:swap}' +
-              '@font-face{font-family:"IBM Plex Mono";src:url(/assets/ibm-plex-mono-500.woff2) format("woff2");font-style:normal;font-weight:400 500;font-display:swap}' +
-              '@font-face{font-family:"IBM Plex Mono";src:url(/assets/ibm-plex-mono-600.woff2) format("woff2");font-style:normal;font-weight:600 700;font-display:swap}' +
-              '@font-face{font-family:"Bricolage Grotesque";src:url(/assets/bricolage-grotesque.woff2) format("woff2");font-style:normal;font-weight:500 700;font-display:swap}' +
+              '@font-face{font-family:"Instrument Sans";src:url(/assets/instrument-sans.woff2) format("woff2");font-style:normal;font-weight:400 700;font-display:swap}' +
+              '@font-face{font-family:"Geist Mono";src:url(/assets/geist-mono.woff2) format("woff2");font-style:normal;font-weight:400 700;font-display:swap}' +
               `html,body{background:${colors.background};color-scheme:light;-webkit-font-smoothing:antialiased}` +
               `:focus-visible{outline:3px solid ${colors.action}!important;outline-offset:2px}` +
-              // A focused field's own 2px blue edge and its outline coincide.
-              'input:focus-visible,textarea:focus-visible{outline-width:2px!important;outline-offset:-2px}',
+              // Fields show focus by their caret over the ink underline, as the design draws them.
+              'input:focus-visible,textarea:focus-visible{outline:none!important}',
           }}
         />
         {document.headNodes}
