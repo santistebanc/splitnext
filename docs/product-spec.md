@@ -177,7 +177,7 @@ device.
 The groups list has Join with a link in its first row, then the split-S mark,
 in ink with paper lines, with splitnext beside it at title size, where other
 screens have their large title: as tall and shrinking the same way as the page
-scrolls, with no Your groups title. Join with a link opens a link field with Open directly under
+scrolls, with no Your groups title. Join with a link opens a compact link field with an arrow button (Open) directly under
 that row, above the mark; a link that is not an invite says so there, and a
 valid one opens the join screen. Each group is a ruled row with its name, your balance (settled when
 zero, choose who you are when unassigned), your balance as a bar scaled to
