@@ -209,8 +209,11 @@ is pinned at the foot; editing a recorded repayment shows Delete in the header.
 Cancel and Record return to where the form was opened, such as Settle up.
 
 The expense editor has Cancel, Delete when changing an expense, and Save in
-the header, then a large monospaced amount over an ink rule, a plain number
-with no currency (ADR 0025), and what it was for (New expense) under it. Both
+the header. When editing a recorded expense, show Created and its recorded date
+and time above the amount, or Last updated and its latest change date and time
+when it has changed, formatted in the device's locale and time zone. New expense
+drafts have no date label. Then show a large monospaced amount over an ink rule,
+a plain number with no currency (ADR 0025), and what it was for (New expense) under it. Both
 shrink as the split scrolls under them. The amount accepts digits and a
 decimal dot or comma, displaying a dot and two fixed decimal places after each
 keystroke. Keep the caret usable for insertion, replacement, and deletion.

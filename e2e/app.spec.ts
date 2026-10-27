@@ -344,6 +344,7 @@ test('records, changes, and removes an expense with plain-number balances', asyn
 
   // A new expense starts in its amount.
   await expect(field(page, 'Amount')).toBeFocused();
+  await expect(page.getByTestId('expense-timestamp')).toHaveCount(0);
 
   // Amounts are plain numbers: there is no currency to choose.
   await expect(button(page, /Change currency$/)).toHaveCount(0);
@@ -360,6 +361,17 @@ test('records, changes, and removes an expense with plain-number balances', asyn
 
   await button(page, 'Change Dinner · 30.00').click();
   await expect(field(page, 'Amount')).not.toBeFocused();
+  const timestamp = page.getByTestId('expense-timestamp');
+
+  await expect(timestamp).toHaveText(/^Created .+\d{4}.+/);
+  const created = await timestamp.textContent();
+  const timestampBox = await timestamp.boundingBox();
+  const amountBox = await field(page, 'Amount').boundingBox();
+
+  expect(timestampBox!.y + timestampBox!.height).toBeLessThanOrEqual(amountBox!.y);
+  await button(page, 'Cancel').click();
+  await button(page, 'Change Dinner · 30.00').click();
+  await expect(timestamp).toHaveText(created!);
   await field(page, 'Amount').fill('40');
   await button(page, 'Save').click();
   await expect(button(page, 'Change Dinner · 40.00')).toBeVisible();
@@ -371,7 +383,9 @@ test('records, changes, and removes an expense with plain-number balances', asyn
   await button(page, 'Back to Trip').click();
 
   // Deleting happens from the expense's own screen, which returns to the group.
+  await page.reload();
   await button(page, 'Change Dinner · 40.00').click();
+  await expect(timestamp).toHaveText(/^Last updated .+\d{4}.+/);
   await button(page, 'Delete Dinner · 40.00').click();
   await expect(page.getByText('No expenses yet', { exact: true })).toHaveCount(0);
   await expect(addButton).toBeVisible();
