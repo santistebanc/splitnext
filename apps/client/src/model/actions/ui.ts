@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { formatAmount, formatInviteLink, repaymentMembers, settlementSuggestions } from '@splitnext/client';
 import { newActivity } from '../activity';
-import { canExcludeExpensePart, decreaseExpenseShare, equalParts, fixExpenseAmount, increaseExpenseShare, noCurrency } from '../expenses';
+import { canExcludeExpensePart, decreaseExpenseShare, fixExpenseAmount, increaseExpenseShare, noCurrency } from '../expenses';
 import { draftFields, groupViews, personFits, viewFits, viewNames } from '../uiState';
 import { workflowGuard, type WorkflowIntent } from '../workflow';
 import { requireSettlement, unavailable, editorLock, navigationLock, defineAction, openSnapshot, requireExpense, requireOpenable, requireMember, requireNotice, requireJoin, joinMembers, requireConfirmation, requireInvite, memberResource, noticeResources, empty, choice, type ActionHost, type ActionPlatform } from './define';
@@ -327,16 +327,6 @@ export const uiActions = {
         return { parts: included ? draft.parts.filter((part) => part.member_id !== input.memberId) : increaseExpenseShare(draft, input.memberId) };
       });
     },
-  }),
-  splitExpenseEqually: defineAction({
-    workflow: 'expenseDraft',
-    group: 'UI',
-    description: 'Split the expense being entered equally between every current member again.',
-    input: empty,
-    example: {},
-    requires: ['openGroup'],
-    unavailable: ({ state }) => requireMember(state),
-    run: async (host, input, ui) => ui.changeExpense(() => ({ parts: equalParts(openSnapshot(host.snapshot())) })),
   }),
   increaseExpenseShare: defineAction({
     workflow: 'expenseDraft',

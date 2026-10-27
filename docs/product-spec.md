@@ -211,8 +211,7 @@ decimal dot or comma, displaying a dot and two fixed decimal places after each
 keystroke. Keep the caret usable for insertion, replacement, and deletion.
 Reject ambiguous or over-precise pasted amounts. Paid by opens the names in
 place as a list of radio rows. Then the split: its caption (28.20 each for an
-equal split, or 5 people for a custom one) with Split equally when it is
-custom, a bar of each person's share in their colour, and one row per person,
+equal split, or 5 people for a custom one), a bar of each person's share in their colour, and one row per person,
 as in the earlier app: their colour, the name with "you", + for another share,
 their amount, and at the end a checkbox for whether they share it. The checkbox
 becomes − once they have more than one share or a fixed amount; − takes a

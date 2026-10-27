@@ -430,7 +430,9 @@ test('keeps split rows aligned without an amount, then shows each share', async 
   await expect(page.getByRole('checkbox', { name: 'Ana shares this expense' })).toBeChecked();
   await field(page, 'Amount').fill('90');
   await expect(button(page, 'Decrease share for Ana')).toBeVisible();
-  await button(page, 'Split equally').click();
+  // There is no Split equally link; taking Ana's extra share away evens it out.
+  await expect(button(page, 'Split equally')).toHaveCount(0);
+  await button(page, 'Decrease share for Ana').click();
   await expect(button(page, 'Amount for Ana: 30.00. Change amount')).toBeVisible();
   await expect(page.getByTestId('split-summary')).toHaveText('30.00 each');
 });

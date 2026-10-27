@@ -54,14 +54,6 @@ function splitSummary(draft: ExpenseDraft, preview: Map<string, number>): string
   return each !== undefined ? `${formatAmount(each, draft.currency)} each` : 'Enter an amount to split';
 }
 
-/** Whether a draft differs from everyone sharing equally. */
-function isCustom(draft: ExpenseDraft, members: readonly { id: string; status: string }[]): boolean {
-  const active = members.filter((member) => member.status === 'active');
-
-  return active.some((member) => !draft.parts.some((part) => part.member_id === member.id)) ||
-    draft.parts.some((part) => part.kind === 'exact' || part.shares !== 1);
-}
-
 /** A − or + beside a person's shares, with a full touch target. */
 function ShareStep(props: { sign: '−' | '+'; label: string; disabled: boolean; onPress: () => void }) {
   return (
@@ -255,7 +247,6 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
   const you = preferredMember(snapshot, replica?.session?.identity.id)?.id;
   const draft = useUiState().expense;
   const edit = useActionCall();
-  const reset = useActionCall();
   const [choosingPayer, setChoosingPayer] = useState(false);
   const allMembers = snapshot?.members ?? [];
 
@@ -270,7 +261,6 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
   const total = parseAmount(draft.amount, draft.currency) ?? 0;
   const hasAmount = total > 0;
   const hue = (memberId: string) => splitHues[Math.max(0, allMembers.findIndex((member) => member.id === memberId)) % splitHues.length] ?? colors.ink;
-  const custom = isCustom(draft, allMembers);
   const included = draft.parts.map((part) => part.member_id);
   const sharing = draft.parts.filter((part) => part.kind === 'shares').length;
 
@@ -310,18 +300,8 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
       </Reveal>
       <ErrorMessage message={edit.error} />
 
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 44, paddingTop: 16, paddingBottom: 4 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingTop: 16, paddingBottom: 4 }}>
         <Text testID="split-summary" style={{ fontFamily, fontSize: 14, fontWeight: '600', color: draft.parts.length ? colors.muted : colors.owes }}>{splitSummary(draft, preview)}</Text>
-        {custom ? (
-          <Pressable
-            accessibilityRole="button"
-            disabled={!reset.can('splitExpenseEqually')}
-            onPress={() => { void reset.call('splitExpenseEqually', {}); }}
-            style={({ pressed }) => [{ height: 44, justifyContent: 'center', paddingLeft: 16, paddingRight: 24, marginRight: -24 }, pressed && s.pressed]}
-          >
-            <Text style={[s.headerActionText, s.link, { fontSize: 14 }]}>Split equally</Text>
-          </Pressable>
-        ) : null}
       </View>
       <View aria-hidden style={{ flexDirection: 'row', height: 10, gap: 2 }}>
         {included.map((memberId) => (
@@ -342,7 +322,6 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
 
       {hasAmount && !entry.ok && entry.problem !== 'Describe the expense.' ? <Text style={[s.body, { paddingTop: 12, color: colors.owes, fontWeight: '500' }]}>{entry.problem}</Text> : null}
       {!activeMembers(snapshot).length ? <Text style={s.caption}>Add a member first.</Text> : null}
-      <ErrorMessage message={reset.error} />
     </View>
   );
 }
