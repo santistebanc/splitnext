@@ -394,7 +394,7 @@ function ReadyApp(props: AppProps) {
                   footer={screen.footer}
                   ruledFooter={screen.ruledFooter}
                   scrollKey={pageKey}
-                  onScroll={(y, headerCollapse) => compact.follow(y + headerCollapse)}
+                  onScroll={(y, headerCollapse, restored) => (restored ? compact.jump(y + headerCollapse) : compact.follow(y + headerCollapse))}
                 >
                   <ViewTransition key={pageKey} mobile={mobile}>
                     <ErrorMessage message={backgroundError} />
