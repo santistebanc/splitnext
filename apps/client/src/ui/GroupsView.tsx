@@ -33,7 +33,7 @@ export function GroupsFooter(props: { app: GroupsViewApp }) {
   return (
     // A drawer: while New group is open, the list above dims and a tap on it
     // closes the drawer. The footer's own top padding belongs to the drawer.
-    <View style={{ gap: 10, marginTop: -16, paddingTop: 16, zIndex: 10 }}>
+    <View style={{ gap: 10, marginTop: -10, paddingTop: 10, zIndex: 10 }}>
       <Pressable
         accessibilityLabel="Close New group"
         aria-hidden={!creating}
