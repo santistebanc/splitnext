@@ -180,9 +180,9 @@ key.
   shared pinned footer, a large amount and description that shrink as the
   split scrolls, Paid by opening the names in
   place with a "you" badge for the preferred member, a bar of each person's
-  share, and one row per person with + for another share, an amount that can
-  be fixed in place, and a checkbox at the end that becomes − above one share
-  or on a fixed amount.
+  share, and one row per person with − and + side by side for whole shares (−
+  only above one share or on a fixed amount), an amount that can be fixed in
+  place, and a checkbox at the end.
   `ExpenseDraft.parts` retains each person's whole shares or typed fixed amount
   independently. Per-person actions increase or decrease shares, include or
   exclude a person, and fix or clear an amount; the catalog protects the last

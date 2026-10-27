@@ -593,21 +593,26 @@ test('aligns split controls in columns for weighted, fixed, and excluded people'
     return box.x + box.width / 2;
   };
 
-  // Above one share or with a fixed amount, the checkbox at the end becomes −.
-  await expect(page.getByRole('checkbox', { name: 'Ana shares this expense' })).toHaveCount(0);
-  await expect(page.getByRole('checkbox', { name: 'Cy shares this expense' })).toHaveCount(0);
+  // Every row ends with its checkbox; − sits beside + once someone has more than one share or a fixed amount.
+  for (const name of ['Ana', 'Benjamin Alexander', 'Cy']) await expect(page.getByRole('checkbox', { name: `${name} shares this expense` })).toHaveCount(1);
+  await expect(button(page, 'Decrease share for Benjamin Alexander')).toHaveCount(0);
 
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 760 });
     const amount = (await button(page, /^Amount for Ana:/).boundingBox())!;
     const fixed = (await field(page, 'Amount for Cy').boundingBox())!;
-    const end = await center(button(page, 'Decrease share for Ana'));
+    const end = await center(page.getByRole('checkbox', { name: 'Ana shares this expense' }));
+    const minus = await center(button(page, 'Decrease share for Ana'));
 
     expect(Math.abs(fixed.x + fixed.width - (amount.x + amount.width))).toBeLessThanOrEqual(1);
-    expect(Math.abs(await center(button(page, 'Decrease share for Cy')) - end)).toBeLessThanOrEqual(1);
+    expect(Math.abs(await center(page.getByRole('checkbox', { name: 'Cy shares this expense' })) - end)).toBeLessThanOrEqual(1);
     expect(Math.abs(await center(page.getByRole('checkbox', { name: 'Benjamin Alexander shares this expense' })) - end)).toBeLessThanOrEqual(1);
+    // − lines up in its own column before the amount, and + right after it.
+    expect(Math.abs(await center(button(page, 'Decrease share for Cy')) - minus)).toBeLessThanOrEqual(1);
+    expect(minus).toBeLessThan(amount.x);
     // + sits before the amount, and only where it changes the split: Ana alone
     // divides the rest, so another share would change nothing.
+    expect(await center(button(page, 'Increase share for Cy'))).toBeGreaterThan(minus);
     expect(await center(button(page, 'Increase share for Cy'))).toBeLessThan(fixed.x);
     await expect(button(page, 'Increase share for Ana')).toHaveCount(0);
     await expect(button(page, 'Increase share for Benjamin Alexander')).toHaveCount(0);
