@@ -43,7 +43,14 @@ function copy(element: HTMLElement): HTMLElement {
   return clone;
 }
 
-type Props = { screen: string; depth: number; children: ReactNode };
+/** `sheet`: the screen rises over the one below it, like a drawer, rather than replacing it. */
+type Props = { screen: string; depth: number; sheet?: boolean; children: ReactNode };
+
+/** How long a sheet takes to rise over the screen below, or to fall away from it. */
+const sheetDuration = 420;
+
+/** The shade over the screen a sheet covers. */
+const scrim = 'rgba(20, 20, 19, 0.32)';
 
 /**
  * Changes of screen, as the prototype moves them: parts that appear on both
@@ -55,6 +62,8 @@ type Props = { screen: string; depth: number; children: ReactNode };
  */
 export class ScreenMorph extends Component<Props, Record<string, never>> {
   root = createRef<HTMLDivElement>();
+  underlay = createRef<HTMLDivElement>();
+  content = createRef<HTMLDivElement>();
   overlay = createRef<HTMLDivElement>();
   finish: (() => void) | null = null;
 
@@ -102,9 +111,16 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
   override componentDidUpdate(previous: Props, _state: Record<string, never>, snapshot: Snapshot | null): void {
     const root = this.root.current;
     const overlay = this.overlay.current;
-    const content = root?.firstElementChild;
+    const content = this.content.current;
 
     if (!snapshot || !root || !overlay || !(content instanceof HTMLElement)) return;
+
+    if (Boolean(this.props.sheet) !== Boolean(previous.sheet)) {
+      this.sheet(snapshot, content, overlay, Boolean(this.props.sheet));
+
+      return;
+    }
+
     const direction = Math.sign(this.props.depth - previous.depth);
     const dx = direction > 0 ? -slide : direction < 0 ? slide : 0;
     const animations: Animation[] = [];
@@ -139,11 +155,52 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
     };
   }
 
+  /**
+   * A sheet rising over the screen it opens from, which stays where it was and
+   * dims; or, closing, falling away to show the screen below as it brightens.
+   */
+  private sheet(snapshot: Snapshot, content: HTMLElement, overlay: HTMLDivElement, rising: boolean): void {
+    const underlay = this.underlay.current;
+
+    if (!underlay) return;
+    const old = snapshot.screen;
+    const shade = document.createElement('div');
+    const animations: Animation[] = [];
+
+    Object.assign(old.style, { position: 'absolute', inset: '0', pointerEvents: 'none' });
+    shade.style.cssText = `position:absolute;inset:0;pointer-events:none;background:${scrim};`;
+
+    if (rising) {
+      // The screen below stays put under its shade while the sheet comes up over it.
+      underlay.replaceChildren(old, shade);
+      animations.push(shade.animate([{ opacity: 0 }, { opacity: 1 }], { duration: sheetDuration, easing: easeOut, fill: 'forwards' }));
+      animations.push(content.animate([{ transform: 'translateY(100%)' }, { transform: 'none' }], { duration: sheetDuration, easing: easeOut }));
+    } else {
+      // The sheet falls away over the screen it returns to, whose shade lifts.
+      overlay.replaceChildren(shade, old);
+      animations.push(shade.animate([{ opacity: 1 }, { opacity: 0 }], { duration: sheetDuration * 0.85, easing: easeOut, fill: 'forwards' }));
+      animations.push(old.animate([{ transform: 'none' }, { transform: 'translateY(100%)' }], { duration: sheetDuration * 0.85, easing: 'cubic-bezier(.4,0,.7,.2)', fill: 'forwards' }));
+    }
+
+    const page = old.querySelector('[data-copied-page]');
+
+    if (page) page.scrollTop = snapshot.scrolled;
+    const timer = setTimeout(() => this.finish?.(), sheetDuration + 60);
+
+    this.finish = () => {
+      clearTimeout(timer);
+      underlay.replaceChildren();
+      overlay.replaceChildren();
+      animations.forEach((animation) => animation.cancel());
+      this.finish = null;
+    };
+  }
+
   /** Flies each part shown on both screens from where it was to where it has landed. */
   private fly(snapshot: Snapshot, overlay: HTMLDivElement, old: HTMLElement, animations: Animation[], landed: HTMLElement[]): void {
     const root = this.root.current;
 
-    const content = root?.firstElementChild;
+    const content = this.content.current;
 
     if (!root || !(content instanceof HTMLElement)) return;
     const pairs: { element: HTMLElement; from: Part; to: Box; style: CSSStyleDeclaration }[] = [];
@@ -215,8 +272,10 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
 
   override render() {
     return (
-      <div ref={this.root} style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>{this.props.children}</div>
+      // The screen never scrolls as a whole; focusing a field still sliding in would otherwise scroll it into view and jump.
+      <div ref={this.root} onScroll={(event) => { event.currentTarget.scrollTop = 0; event.currentTarget.scrollLeft = 0; }} style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        <div ref={this.underlay} aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }} />
+        <div ref={this.content} style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>{this.props.children}</div>
         <div ref={this.overlay} aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 20, overflow: 'hidden' }} />
       </div>
     );

@@ -390,7 +390,7 @@ function ReadyApp(props: AppProps) {
 
             return (
               <View style={s.page}>
-                <ScreenMorph screen={pageKey} depth={depth}>
+                <ScreenMorph screen={pageKey} depth={depth} sheet={view === 'expense' && !ui.expense.expenseId}>
                 <Frame
                   status={<SyncStatus online={state.online} reachable={state.reachable} pending={pending} busy={connection.busy} onRetry={retry} retryError={connection.error} />}
                   header={screen.header}

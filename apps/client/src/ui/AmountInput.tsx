@@ -3,7 +3,7 @@ import { TextInput } from 'react-native';
 import { formatAmount, parseAmount } from '@splitnext/client';
 import { colors, s } from './components';
 
-export type AmountInputHandle = { focus: () => void };
+export type AmountInputHandle = { focus: (options?: FocusOptions) => void };
 
 export type AmountInputProps = {
   inputRef: RefObject<AmountInputHandle | null>;
