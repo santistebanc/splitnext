@@ -90,3 +90,8 @@ export const displayFamily = 'Instrument Sans';
 
 /** The easing every movement shares: quick to start, long to settle. */
 export const easeOut = 'cubic-bezier(.22,.8,.16,1)';
+
+/** A style that eases changes to one property on the web, where views are elements. */
+export function withTransition<const Style extends object>(style: Style, property: string, duration: number) {
+  return { ...style, transitionProperty: property, transitionDuration: `${duration}ms`, transitionTimingFunction: easeOut };
+}

@@ -3,6 +3,7 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { parseInviteLink, type ClientGroupSummary } from '@splitnext/client';
 import type { AppController } from '../model/controller';
 import { Reveal } from './Reveal';
+import { morph } from './ScreenMorph';
 import { BalanceBar, Button, ErrorMessage, FooterButton, ScreenHeader, balanceColor, s, signedFigure } from './components';
 import { TrashIcon } from './icons';
 import { colors, fontFamily, monoFamily } from './theme';
@@ -20,6 +21,7 @@ export function GroupsFooter() {
     <>
       <ErrorMessage message={action.error} />
       <FooterButton
+        morph="newgroup"
         disabled={!action.can('showCreateGroup')}
         onPress={() => {
           void action.call('showCreateGroup', {});
@@ -120,7 +122,7 @@ export function WelcomeView() {
 }
 
 /** Your balance and how it compares with your other groups, or why there is none. */
-function GroupBalance(props: { group: ClientGroupSummary; max: number }) {
+function GroupBalance(props: { group: ClientGroupSummary }) {
   const balances = props.group.stored_locally ? props.group.you_balances : undefined;
 
   if (balances === null) return <Text style={[s.amount, { color: colors.muted }]}>choose who you are</Text>;
@@ -132,7 +134,7 @@ function GroupBalance(props: { group: ClientGroupSummary; max: number }) {
   return (
     <View style={{ alignItems: 'flex-end', gap: 6 }}>
       {balances.map(({ currency, amount }) => (
-        <Text key={currency} style={[s.amount, { color: balanceColor(amount) }]}>{signedFigure(amount, currency)}</Text>
+        <Text key={currency} ref={morph(`gamt-${props.group.group_id}-${currency}`)} style={[s.amount, { color: balanceColor(amount) }]}>{signedFigure(amount, currency)}</Text>
       ))}
     </View>
   );
@@ -179,8 +181,10 @@ export function GroupsView(props: GroupsViewProps) {
           style={({ pressed }) => [s.groupCard, pressed && s.pressed]}
         >
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-            <Text numberOfLines={1} style={{ flex: 1, fontFamily, fontSize: 20, lineHeight: 21, fontWeight: '600', color: colors.ink }}>{group.name}</Text>
-            <GroupBalance group={group} max={max} />
+            <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-start' }}>
+              <Text ref={morph(`gname-${group.group_id}`)} numberOfLines={1} style={{ maxWidth: '100%', fontFamily, fontSize: 20, lineHeight: 21, fontWeight: '600', color: colors.ink }}>{group.name}</Text>
+            </View>
+            <GroupBalance group={group} />
           </View>
           <BalanceBar track amount={firstBalance(group)} max={max} />
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 20 }}>

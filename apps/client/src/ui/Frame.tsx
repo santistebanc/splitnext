@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Platform, ScrollView, Text, View } from 'react-native';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { Platform, ScrollView, Text, View } from 'react-native';
 import { usePathname } from 'expo-router';
 import { s } from './components';
 import {
@@ -78,22 +78,6 @@ export function Frame(props: FrameProps) {
     return () => cancelAnimationFrame(frame);
   }, [scrollKey]);
 
-  // Each screen rises into place as it fades in. The page area moves rather
-  // than its content, so pinned parts stay at the area's top and nothing
-  // scrolled past them shows above them on the way.
-  const [rise] = useState(() => new Animated.Value(0));
-
-  useLayoutEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-    rise.setValue(8);
-    const animation = Animated.timing(rise, { toValue: 0, duration: 180, useNativeDriver: Platform.OS !== 'web' });
-
-    animation.start();
-
-    return () => animation.stop();
-  }, [scrollKey]);
-
   const visibleHeight = useVisibleViewportHeight(
     (mobile || touch) && !homepage,
   );
@@ -124,7 +108,7 @@ export function Frame(props: FrameProps) {
           <View style={s.screenColumn}>{props.header}</View>
         </View>
       ) : null}
-      <Animated.View style={[s.page, { transform: [{ translateY: rise }] }]}>
+      <View style={s.page}>
         <ScrollView
           ref={scroll}
           onScroll={(event) => {
@@ -154,7 +138,7 @@ export function Frame(props: FrameProps) {
             {props.children}
           </View>
         </ScrollView>
-      </Animated.View>
+      </View>
       {props.footer ? (
         floating ? (
           <View

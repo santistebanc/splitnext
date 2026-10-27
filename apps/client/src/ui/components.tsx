@@ -14,7 +14,8 @@ import {
 import { formatAmount } from '@splitnext/client';
 import { between, useCompactProgress } from './pageScroll';
 import { AlertIcon, WarningIcon } from './icons';
-import { colors, displayFamily, fontFamily, monoFamily } from './theme';
+import { morph } from './ScreenMorph';
+import { colors, displayFamily, fontFamily, monoFamily, withTransition } from './theme';
 
 export { colors } from './theme';
 
@@ -195,7 +196,7 @@ export function BalanceBar(props: { amount: number; max: number; height?: number
   const share = props.max > 0 ? Math.min(1, Math.abs(props.amount) / props.max) : 0;
   const width = `${share * 100}%` as const;
   const half = { flex: 1, flexDirection: 'row', alignItems: 'center' } as const;
-  const grow = { height: props.track ? '100%' : (props.height ?? 14), transitionProperty: 'width', transitionDuration: '600ms', transitionTimingFunction: 'cubic-bezier(.22,.8,.16,1)' } as const;
+  const grow = withTransition({ height: props.track ? '100%' : (props.height ?? 14) }, 'width', 600);
 
   return (
     <View aria-hidden style={{ flexDirection: 'row', height: props.track ? (props.height ?? 6) : '100%', alignSelf: 'stretch' }}>
@@ -224,7 +225,7 @@ export function PageTitle(props: { children: ReactNode }) {
  * hairline appearing below. A heading that is more than text stands in for
  * the title and styles its text with `titleStyle(progress)`.
  */
-export function ScreenHeader(props: { title?: string | undefined; heading?: ReactNode; context?: string | undefined; start?: ReactNode; end?: ReactNode; below?: ReactNode }) {
+export function ScreenHeader(props: { title?: string | undefined; heading?: ReactNode; context?: string | undefined; start?: ReactNode; end?: ReactNode; below?: ReactNode; morph?: string | undefined }) {
   const progress = useCompactProgress();
 
   return (
@@ -236,7 +237,7 @@ export function ScreenHeader(props: { title?: string | undefined; heading?: Reac
       {props.heading ?? props.title ? (
         <View style={[s.screenHeaderTitle, { paddingTop: between(16, 4, progress) }]}>
           {props.heading ?? (
-            <Text accessibilityRole="header" numberOfLines={1} style={titleStyle(progress)}>
+            <Text ref={morph(props.morph)} accessibilityRole="header" numberOfLines={1} style={titleStyle(progress)}>
               {props.title}
             </Text>
           )}
@@ -289,6 +290,7 @@ export function HeaderAction(props: HeaderActionProps & { text: string; danger?:
       onPress={props.onPress}
       style={({ pressed }) => [
         s.headerAction,
+        props.quiet && { paddingLeft: 24, paddingRight: 20 },
         props.primary && s.headerPrimary,
         props.primary && props.disabled && s.headerPrimaryIdle,
         pressed && s.pressed,
@@ -314,11 +316,12 @@ export function EmptyState(props: { icon?: ReactNode; title: string; text?: stri
  * The screen's main action at the foot of the screen: a full-width black
  * block, grey while it cannot be pressed, with a spinner while it works.
  */
-export function FooterButton(props: { children: ReactNode; onPress: () => void; disabled?: boolean; busy?: boolean; label?: string; icon?: ReactNode }) {
+export function FooterButton(props: { children: ReactNode; onPress: () => void; disabled?: boolean; busy?: boolean; label?: string; icon?: ReactNode; morph?: string }) {
   const idle = props.disabled || props.busy;
 
   return (
     <Pressable
+      ref={morph(props.morph)}
       accessibilityRole="button"
       accessibilityLabel={props.label}
       accessibilityState={{ disabled: Boolean(idle), busy: Boolean(props.busy) }}

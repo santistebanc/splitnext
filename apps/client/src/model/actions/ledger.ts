@@ -48,17 +48,19 @@ export const ledgerActions = {
   }),
   recordSettlement: defineAction({
     group: 'Ledger changes', description: 'Record money already repaid outside Splitnext.',
-    input: z.object({ from: choice('repaymentMember', 'Who paid.'), to: choice('repaymentMember', 'Who received it.'), amount: z.string() }),
+    input: z.object({ from: choice('repaymentMember', 'Who paid.'), to: choice('repaymentMember', 'Who received it.'), amount: z.string(), currency: currencyCodeSchema.optional().meta({ description: 'Only for settling a balance recorded with a real currency before amounts became plain numbers.' }) }),
     example: { from: 'member-1', to: 'member-2', amount: '10.00' }, requires: ['openGroup'],
     unavailable: ({ state }, input) => {
       if (!input) return repaymentMembers(openSnapshot(state)).length > 1 ? null : unavailable('member_not_found', 'Add another member first.');
       const members = repaymentMembers(openSnapshot(state));
 
-      return input.from !== input.to && members.some((member) => member.id === input.from) && members.some((member) => member.id === input.to) && (parseAmount(input.amount, noCurrency) ?? 0) > 0
+      return input.from !== input.to && members.some((member) => member.id === input.from) && members.some((member) => member.id === input.to) && (parseAmount(input.amount, input.currency ?? noCurrency) ?? 0) > 0
         ? null : unavailable('invalid_input', 'Choose two different members and a positive amount.');
     },
     run: async (host, input) => {
-      await host.submit({ type: 'settlement.record', payload: { from_member_id: input.from, to_member_id: input.to, currency: noCurrency, amount: parseAmount(input.amount, noCurrency) ?? 0 } });
+      const currency = input.currency ?? noCurrency;
+
+      await host.submit({ type: 'settlement.record', payload: { from_member_id: input.from, to_member_id: input.to, currency, amount: parseAmount(input.amount, currency) ?? 0 } });
     },
   }),
   saveMemberEdit: defineAction({

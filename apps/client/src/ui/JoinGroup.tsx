@@ -1,10 +1,8 @@
 import { memberLabel, previewFromSnapshot } from '@splitnext/client';
 import { useEffect } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import type { AppController } from '../model/controller';
-import { BrandMark } from './BrandMark';
-import { ErrorMessage, Field, FooterButton, Notice, PageTitle, RadioRow, Tag, errorMessage, s } from './components';
-import { LinkIcon, PlusIcon } from './icons';
+import { ErrorMessage, Field, FooterButton, Notice, RadioRow, Tag, errorMessage, s, titleStyle } from './components';
 import { colors, fontFamily } from './theme';
 import { useActions, useUiState, type useActionCall } from './useActionCall';
 
@@ -90,13 +88,10 @@ function LinkEntry(props: JoinGroupProps) {
   }
 
   return (
-    <View style={{ gap: 36, paddingHorizontal: 8 }}>
-      <View style={{ gap: 16 }}>
-        <View style={{ width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: broken ? colors.danger : colors.actionSoft }}>
-          <LinkIcon size={30} broken={broken} color={broken ? colors.owes : colors.action} />
-        </View>
-        <PageTitle>{broken ? 'This invite link doesn’t work' : 'Join a group'}</PageTitle>
-        <Text style={{ fontFamily, fontSize: 16, lineHeight: 24, color: colors.soft }}>
+    <View style={{ gap: 36, paddingTop: 8 }}>
+      <View style={{ gap: 10 }}>
+        <Text accessibilityRole="header" style={titleStyle(0)}>{broken ? 'This invite link doesn’t work' : 'Join a group'}</Text>
+        <Text style={{ fontFamily, fontSize: 15, lineHeight: 21, color: colors.muted }}>
           {broken ? 'It may have been replaced by someone in the group. Ask them for the current link.' : 'Paste the invite link someone in the group sent you.'}
         </Text>
       </View>
@@ -106,7 +101,7 @@ function LinkEntry(props: JoinGroupProps) {
         value={link}
         editable={actions.availability('changeDraft', { field: 'join.link', value: link }).available}
         onChangeText={setLink}
-        placeholder="splitnext.app/j#…"
+        placeholder="Paste invite link"
         autoCapitalize="none"
         autoCorrect={false}
         returnKeyType="go"
@@ -120,7 +115,7 @@ function LinkEntry(props: JoinGroupProps) {
                 .then(() => navigator.clipboard.readText())
                 .then(setLink, () => undefined);
             }}
-            style={({ pressed }) => [s.fieldButton, { paddingHorizontal: 16 }, pressed && s.pressed]}
+            style={({ pressed }) => [s.fieldButton, pressed && s.pressed]}
           >
             <Text style={s.fieldButtonText}>Paste</Text>
           </Pressable>
@@ -151,9 +146,8 @@ export function JoinGroup(props: JoinGroupProps) {
   }
 
   return (
-    <View style={{ gap: 8 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 4 }}>
-        <BrandMark size={28} />
+    <View style={{ gap: 8, paddingTop: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <Text style={{ flex: 1, fontFamily, fontSize: 14, color: colors.muted }}>{props.rejoining ? 'Welcome back to' : 'You’ve been invited to'}</Text>
         {!props.rejoining ? (
           <Pressable
@@ -166,15 +160,14 @@ export function JoinGroup(props: JoinGroupProps) {
           </Pressable>
         ) : null}
       </View>
-      <View style={{ gap: 4, paddingHorizontal: 4, paddingBottom: 12 }}>
-        <PageTitle>{group.name}</PageTitle>
+      <View style={{ gap: 10, paddingBottom: 20 }}>
+        <Text accessibilityRole="header" style={titleStyle(0)}>{group.name}</Text>
         <Text style={{ fontFamily, fontSize: 15, color: colors.muted }}>
           {people.length === 1 ? '1 person' : `${people.length} people`} · Which one are you?
         </Text>
       </View>
 
-      <View accessibilityRole="radiogroup" accessibilityLabel="Names" style={{ gap: 6 }}>
-        <Text style={[s.eyebrow, { paddingHorizontal: 4, paddingBottom: 2 }]}>Names</Text>
+      <View accessibilityRole="radiogroup" accessibilityLabel="Names" style={{ borderBottomWidth: 1, borderColor: colors.rule }}>
         {ordered.map((entry) => {
           const label = memberLabel(entry.display_name, entry.name_ordinal);
 
@@ -191,31 +184,33 @@ export function JoinGroup(props: JoinGroupProps) {
             </RadioRow>
           );
         })}
-        <View style={{ height: 4 }} />
-        <RadioRow
-          label="Someone else"
-          selected={chosen === 'new'}
-          disabled={!actions.availability('chooseJoinMember', { as: { kind: 'new' } }).available}
-          onPress={() => choose({ kind: 'new' })}
-          style={{ borderStyle: 'dashed', backgroundColor: colors.background }}
-        >
-          <PlusIcon size={18} color={colors.action} />
-        </RadioRow>
-      </View>
-      {chosen === 'new' ? (
-        <View style={{ paddingTop: 4, paddingHorizontal: 4 }}>
-          <Field
-            label="Your name"
+        <View style={[s.radioRow, { gap: 14 }]}>
+          <Pressable
+            accessibilityRole="radio"
+            accessibilityLabel="Someone else"
+            accessibilityState={{ checked: chosen === 'new' }}
+            aria-checked={chosen === 'new'}
+            disabled={!actions.availability('chooseJoinMember', { as: { kind: 'new' } }).available}
+            onPress={() => choose({ kind: 'new' })}
+            style={{ width: 44, height: 56, marginHorizontal: -12, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <View style={[s.radioDot, chosen === 'new' && s.radioDotSelected]} />
+          </Pressable>
+          <TextInput
+            accessibilityLabel="Your name"
+            placeholder="Someone else"
+            placeholderTextColor={colors.placeholder}
             value={name}
             editable={actions.availability('changeDraft', { field: 'join.name', value: name }).available}
+            onFocus={() => { if (chosen !== 'new') choose({ kind: 'new' }); }}
             onChangeText={(value) => {
               void actions.dispatch('changeDraft', { field: 'join.name', value }, { origin: 'ui' });
             }}
             maxLength={100}
-            autoFocus
+            style={{ flex: 1, minWidth: 0, height: 56, padding: 0, fontFamily, fontSize: 17, fontWeight: '500', color: colors.ink }}
           />
         </View>
-      ) : null}
+      </View>
       {person?.in_use ? (
         <Notice
           tone="warning"
