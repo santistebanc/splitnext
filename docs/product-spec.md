@@ -201,11 +201,16 @@ the person and their balance, then the payments in the group's plan that
 involve them, each From → To with its amount and Record, which records it as
 planned, then Record a different payment, which opens the repayment form with
 the first planned amount for a partial or other payment. When nothing is owed
-it shows ✓ Settled. The repayment form is a page with Cancel, a large Record a
-payment (Change payment for a recorded one), From and To as square chips, a
-large amount, a caption saying whether it is the full amount owed, and
-earlier repayments, each opening in the form. Record (Save when changing one)
-is pinned at the foot; editing a recorded repayment shows Delete in the header.
+it shows ✓ Settled. The repayment form is a page with Cancel and Record (Save
+when changing one) in the header, with Delete beside Save for a recorded
+repayment. Below those actions, two member dropdowns form the large sentence
+“[person] paid [person]”, with you in place of the preferred member's name.
+The dropdowns have accessible Paid by and Paid to labels and retain the amount
+when either member changes. Long names truncate within the dropdowns on narrow
+screens. Below the sentence: a large plain-number amount, a caption saying
+whether it is the full amount owed, and earlier repayments, each opening in the
+form. The sentence shrinks as the content scrolls, and the header actions stay
+available. Selecting the same member on both sides prevents recording or saving.
 Cancel and Record return to where the form was opened, such as Settle up.
 
 The expense editor has Cancel, Delete when changing an expense, and Save in

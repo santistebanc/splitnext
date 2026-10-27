@@ -167,10 +167,14 @@ key.
   that involve one person. The plan has the fewest payments: it splits nonzero
   balances into as many zero-sum sets as possible with a bitmask search for up
   to 14 people, and settles each set greedily; larger groups use the greedy
-  plan alone. The repayment form chooses From and To with square chips and
-  also lists earlier repayments. The expense editor has Cancel, Delete, and
-  Save, a large amount and description that shrink as the split scrolls, Paid
-  by opening the names in place, a bar of each person's share, and one row per
+  plan alone. The repayment form lists earlier repayments. Its member
+  dropdowns form the heading “[person] paid [person]”, with Cancel, Record or
+  Save, and Delete for an existing repayment in the header. The web uses native
+  select controls; member changes dispatch the same prepareRepayment action as
+  other callers.
+  The expense editor has Cancel, Delete, and Save, a large amount and
+  description that shrink as the split scrolls, Paid by opening the names in
+  place, a bar of each person's share, and one row per
   person with + for another share, an amount that can be fixed in place, and
   a checkbox at the end that becomes − above one share or on a fixed amount.
   `ExpenseDraft.parts` retains each person's whole shares or typed fixed amount

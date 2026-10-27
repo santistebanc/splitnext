@@ -959,6 +959,75 @@ test('records planned and other repayments offline', async ({ page, context }) =
   await expect(page.getByText(/saved here/)).toHaveCount(0);
 });
 
+test('chooses repayment members with dropdowns in the payment heading', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 760 });
+  await createGroup(page, 'Dropdown payments', 'Ana');
+  await addMember(page, 'Benjamin Alexander');
+  await addMember(page, 'Cy');
+  await addExpense(page, 'Dinner', '60');
+  await person(page, 'Benjamin Alexander').click();
+  await button(page, 'Settle up, 1 payment').click();
+  await button(page, 'Record a different payment').click();
+  const from = page.getByRole('combobox', { name: 'Paid by', exact: true });
+  const to = page.getByRole('combobox', { name: 'Paid to', exact: true });
+  const amount = field(page, 'Amount');
+  const record = button(page, 'Record repayment');
+
+  await expect(from).toBeVisible();
+  await expect(to).toBeVisible();
+  await expect(from.locator('option:checked')).toHaveText('Benjamin Alexander');
+  await expect(to.locator('option:checked')).toHaveText('you');
+
+  const selectedTextFits = await to.evaluate((node) => {
+    const option = node.querySelector('option:checked');
+    const style = getComputedStyle(node);
+    const canvas = document.createElement('canvas').getContext('2d')!;
+
+    canvas.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+
+    return canvas.measureText(option?.textContent ?? '').width <= node.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  });
+
+  expect(selectedTextFits).toBe(true);
+  await amount.fill('7.50');
+  await from.selectOption({ label: 'Cy' });
+  await expect(amount).toHaveValue('7.50');
+  await to.selectOption({ label: 'Cy' });
+  await expect(record).toBeDisabled();
+  await to.selectOption({ label: 'Benjamin Alexander' });
+  await expect(record).toBeEnabled();
+
+  const fromBox = (await from.boundingBox())!;
+  const toBox = (await to.boundingBox())!;
+  const amountBox = (await amount.boundingBox())!;
+  const recordBox = (await record.boundingBox())!;
+
+  expect(Math.abs(fromBox.y - toBox.y)).toBeLessThanOrEqual(1);
+  expect(recordBox.y + recordBox.height).toBeLessThanOrEqual(fromBox.y);
+  expect(fromBox.y + fromBox.height).toBeLessThan(amountBox.y);
+  expect(await page.locator('#splitnext-page').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await record.click();
+  await expect(heading(page, 'Settle up')).toBeVisible();
+  await button(page, 'Record a different payment').click();
+  await expect(button(page, 'Change repayment: Cy paid Benjamin Alexander back 7.50')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('repayment-dropdowns-320.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: testInfo.outputPath('repayment-dropdowns-390.png') });
+  await button(page, 'Cancel').click();
+  await button(page, 'Back to Benjamin Alexander').click();
+  await button(page, 'Back to Dropdown payments').click();
+  await button(page, 'Change repayment: Cy paid Benjamin Alexander back 7.50').click();
+  await expect(from.locator('option:checked')).toHaveText('Cy');
+  await expect(to.locator('option:checked')).toHaveText('Benjamin Alexander');
+  await from.selectOption({ label: 'You' });
+  await button(page, 'Cancel').click();
+  await button(page, 'Change repayment: Cy paid Benjamin Alexander back 7.50').click();
+  await expect(from.locator('option:checked')).toHaveText('Cy');
+  await from.selectOption({ label: 'You' });
+  await button(page, 'Save repayment').click();
+  await expect(button(page, 'Change repayment: You paid Benjamin Alexander back 7.50')).toBeVisible();
+});
+
 test('edits and removes a repayment offline', async ({ page, context }, testInfo) => {
   await page.setViewportSize({ width: 320, height: 760 });
   await createGroup(page, 'Repayment changes', 'Ana');
@@ -987,9 +1056,9 @@ test('edits and removes a repayment offline', async ({ page, context }, testInfo
 
   await expect(remove).toHaveText('Delete');
   await expect(button(page, /^Remove repayment/)).toHaveCount(0);
-  // Delete sits in the header above the form; Save is the action at its foot.
+  // Delete and Save sit in the header, above the payment sentence and amount.
   expect(removeBox.y + removeBox.height).toBeLessThan((await field(page, 'Amount').boundingBox())!.y);
-  expect(saveBox.y).toBeGreaterThan((await field(page, 'Amount').boundingBox())!.y);
+  expect(saveBox.y + saveBox.height).toBeLessThan((await field(page, 'Amount').boundingBox())!.y);
   await page.screenshot({ path: testInfo.outputPath('repayment-header.png') });
   await remove.click();
   await expect(heading(page, 'Repayment changes')).toBeVisible();
