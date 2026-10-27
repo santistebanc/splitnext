@@ -228,8 +228,12 @@ test('uses one large title on every screen and opens the join field in place', a
   expect(nameBox.x - (logo.x + logo.width)).toBeLessThan(20);
   expect(Math.abs(nameBox.y + nameBox.height / 2 - (logo.y + logo.height / 2))).toBeLessThanOrEqual(3);
   await button(page, 'New group').click();
-  await expect(heading(page, 'New group')).toHaveCSS('font-size', '42px');
+  // New group opens upward from its button, over the groups list, ready to type.
+  await expect(page.getByRole('region', { name: 'New group' })).toBeVisible();
+  await expect(field(page, 'Group name')).toBeFocused();
+  await expect(heading(page, 'Your groups')).toBeVisible();
   await button(page, 'Back to groups').click();
+  await expect(page.getByRole('region', { name: 'New group' })).toHaveCount(0);
 
   // Join opens a link field directly under itself, above the mark; a link that
   // is not an invite says so there.

@@ -182,9 +182,11 @@ zero, choose who you are when unassigned), your balance as a bar scaled to
 your largest balance across groups, the people count with You're and the
 member name, and a bin that asks in place before leaving the group on this
 device. Show N groups you left lists them with Rejoin, and New group is
-pinned at the foot. New group is a page with a large title, Group name and
-Your name fields, and a pinned Create group that shows Creating… while it
-works.
+pinned at the foot. New group does not leave the list: it opens upward
+from the button, just tall enough for New group with Cancel, Group name, and
+Your name (focused on Group name), and the button becomes Create group, grey
+until both names are filled and Creating… while it works. Cancel, Back, or a
+tap elsewhere closes it and discards the draft.
 
 The join screen shows the group's name large and Which one are you?, with one
 ruled row per name (Taken when another device has it) and a last row whose
