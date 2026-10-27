@@ -34,9 +34,11 @@ After creation, open the group screen. Its balances end with an inline Add a
 person row, and Invite people under the group's name opens the invite link in
 place, so adding names and inviting can happen in either order. The groups
 list shows each locally stored group's people count and the member this
-installation uses. The invite link shows in the monospaced face between an ink
-rule and a hairline, with Copy link (Copied once copied), native Share where
-supported, and Replace link side by side below it. Replace link first asks for
+installation uses. The invite link shows in the monospaced face, without
+https://, between an ink rule and a hairline; Copy link and Share send it with
+https://, and the join field accepts it either way. Below it sit Copy link
+(Copied once copied), native Share where supported, and Replace link side by
+side. Replace link first asks for
 confirmation in the same place, stating that the old link will stop working
 while everyone already in the group keeps their access, with Cancel and
 Replace. Creating a link does not imply anyone has joined.

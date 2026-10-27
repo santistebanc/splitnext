@@ -21,7 +21,8 @@ const linkId = 'invite-link-text';
 
 /**
  * The invite link, opened in place under the group's name: the link between
- * two rules, then Copy link beside Replace link. Replacing asks first in the
+ * two rules, shown without `https://` but copied and shared with it, then Copy
+ * link beside Replace link. Replacing asks first in the
  * same place, because the old link stops working.
  */
 export function InvitePanel(props: { app: InvitePanelApp }) {
@@ -44,7 +45,7 @@ export function InvitePanel(props: { app: InvitePanelApp }) {
       <View style={{ paddingVertical: 14, borderTopWidth: 1.5, borderBottomWidth: 1, borderTopColor: colors.ink, borderBottomColor: colors.rule }}>
         {link ? (
           <Text testID="invite-link" nativeID={linkId} selectable style={{ fontFamily: monoFamily, fontSize: 15, lineHeight: 21, fontWeight: '500', color: colors.ink }}>
-            {link}
+            {link.replace(/^https?:\/\//, '')}
           </Text>
         ) : (
           <Text style={s.lead}>No invite link yet</Text>

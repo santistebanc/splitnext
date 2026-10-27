@@ -27,6 +27,14 @@ describe('invite links', () => {
     expect(parseInviteLink(`https://splitnext.app/j/#${code}`)).toEqual({ group_id: null, token: code });
   });
 
+  it('reads a link pasted without its scheme, as the invite panel shows it', () => {
+    const code = createInviteToken();
+
+    expect(parseInviteLink(`splitnext.app/j#${code}`)).toEqual({ group_id: null, token: code });
+    expect(parseInviteLink(` localhost:8787/j#${code} `)).toEqual({ group_id: null, token: code });
+    expect(parseInviteLink(`http://localhost:8787/j#${code}`)).toEqual({ group_id: null, token: code });
+  });
+
   it('keeps links made with earlier tokens working', () => {
     const groupId = createIdentifier();
     const link = formatInviteLink('https://splitnext.app', groupId, legacyToken);

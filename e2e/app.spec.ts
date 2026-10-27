@@ -70,11 +70,14 @@ async function addExpense(page: Page, description: string, amount: string, payer
 async function inviteLink(page: Page): Promise<string> {
   await button(page, 'Invite people').click();
   const panel = page.getByRole('region', { name: 'Invite people' });
-  const link = (await panel.getByTestId('invite-link').textContent()) ?? '';
+  const shown = (await panel.getByTestId('invite-link').textContent()) ?? '';
   await button(page, 'Invite people').click();
   await expect(panel).toHaveCount(0);
 
-  return link;
+  // The panel shows the link without its scheme.
+  expect(shown).not.toMatch(/^https?:/);
+
+  return `${new URL(page.url()).protocol}//${shown}`;
 }
 
 async function goOffline(page: Page, context: { setOffline: (offline: boolean) => Promise<void> }): Promise<void> {
@@ -584,7 +587,8 @@ test('renames the group in place, copies the invite link, and replaces it after 
 
   await panel.getByRole('button', { name: 'Copy link', exact: true }).click();
   await expect(panel.getByRole('button', { name: 'Link copied', exact: true })).toBeVisible();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(before);
+  // The panel shows the link without its scheme; the copy keeps it, so it opens when tapped.
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`http://${before}`);
   expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(before);
 
   // Replacing asks first, in the same place.
@@ -688,7 +692,12 @@ test('returns to the groups list while an invite check is still running', async 
 
   // The invite token leaves the address bar with the join page.
   await expect(page).toHaveURL(/\/app$/);
-  await page.goto(link);
+
+  // The link as the invite panel shows it, without its scheme, opens the invite too.
+  await page.unroute('**/invites/preview');
+  await button(page, 'Join with an invite link').click();
+  await field(page, 'Invite link').fill(link.replace(/^https?:\/\//, ''));
+  await button(page, 'Open').click();
   await expect(page.getByText(/Which one are you\?/)).toBeVisible();
 });
 
