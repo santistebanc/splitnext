@@ -66,7 +66,7 @@ function Row(props: { first: boolean; label: string; title: string; meta?: strin
       <ListRow label={props.label} disabled={props.disabled} onPress={props.onPress}>
         <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text ref={morph(props.morph && `etitle-${props.morph}`)} numberOfLines={1} style={[s.name, { flexShrink: 1, fontSize: 17, lineHeight: 22 }]}>{props.title}</Text>
+            <Text ref={morph(props.morph && `etitle-${props.morph}`)} numberOfLines={2} style={[s.name, { flexShrink: 1, fontSize: 17, lineHeight: 22 }]}>{props.title}</Text>
             {props.review ? <ReviewDot /> : null}
           </View>
           {props.meta ? <Text numberOfLines={1} style={s.rowCaption}>{props.meta}</Text> : null}

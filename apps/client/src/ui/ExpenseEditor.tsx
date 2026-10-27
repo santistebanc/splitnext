@@ -227,6 +227,12 @@ export function ExpenseControls() {
   }
 
   const titleSize = between(24, 18, progress);
+  const descriptionStyle = { fontFamily, fontSize: titleSize, lineHeight: titleSize * 1.2, fontWeight: '600', letterSpacing: -0.02 * titleSize, color: colors.ink } as const;
+  const [descriptionHeight, setDescriptionHeight] = useState(0);
+  const [editingDescription, setEditingDescription] = useState(false);
+  // Read rather than edited: the cut text shows instead of the field's own.
+  const shown = !editingDescription && Boolean(draft.description);
+  const descriptionKey = draft.expenseId ? `etitle-${draft.expenseId}` : 'addexp';
   // The amount as shown, grouped in threes, fits the width: up to "999 999.99"
   // at full size, and longer figures in proportion.
   const whole = Math.max(1, (draft.amount.split('.')[0] ?? '').length);
@@ -248,18 +254,41 @@ export function ExpenseControls() {
         />
         </View>
       </View>
-      <View style={{ paddingTop: between(16, 8, progress), paddingBottom: between(14, 8, progress), borderBottomWidth: 1, borderColor: colors.rule }}>
+      <View style={{ position: 'relative', paddingTop: between(16, 8, progress), paddingBottom: between(14, 8, progress), borderBottomWidth: 1, borderColor: colors.rule }}>
+        {/* The description as read: cut at two lines with an ellipsis. It also
+            measures the field's height, and shows over the field until the
+            field is being edited, when the field shows all of it. */}
+        <Text
+          ref={morph(shown ? descriptionKey : null)}
+          aria-hidden
+          numberOfLines={2}
+          onLayout={(event) => setDescriptionHeight(event.nativeEvent.layout.height)}
+          style={[descriptionStyle, { position: 'absolute', left: 0, right: 0, opacity: shown ? 1 : 0, pointerEvents: 'none', zIndex: 1 }]}
+        >
+          {draft.description || ' '}
+        </Text>
         <TextInput
-          ref={morph(draft.expenseId ? `etitle-${draft.expenseId}` : 'addexp')}
+          ref={morph(shown ? null : descriptionKey)}
+          onFocus={() => setEditingDescription(true)}
+          onBlur={() => setEditingDescription(false)}
           accessibilityLabel="Description"
           placeholder="New expense"
           placeholderTextColor={colors.placeholder}
           value={draft.description}
-          onChangeText={(value) => change('expense.description', value)}
+          // Enter saves rather than starting a line; the text wraps to a second line by itself.
+          onChangeText={(value) => change('expense.description', value.replace(/\n/g, ''))}
           maxLength={100}
+          multiline
+          submitBehavior="submit"
           returnKeyType="done"
           onSubmitEditing={submit}
-          style={{ height: titleSize * 1.2, padding: 0, fontFamily, fontSize: titleSize, fontWeight: '600', letterSpacing: -0.02 * titleSize, color: colors.ink }}
+          // The web's text area would start a new line on Enter; it saves instead.
+          onKeyPress={(event) => {
+            if (event.nativeEvent.key !== 'Enter') return;
+            event.preventDefault();
+            submit();
+          }}
+          style={[descriptionStyle, { height: Math.max(titleSize * 1.2, descriptionHeight), padding: 0, overflow: 'hidden' }, shown && { color: 'transparent' }]}
         />
       </View>
     </View>

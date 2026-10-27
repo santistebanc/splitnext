@@ -91,7 +91,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
               />
             ) : (
               <>
-                <Text ref={morph(replica && memberId ? `pname-${replica.group_id}-${memberId}` : null)} accessibilityRole="header" numberOfLines={1} style={[titleStyle(progress), { flexShrink: 1 }]}>{name}</Text>
+                <Text ref={morph(replica && memberId ? `pname-${replica.group_id}-${memberId}` : null)} accessibilityRole="header" numberOfLines={2} style={[titleStyle(progress), { flexShrink: 1 }]}>{name}</Text>
                 {isYou ? <Text style={{ fontFamily, fontSize: 15, fontWeight: '500', color: colors.muted }}>you</Text> : null}
                 {active && memberId ? (
                   <Pressable
@@ -230,7 +230,7 @@ export function PersonDetails(props: { app: MemberListApp }) {
                 }}
               >
                 <View style={{ flex: 1, minWidth: 0, gap: 4, alignItems: 'flex-start' }}>
-                  <Text ref={morph(row.kind === 'expense' ? `etitle-${row.id}` : null)} numberOfLines={1} style={[s.name, { maxWidth: '100%' }]}>{title}</Text>
+                  <Text ref={morph(row.kind === 'expense' ? `etitle-${row.id}` : null)} numberOfLines={2} style={[s.name, { maxWidth: '100%', lineHeight: 20 }]}>{title}</Text>
                   <Text numberOfLines={1} style={[s.rowCaption, { maxWidth: '100%' }]}>{row.detail}</Text>
                 </View>
                 <Text ref={morph(row.kind === 'expense' ? `eamt-${row.id}` : null)} style={[s.amount, { color: balanceColor(row.amount) }]}>{signedFigure(row.amount, group.currency)}</Text>

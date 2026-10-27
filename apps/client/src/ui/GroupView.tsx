@@ -70,7 +70,7 @@ function GroupName(props: { name: string; groupId: string }) {
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         {draft === null ? (
           <>
-            <Text ref={morph(`gname-${props.groupId}`)} accessibilityRole="header" numberOfLines={1} style={[titleStyle(progress), { flexShrink: 1 }]}>{props.name}</Text>
+            <Text ref={morph(`gname-${props.groupId}`)} accessibilityRole="header" numberOfLines={2} style={[titleStyle(progress), { flexShrink: 1 }]}>{props.name}</Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Rename group"
@@ -223,7 +223,7 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
       >
         <View style={{ width: '34%', flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0 }}>
           <MemberIcon participants={participants} size={6} />
-          <Text ref={morph(`pname-${props.replica.group_id}-${props.memberId}`)} numberOfLines={1} style={[s.name, { flexShrink: 1 }]}>{name}</Text>
+          <Text ref={morph(`pname-${props.replica.group_id}-${props.memberId}`)} numberOfLines={2} style={[s.name, { flexShrink: 1, lineHeight: 20 }]}>{name}</Text>
           {props.you ? <YouBadge /> : null}
           {props.removed ? <Text style={s.tag}>removed</Text> : null}
         </View>

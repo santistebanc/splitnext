@@ -17,7 +17,12 @@ const slide = 28;
 type Box = { x: number; y: number; w: number; h: number };
 
 /** `clips`: text cut short with an ellipsis, which must stay cut while it flies. */
-type Part = { box: Box; clone: HTMLElement; background: string; radius: string; border: string; borderWidth: string; color: string; font: string; clips: boolean };
+type Part = { box: Box; clone: HTMLElement; background: string; radius: string; border: string; borderWidth: string; color: string; font: string; clips: boolean; whiteSpace: string };
+
+/** Text cut short, at the end of one line or of its last allowed line. */
+function clipped(style: CSSStyleDeclaration): boolean {
+  return style.textOverflow === 'ellipsis' || (style.webkitLineClamp !== '' && style.webkitLineClamp !== 'none');
+}
 
 type Snapshot = { parts: Map<string, Part>; screen: HTMLElement; scrolled: number };
 
@@ -31,6 +36,9 @@ function copy(element: HTMLElement): HTMLElement {
   inputs.forEach((input, index) => copies[index]?.setAttribute('value', input.value));
 
   if (element instanceof HTMLInputElement && clone instanceof HTMLInputElement) clone.setAttribute('value', element.value);
+
+  // A text area's copy starts from its first text, not what is in it now.
+  if (element instanceof HTMLTextAreaElement && clone instanceof HTMLTextAreaElement) clone.textContent = element.value;
 
   clone.removeAttribute('data-morph');
 
@@ -102,7 +110,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
       if (!key || !this.visible(element, box)) return;
       const style = getComputedStyle(element);
 
-      parts.set(key, { box, clone: copy(element), background: style.backgroundColor, radius: style.borderRadius, border: style.borderTopColor, borderWidth: style.borderTopWidth, color: style.color, font: style.font, clips: style.textOverflow === 'ellipsis' });
+      parts.set(key, { box, clone: copy(element), background: style.backgroundColor, radius: style.borderRadius, border: style.borderTopColor, borderWidth: style.borderTopWidth, color: style.color, font: style.font, clips: clipped(style), whiteSpace: style.whiteSpace });
     });
 
     return { parts, screen: copy(root), scrolled: root.querySelector(`#${pageId}`)?.scrollTop ?? 0 };
@@ -228,7 +236,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
       // A bar stretches to its new shape; text keeps its proportions and crossfades.
       const stretch = element.dataset.morphStretch !== undefined;
       const sx = to.w / a.w;
-      const base = { position: 'absolute', margin: '0', background: 'transparent', borderColor: 'transparent', transformOrigin: '0 0', boxSizing: 'border-box', visibility: 'visible', transition: 'none', overflow: 'visible', whiteSpace: 'nowrap' };
+      const base = { position: 'absolute', margin: '0', background: 'transparent', borderColor: 'transparent', transformOrigin: '0 0', boxSizing: 'border-box', visibility: 'visible', transition: 'none', overflow: 'visible' };
       const box = document.createElement('div');
 
       element.style.visibility = 'hidden';
@@ -246,7 +254,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
       const cut = (clips: boolean) => (clips ? { overflow: 'hidden', textOverflow: 'ellipsis' } : {});
       const leaving = from.clone;
 
-      Object.assign(leaving.style, base, cut(from.clips), { left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px`, color: from.color, font: from.font });
+      Object.assign(leaving.style, base, cut(from.clips), { whiteSpace: from.whiteSpace, left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px`, color: from.color, font: from.font });
       overlay.appendChild(leaving);
       animations.push(leaving.animate(stretch
         // Fades only once the arriving copy is mostly in, so the bar never
@@ -258,7 +266,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
 
       arriving.dataset.morphArriving = '';
 
-      Object.assign(arriving.style, base, cut(style.textOverflow === 'ellipsis'), { left: `${to.x}px`, top: `${to.y}px`, width: `${to.w}px`, height: `${to.h}px`, color: style.color, font: style.font });
+      Object.assign(arriving.style, base, cut(clipped(style)), { whiteSpace: style.whiteSpace, left: `${to.x}px`, top: `${to.y}px`, width: `${to.w}px`, height: `${to.h}px`, color: style.color, font: style.font });
       overlay.appendChild(arriving);
       animations.push(arriving.animate(stretch
         ? [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / sx},${1 / scale})`, opacity: 0 }, { opacity: 1, offset: 0.6 }, { transform: 'none', opacity: 1 }]

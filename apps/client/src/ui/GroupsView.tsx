@@ -258,7 +258,7 @@ export function GroupsView(props: GroupsViewProps) {
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-start' }}>
-              <Text ref={morph(`gname-${group.group_id}`)} numberOfLines={1} style={{ maxWidth: '100%', fontFamily, fontSize: 20, lineHeight: 25, fontWeight: '600', color: colors.ink }}>{group.name}</Text>
+              <Text ref={morph(`gname-${group.group_id}`)} numberOfLines={2} style={{ maxWidth: '100%', fontFamily, fontSize: 20, lineHeight: 25, fontWeight: '600', color: colors.ink }}>{group.name}</Text>
             </View>
             <Pressable
               ref={leaving === group.group_id ? leaveToggle : undefined}
@@ -307,7 +307,7 @@ export function GroupsView(props: GroupsViewProps) {
           onPress={() => open(group)}
           style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 18 }, s.ruled, pressed && s.pressed]}
         >
-          <Text numberOfLines={1} style={{ flex: 1, fontFamily, fontSize: 20, fontWeight: '600', color: colors.faint }}>{group.name}</Text>
+          <Text numberOfLines={2} style={{ flex: 1, fontFamily, fontSize: 20, lineHeight: 25, fontWeight: '600', color: colors.faint }}>{group.name}</Text>
           <Text style={s.rowAction}>Rejoin</Text>
         </Pressable>
         {target === group.group_id ? <ErrorMessage message={action.error} /> : null}
