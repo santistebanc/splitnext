@@ -64,7 +64,10 @@ an open dropdown (who paid, the join field, the invite link, or a leave
 confirmation) closes it, and still reaches whatever was tapped; its own button
 still toggles it, and starting to scroll leaves it open. Balance bars
 ease to their new width. Reduced motion shows every change at once.
-Avoid repeated explanatory text, duplicate actions, unsupported controls, and rename
+Long group names, a group's title, names in the balances and a person's
+title, and expense names in the list, a breakdown, and the expense editor take
+up to two lines, then end in an ellipsis; the editor shows the whole
+description while it is being edited, and Enter saves it. Avoid repeated explanatory text, duplicate actions, unsupported controls, and rename
 save actions before a name changes. Use precise control labels rather than
 static explanatory paragraphs in app screens. Keep access-recovery
 details in the product documentation and the current beta scope on the homepage. Keep URL handling
