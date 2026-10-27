@@ -13,7 +13,7 @@ import { useActionCall, useActions, useUiState } from './useActionCall';
 type GroupViewProps = { app: MemberListApp };
 
 /** The bell that opens Activity, with a count of new changes from others and changes to review. */
-export function ActivityBell(props: { app: MemberListApp }) {
+function ActivityBell(props: { app: MemberListApp }) {
   const open = useActionCall();
   const ui = useUiState();
   const replica = props.app.snapshot().group;

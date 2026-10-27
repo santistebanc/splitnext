@@ -25,8 +25,6 @@ export const colors = {
   actionBusy: '#8fa9cf',
   /** The row that is you, in a list of everyone. */
   youRow: '#eef4fd',
-  /** The edge of a suggestion that involves you. */
-  youEdge: '#b9cff0',
   /** Card edges. */
   border: '#dde2e7',
   /** Lines between rows inside a card. */
@@ -61,17 +59,9 @@ export const colors = {
   warningInk: '#6b3305',
   danger: '#fdeee3',
   dangerInk: '#7a3206',
-  red: '#a9470c',
   /** The dark balance and invite cards. */
   night: '#10161d',
-  nightMuted: '#b8c2cc',
-  nightEdge: '#39424c',
   nightOwed: '#8ec1ff',
-  nightOwes: '#ffb27a',
-  /** The logo's blue, and its dark text. */
-  logo: '#60a5fa',
-  logoInk: '#0b2a55',
-  badge: '#ffffff',
 };
 
 /** Body text, labels, and controls. */

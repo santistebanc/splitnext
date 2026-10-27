@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { formatAmount, preferredMember, type ClientReplicaState, type Expense, type Settlement } from '@splitnext/client';
-import { balanceRows, currentExpenses, expenseLabel, memberName, moneyLabel } from '../model/expenses';
+import { currentExpenses, expenseLabel, memberName, moneyLabel } from '../model/expenses';
 import { needsReview } from '../model/notices';
 import { StickyTop } from './StickyTop';
 import { ErrorMessage, colors, s } from './components';
@@ -19,20 +19,6 @@ export function signedMoney(amount: number, currency: string): string {
 /** A balance figure without its currency, such as "+12.50", "−12.50", or "0.00". */
 export function signedFigure(amount: number, currency: string): string {
   return `${amount > 0 ? '+' : amount < 0 ? '−' : ''}${formatAmount(Math.abs(amount), currency)}`;
-}
-
-/** Your own non-zero balance in each currency. */
-export function yourBalances(replica: Replica): { currency: string; amount: number }[] {
-  const snapshot = replica.projected_snapshot;
-  const you = preferredMember(snapshot, replica.session?.identity.id);
-
-  if (!you) return [];
-
-  return balanceRows(snapshot).flatMap(({ currency, rows }) => {
-    const amount = rows.find((row) => row.member.id === you.id)?.amount ?? 0;
-
-    return amount ? [{ currency, amount }] : [];
-  });
 }
 
 /** A name in a sentence, as "You"/"you" when it is this device's member. */

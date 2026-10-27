@@ -613,7 +613,7 @@ const ds = StyleSheet.create({
     borderRadius: 4,
     padding: 10,
   },
-  failed: { color: colors.red },
+  failed: { color: colors.owes },
   pending: { color: '#8a5a00' },
   done: { color: colors.online },
   logEntry: {
