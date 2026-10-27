@@ -30,6 +30,8 @@ export function ExpenseEditorHeader(props: ExpenseEditorProps) {
         end={expense ? (
           <HeaderAction danger text="Delete" label={`Delete ${expenseLabel(expense)}`} disabled={!remove.can('removeExpense', { expenseId: expense.id })} onPress={() => { void remove.call('removeExpense', { expenseId: expense.id }, () => { void back.call('closePanel', {}); }); }} />
         ) : null}
+        // The timestamp sits under this row; the rule under the description ends the header.
+        scrollRule={false}
       />
       {expense ? (
         <Text testID="expense-timestamp" style={s.caption}>
