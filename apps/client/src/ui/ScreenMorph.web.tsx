@@ -16,7 +16,8 @@ const slide = 28;
 
 type Box = { x: number; y: number; w: number; h: number };
 
-type Part = { box: Box; clone: HTMLElement; background: string; radius: string; border: string; borderWidth: string; color: string; font: string };
+/** `clips`: text cut short with an ellipsis, which must stay cut while it flies. */
+type Part = { box: Box; clone: HTMLElement; background: string; radius: string; border: string; borderWidth: string; color: string; font: string; clips: boolean };
 
 type Snapshot = { parts: Map<string, Part>; screen: HTMLElement; scrolled: number };
 
@@ -85,7 +86,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
       if (!key || !this.visible(box)) return;
       const style = getComputedStyle(element);
 
-      parts.set(key, { box, clone: copy(element), background: style.backgroundColor, radius: style.borderRadius, border: style.borderTopColor, borderWidth: style.borderTopWidth, color: style.color, font: style.font });
+      parts.set(key, { box, clone: copy(element), background: style.backgroundColor, radius: style.borderRadius, border: style.borderTopColor, borderWidth: style.borderTopWidth, color: style.color, font: style.font, clips: style.textOverflow === 'ellipsis' });
     });
 
     return { parts, screen: copy(root), scrolled: root.querySelector(`#${pageId}`)?.scrollTop ?? 0 };
@@ -145,22 +146,26 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
         { transform: `translate(${to.x}px,${to.y}px)`, width: `${to.w}px`, height: `${to.h}px`, backgroundColor: style.backgroundColor, borderRadius: style.borderRadius, borderColor: style.borderTopColor },
       ], { duration, easing: easeOut, fill: 'forwards' }));
 
+      // Text cut short keeps its ellipsis on the way: it still clips, and its
+      // own width runs from the old box's to the new one's, allowing for its
+      // scale, so the cut moves as the room for it changes.
+      const cut = (clips: boolean) => (clips ? { overflow: 'hidden', textOverflow: 'ellipsis' } : {});
       const leaving = from.clone;
 
-      Object.assign(leaving.style, base, { left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px`, color: from.color, font: from.font });
+      Object.assign(leaving.style, base, cut(from.clips), { left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px`, color: from.color, font: from.font });
       overlay.appendChild(leaving);
       animations.push(leaving.animate(stretch
         // Stays solid under the arriving copy, so the bar never thins out midway.
         ? [{ transform: 'none' }, { transform: `translate(${to.x - a.x}px,${to.y - a.y}px) scale(${sx},${scale})` }]
-        : [{ transform: 'none', opacity: 1 }, { opacity: 0, offset: 0.45 }, { transform: `translate(${to.x - a.x}px,${to.y - a.y}px) scale(${scale})`, opacity: 0 }], { duration, easing: easeOut, fill: 'forwards' }));
+        : [{ transform: 'none', width: `${a.w}px`, opacity: 1 }, { opacity: 0, offset: 0.45 }, { transform: `translate(${to.x - a.x}px,${to.y - a.y}px) scale(${scale})`, width: `${to.w / scale}px`, opacity: 0 }], { duration, easing: easeOut, fill: 'forwards' }));
 
       const arriving = copy(element);
 
-      Object.assign(arriving.style, base, { left: `${to.x}px`, top: `${to.y}px`, width: `${to.w}px`, height: `${to.h}px`, color: style.color, font: style.font });
+      Object.assign(arriving.style, base, cut(style.textOverflow === 'ellipsis'), { left: `${to.x}px`, top: `${to.y}px`, width: `${to.w}px`, height: `${to.h}px`, color: style.color, font: style.font });
       overlay.appendChild(arriving);
       animations.push(arriving.animate(stretch
         ? [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / sx},${1 / scale})`, opacity: 0 }, { transform: 'none', opacity: 1 }]
-        : [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / scale})`, opacity: 0 }, { opacity: 0, offset: 0.3 }, { transform: 'none', opacity: 1 }], { duration, easing: easeOut, fill: 'forwards' }));
+        : [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / scale})`, width: `${a.w * scale}px`, opacity: 0 }, { opacity: 0, offset: 0.3 }, { transform: 'none', width: `${to.w}px`, opacity: 1 }], { duration, easing: easeOut, fill: 'forwards' }));
     }
 
     const timer = setTimeout(() => this.finish?.(), duration + 40);

@@ -1210,6 +1210,40 @@ test('never cuts off the tops or tails of letters in titles and names', async ({
   }
 });
 
+test('keeps a cut-off name cut off while it flies to its title', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 760 });
+  await createGroup(page, 'Long names', 'Ana');
+  await addMember(page, 'Maximiliano Fernández-Castellanos de la Vega y Montenegro');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+  // Every frame: each visible flying copy of the name, whether it still clips with an ellipsis, and its width.
+  const watching = page.evaluate(() => new Promise<{ ellipsis: boolean; width: number }[]>((resolve) => {
+    const start = performance.now();
+    const frames: { ellipsis: boolean; width: number }[] = [];
+
+    (function frame() {
+      for (const node of document.querySelectorAll('[aria-hidden] *')) {
+        const style = getComputedStyle(node);
+
+        if (node.childElementCount || !node.textContent?.startsWith('Maximiliano') || Number(style.opacity) < 0.05) continue;
+        frames.push({ ellipsis: style.textOverflow === 'ellipsis' && style.overflow === 'hidden', width: node.getBoundingClientRect().width });
+      }
+
+      if (performance.now() - start < 700) requestAnimationFrame(frame);
+      else resolve(frames);
+    })();
+  }));
+
+  await person(page, 'Maximiliano Fernández-Castellanos de la Vega y Montenegro').click();
+  const frames = await watching;
+  const widths = new Set(frames.map((frame) => Math.round(frame.width)));
+
+  expect(frames.length).toBeGreaterThan(0);
+  expect(frames.filter((frame) => !frame.ellipsis)).toEqual([]);
+  // The copy's room changes on the way rather than jumping at the end.
+  expect(widths.size).toBeGreaterThan(4);
+});
+
 test('closes panels in place without the content returning at the end', async ({ page }) => {
   await createGroup(page, 'Panels', 'Ana');
   await addMember(page, 'Ben');
