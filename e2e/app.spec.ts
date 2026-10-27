@@ -603,15 +603,26 @@ test('renames the group in place, copies the invite link, and replaces it after 
 test('adds each name typed while earlier ones are still saving', async ({ page }) => {
   await createGroup(page, 'Trip', 'Ana');
 
-  // No waiting between names: each is added, none merged into the next or dropped.
+  // Enter clears the field and keeps it focused, so names can be typed one
+  // after another without waiting: each is added, none merged or dropped.
+  const add = field(page, 'Add a person');
+
+  await add.click();
+
   for (const name of ['Ben', 'Cy', 'Dana']) {
-    await field(page, 'Add a person').fill(name);
-    await field(page, 'Add a person').press('Enter');
+    await page.keyboard.type(name);
+    await page.keyboard.press('Enter');
+    await expect(add).toBeFocused();
+    await expect(add).toHaveValue('');
   }
 
   for (const name of ['Ben', 'Cy', 'Dana']) await expect(person(page, name)).toBeVisible();
   await expect(page.getByRole('button', { name: /Show details$/ })).toHaveCount(4);
-  await expect(field(page, 'Add a person')).toHaveValue('');
+
+  // Enter on the empty field finishes.
+  await page.keyboard.press('Enter');
+  await expect(add).not.toBeFocused();
+  await expect(button(page, 'Add expense')).toBeEnabled();
 });
 
 test('opens details as pages with Back, browser history, and keyboard focus', async ({ page }) => {
