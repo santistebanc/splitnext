@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 
 import { between, useCompactProgress } from './pageScroll';
-import { AlertIcon, BackIcon, ChevronDownIcon, ChevronRightIcon, WarningIcon } from './icons';
+import { AlertIcon, BackIcon, WarningIcon } from './icons';
 import { colors, displayFamily, fontFamily, monoFamily } from './theme';
 
 export { colors } from './theme';
@@ -114,24 +114,6 @@ export function Field(props: FieldProps) {
   );
 }
 
-/** A three-letter currency code, typed into a field-height box beside an amount. */
-export function CurrencyField(props: { value: string; onChangeText: (value: string) => void }) {
-  return (
-    <View style={s.fieldButton}>
-      <TextInput
-        accessibilityLabel="Currency"
-        value={props.value}
-        onChangeText={props.onChangeText}
-        maxLength={3}
-        autoCapitalize="characters"
-        autoCorrect={false}
-        style={s.currencyInput}
-      />
-      <ChevronDownIcon />
-    </View>
-  );
-}
-
 type ChoiceProps = {
   children?: string;
   /** Richer content than a single line of text, such as a code and an amount. */
@@ -185,18 +167,6 @@ export function RadioRow(props: { label: string; selected: boolean; onPress: () 
       <Text numberOfLines={1} style={[s.radioLabel, props.compact && { fontSize: 15 }]}>{props.label}</Text>
       {props.children}
     </Pressable>
-  );
-}
-
-/** A small uppercase section title with an optional action at its end. */
-export function SectionHeader(props: { title: string; children?: ReactNode }) {
-  return (
-    <View style={s.sectionHeader}>
-      <Text accessibilityRole="header" style={s.eyebrow}>
-        {props.title}
-      </Text>
-      {props.children}
-    </View>
   );
 }
 
@@ -282,24 +252,6 @@ export function HeaderAction(props: HeaderActionProps & { text: string; danger?:
       ]}
     >
       <Text style={[s.headerActionText, props.primary && s.headerPrimaryText, props.danger && s.dangerText]}>{props.text}</Text>
-    </Pressable>
-  );
-}
-
-/** A full-width row of a settings card. */
-export function ListRow(props: { label: string; onPress: () => void; disabled?: boolean; first?: boolean; value?: string; danger?: boolean; chevron?: boolean }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={props.label}
-      accessibilityState={{ disabled: Boolean(props.disabled) }}
-      disabled={props.disabled}
-      onPress={props.onPress}
-      style={({ pressed }) => [s.listRow, !props.first && s.ruled, (pressed || props.disabled) && s.dim]}
-    >
-      <Text style={[s.listRowLabel, props.danger && s.listRowDanger]}>{props.label}</Text>
-      {props.value ? <Text style={s.listRowValue}>{props.value}</Text> : null}
-      {props.chevron ? <ChevronRightIcon color={colors.muted} /> : null}
     </Pressable>
   );
 }
@@ -508,23 +460,11 @@ export const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  navIconEnd: { marginLeft: 0 },
   headerAction: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 12 },
   headerActionText: { color: colors.ink, fontFamily, fontSize: 15, fontWeight: '400' },
   headerPrimary: { backgroundColor: colors.action, paddingHorizontal: 18, borderRadius: 999 },
   headerPrimaryIdle: { backgroundColor: colors.actionBusy },
   headerPrimaryText: { color: colors.actionInk, fontWeight: '600' },
-  /** A plain tappable row of a settings card. */
-  listRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    minHeight: 56,
-    paddingHorizontal: 16,
-  },
-  listRowLabel: { flex: 1, color: colors.ink, fontFamily, fontSize: 16 },
-  listRowDanger: { color: colors.owes, fontWeight: '500' },
-  listRowValue: { color: colors.muted, fontFamily, fontSize: 14 },
   emptyState: { alignItems: 'center', paddingTop: 72, paddingBottom: 24, paddingHorizontal: 24, gap: 12 },
   emptyIcon: {
     width: 72,
@@ -575,28 +515,10 @@ export const s = StyleSheet.create({
   },
   wide: { maxWidth: 1040 },
   eyebrow: caps,
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingHorizontal: 4,
-    paddingTop: 4,
-  },
-  title: {
-    fontFamily: displayFamily,
-    fontSize: 34,
-    lineHeight: 39,
-    color: colors.ink,
-    fontWeight: '700',
-    letterSpacing: -0.7,
-  },
   subtitle: { color: colors.muted, fontFamily, fontSize: 15, lineHeight: 22 },
   heading: viewTitle,
   body: { color: colors.ink, fontFamily, fontSize: 15, lineHeight: 22 },
   caption: { color: colors.muted, fontFamily, fontSize: 13, lineHeight: 18 },
-  /** Amounts and codes in the monospaced face. */
-  figures: { fontFamily: monoFamily, fontWeight: '600' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -611,16 +533,7 @@ export const s = StyleSheet.create({
     gap: 12,
   },
   stack: { gap: 14 },
-  tight: { gap: 4 },
   actions: { flexDirection: 'row', gap: 8 },
-  card: {
-    padding: 16,
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 12,
-  },
   groupCard: {
     gap: 14,
     padding: 18,
@@ -637,8 +550,6 @@ export const s = StyleSheet.create({
     borderColor: colors.border,
     overflow: 'hidden',
   },
-  /** A quiet grey panel inside a card or form. */
-  inset: { backgroundColor: colors.pale, borderRadius: 14, padding: 14, gap: 12 },
   ruled: rule,
   prompt: {
     padding: 16,
@@ -700,13 +611,6 @@ export const s = StyleSheet.create({
   chipSelected: { backgroundColor: colors.night, borderColor: colors.night },
   chipText: { color: colors.ink, fontFamily, fontSize: 14, fontWeight: '600' },
   chipTextSelected: { color: colors.surface },
-  segments: {
-    flexDirection: 'row',
-    padding: 4,
-    gap: 4,
-    borderRadius: 12,
-    backgroundColor: colors.track,
-  },
   segment: {
     flex: 1,
     minHeight: 40,
@@ -805,21 +709,6 @@ export const s = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   fieldButtonText: { color: colors.ink, fontFamily, fontSize: 15, fontWeight: '600' },
-  splitInput: {
-    width: 92,
-    height: 40,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.field,
-    backgroundColor: colors.surface,
-    textAlign: 'right',
-    color: colors.ink,
-    fontFamily: monoFamily,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  currencyInput: { width: 46, height: '100%', padding: 0, color: colors.ink, fontFamily: monoFamily, fontSize: 18, fontWeight: '600' },
   copyButton: {
     width: 48,
     minHeight: 48,
@@ -849,7 +738,6 @@ export const s = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: colors.surface,
   },
-  error: { color: colors.owes, fontFamily, fontSize: 13, lineHeight: 18 },
   notice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -876,10 +764,6 @@ export const s = StyleSheet.create({
   tagWarning: { color: colors.warningInk, backgroundColor: colors.warning, fontSize: 11, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
   tagAction: { color: colors.actionInk, backgroundColor: colors.action, fontWeight: '700' },
   name: { color: colors.ink, fontFamily, fontSize: 16, fontWeight: '500' },
-  memberRow: { minHeight: 64, paddingVertical: 6, paddingLeft: 16, paddingRight: 6, justifyContent: 'center', gap: 6 },
-  memberLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  /** A member name that reads as text and becomes a field when tapped. */
-  editableMemberName: { minHeight: 36, justifyContent: 'center', marginLeft: -6, paddingHorizontal: 6, borderRadius: 8 },
   memberNameInput: {
     height: 40,
     minWidth: 0,
@@ -894,16 +778,12 @@ export const s = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-  memberActionsButton: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  addPersonRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 60, paddingHorizontal: 16 },
   presenceDot: { width: 10, height: 10, borderRadius: 5 },
   presenceOnline: { backgroundColor: colors.online },
   presenceOffline: { borderWidth: 2, borderColor: colors.muted },
   presenceUnclaimed: { borderWidth: 2, borderStyle: 'dashed', borderColor: colors.control },
-  chevron: { color: colors.muted, fontFamily, fontSize: 26, lineHeight: 26 },
   rowAction: { color: colors.actionText, fontFamily, fontSize: 14, fontWeight: '600' },
   skeleton: { backgroundColor: colors.track, borderRadius: 8 },
-  skeletonTitle: { width: 220, height: 36 },
   skeletonLine: { width: '60%', height: 14 },
   skeletonShort: { width: '35%', height: 12 },
   banner: {
@@ -920,9 +800,6 @@ export const s = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  owed: { color: colors.owed },
-  owes: { color: colors.owes },
-  currency: { fontFamily: monoFamily, fontSize: 12, fontWeight: '600', color: colors.muted },
   checkbox: {
     width: 24,
     height: 24,
@@ -932,7 +809,6 @@ export const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checked: { backgroundColor: colors.action, borderColor: colors.action },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(16, 22, 29, 0.45)',

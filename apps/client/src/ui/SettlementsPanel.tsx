@@ -164,7 +164,7 @@ export function SettlementsPanel(props: { replica: ClientReplicaState }) {
 }
 
 /** Recorded repayments, newest first; each opens in the repayment form. */
-export function RepaymentHistory(props: { replica: ClientReplicaState }) {
+function RepaymentHistory(props: { replica: ClientReplicaState }) {
   const action = useActionCall();
   const snapshot = props.replica.projected_snapshot;
   const draft = useUiState().repayment;

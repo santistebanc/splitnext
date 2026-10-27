@@ -92,15 +92,6 @@ export function GridIcon(props: IconProps) {
   );
 }
 
-export function SyncIcon(props: IconProps) {
-  return (
-    <Outline strokeWidth={2.2} {...props} fallback={14}>
-      <Path d="M20 12a8 8 0 0 1-14 5.3M4 12a8 8 0 0 1 14-5.3" />
-      <Path d="M18 3v4h-4M6 21v-4h4" />
-    </Outline>
-  );
-}
-
 export function WarningIcon(props: IconProps) {
   return (
     <Outline strokeWidth={2} {...props} fallback={18}>
@@ -137,24 +128,6 @@ export function ReceiptIcon(props: IconProps) {
   );
 }
 
-export function ScaleIcon(props: IconProps) {
-  return (
-    <Outline {...props} fallback={22}>
-      <Path d="M12 4v16M6 20h12M5 7h14" />
-      <Path d="M7 7l-3 6h6zM17 7l-3 6h6z" />
-    </Outline>
-  );
-}
-
-export function ClockIcon(props: IconProps) {
-  return (
-    <Outline {...props} fallback={22}>
-      <Circle cx={12} cy={12} r={8} />
-      <Path d="M12 8v4l3 2" />
-    </Outline>
-  );
-}
-
 export function PeopleIcon(props: IconProps) {
   return (
     <Outline {...props} fallback={22}>
@@ -180,14 +153,6 @@ export function ShareIcon(props: IconProps) {
     <Outline strokeWidth={2} {...props} fallback={16}>
       <Path d="M12 15V3M7 8l5-5 5 5" />
       <Path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
-    </Outline>
-  );
-}
-
-export function ArrowDownIcon(props: IconProps) {
-  return (
-    <Outline strokeWidth={2.2} {...props} fallback={16}>
-      <Path d="M12 5v14M6 13l6 6 6-6" />
     </Outline>
   );
 }
