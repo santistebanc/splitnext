@@ -219,7 +219,9 @@ becomes − once they have more than one share or a fixed amount; − takes a
 share away, and on a fixed amount or the last share leaves them out. + shows
 while it changes the split: on a fixed amount, or when more than one person
 divides by shares; on a fixed amount it returns them to the nearest whole
-shares. Tapping an amount fixes it in place; everybody else divides the
+shares. Tapping an amount fixes it in place, in a field formatted like the
+expense's own amount (two fixed decimals, a dot or comma for the point) with
+the shown share selected; everybody else divides the
 remainder by their shares, and clearing it restores one share. Without a
 positive total each row shows only its checkbox, without +, an amount, or −;
 they appear once a valid amount is entered. Excluded people stay in place, faded, with

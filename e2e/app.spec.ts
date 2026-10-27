@@ -500,18 +500,23 @@ test('mixes fixed amounts and weighted shares, preserves them offline, and clear
   // Fix one person while the others retain their 3:2 weights.
   await button(page, /^Amount for Cy:/).click();
   await expect(field(page, 'Amount for Cy')).toBeFocused();
-  await field(page, 'Amount for Cy').fill('101');
+  // Its shown share is selected, so typing replaces it.
+  await page.keyboard.type('101');
+  await expect(field(page, 'Amount for Cy')).toHaveValue('101.00');
   await expect(button(page, 'Save')).toBeDisabled();
   await expect(page.getByText('The amounts add up to more than the total.', { exact: true })).toBeVisible();
+  // The fixed amount is formatted like the expense's own: two decimals, a comma read as the point.
+  await field(page, 'Amount for Cy').fill('12,5');
+  await expect(field(page, 'Amount for Cy')).toHaveValue('12.50');
   await field(page, 'Amount for Cy').fill('20');
   await field(page, 'Amount for Cy').press('Enter');
   await expect(button(page, 'Amount for Ana: 48.00. Change amount')).toBeVisible();
   await expect(button(page, 'Amount for Ben: 32.00. Change amount')).toBeVisible();
-  await expect(field(page, 'Amount for Cy')).toHaveValue(/^20(\.00)?$/);
+  await expect(field(page, 'Amount for Cy')).toHaveValue('20.00');
   await field(page, 'Amount').fill('130');
   await expect(button(page, 'Amount for Ana: 66.00. Change amount')).toBeVisible();
   await expect(button(page, 'Amount for Ben: 44.00. Change amount')).toBeVisible();
-  await expect(field(page, 'Amount for Cy')).toHaveValue(/^20(\.00)?$/);
+  await expect(field(page, 'Amount for Cy')).toHaveValue('20.00');
   await field(page, 'Amount').fill('100');
 
   await goOffline(page, context);
@@ -520,7 +525,7 @@ test('mixes fixed amounts and weighted shares, preserves them offline, and clear
   await expect(button(page, 'Delete Mixed dinner · 100.00')).toBeVisible();
   await expect(button(page, 'Amount for Ana: 48.00. Change amount')).toBeVisible();
   await expect(button(page, 'Amount for Ben: 32.00. Change amount')).toBeVisible();
-  await expect(field(page, 'Amount for Cy')).toHaveValue(/^20(\.00)?$/);
+  await expect(field(page, 'Amount for Cy')).toHaveValue('20.00');
 
   // Editing only the occasion must keep both the fixed value and the weights.
   await field(page, 'Description').fill('Mixed dinner edited');

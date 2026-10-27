@@ -8,7 +8,15 @@ export function AmountInput(props: AmountInputProps) {
   return (
     <NumericFormat
       getInputRef={(input: HTMLInputElement) => { props.inputRef.current = input; }}
-      aria-label="Amount"
+      aria-label={props.label ?? 'Amount'}
+      disabled={props.editable === false}
+      // NumericFormat reports focus a tick late, after placing the caret, so
+      // callers hear of it at once here and the selection follows its caret.
+      onFocusCapture={props.onFocus}
+      onFocus={(event) => {
+        if (props.inline) event.currentTarget.select();
+      }}
+      onBlur={props.onBlur}
       placeholder={formatAmount(0, props.currency)}
       inputMode="decimal"
       value={props.value}
@@ -56,6 +64,7 @@ export function AmountInput(props: AmountInputProps) {
         boxSizing: 'border-box', background: 'transparent', outline: 'none',
         color: colors.ink, fontFamily: monoFamily, fontSize: props.fontSize,
         fontWeight: 500, letterSpacing: -0.05 * props.fontSize,
+        ...(props.inline && { textAlign: 'right', borderBottom: `1.5px solid ${colors.ink}`, letterSpacing: 0 }),
       }}
     />
   );
