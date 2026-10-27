@@ -35,10 +35,12 @@ person row, and Invite people under the group's name opens the invite link in
 place, so adding names and inviting can happen in either order. The groups
 list shows each locally stored group's people count and the member this
 installation uses. The invite link shows in the monospaced face, without
-https://, between an ink rule and a hairline; Copy link and Share send it with
-https://, and the join field accepts it either way. Below it sit Copy link
-(Copied once copied), native Share where supported, and Replace link side by
-side. Replace link first asks for
+https://, in one row between an ink rule and a hairline: a Share icon on its
+left where the device can share, and a Replace icon on its right. Tapping the
+link highlights it and copies it, with https://, and the caption below changes
+from Tap the link to copy it to Copied; Share also sends it with https://, and
+the join field accepts it either way. There is no separate Copy link button.
+Replace first asks for
 confirmation in the same place, stating that the old link will stop working
 while everyone already in the group keeps their access, with Cancel and
 Replace. Creating a link does not imply anyone has joined.
