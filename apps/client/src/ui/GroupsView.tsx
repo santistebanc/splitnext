@@ -200,11 +200,19 @@ export function GroupsView(props: GroupsViewProps) {
           onPress={() => open(group)}
           style={({ pressed }) => [s.groupCard, pressed && s.pressed]}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-start' }}>
               <Text ref={morph(`gname-${group.group_id}`)} numberOfLines={1} style={{ maxWidth: '100%', fontFamily, fontSize: 20, lineHeight: 25, fontWeight: '600', color: colors.ink }}>{group.name}</Text>
             </View>
-            <GroupBalance group={group} />
+            <Pressable
+              ref={leaving === group.group_id ? leaveToggle : undefined}
+              accessibilityRole="button"
+              accessibilityLabel={`Leave ${group.name}`}
+              onPress={() => setLeaving(leaving === group.group_id ? null : group.group_id)}
+              style={({ pressed }) => [{ width: 44, height: 44, marginVertical: -10, marginRight: -12, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed]}
+            >
+              <TrashIcon size={18} color={colors.muted} />
+            </Pressable>
           </View>
           <BalanceBar track amount={firstBalance(group)} max={max} morph={barMorph(group)} />
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 20 }}>
@@ -213,15 +221,7 @@ export function GroupsView(props: GroupsViewProps) {
               {group.pending_commands ? <Text style={s.caption}>{group.pending_commands === 1 ? '1 change waiting' : `${group.pending_commands} changes waiting`}</Text> : null}
               {review ? <Text style={[s.caption, { fontWeight: '600', color: colors.warningInk }]}>A change needs review</Text> : null}
             </View>
-            <Pressable
-              ref={leaving === group.group_id ? leaveToggle : undefined}
-              accessibilityRole="button"
-              accessibilityLabel={`Leave ${group.name}`}
-              onPress={() => setLeaving(leaving === group.group_id ? null : group.group_id)}
-              style={({ pressed }) => [{ width: 44, height: 44, margin: -12, marginLeft: 0, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed]}
-            >
-              <TrashIcon size={18} color={colors.muted} />
-            </Pressable>
+            <GroupBalance group={group} />
           </View>
         </Pressable>
         <Reveal toggle={leaveToggle} onOutsidePress={() => setLeaving(null)}>
