@@ -125,10 +125,9 @@ key.
   as you on this installation in localStorage and prefills it when creating a
   group or joining as someone new. The name stays editable. The group opens on
   its group screen.
-- The groups list shows  in place of a title. Join with a link
-  opens a link field in 's , directly under its row;
-  Open checks
-  that it is an invite link (`parseInviteLink`) before opening the join screen
+- The groups list shows `BrandMark` in place of a title. Join with a link
+  opens a link field in `ScreenHeader`'s `underRow`, directly under its row;
+  Open checks that it is an invite link (`parseInviteLink`) before opening the join screen
   with it. Invite recipients preview the group and choose an existing name,
   even when it is already taken on another device, or type their own in the
   last row as a new member. Invite links for a group already joined on this
