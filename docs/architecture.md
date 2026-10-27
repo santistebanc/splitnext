@@ -81,7 +81,7 @@ the direction. With `sheet`, a new expense instead rises over a still copy of
 the group screen kept under a shade in an underlay, and falls away over the
 returning screen, without flying parts. The screen container never scrolls,
 so focusing a field that is still sliding in cannot jump it into view. Keys pair a group's name in the list with its title, your
-balance with your row, a person's row with their page, an expense row's title
+balance with your row, a person's row with their page, an expense row's title (in the list or a person's breakdown)
 and amount with the editor's, Settle
 up, New group, and Activity with their titles. `Reveal` opens content in place,
 growing it down from nothing and shrinking it away before it unmounts. Both

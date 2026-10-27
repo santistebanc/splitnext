@@ -229,11 +229,11 @@ export function PersonDetails(props: { app: MemberListApp }) {
                   else void open.call('showSettlement', { settlementId: row.id });
                 }}
               >
-                <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-                  <Text numberOfLines={1} style={s.name}>{title}</Text>
-                  <Text numberOfLines={1} style={s.rowCaption}>{row.detail}</Text>
+                <View style={{ flex: 1, minWidth: 0, gap: 4, alignItems: 'flex-start' }}>
+                  <Text ref={morph(row.kind === 'expense' ? `etitle-${row.id}` : null)} numberOfLines={1} style={[s.name, { maxWidth: '100%' }]}>{title}</Text>
+                  <Text numberOfLines={1} style={[s.rowCaption, { maxWidth: '100%' }]}>{row.detail}</Text>
                 </View>
-                <Text style={[s.amount, { color: balanceColor(row.amount) }]}>{signedFigure(row.amount, group.currency)}</Text>
+                <Text ref={morph(row.kind === 'expense' ? `eamt-${row.id}` : null)} style={[s.amount, { color: balanceColor(row.amount) }]}>{signedFigure(row.amount, group.currency)}</Text>
               </ListRow>
             );
           })}
