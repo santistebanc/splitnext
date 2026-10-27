@@ -71,17 +71,9 @@ export async function addMember(page: Page, name: string): Promise<void> {
   await expect(field(page, 'Add a person')).toHaveValue('');
 }
 
-/** Chooses a currency from the currency drawer by searching for its code. */
-export async function chooseCurrency(page: Page, currency: string): Promise<void> {
-  await button(page, /^Currency: .*\. Change currency$/).click();
-  await field(page, 'Search currencies').fill(currency);
-  await page.getByRole('radio', { name: new RegExp(`^${escaped(currency)}, `) }).click();
-}
-
-export async function addExpense(page: Page, description: string, amount: string, currency: string, payer?: string): Promise<void> {
+export async function addExpense(page: Page, description: string, amount: string, payer?: string): Promise<void> {
   await button(page, 'Add expense').click();
   await field(page, 'Amount').fill(amount);
-  await chooseCurrency(page, currency);
 
   if (payer) {
     await button(page, /^Paid by .*Change payer$/).click();

@@ -46,7 +46,7 @@ export function reviewTitle(notice: Notice): string {
     case 'member.restore':
       return `Restoring ${subject(notice)}`;
     case 'settlement.record':
-      return `Your repayment of ${formatAmount(command.payload.amount, command.payload.currency)} ${command.payload.currency}`;
+      return `Your repayment of ${formatAmount(command.payload.amount, command.payload.currency)}`;
     case 'settlement.edit':
       return 'Your change to a repayment';
     case 'settlement.remove':
@@ -77,10 +77,10 @@ function currentResult(notice: Notice): string | null {
   if (current?.kind === 'expense')
     return current.expense.status === 'removed'
       ? 'removed'
-      : `${formatAmount(current.expense.total, current.expense.currency)} ${current.expense.currency}, split between ${current.expense.parts.length}`;
+      : `${formatAmount(current.expense.total, current.expense.currency)}, split between ${current.expense.parts.length}`;
 
   if (current?.kind === 'settlement')
-    return current.settlement.status === 'removed' ? 'removed' : `${formatAmount(current.settlement.amount, current.settlement.currency)} ${current.settlement.currency}`;
+    return current.settlement.status === 'removed' ? 'removed' : formatAmount(current.settlement.amount, current.settlement.currency);
 
   if (current?.kind === 'member')
     return current.member.status === 'active' ? `called “${current.member.display_name}”` : 'removed';

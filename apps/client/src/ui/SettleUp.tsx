@@ -1,8 +1,8 @@
 import { Pressable, Text, View } from 'react-native';
 import { formatAmount, memberSettlements, preferredMember, repaymentMembers, settlementSuggestions } from '@splitnext/client';
-import { memberName, moneyLabel } from '../model/expenses';
+import { memberName, moneyLabel, noCurrency } from '../model/expenses';
 import { BackHeader } from './BackHeader';
-import { Button, ErrorMessage, Pill, SectionHeading, colors, s } from './components';
+import { Button, ErrorMessage, Pill, colors, s } from './components';
 import { useRepaymentForm } from './ExpenseList';
 import { ArrowRightIcon, CheckIcon } from './icons';
 import type { MemberListApp } from './MemberList';
@@ -19,7 +19,7 @@ export function SettleUpHeader(props: { app: MemberListApp }) {
 }
 
 /**
- * The payments in the group's settle-up plan, per currency: all of them, or
+ * The payments in the group's settle-up plan: all of them, or
  * those involving one person. Each opens the repayment form filled in; the amount stays
  * editable for a partial payment.
  */
@@ -54,7 +54,6 @@ export function SettleUp(props: { app: MemberListApp }) {
 
       {currencies.map((currency) => (
         <View key={currency}>
-          <SectionHeading title={currency} />
           <View style={{ gap: 8 }}>
             {payments.filter((entry) => entry.currency === currency).map((entry) => {
               const from = label(entry.from_member_id);
@@ -91,7 +90,7 @@ export function SettleUp(props: { app: MemberListApp }) {
           onPress={() => {
             const owes = payments.find((entry) => entry.from_member_id === from || entry.to_member_id === from);
 
-            repayment.open({ from, to: owes ? (owes.from_member_id === from ? owes.to_member_id : owes.from_member_id) : other, amount: '', currency: owes?.currency ?? currencies[0] ?? 'EUR', manual: true });
+            repayment.open({ from, to: owes ? (owes.from_member_id === from ? owes.to_member_id : owes.from_member_id) : other, amount: '', currency: owes?.currency ?? currencies[0] ?? noCurrency, manual: true });
           }}
         >
           Record a different payment

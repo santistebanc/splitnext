@@ -7,3 +7,5 @@ netting or converted total, preserving original amounts and allowing offline
 work without an exchange-rate dependency. Allocation precision and accumulated
 rounding burden belong to each currency, and repayments reduce only balances
 in the settlement's currency.
+
+_Superseded for display and entry by [ADR 0025](./0025-deal-in-plain-numbers-without-currency.md): the app records XXX and shows no currency._

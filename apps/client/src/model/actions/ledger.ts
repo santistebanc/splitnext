@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { undoProblem, undoExplanation, memberHasRecords, repaymentMembers, allocate, currencyCodeSchema, expenseDescriptionSchema, groupNameSchema, memberLabel, memberNameSchema, nameOrdinals, parseAmount, requiresServerDecision } from '@splitnext/client';
-import { balanceRows, entryFromDraft, equalParts } from '../expenses';
+import { balanceRows, entryFromDraft, equalParts, noCurrency } from '../expenses';
 import { requireSettlement, unavailable, editorLock, defineAction, openSnapshot, requireExpense, requireExpenseEntry, expenseResource, requireMember, requireRemovedMember, requireNotice, requireName, memberResource, noticeResources, empty, choice, suggested } from './define';
 
 /** Changes to the shared ledger; they can queue offline. */
@@ -48,17 +48,17 @@ export const ledgerActions = {
   }),
   recordSettlement: defineAction({
     group: 'Ledger changes', description: 'Record money already repaid outside Splitnext.',
-    input: z.object({ from: choice('repaymentMember', 'Who paid.'), to: choice('repaymentMember', 'Who received it.'), amount: z.string(), currency: suggested(currencyCodeSchema, 'currency', 'The repayment currency.') }),
-    example: { from: 'member-1', to: 'member-2', amount: '10.00', currency: 'EUR' }, requires: ['openGroup'],
+    input: z.object({ from: choice('repaymentMember', 'Who paid.'), to: choice('repaymentMember', 'Who received it.'), amount: z.string() }),
+    example: { from: 'member-1', to: 'member-2', amount: '10.00' }, requires: ['openGroup'],
     unavailable: ({ state }, input) => {
       if (!input) return repaymentMembers(openSnapshot(state)).length > 1 ? null : unavailable('member_not_found', 'Add another member first.');
       const members = repaymentMembers(openSnapshot(state));
 
-      return input.from !== input.to && members.some((member) => member.id === input.from) && members.some((member) => member.id === input.to) && (parseAmount(input.amount, input.currency) ?? 0) > 0
+      return input.from !== input.to && members.some((member) => member.id === input.from) && members.some((member) => member.id === input.to) && (parseAmount(input.amount, noCurrency) ?? 0) > 0
         ? null : unavailable('invalid_input', 'Choose two different members and a positive amount.');
     },
     run: async (host, input) => {
-      await host.submit({ type: 'settlement.record', payload: { from_member_id: input.from, to_member_id: input.to, currency: input.currency, amount: parseAmount(input.amount, input.currency) ?? 0 } });
+      await host.submit({ type: 'settlement.record', payload: { from_member_id: input.from, to_member_id: input.to, currency: noCurrency, amount: parseAmount(input.amount, noCurrency) ?? 0 } });
     },
   }),
   saveMemberEdit: defineAction({
@@ -256,10 +256,9 @@ export const ledgerActions = {
     input: z.object({
       description: expenseDescriptionSchema.meta({ description: 'What the expense was for.' }),
       amount: z.string().meta({ description: 'The amount paid, such as 12.50.' }),
-      currency: suggested(currencyCodeSchema, 'currency', 'The ISO currency code, such as EUR.'),
       paidBy: choice('member', 'The member who paid.'),
     }),
-    example: { description: 'Dinner', amount: '42.50', currency: 'EUR', paidBy: 'member-1' },
+    example: { description: 'Dinner', amount: '42.50', paidBy: 'member-1' },
     requires: ['openGroup'],
     unavailable: ({ state }, input) => requireExpenseEntry(input) ?? requireMember(state, input?.paidBy),
     run: (host, input) =>
@@ -267,8 +266,8 @@ export const ledgerActions = {
         type: 'expense.record',
         payload: {
           description: input.description,
-          currency: input.currency,
-          total: parseAmount(input.amount, input.currency) ?? 0,
+          currency: noCurrency,
+          total: parseAmount(input.amount, noCurrency) ?? 0,
           paid_by: input.paidBy,
           parts: equalParts(openSnapshot(host.snapshot())),
         },
@@ -282,10 +281,9 @@ export const ledgerActions = {
       expenseId: choice('expense', 'The expense to change.'),
       description: expenseDescriptionSchema.meta({ description: 'What the expense was for.' }),
       amount: z.string().meta({ description: 'The amount paid, such as 12.50.' }),
-      currency: suggested(currencyCodeSchema, 'currency', 'The ISO currency code, such as EUR.'),
       paidBy: choice('member', 'The member who paid.'),
     }),
-    example: { expenseId: 'expense-1', description: 'Dinner', amount: '45.00', currency: 'EUR', paidBy: 'member-1' },
+    example: { expenseId: 'expense-1', description: 'Dinner', amount: '45.00', paidBy: 'member-1' },
     requires: ['openGroup'],
     unavailable: ({ state }, input) => {
       const blocked = requireExpense(state, input?.expenseId, 'active') ?? requireExpenseEntry(input) ?? requireMember(state, input?.paidBy);
@@ -293,7 +291,7 @@ export const ledgerActions = {
 
       if (blocked || !input || !expense) return blocked;
 
-      return allocate(parseAmount(input.amount, input.currency) ?? 0, expense.parts).ok
+      return allocate(parseAmount(input.amount, expense.currency) ?? 0, expense.parts).ok
         ? null
         : unavailable('invalid_input', 'The new amount does not fit how this expense is split.');
     },
@@ -308,8 +306,8 @@ export const ledgerActions = {
           expense_id: expense.id,
           expected_version: expense.version,
           description: input.description,
-          currency: input.currency,
-          total: parseAmount(input.amount, input.currency) ?? 0,
+          currency: expense.currency,
+          total: parseAmount(input.amount, expense.currency) ?? 0,
           paid_by: input.paidBy,
           parts: expense.parts,
         },

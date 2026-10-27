@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { parseAmount, preferredMember, repaymentMembers, settlementSuggestions, type ClientReplicaState } from '@splitnext/client';
-import { memberName, moneyLabel, recentCurrencies } from '../model/expenses';
+import { memberName, moneyLabel } from '../model/expenses';
 import { ErrorMessage, HeaderAction, RadioRow, ScreenHeader, SectionHeading, colors, s } from './components';
 import { RepaymentRow } from './ExpenseList';
-import { CurrencyPicker } from './CurrencyPicker';
 import { Drawer } from './Drawer';
 import { ChevronDownIcon } from './icons';
 import { displayFamily, radius } from './theme';
@@ -101,7 +100,7 @@ export function SettlementsPanel(props: { replica: ClientReplicaState }) {
     void action.call('prepareRepayment', { from, to, amount: draft.amount, currency: draft.currency, keepEditing: Boolean(draft.settlementId), manual: true });
   };
 
-  const change = (field: 'repayment.amount' | 'repayment.currency', value: string) => {
+  const change = (field: 'repayment.amount', value: string) => {
     void actions.dispatch('changeDraft', { field, value }, { origin: 'ui' });
   };
 
@@ -146,7 +145,6 @@ export function SettlementsPanel(props: { replica: ClientReplicaState }) {
             onChangeText={(value) => change('repayment.amount', value)}
             style={s.amountInput}
           />
-          <CurrencyPicker value={draft.currency} recent={recentCurrencies(snapshot)} onChange={(value) => change('repayment.currency', value)} />
         </View>
         <Text style={s.caption}>
           {owed

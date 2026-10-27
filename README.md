@@ -21,11 +21,11 @@ How it fits together, and the rules each part keeps, is in
   Regeneration invalidates the previous link.
 - Offline-capable group rename and member add, rename, remove, and restore
   commands.
-- Offline-capable expense record, edit, remove, and restore commands, in any
-  currency, with allocations and burden-fair rounding fixed by the server and
-  balances kept per currency.
-- Explicit repayments with a settle-up plan of the fewest payments per
-  currency, partial or excess amounts, offline recording and versioned
+- Offline-capable expense record, edit, remove, and restore commands, as
+  plain numbers without currency, with allocations and burden-fair rounding
+  fixed by the server.
+- Explicit repayments with a settle-up plan of the fewest payments,
+  partial or excess amounts, offline recording and versioned
   edit/remove/restore commands.
 - Cached, attributed Activity and safe compensating undo, including reversing a
   reversal while preserving immutable history and later changes.
@@ -49,7 +49,7 @@ How it fits together, and the rules each part keeps, is in
   pages rendered by the same Cloudflare Worker: single-screen group creation,
   member management, invitation sharing, joining and rejoining, group
   switching, expense entry and editing with per-person share controls and fixed
-  amounts mixed with weighted shares, per-currency balances, and offline command and conflict feedback. Its
+  amounts mixed with weighted shares, balances, and offline command and conflict feedback. Its
   screens are
   described in [docs/architecture.md](./docs/architecture.md#the-web-app) and
   specified in [docs/product-spec.md](./docs/product-spec.md).
@@ -63,8 +63,10 @@ How it fits together, and the rules each part keeps, is in
   Bricolage Grotesque fonts. The original blue split-S mark appears on the
   groups list and the join screen. Theme assets are precached with the app shell
   for offline reloads; changing a theme asset invalidates that cache.
-- Groups have no currency setting. Expenses record their own currency, and repayments do, with separate balances per currency; see
-  [ADR 0014](./docs/adr/0014-record-currency-per-expense.md).
+- Amounts are plain numbers with two decimals, never shown with a currency.
+  Expenses and repayments record the no-currency code XXX, and the ledger keeps
+  any older real-currency records separate; see
+  [ADR 0025](./docs/adr/0025-deal-in-plain-numbers-without-currency.md).
 - Expenses use the pure, property-tested money module, `src/domain/money.ts`:
   whole minor units per currency, allocation by
   exact amounts and shares, rounding extras that rotate by accumulated burden,
@@ -185,4 +187,4 @@ state. See [docs/architecture.md](./docs/architecture.md#diagnostics).
 - [Architecture decisions](./docs/adr/)
 - [Agent working agreement](./AGENTS.md)
 
-The groups list shows your separate currency balances. Settle up suggests net transfers and records partial or excess repayments, including offline. Repayments represent money paid outside the app.
+The groups list shows your balance. Settle up suggests net transfers and records partial or excess repayments, including offline. Repayments represent money paid outside the app.

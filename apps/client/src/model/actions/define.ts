@@ -1,6 +1,7 @@
 import type { ActionExecutions, PendingExecution } from '../executions';
 import { z } from 'zod';
-import { activeMembers, currencyCodeSchema, expenseDescriptionSchema, parseAmount, type JsonValue } from '@splitnext/client';
+import { activeMembers, expenseDescriptionSchema, parseAmount, type JsonValue } from '@splitnext/client';
+import { noCurrency } from '../expenses';
 import type { ActionInvocation, AppController, AppState } from '../controller';
 import type { AppUiState, SeenStorage, UiState } from '../uiState';
 import type { ValueSource } from '../actionInputs';
@@ -45,8 +46,6 @@ export type ActionPlatform = {
   copyText?: (text: string) => Promise<void>;
   shareLink?: (link: string, title: string) => Promise<void>;
   openHomepage?: () => void;
-  /** The region the device's locale names, such as US, for currency suggestions. */
-  localeRegion?: string | null;
   /** The dispatcher's diagnostics report; see DiagnosticsLog. */
   diagnosticsReport?: () => string;
 };
@@ -412,14 +411,12 @@ export function requireExpense(
 }
 
 /** What a person entered for an expense, checked before it becomes a command. */
-export function requireExpenseEntry(input?: { description: string; amount: string; currency: string }): BlockedAction | null {
+export function requireExpenseEntry(input?: { description: string; amount: string }): BlockedAction | null {
   if (!input) return null;
 
   return (
     requireName(expenseDescriptionSchema, input.description, 'description') ??
-    (currencyCodeSchema.safeParse(input.currency).success && parseAmount(input.amount, input.currency)
-      ? null
-      : unavailable('invalid_input', 'Enter an amount and a currency, such as 12.50 EUR.'))
+    (parseAmount(input.amount, noCurrency) ? null : unavailable('invalid_input', 'Enter an amount, such as 12.50.'))
   );
 }
 
