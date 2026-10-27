@@ -210,23 +210,18 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
                       </Text>
                       {entry.detail ? <Text style={{ fontFamily: monoFamily, fontSize: 13, fontWeight: '500', color: colors.muted }}>{entry.detail}</Text> : null}
                     </View>
-                    <View style={{ alignItems: 'flex-end', gap: 6, paddingTop: 2 }}>
+                    {/* The time, then whether it is new, then Undo or Restore, in one column at the end. */}
+                    <View style={{ alignItems: 'flex-end', gap: 8, paddingTop: 2 }}>
                       <Text style={{ fontFamily, fontSize: 12, color: colors.muted }}>{timeLabel(new Date(event.occurred_at))}</Text>
                       {isNew ? <Tag tone="warning">new</Tag> : null}
+                      {reversible && !problem ? (
+                        <EntryAction icon text="Undo" label={`Undo: ${label}`} disabled={!action.can('undoChange', { eventId: event.id })} onPress={() => { void action.call('undoChange', { eventId: event.id }); }} />
+                      ) : null}
+                      {restorable && change === 'expense.removed' ? <EntryAction icon text="Restore" label="Restore expense" disabled={!action.can('restoreExpense', { expenseId: event.target.id })} onPress={() => { void action.call('restoreExpense', { expenseId: event.target.id }); }} /> : null}
+                      {restorable && change === 'settlement.removed' ? <EntryAction icon text="Restore" label="Restore repayment" disabled={!action.can('restoreSettlement', { settlementId: event.target.id })} onPress={() => { void action.call('restoreSettlement', { settlementId: event.target.id }); }} /> : null}
+                      {restorable && change === 'member.removed' ? <EntryAction icon text="Restore" label="Restore member" disabled={!action.can('restoreMember', { memberId: event.target.id })} onPress={() => { void action.call('restoreMember', { memberId: event.target.id }); }} /> : null}
                     </View>
                   </View>
-                  {reversible && !problem ? (
-                    <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-                      <EntryAction icon text="Undo" label={`Undo: ${label}`} disabled={!action.can('undoChange', { eventId: event.id })} onPress={() => { void action.call('undoChange', { eventId: event.id }); }} />
-                    </View>
-                  ) : null}
-                  {restorable ? (
-                    <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-                      {change === 'expense.removed' ? <EntryAction icon text="Restore" label="Restore expense" disabled={!action.can('restoreExpense', { expenseId: event.target.id })} onPress={() => { void action.call('restoreExpense', { expenseId: event.target.id }); }} /> : null}
-                      {change === 'settlement.removed' ? <EntryAction icon text="Restore" label="Restore repayment" disabled={!action.can('restoreSettlement', { settlementId: event.target.id })} onPress={() => { void action.call('restoreSettlement', { settlementId: event.target.id }); }} /> : null}
-                      {change === 'member.removed' ? <EntryAction icon text="Restore" label="Restore member" disabled={!action.can('restoreMember', { memberId: event.target.id })} onPress={() => { void action.call('restoreMember', { memberId: event.target.id }); }} /> : null}
-                    </View>
-                  ) : null}
                   {/* A later change simply leaves no Undo; only other reasons are explained. */}
                   {problem && problem !== 'undo_changed' ? <Notice tone="info" icon={<InfoIcon color={colors.soft} />} message={undoExplanation(problem)} /> : null}
                   </View>
