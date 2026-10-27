@@ -4,7 +4,7 @@ import { currencyOptions } from '../model/currency';
 import { s } from './components';
 import { Drawer } from './Drawer';
 import { CheckIcon, ChevronDownIcon, SearchIcon } from './icons';
-import { colors, fontFamily, monoFamily } from './theme';
+import { colors, fontFamily, monoFamily, radius } from './theme';
 
 /** The currency beside an amount: a grey pill that opens the currencies to choose from. */
 export function CurrencyPicker(props: { value: string; recent: string[]; onChange: (currency: string) => void; height?: number }) {
@@ -16,7 +16,7 @@ export function CurrencyPicker(props: { value: string; recent: string[]; onChang
         accessibilityRole="button"
         accessibilityLabel={`Currency: ${props.value || 'none'}. Change currency`}
         onPress={() => setOpen(true)}
-        style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 6, height: props.height ?? 44, paddingHorizontal: 12, borderRadius: 10, backgroundColor: colors.track }, pressed && s.dim]}
+        style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 6, height: props.height ?? 44, paddingHorizontal: 12, borderRadius: radius.small, backgroundColor: colors.track }, pressed && s.pressed]}
       >
         <Text style={{ minWidth: 36, fontFamily: monoFamily, fontSize: 16, fontWeight: '600', color: colors.ink }}>{props.value}</Text>
         <ChevronDownIcon size={14} color={colors.ink} strokeWidth={2.2} />
@@ -58,7 +58,7 @@ function CurrencyDrawer(props: { value: string; recent: string[]; onClose: () =>
           onSubmitEditing={() => {
             if (options[0]) props.onChoose(options[0].code);
           }}
-          style={{ height: 48, paddingLeft: 42, paddingRight: 14, borderRadius: 12, backgroundColor: colors.background, fontFamily, fontSize: 16, color: colors.ink }}
+          style={{ height: 48, paddingLeft: 42, paddingRight: 14, borderRadius: radius.control, backgroundColor: colors.background, fontFamily, fontSize: 16, color: colors.ink }}
         />
         <View pointerEvents="none" style={{ position: 'absolute', left: 14, top: 15 }}>
           <SearchIcon color={colors.muted} />
@@ -77,7 +77,7 @@ function CurrencyDrawer(props: { value: string; recent: string[]; onClose: () =>
                 accessibilityState={{ checked: selected }}
                 aria-checked={selected}
                 onPress={() => props.onChoose(option.code)}
-                style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48, paddingHorizontal: 4 }, index > 0 && s.ruled, pressed && s.dim]}
+                style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48, paddingHorizontal: 4 }, index > 0 && s.ruled, pressed && s.rowPressed]}
               >
                 <Text style={{ width: 44, fontFamily: monoFamily, fontSize: 15, fontWeight: '600', color: selected ? colors.action : colors.ink }}>{option.code}</Text>
                 <Text numberOfLines={1} style={{ flex: 1, fontFamily, fontSize: 15, color: selected ? colors.action : colors.soft }}>{option.name}</Text>

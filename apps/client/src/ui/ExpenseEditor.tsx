@@ -10,7 +10,7 @@ import { Drawer } from './Drawer';
 import { between, useCompactProgress } from './pageScroll';
 import { CheckIcon, ChevronUpIcon, ChevronDownIcon } from './icons';
 import { YouBadge } from './YouBadge';
-import { fontFamily, monoFamily } from './theme';
+import { fontFamily, monoFamily, radius } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 export type ExpenseEditorApp = Pick<AppController, 'snapshot'>;
@@ -76,7 +76,7 @@ function ShareArrow(props: { up: boolean; label: string; disabled: boolean; onPr
       accessibilityState={{ disabled: props.disabled }}
       disabled={props.disabled}
       onPress={props.onPress}
-      style={({ pressed }) => [{ width: 44, height: 44, flexShrink: 0, alignItems: 'center', justifyContent: 'center' }, (pressed || props.disabled) && s.dim]}
+      style={({ pressed }) => [{ width: 44, height: 44, flexShrink: 0, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, props.disabled && s.dim]}
     >
       <View style={[s.checkbox, splitControlFill]}>
         <Icon size={16} color={colors.action} />
@@ -133,7 +133,7 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
                     accessibilityState={{ disabled: !canFix }}
                     disabled={!canFix}
                     onPress={() => { void edit.call('setExpenseFixedAmount', fixing, () => setEditing(true)); }}
-                    style={({ pressed }) => [{ minHeight: 44, justifyContent: 'center' }, pressed && s.dim]}
+                    style={({ pressed }) => [{ minHeight: 44, justifyContent: 'center' }, pressed && s.pressed]}
                   >
                     <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ textAlign: 'right', fontFamily: monoFamily, fontSize: 14, lineHeight: 20, fontWeight: '600', color: fixed ? colors.action : colors.muted }}>
                       {`${currencySymbol(props.currency)} ${shown}`}
@@ -153,7 +153,7 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
               aria-checked={included}
               disabled={!edit.can('toggleExpenseParticipant', member)}
               onPress={() => { void edit.call('toggleExpenseParticipant', member); }}
-              style={({ pressed }) => [{ width: 44, height: 44, flexShrink: 0, alignItems: 'center', justifyContent: 'center' }, (pressed || !edit.can('toggleExpenseParticipant', member)) && s.dim]}
+              style={({ pressed }) => [{ width: 44, height: 44, flexShrink: 0, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !edit.can('toggleExpenseParticipant', member) && s.dim]}
             >
               <View style={[s.checkbox, included && splitControlFill]}>
                 {included ? <CheckIcon size={16} color={colors.action} strokeWidth={2.2} /> : null}
@@ -239,7 +239,7 @@ export function ExpenseControls(props: ExpenseEditorProps) {
             accessibilityLabel={`Paid by ${draft.paidBy ? `${memberName(snapshot, draft.paidBy)}${draft.paidBy === you ? ' (you)' : ''}` : 'nobody yet'}. Change payer`}
             accessibilityState={{ expanded: choosingPayer }}
             onPress={() => setChoosingPayer(!choosingPayer)}
-            style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 4, height: between(36, 30, progress), paddingHorizontal: 8, borderRadius: 10 }, choosingPayer && { backgroundColor: colors.track }, pressed && s.dim]}
+            style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 4, height: between(36, 30, progress), paddingHorizontal: 8, borderRadius: radius.small }, choosingPayer && { backgroundColor: colors.track }, pressed && s.pressed]}
           >
             <Text style={{ fontFamily, fontSize: between(16, 14, progress), fontWeight: '600', color: colors.ink }}>
               {draft.paidBy ? (draft.paidBy === you ? 'you' : memberName(snapshot, draft.paidBy)) : 'Choose'}
@@ -295,7 +295,7 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
 
   return (
     <View style={{ gap: 12, paddingHorizontal: 4, paddingBottom: 24 }}>
-      <View style={{ borderRadius: 16, backgroundColor: colors.surface, overflow: 'hidden' }}>
+      <View style={{ borderRadius: radius.card, backgroundColor: colors.surface, overflow: 'hidden' }}>
         {members.map((member, index) => (
           <ExpenseSplitRow key={member.id} memberId={member.id} name={memberName(snapshot, member.id)} you={member.id === you} part={draft.parts.find((part) => part.member_id === member.id)} owed={preview.get(member.id)} currency={draft.currency} first={index === 0} hasAmount={hasAmount} />
         ))}

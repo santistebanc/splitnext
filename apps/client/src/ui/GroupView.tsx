@@ -7,7 +7,7 @@ import { CompactProgressContext } from './pageScroll';
 import { ExpenseList } from './ExpenseList';
 import { BellIcon, ChevronDownIcon, SettingsIcon } from './icons';
 import type { MemberListApp } from './MemberList';
-import { fontFamily } from './theme';
+import { fontFamily, radius } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 type GroupViewProps = { app: MemberListApp };
@@ -30,11 +30,11 @@ function ActivityBell(props: { app: MemberListApp }) {
       accessibilityLabel={label}
       disabled={!open.can('showActivity')}
       onPress={() => { void open.call('showActivity', {}); }}
-      style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, (pressed || !open.can('showActivity')) && s.dim]}
+      style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !open.can('showActivity') && s.dim]}
     >
       <BellIcon />
       {count ? (
-        <View aria-hidden style={{ position: 'absolute', top: 4, right: 2, minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: 999, borderWidth: 2, borderColor: colors.background, backgroundColor: colors.alert, alignItems: 'center', justifyContent: 'center' }}>
+        <View aria-hidden style={{ position: 'absolute', top: 4, right: 2, minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: radius.pill, borderWidth: 2, borderColor: colors.background, backgroundColor: colors.alert, alignItems: 'center', justifyContent: 'center' }}>
           <Text testID="activity-count" style={{ fontFamily, fontSize: 11, fontWeight: '700', color: colors.actionInk }}>{count}</Text>
         </View>
       ) : null}
@@ -71,7 +71,7 @@ export function GroupHeader(props: { app: MemberListApp; onLayout?: (height: num
             accessibilityState={{ disabled: !canLeave }}
             disabled={!canLeave}
             onPress={() => { void actions.dispatch('showGroups', {}, { origin: 'ui' }); }}
-            style={({ pressed }) => [{ alignSelf: 'flex-start', maxWidth: '100%', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4 }, (pressed || !canLeave) && s.dim]}
+            style={({ pressed }) => [{ alignSelf: 'flex-start', maxWidth: '100%', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4 }, pressed && s.pressed, !canLeave && s.dim]}
           >
             <Text accessibilityRole="header" numberOfLines={1} style={[s.screenTitle, { flexShrink: 1 }]}>{name}</Text>
             <ChevronDownIcon size={20} color={colors.muted} />
@@ -86,7 +86,7 @@ export function GroupHeader(props: { app: MemberListApp; onLayout?: (height: num
               accessibilityState={{ disabled: !settings.can('showSettings') }}
               disabled={!settings.can('showSettings')}
               onPress={() => { void settings.call('showSettings', {}); }}
-              style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, (pressed || !settings.can('showSettings')) && s.dim]}
+              style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !settings.can('showSettings') && s.dim]}
             >
               <SettingsIcon />
             </Pressable>

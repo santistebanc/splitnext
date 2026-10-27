@@ -25,7 +25,7 @@ export function Drawer(props: { title: string; onClose: () => void; full?: boole
               accessibilityRole="button"
               accessibilityLabel="Close"
               onPress={props.onClose}
-              style={({ pressed }) => [s.drawerClose, pressed && s.dim]}
+              style={({ pressed }) => [s.drawerClose, pressed && s.pressed]}
             >
               <CloseIcon size={18} />
             </Pressable>

@@ -32,7 +32,7 @@ export function SyncStatus(props: { online: boolean; reachable: boolean; pending
         accessibilityLiveRegion="polite"
         accessibilityState={{ expanded }}
         onPress={() => setExpanded(true)}
-        style={({ pressed }) => [{ minHeight: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 4, backgroundColor: colors.track }, pressed && s.dim]}
+        style={({ pressed }) => [{ minHeight: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 4, backgroundColor: colors.track }, pressed && s.pressed]}
       >
         <WifiIcon off size={14} color={colors.soft} strokeWidth={2} />
         <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily, fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.soft }}>{label}</Text>

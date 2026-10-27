@@ -18,7 +18,8 @@ export const colors = {
   /** The one main action on a page, and links. */
   action: '#1b5fc1',
   actionInk: '#ffffff',
-  actionText: '#1b5fc1',
+  /** Quieter text on an action-blue surface. */
+  actionInkSoft: '#d6e6ff',
   actionDark: '#134a99',
   actionSoft: '#e6effc',
   /** A main action that is working and cannot be pressed again. */
@@ -63,6 +64,18 @@ export const colors = {
   night: '#10161d',
   nightOwed: '#8ec1ff',
 };
+
+/**
+ * Corner radii: small controls inside rows, fields and buttons, cards and
+ * tiles, sheets and dialogs, and fully rounded pills.
+ */
+export const radius = { small: 10, control: 12, card: 16, sheet: 24, pill: 999 } as const;
+
+/** Shadows: raised for a control lifted off its track, floating for anything over the page. */
+export const shadows = {
+  raised: '0 1px 3px rgba(16, 22, 29, 0.15)',
+  floating: '0 6px 18px rgba(16, 22, 29, 0.18)',
+} as const;
 
 /** Body text, labels, and controls. */
 export const fontFamily = 'IBM Plex Sans';

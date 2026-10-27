@@ -14,7 +14,7 @@ import {
 import { formatAmount } from '@splitnext/client';
 import { between, useCompactProgress } from './pageScroll';
 import { AlertIcon, BackIcon, WarningIcon } from './icons';
-import { colors, displayFamily, fontFamily, monoFamily } from './theme';
+import { colors, displayFamily, fontFamily, monoFamily, radius, shadows } from './theme';
 
 export { colors } from './theme';
 
@@ -35,6 +35,8 @@ type ButtonProps = {
   label?: string;
   grow?: boolean;
   icon?: ReactNode;
+  /** For a button that shows or hides more below it. */
+  expanded?: boolean;
 };
 
 export function Button(props: ButtonProps) {
@@ -44,7 +46,7 @@ export function Button(props: ButtonProps) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={props.label}
-      accessibilityState={{ disabled: Boolean(props.disabled) }}
+      accessibilityState={{ disabled: Boolean(props.disabled), ...(props.expanded !== undefined && { expanded: props.expanded }) }}
       disabled={props.disabled}
       onPress={props.onPress}
       style={({ pressed }) => [
@@ -172,10 +174,10 @@ export function RadioRow(props: { label: string; selected: boolean; onPress: () 
 }
 
 /** A section's title, such as Balances or a currency, with an optional action at its end. */
-export function SectionHeading(props: { title: string; end?: ReactNode; onPress?: (() => void) | undefined }) {
+export function SectionHeading(props: { title: string; end?: ReactNode; onPress?: (() => void) | undefined; color?: string }) {
   return (
     <View style={s.sectionHeading}>
-      <Text accessibilityRole="header" onPress={props.onPress} style={s.sectionTitle}>{props.title}</Text>
+      <Text accessibilityRole="header" onPress={props.onPress} style={[s.sectionTitle, props.color !== undefined && { color: props.color }]}>{props.title}</Text>
       {props.end}
     </View>
   );
@@ -253,7 +255,7 @@ export function BackButton(props: HeaderActionProps) {
       accessibilityState={{ disabled: Boolean(props.disabled) }}
       disabled={props.disabled}
       onPress={props.onPress}
-      style={({ pressed }) => [s.navIcon, (pressed || props.disabled) && s.dim]}
+      style={({ pressed }) => [s.navIcon, pressed && s.pressed, props.disabled && s.dim]}
     >
       <BackIcon />
     </Pressable>
@@ -297,7 +299,7 @@ export function EmptyState(props: { icon: ReactNode; title: string; text?: strin
  * The screen's main action at the foot of the screen: a large blue button,
  * a greyed one with a spinner while it works.
  */
-export function FooterButton(props: { children: ReactNode; onPress: () => void; disabled?: boolean; busy?: boolean; label?: string; icon?: ReactNode; floating?: boolean }) {
+export function FooterButton(props: { children: ReactNode; onPress: () => void; disabled?: boolean; busy?: boolean; label?: string; icon?: ReactNode }) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -307,13 +309,64 @@ export function FooterButton(props: { children: ReactNode; onPress: () => void; 
       onPress={props.onPress}
       style={({ pressed }) => [
         s.footerButton,
-        props.floating && s.floatingButton,
         (props.disabled || props.busy) && s.footerButtonIdle,
         pressed && s.pressed,
       ]}
     >
       {props.busy ? <ActivityIndicator size="small" color={colors.actionInk} /> : props.icon}
       <Text style={s.footerButtonText}>{props.children}</Text>
+    </Pressable>
+  );
+}
+
+/**
+ * A rounded action, such as Invite people or Settle up: filled blue for the
+ * step to take next, soft blue otherwise. Large, it floats over the page, as
+ * Add expense does. Without onPress it only shows, as inside a pressable card.
+ */
+export function Pill(props: { text: string; label?: string; onPress?: () => void; disabled?: boolean; filled?: boolean; large?: boolean; icon?: (color: string) => ReactNode }) {
+  const ink = props.filled ? colors.actionInk : colors.action;
+  const style = [s.pill, props.icon && s.pillWithIcon, props.large && s.largePill, props.filled && s.filledPill];
+
+  const content = (
+    <>
+      {props.icon?.(ink)}
+      <Text numberOfLines={1} style={[s.pillText, props.large && s.largePillText, { color: ink }]}>{props.text}</Text>
+    </>
+  );
+
+  if (!props.onPress) return <View style={style}>{content}</View>;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={props.label}
+      accessibilityState={{ disabled: Boolean(props.disabled) }}
+      disabled={props.disabled}
+      onPress={props.onPress}
+      hitSlop={6}
+      style={({ pressed }) => [style, pressed && s.pressed, props.disabled && s.dim]}
+    >
+      {content}
+    </Pressable>
+  );
+}
+
+/**
+ * A pressable row of a card of rows, such as an expense or a person. Rows
+ * after the first are ruled; pressing tints the row.
+ */
+export function ListRow(props: { label: string; onPress: () => void; disabled?: boolean; first?: boolean; style?: StyleProp<ViewStyle>; children: ReactNode }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={props.label}
+      accessibilityState={{ disabled: Boolean(props.disabled) }}
+      disabled={props.disabled}
+      onPress={props.onPress}
+      style={({ pressed }) => [s.listRow, props.first === false && s.ruled, props.style, pressed && s.rowPressed]}
+    >
+      {props.children}
     </Pressable>
   );
 }
@@ -482,13 +535,13 @@ export const s = StyleSheet.create({
   navIcon: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: radius.control,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerAction: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 12 },
+  headerAction: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: radius.control },
   headerActionText: { color: colors.ink, fontFamily, fontSize: 15, fontWeight: '400' },
-  headerPrimary: { backgroundColor: colors.action, paddingHorizontal: 18, borderRadius: 999 },
+  headerPrimary: { backgroundColor: colors.action, paddingHorizontal: 18, borderRadius: radius.pill },
   headerPrimaryIdle: { backgroundColor: colors.actionBusy },
   headerPrimaryText: { color: colors.actionInk, fontWeight: '600' },
   emptyState: { alignItems: 'center', paddingTop: 72, paddingBottom: 24, paddingHorizontal: 24, gap: 12 },
@@ -528,7 +581,7 @@ export const s = StyleSheet.create({
     backgroundColor: colors.actionSoft,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 999,
+    borderRadius: radius.pill,
     overflow: 'hidden',
   },
   main: {
@@ -545,11 +598,14 @@ export const s = StyleSheet.create({
   sectionTitle: { flex: 1, fontFamily, fontSize: 15, fontWeight: '600', color: colors.ink },
   /** One row of a card of rows: compact, so more of the page fits on screen. */
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingVertical: 6, paddingHorizontal: 16 },
+  rowPressed: { backgroundColor: colors.background },
   /** A row's second line, smaller than a caption elsewhere. */
   rowCaption: { color: colors.muted, fontFamily, fontSize: 12, lineHeight: 16 },
   subtitle: { color: colors.muted, fontFamily, fontSize: 15, lineHeight: 22 },
   heading: viewTitle,
   body: { color: colors.ink, fontFamily, fontSize: 15, lineHeight: 22 },
+  /** An explanation at the top of a screen or dialog, quieter than body text. */
+  lead: { color: colors.soft, fontFamily, fontSize: 15, lineHeight: 22 },
   caption: { color: colors.muted, fontFamily, fontSize: 13, lineHeight: 18 },
   row: {
     flexDirection: 'row',
@@ -569,24 +625,18 @@ export const s = StyleSheet.create({
   groupCard: {
     gap: 14,
     padding: 18,
-    borderRadius: 18,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
   /** A white card holding rows separated by hairlines. */
-  listCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
+  listCard: { backgroundColor: colors.surface, borderRadius: radius.card, overflow: 'hidden' },
   ruled: rule,
   prompt: {
     padding: 16,
     backgroundColor: colors.surface,
-    borderRadius: 18,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.border,
     gap: 12,
@@ -599,7 +649,7 @@ export const s = StyleSheet.create({
     minHeight: 48,
     paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: radius.control,
     backgroundColor: colors.action,
     alignItems: 'center',
     justifyContent: 'center',
@@ -608,7 +658,7 @@ export const s = StyleSheet.create({
     minHeight: 40,
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 10,
+    borderRadius: radius.small,
   },
   growButton: { flex: 1 },
   buttonText: {
@@ -622,18 +672,24 @@ export const s = StyleSheet.create({
   inkText: { color: colors.ink },
   secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.field },
   quiet: { backgroundColor: 'transparent', paddingHorizontal: 6 },
-  quietText: { color: colors.actionText },
+  quietText: { color: colors.action },
   danger: { backgroundColor: 'transparent', paddingHorizontal: 6 },
   dangerText: { color: colors.owes },
   dark: { backgroundColor: colors.night },
   pressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
+  pill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 32, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.actionSoft },
+  pillWithIcon: { paddingLeft: 10 },
+  largePill: { gap: 8, height: 48, paddingLeft: 16, paddingRight: 20, boxShadow: shadows.floating },
+  filledPill: { backgroundColor: colors.action },
+  pillText: { fontFamily, fontSize: 14, fontWeight: '600' },
+  largePillText: { fontSize: 16 },
   dim: { opacity: 0.45 },
   busyButton: { backgroundColor: colors.actionBusy },
   chip: {
     minHeight: 44,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 999,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.field,
     backgroundColor: colors.surface,
@@ -653,7 +709,7 @@ export const s = StyleSheet.create({
   },
   segmentSelected: {
     backgroundColor: colors.surface,
-    boxShadow: '0 1px 3px rgba(16, 22, 29, 0.15)',
+    boxShadow: shadows.raised,
   },
   radioRow: {
     flexDirection: 'row',
@@ -661,13 +717,13 @@ export const s = StyleSheet.create({
     gap: 14,
     minHeight: 52,
     paddingHorizontal: 14,
-    borderRadius: 14,
+    borderRadius: radius.control,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
   radioRowSelected: { borderWidth: 2, borderColor: colors.action, paddingHorizontal: 13 },
-  radioDot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.control },
+  radioDot: { width: 20, height: 20, borderRadius: radius.small, borderWidth: 2, borderColor: colors.control },
   radioDotSelected: { borderWidth: 6, borderColor: colors.action },
   radioLabel: { flex: 1, color: colors.ink, fontFamily, fontSize: 17, fontWeight: '500' },
   field: { gap: 8 },
@@ -686,7 +742,7 @@ export const s = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.field,
-    borderRadius: 12,
+    borderRadius: radius.control,
     color: colors.ink,
     fontFamily,
     fontSize: 17,
@@ -698,7 +754,7 @@ export const s = StyleSheet.create({
     paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: colors.field,
-    borderRadius: 12,
+    borderRadius: radius.control,
     backgroundColor: colors.surface,
     color: colors.ink,
     fontFamily,
@@ -715,7 +771,7 @@ export const s = StyleSheet.create({
     height: 64,
     marginLeft: -12,
     paddingHorizontal: 12,
-    borderRadius: 12,
+    borderRadius: radius.control,
     color: colors.ink,
     fontFamily: monoFamily,
     fontSize: 44,
@@ -735,7 +791,7 @@ export const s = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 14,
-    borderRadius: 12,
+    borderRadius: radius.control,
     borderWidth: 1,
     borderColor: colors.field,
     backgroundColor: colors.surface,
@@ -756,7 +812,7 @@ export const s = StyleSheet.create({
     width: 12,
     height: 14,
     borderWidth: 1.5,
-    borderColor: colors.actionText,
+    borderColor: colors.action,
     borderRadius: 3,
   },
   copyFront: {
@@ -766,7 +822,7 @@ export const s = StyleSheet.create({
     width: 12,
     height: 14,
     borderWidth: 1.5,
-    borderColor: colors.actionText,
+    borderColor: colors.action,
     borderRadius: 3,
     backgroundColor: colors.surface,
   },
@@ -776,7 +832,7 @@ export const s = StyleSheet.create({
     gap: 10,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: 12,
+    borderRadius: radius.control,
     backgroundColor: colors.pale,
   },
   noticeWarning: { backgroundColor: colors.warning },
@@ -814,7 +870,7 @@ export const s = StyleSheet.create({
   presenceOnline: { backgroundColor: colors.online },
   presenceOffline: { borderWidth: 2, borderColor: colors.muted },
   presenceUnclaimed: { borderWidth: 2, borderStyle: 'dashed', borderColor: colors.control },
-  rowAction: { color: colors.actionText, fontFamily, fontSize: 14, fontWeight: '600' },
+  rowAction: { color: colors.action, fontFamily, fontSize: 14, fontWeight: '600' },
   skeleton: { backgroundColor: colors.track, borderRadius: 8 },
   skeletonLine: { width: '60%', height: 14 },
   skeletonShort: { width: '35%', height: 12 },
@@ -822,7 +878,7 @@ export const s = StyleSheet.create({
     backgroundColor: colors.warning,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: 14,
+    borderRadius: radius.control,
     gap: 6,
   },
   chosen: { borderWidth: 2, borderColor: colors.action },
@@ -851,15 +907,15 @@ export const s = StyleSheet.create({
   overlayCentered: { justifyContent: 'center', padding: 24 },
   drawerTitle: viewTitle,
   drawer: { maxHeight: '88%', paddingTop: 20, gap: 14 },
-  popup: { maxWidth: 440, maxHeight: '80%', borderRadius: 24, paddingBottom: 24 },
+  popup: { maxWidth: 440, maxHeight: '80%', borderRadius: radius.sheet, paddingBottom: 24 },
   drawerClose: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
   sheet: {
     width: '100%',
     maxWidth: 560,
     alignSelf: 'center',
     backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     paddingTop: 24,
     paddingHorizontal: 20,
     paddingBottom: 32,
@@ -876,14 +932,13 @@ export const s = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     minHeight: 56,
-    borderRadius: 16,
+    borderRadius: radius.card,
     backgroundColor: colors.action,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
-  floatingButton: { boxShadow: '0 6px 18px rgba(16, 22, 29, 0.18)' },
-  footerButtonIdle: { backgroundColor: colors.actionBusy, boxShadow: 'none' },
+  footerButtonIdle: { backgroundColor: colors.actionBusy },
   footerButtonText: { color: colors.actionInk, fontFamily, fontSize: 17, fontWeight: '600' },
   mobileWrap: { paddingHorizontal: 16 },
   mobileHeader: { minHeight: 56, paddingVertical: 6 },
@@ -899,5 +954,5 @@ export const s = StyleSheet.create({
     letterSpacing: -2,
     color: colors.ink,
   },
-  heroAccent: { color: colors.actionText },
+  heroAccent: { color: colors.action },
 });
