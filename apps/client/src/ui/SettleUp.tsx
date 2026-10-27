@@ -29,7 +29,7 @@ export function SettleUpHeader(props: { app: MemberListApp }) {
         morph={person ? `settle-${person}` : undefined}
         below={person ? (
           <View style={{ gap: 16, paddingTop: between(32, 12, progress) }}>
-            <Text style={{ fontFamily, fontSize: 20, lineHeight: 21, fontWeight: '600', color: colors.ink }}>{name}</Text>
+            <Text style={{ fontFamily, fontSize: 20, lineHeight: 25, fontWeight: '600', color: colors.ink }}>{name}</Text>
             <BalanceFigure amount={amount?.amount ?? 0} currency={amount?.currency ?? noCurrency} max={max} label="" size={18} bar={8} />
           </View>
         ) : undefined}

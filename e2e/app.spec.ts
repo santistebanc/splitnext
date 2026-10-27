@@ -31,6 +31,42 @@ function bell(page: Page) {
   return button(page, /^Activity[,:]/);
 }
 
+/**
+ * Text whose letters reach past the box that clips it, such as a one-line
+ * title cutting off descenders: each text's ink, from the font's own metrics,
+ * against its nearest clipping box. A line box's height does not show this.
+ */
+function clippedText(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const canvas = document.createElement('canvas').getContext('2d')!;
+    const clips = (node: Element) => getComputedStyle(node).overflow !== 'visible';
+    const found: string[] = [];
+
+    for (const element of document.querySelectorAll('body *')) {
+      const text = [...element.childNodes].flatMap((node) => (node.nodeType === Node.TEXT_NODE ? [node.textContent] : [])).join('').trim();
+      const style = getComputedStyle(element);
+      let clipper: Element | null = element;
+
+      while (clipper && !clips(clipper)) clipper = clipper.parentElement;
+
+      if (!text || style.visibility === 'hidden' || !clipper || clipper.id === 'splitnext-page' || clipper === document.body) continue;
+      canvas.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      const metrics = canvas.measureText(text);
+      const content = metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent;
+      const line = style.lineHeight === 'normal' ? content : parseFloat(style.lineHeight);
+      const box = element.getBoundingClientRect();
+      const edge = clipper.getBoundingClientRect();
+      const baseline = box.top + (line - content) / 2 + metrics.fontBoundingBoxAscent;
+      const lastBaseline = baseline + (Math.max(1, Math.round(box.height / line)) - 1) * line;
+      const cut = Math.max(edge.top - (baseline - metrics.actualBoundingBoxAscent), lastBaseline + metrics.actualBoundingBoxDescent - edge.bottom);
+
+      if (cut > 0.5) found.push(`${text} (${style.fontSize} on ${line}px) loses ${cut.toFixed(1)}px`);
+    }
+
+    return found;
+  });
+}
+
 /** Creates a group from the groups list and lands on its group screen. */
 async function createGroup(page: Page, name: string, you: string): Promise<void> {
   await page.goto('/app');
@@ -1108,6 +1144,29 @@ test('morphs between screens and leaves nothing behind', async ({ page }) => {
   expect(samples.every((sample) => sample.pages === 1)).toBe(true);
   expect(samples.at(-1)?.copies).toBe(0);
   await expect(heading(page, 'Morphing')).toBeVisible();
+});
+
+test('never cuts off the tops or tails of letters in titles and names', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 760 });
+  await createGroup(page, 'Magalyjoqh trip', 'Pippy');
+  await addMember(page, 'Jaqy Gypsy');
+  await addExpense(page, 'Groceries jqyp', '90');
+
+  const screens: [string, () => Promise<void>][] = [
+    ['group screen', async () => {}],
+    ['person', () => person(page, 'Jaqy Gypsy').click()],
+    ['settle up', () => button(page, /^Settle up/).click()],
+    ['activity', async () => { await page.goBack(); await page.goBack(); await bell(page).click(); }],
+    ['expense form', async () => { await button(page, /^Back to /).click(); await button(page, /^Change Groceries jqyp/).click(); }],
+    ['groups list', async () => { await button(page, 'Cancel').click(); await button(page, 'Back to groups').click(); }],
+    ['new group', () => button(page, 'New group').click()],
+  ];
+
+  for (const [screen, open] of screens) {
+    await open();
+    await page.waitForTimeout(300);
+    expect(await clippedText(page), screen).toEqual([]);
+  }
 });
 
 test('closes panels in place without the content returning at the end', async ({ page }) => {

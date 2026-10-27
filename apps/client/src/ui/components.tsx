@@ -251,11 +251,14 @@ export function ScreenHeader(props: { title?: string | undefined; heading?: Reac
   );
 }
 
-/** The large title's text at a scroll progress: 42px at rest, 22px compact. */
+/**
+ * The large title's text at a scroll progress: 42px at rest, 22px compact.
+ * Its line leaves room for descenders, which a one-line title would clip.
+ */
 export function titleStyle(progress: number) {
   const size = between(42, 22, progress);
 
-  return { color: colors.ink, fontFamily: displayFamily, fontSize: size, lineHeight: size * 1.05, fontWeight: '700', letterSpacing: -0.03 * size } as const;
+  return { color: colors.ink, fontFamily: displayFamily, fontSize: size, lineHeight: size * 1.2, fontWeight: '700', letterSpacing: -0.03 * size } as const;
 }
 
 /** No gap below the header: its own padding and hairline separate it from the page. */
@@ -516,7 +519,7 @@ const caps = {
 } as const;
 
 /** The compact title scale for drawers and dialogs. */
-const viewTitle = { color: colors.ink, fontFamily: displayFamily, fontSize: 22, lineHeight: 26, fontWeight: '700', letterSpacing: -0.6 } as const;
+const viewTitle = { color: colors.ink, fontFamily: displayFamily, fontSize: 22, lineHeight: 27, fontWeight: '700', letterSpacing: -0.6 } as const;
 
 export const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.background },
@@ -541,7 +544,7 @@ export const s = StyleSheet.create({
   screenHeaderEnd: { flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: -12 },
   screenHeaderTitleContent: { alignSelf: 'flex-start', maxWidth: '100%' },
   screenContext: { color: colors.muted, fontFamily, fontSize: 13, lineHeight: 18 },
-  screenTitle: { color: colors.ink, fontFamily: displayFamily, fontSize: 42, lineHeight: 44, fontWeight: '700', letterSpacing: -1.26 },
+  screenTitle: { color: colors.ink, fontFamily: displayFamily, fontSize: 42, lineHeight: 50, fontWeight: '700', letterSpacing: -1.26 },
   pageTitle: viewTitle,
   /** The text back action: 44 high, its padding reaching the screen edge. */
   navIcon: { height: 44, justifyContent: 'center', paddingLeft: 24, paddingRight: 20 },
