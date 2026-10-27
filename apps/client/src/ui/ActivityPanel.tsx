@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { reversibleEffect, undoProblem, undoExplanation, type ClientReplicaState } from '@splitnext/client';
 import { describeActivity, newActivity, visibleActivity } from '../model/activity';
 import { reviewDetail, reviewTitle } from '../model/notices';
 import { BackHeader } from './BackHeader';
-import { Button, EmptyState, ErrorMessage, HeaderAction, Notice, SectionHeading, Tag, colors, s } from './components';
+import { EmptyState, ErrorMessage, HeaderAction, Notice, SectionHeading, Tag, colors, s } from './components';
 import { InfoIcon } from './icons';
 import type { MemberListApp } from './MemberList';
 import { StickyTop } from './StickyTop';
@@ -61,12 +61,29 @@ export function ActivityHeader(props: { app: MemberListApp }) {
   );
 }
 
-/** A small action inside an entry, white unless it is the entry's main one. */
+/**
+ * A compact action at the end of an entry, outlined unless it is the entry's
+ * main one. Its touch area reaches past its edge to a full target.
+ */
 function EntryAction(props: { text: string; label: string; disabled: boolean; onPress: () => void; primary?: boolean; icon?: boolean }) {
   return (
-    <Button small secondary={!props.primary} label={props.label} disabled={props.disabled} onPress={props.onPress}>
-      {props.text}
-    </Button>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={props.label}
+      accessibilityState={{ disabled: props.disabled }}
+      disabled={props.disabled}
+      hitSlop={{ top: 6, bottom: 6 }}
+      onPress={props.onPress}
+      style={({ pressed }) => [
+        { minHeight: 32, paddingHorizontal: 12, justifyContent: 'center', borderWidth: 1, borderColor: colors.ink, backgroundColor: props.primary ? colors.action : 'transparent' },
+        pressed && !props.disabled && s.pressed,
+        props.disabled && (props.primary ? s.busyButton : s.dim),
+      ]}
+    >
+      <Text style={{ fontFamily, fontSize: 13, fontWeight: '600', color: props.primary ? (props.disabled ? colors.actionBusyInk : colors.actionInk) : colors.ink }}>
+        {props.text}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -115,7 +132,7 @@ function NeedsReview(props: { replica: ClientReplicaState }) {
                   <Text style={{ fontFamily, fontSize: 13, lineHeight: 19, color: colors.soft }}>{reviewDetail(notice)}</Text>
                 </View>
               </View>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
                 <EntryAction primary text="Apply again" label="Apply again" disabled={!action.can('retryNotice', { commandId })} onPress={() => act(commandId, 'retryNotice')} />
                 <EntryAction text="Dismiss" label="Dismiss" disabled={!action.can('dismissNotice', { commandId })} onPress={() => act(commandId, 'dismissNotice')} />
               </View>
@@ -199,18 +216,19 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
                     </View>
                   </View>
                   {reversible && !problem ? (
-                    <View style={{ flexDirection: 'row' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
                       <EntryAction icon text="Undo" label={`Undo: ${label}`} disabled={!action.can('undoChange', { eventId: event.id })} onPress={() => { void action.call('undoChange', { eventId: event.id }); }} />
                     </View>
                   ) : null}
                   {restorable ? (
-                    <View style={{ flexDirection: 'row' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
                       {change === 'expense.removed' ? <EntryAction icon text="Restore" label="Restore expense" disabled={!action.can('restoreExpense', { expenseId: event.target.id })} onPress={() => { void action.call('restoreExpense', { expenseId: event.target.id }); }} /> : null}
                       {change === 'settlement.removed' ? <EntryAction icon text="Restore" label="Restore repayment" disabled={!action.can('restoreSettlement', { settlementId: event.target.id })} onPress={() => { void action.call('restoreSettlement', { settlementId: event.target.id }); }} /> : null}
                       {change === 'member.removed' ? <EntryAction icon text="Restore" label="Restore member" disabled={!action.can('restoreMember', { memberId: event.target.id })} onPress={() => { void action.call('restoreMember', { memberId: event.target.id }); }} /> : null}
                     </View>
                   ) : null}
-                  {problem ? <Notice tone="info" icon={<InfoIcon color={colors.soft} />} message={undoExplanation(problem)} /> : null}
+                  {/* A later change simply leaves no Undo; only other reasons are explained. */}
+                  {problem && problem !== 'undo_changed' ? <Notice tone="info" icon={<InfoIcon color={colors.soft} />} message={undoExplanation(problem)} /> : null}
                   </View>
                 </View>
               );

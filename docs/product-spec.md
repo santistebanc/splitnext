@@ -279,8 +279,8 @@ or the member-removal toast. These simple changes can be corrected manually.
 Group creation, joining, leaving, and invite replacement also have no Undo.
 Expenses, repayments, and group renames retain safe Undo.
 
-An undo cannot overwrite a later change to the affected information. Explain
-why an action cannot currently be undone. Unrelated changes elsewhere in the
+An undo cannot overwrite a later change to the affected information; such an
+action simply shows no Undo, without an explanation. Unrelated changes elsewhere in the
 group do not make an undo stale. Recheck safety on the server when applying
 the compensating command; an offline undo that becomes stale uses the normal
 conflict-notice experience.

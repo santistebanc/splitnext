@@ -627,7 +627,7 @@ test('activity', async ({ browser }) => {
   await spot(page, button(page, 'Restore expense'), 'activity-restore-expense', 'Activity', 'Restore expense', 'The removed expense is still removed.');
   await spot(page, activityEntry(page, /removed a repayment/).first(), 'activity-repayment', 'Activity', 'Repayment change', 'Green icon: a repayment was recorded, changed, or removed.');
   await spot(page, button(page, 'Restore repayment'), 'activity-restore-repayment', 'Activity', 'Restore repayment', 'The removed repayment is still removed.');
-  await spot(page, page.getByText(/Undo would overwrite a later change|cannot be removed by undoing/).first().locator('..'), 'activity-undo-blocked', 'Activity', 'Why Undo is unavailable', 'Undoing would overwrite a later change, or the person has history.');
+  await spot(page, page.getByText(/cannot be removed by undoing/).first().locator('..'), 'activity-undo-blocked', 'Activity', 'Why Undo is unavailable', 'The person has history, so undoing their addition would leave it orphaned.');
 
   // Later in the day, and then the next day. A frozen clock would stop the
   // screens' fade-in, so screens appear without it.
