@@ -160,6 +160,9 @@ export function GroupsView(props: GroupsViewProps) {
   const active = state.groups.filter((group) => group.status === 'active');
   const left = state.groups.filter((group) => group.status === 'left');
   const firstBalance = (group: ClientGroupSummary) => (group.stored_locally ? group.you_balances?.[0]?.amount ?? 0 : 0);
+  const firstCurrency = (group: ClientGroupSummary) => (group.stored_locally ? group.you_balances?.[0]?.currency : undefined);
+  // Your bar flies to your row on the group screen.
+  const barMorph = (group: ClientGroupSummary) => (firstCurrency(group) ? `gbar-${group.group_id}-${firstCurrency(group)}` : null);
   const max = Math.max(1, ...active.map((group) => Math.abs(firstBalance(group))));
 
   function open(group: ClientGroupSummary): void {
@@ -198,7 +201,7 @@ export function GroupsView(props: GroupsViewProps) {
             </View>
             <GroupBalance group={group} />
           </View>
-          <BalanceBar track amount={firstBalance(group)} max={max} />
+          <BalanceBar track amount={firstBalance(group)} max={max} morph={barMorph(group)} />
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 20 }}>
             <View style={{ flex: 1, gap: 2 }}>
               <Text numberOfLines={1} style={s.caption}>{meta || ' '}</Text>

@@ -130,6 +130,9 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
     for (const { element, from, to, style } of pairs) {
       const a = from.box;
       const scale = to.h / a.h;
+      // A bar stretches to its new shape; text keeps its proportions and crossfades.
+      const stretch = element.dataset.morphStretch !== undefined;
+      const sx = to.w / a.w;
       const base = { position: 'absolute', margin: '0', background: 'transparent', borderColor: 'transparent', transformOrigin: '0 0', boxSizing: 'border-box', visibility: 'visible', transition: 'none', overflow: 'visible', whiteSpace: 'nowrap' };
       const box = document.createElement('div');
 
@@ -146,13 +149,18 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
 
       Object.assign(leaving.style, base, { left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px`, color: from.color, font: from.font });
       overlay.appendChild(leaving);
-      animations.push(leaving.animate([{ transform: 'none', opacity: 1 }, { opacity: 0, offset: 0.45 }, { transform: `translate(${to.x - a.x}px,${to.y - a.y}px) scale(${scale})`, opacity: 0 }], { duration, easing: easeOut, fill: 'forwards' }));
+      animations.push(leaving.animate(stretch
+        // Stays solid under the arriving copy, so the bar never thins out midway.
+        ? [{ transform: 'none' }, { transform: `translate(${to.x - a.x}px,${to.y - a.y}px) scale(${sx},${scale})` }]
+        : [{ transform: 'none', opacity: 1 }, { opacity: 0, offset: 0.45 }, { transform: `translate(${to.x - a.x}px,${to.y - a.y}px) scale(${scale})`, opacity: 0 }], { duration, easing: easeOut, fill: 'forwards' }));
 
       const arriving = copy(element);
 
       Object.assign(arriving.style, base, { left: `${to.x}px`, top: `${to.y}px`, width: `${to.w}px`, height: `${to.h}px`, color: style.color, font: style.font });
       overlay.appendChild(arriving);
-      animations.push(arriving.animate([{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / scale})`, opacity: 0 }, { opacity: 0, offset: 0.3 }, { transform: 'none', opacity: 1 }], { duration, easing: easeOut, fill: 'forwards' }));
+      animations.push(arriving.animate(stretch
+        ? [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / sx},${1 / scale})`, opacity: 0 }, { transform: 'none', opacity: 1 }]
+        : [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / scale})`, opacity: 0 }, { opacity: 0, offset: 0.3 }, { transform: 'none', opacity: 1 }], { duration, easing: easeOut, fill: 'forwards' }));
     }
 
     const timer = setTimeout(() => this.finish?.(), duration + 40);
@@ -180,12 +188,19 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
   }
 }
 
-/** Marks a part that appears on two screens, so changing between them flies it across. */
-export function morph(key: string | null | undefined) {
+/**
+ * Marks a part that appears on two screens, so changing between them flies it
+ * across; with `stretch`, such as for a bar, it takes its new shape rather
+ * than keeping its proportions.
+ */
+export function morph(key: string | null | undefined, options?: { stretch?: boolean }) {
   return (node: MorphTarget) => {
     if (!(node instanceof HTMLElement)) return;
 
     if (key) node.dataset.morph = key;
     else delete node.dataset.morph;
+
+    if (key && options?.stretch) node.dataset.morphStretch = '';
+    else delete node.dataset.morphStretch;
   };
 }

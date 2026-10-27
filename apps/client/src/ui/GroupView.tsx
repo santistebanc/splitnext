@@ -186,6 +186,9 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
   const participants = participantMarkers(props.replica, props.memberId, props.app.client.presence(props.replica.group_id), state.online && state.reachable);
   const amounts = props.balances.map((entry) => signedFigure(entry.amount, entry.currency));
   const first = props.balances[0]?.amount ?? 0;
+  const currency = props.balances[0]?.currency;
+  // The bar flies to the person's page, and yours also to the groups list.
+  const bar = currency ? (props.you ? `gbar-${props.replica.group_id}-${currency}` : `pbar-${props.replica.group_id}-${props.memberId}-${currency}`) : null;
 
   return (
     <View>
@@ -203,7 +206,7 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
           {props.removed ? <Text style={s.tag}>removed</Text> : null}
         </View>
         <View style={{ flex: 1, alignSelf: 'stretch' }}>
-          {props.recorded ? <BalanceBar amount={first} max={props.max} /> : null}
+          {props.recorded ? <BalanceBar amount={first} max={props.max} morph={bar} /> : null}
         </View>
         <View style={{ width: 84, alignItems: 'flex-end', gap: 6 }}>
           {props.balances.length ? props.balances.map((entry) => (

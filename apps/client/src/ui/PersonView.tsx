@@ -28,7 +28,7 @@ function largestBalance(snapshot: Parameters<typeof balanceRows>[0] | undefined)
 }
 
 /** A balance as a large figure over its bar, with what it means beside it. */
-export function BalanceFigure(props: { amount: number; currency: string; max: number; label: string; size: number; bar: number; morph?: string | null }) {
+export function BalanceFigure(props: { amount: number; currency: string; max: number; label: string; size: number; bar: number; morph?: string | null; barMorph?: string | null }) {
   return (
     <View style={{ gap: 10 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
@@ -37,7 +37,7 @@ export function BalanceFigure(props: { amount: number; currency: string; max: nu
           {signedFigure(props.amount, props.currency)}
         </Text>
       </View>
-      <BalanceBar track amount={props.amount} max={props.max} height={props.bar} />
+      <BalanceBar track amount={props.amount} max={props.max} height={props.bar} morph={props.barMorph} />
     </View>
   );
 }
@@ -128,7 +128,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
               <Text style={s.caption}>{active ? presenceText(participants) : 'Removed · still in balances until settled'}</Text>
             </View>
             <View style={{ paddingTop: between(18, 8, progress) }}>
-              <BalanceFigure amount={first?.amount ?? 0} currency={first?.currency ?? 'XXX'} max={largestBalance(snapshot)} label={label} size={between(30, 20, progress)} bar={between(12, 8, progress)} morph={replica && memberId && first ? (isYou ? `gamt-${replica.group_id}-${first.currency}` : `pamt-${replica.group_id}-${memberId}-${first.currency}`) : null} />
+              <BalanceFigure amount={first?.amount ?? 0} currency={first?.currency ?? 'XXX'} max={largestBalance(snapshot)} label={label} size={between(30, 20, progress)} bar={between(12, 8, progress)} morph={replica && memberId && first ? (isYou ? `gamt-${replica.group_id}-${first.currency}` : `pamt-${replica.group_id}-${memberId}-${first.currency}`) : null} barMorph={replica && memberId && first ? (isYou ? `gbar-${replica.group_id}-${first.currency}` : `pbar-${replica.group_id}-${memberId}-${first.currency}`) : null} />
             </View>
           </View>
         )}
