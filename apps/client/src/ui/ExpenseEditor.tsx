@@ -327,14 +327,18 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
       <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingTop: 16, paddingBottom: 4 }}>
         <Text testID="split-summary" style={{ fontFamily, fontSize: 14, fontWeight: '600', color: draft.parts.length ? colors.muted : colors.owes }}>{splitSummary(draft, preview)}</Text>
       </View>
-      <View aria-hidden style={{ flexDirection: 'row', height: 10, gap: 2 }}>
+      {/* Each share grows into the room left after the gaps, so the bar always fits. */}
+      <View aria-hidden testID="split-bar" style={{ flexDirection: 'row', height: 10, gap: 2, overflow: 'hidden' }}>
         {included.map((memberId) => (
           <View
             key={memberId}
             style={withTransition({
-              width: `${hasAmount ? (Math.max(0, preview.get(memberId) ?? 0) / total) * 100 : 100 / included.length}%`,
+              flexGrow: hasAmount ? Math.max(0, preview.get(memberId) ?? 0) / total : 1,
+              flexShrink: 1,
+              flexBasis: 0,
+              minWidth: 0,
               backgroundColor: hue(memberId),
-            }, 'width', 450)}
+            }, 'flex-grow', 450)}
           />
         ))}
       </View>

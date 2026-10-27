@@ -483,6 +483,33 @@ test('groups the digits of large amounts in threes, as typed and as shown', asyn
   await expect(page.getByText(grouped('−2 160.50'), { exact: true })).toBeVisible();
 });
 
+test('fits the split bar within the page however many people share the expense', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 760 });
+  await createGroup(page, 'Many', 'Ana');
+
+  for (const name of ['Al', 'Bo', 'Cy', 'Di', 'Ed', 'Fy', 'Gu', 'Hu', 'Ia', 'Jo', 'Ki', 'Lu', 'Mo']) await addMember(page, name);
+
+  await button(page, 'Add expense').click();
+  await field(page, 'Amount').fill('1765.25');
+  await button(page, 'Increase share for Ana').click();
+  const bar = page.getByTestId('split-bar');
+
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 760 });
+    await page.waitForTimeout(600);
+    // The bar ends where the rules above and below it end.
+    const edge = (await page.getByRole('button', { name: /^Paid by / }).boundingBox())!;
+    const segments = await bar.evaluate((node) => [...node.children].map((child) => child.getBoundingClientRect().width));
+    const box = (await bar.boundingBox())!;
+
+    expect(box.x + box.width).toBeLessThanOrEqual(edge.x + edge.width + 0.5);
+    expect(Math.max(...await bar.evaluate((node) => [...node.children].map((child) => child.getBoundingClientRect().right)))).toBeLessThanOrEqual(edge.x + edge.width + 0.5);
+    expect(segments).toHaveLength(14);
+    // Ana's two shares take twice anyone else's room.
+    expect(Math.abs(segments[0]! / segments[1]! - 2)).toBeLessThan(0.05);
+  }
+});
+
 test('keeps split rows aligned without an amount, then shows each share', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Zero amount', 'Ana');
