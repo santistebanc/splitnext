@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { View, type TextInput } from 'react-native';
+import { Pressable, Text, View, type TextInput } from 'react-native';
 import type { AppController } from '../model/controller';
-import { Field } from './components';
+import { Field, s } from './components';
+import { colors, fontFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 export type CreateGroupApp = Pick<AppController, 'snapshot'>;
@@ -46,7 +47,14 @@ export function CreateGroup(props: CreateGroupProps) {
       clearTimeout(opened);
     };
   }, []);
+
   const { submit } = useSubmitCreate(props.close);
+  // The names you go by in your other groups, once each, other than the one entered.
+  const typed = person.trim().toLowerCase();
+
+  const suggestions = [...new Map(props.app.snapshot().groups.flatMap((group) => (group.you_name ? [[group.you_name.trim().toLowerCase(), group.you_name.trim()] as const] : []))).values()]
+    .filter((suggestion) => suggestion.toLowerCase() !== typed)
+    .slice(0, 6);
 
   return (
     <View style={{ gap: 12, paddingTop: 4 }}>
@@ -82,6 +90,23 @@ export function CreateGroup(props: CreateGroupProps) {
         onSubmitEditing={submit}
         style={compact}
       />
+      {suggestions.length ? (
+        <View role="list" aria-label="Names you use in other groups" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: -4 }}>
+          {suggestions.map((suggestion) => (
+            <Pressable
+              key={suggestion}
+              accessibilityRole="button"
+              accessibilityLabel={`Use ${suggestion}`}
+              onPress={() => {
+                void actions.dispatch('changeDraft', { field: 'create.yourName', value: suggestion }, { origin: 'ui' });
+              }}
+              style={({ pressed }) => [{ height: 32, paddingHorizontal: 12, justifyContent: 'center', borderWidth: 1, borderColor: colors.rule }, pressed && s.pressed]}
+            >
+              <Text style={{ fontFamily, fontSize: 14, fontWeight: '500', color: colors.ink }}>{suggestion}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }

@@ -191,8 +191,10 @@ pinned at the foot. New group does not leave the list: it opens a drawer
 upward from the button, just tall enough for New group with Cancel and two
 compact fields, Group name (focused) and Your name, while the screen above
 dims. The button becomes Create group, grey until both names are filled and
-Creating… while it works. Cancel, Back, or a tap on the dimmed screen closes
-it and discards the draft.
+Creating… while it works. Your name starts as the last name used here, with
+the names you go by in your other groups offered under it, each once, to use
+with a tap. Cancel, Back, or a tap on the dimmed screen closes it and
+discards the draft.
 
 The join screen shows the group's name large and Which one are you?, with one
 ruled row per name (Taken when another device has it) and a last row whose
