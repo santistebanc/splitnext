@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { parseInviteLink, type ClientGroupSummary } from '@splitnext/client';
 import type { AppController } from '../model/controller';
+import { BrandMark } from './BrandMark';
+import { between, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
 import { morph } from './ScreenMorph';
 import { BalanceBar, Button, ErrorMessage, FooterButton, ScreenHeader, balanceColor, s, signedFigure } from './components';
@@ -34,10 +36,11 @@ export function GroupsFooter() {
 }
 
 /**
- * The name and Join with a link above a large Your groups. Join opens a link
- * field in place; Open checks the link on the join screen.
+ * The name and Join with a link above the large mark. Join opens a link
+ * field directly under it; Open checks the link on the join screen.
  */
 export function GroupsHeader() {
+  const progress = useCompactProgress();
   const join = useActionCall();
   const [open, setOpen] = useState(false);
   const [link, setLink] = useState('');
@@ -73,7 +76,7 @@ export function GroupsHeader() {
             <Text style={[s.headerActionText, s.link]}>Join with a link</Text>
           </Pressable>
         )}
-        below={(
+        underRow={(
           <Reveal>
             {open ? (
               <View style={{ gap: 8, paddingTop: 4 }}>
@@ -104,7 +107,12 @@ export function GroupsHeader() {
             ) : null}
           </Reveal>
         )}
-        title="Your groups"
+        heading={(
+          // The mark stands where a title would be, as large and shrinking the same way; it is still the screen's heading.
+          <View accessibilityRole="header" accessibilityLabel="Your groups" style={{ alignSelf: 'flex-start' }}>
+            <BrandMark size={between(44, 24, progress)} />
+          </View>
+        )}
       />
       <ErrorMessage message={join.error} />
     </>

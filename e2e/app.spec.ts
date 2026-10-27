@@ -145,13 +145,23 @@ test('uses one large title on every screen and opens the join field in place', a
   await expect(heading(page, 'Activity')).toHaveCSS('font-size', '42px');
   await button(page, 'Back to Headers').click();
   await button(page, 'Back to groups').click();
-  await expect(heading(page, 'Your groups')).toHaveCSS('font-size', '42px');
+  // The groups list shows the mark, about as tall as a title, instead of one.
+  await expect(page.getByText('Your groups', { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId('splitnext-logo')).toHaveAttribute('height', '44');
   await button(page, 'New group').click();
   await expect(heading(page, 'New group')).toHaveCSS('font-size', '42px');
   await button(page, 'Back to groups').click();
 
-  // Join opens a link field under the name; a link that is not an invite says so there.
+  // Join opens a link field directly under itself, above the mark; a link that
+  // is not an invite says so there.
   await button(page, 'Join with an invite link').click();
+  const join = (await button(page, 'Join with an invite link').boundingBox())!;
+  const linkField = (await field(page, 'Invite link').boundingBox())!;
+  const mark = (await page.getByTestId('splitnext-logo').boundingBox())!;
+
+  expect(linkField.y).toBeGreaterThanOrEqual(join.y + join.height - 1);
+  expect(linkField.y - (join.y + join.height)).toBeLessThan(24);
+  expect(mark.y).toBeGreaterThan(linkField.y + linkField.height);
   await field(page, 'Invite link').fill('not a link');
   await button(page, 'Open').click();
   await expect(page.getByText('That isn’t a splitnext invite link.', { exact: true })).toBeVisible();
