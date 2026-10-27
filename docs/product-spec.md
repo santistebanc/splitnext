@@ -74,9 +74,11 @@ the primary group action and does not require invitation acceptance. See
 The balances list everyone in the group with their balance, you
 first on a tinted row with a quiet "you" label, then everyone else from most
 negative to most positive balance (owing first, then settled, then owed), then people in no
-current expense or repayment yet, and a last + Add a person row. Typing a name there and ending
-the typing (leaving the field, Enter, or Done) adds the person without a
-confirm step; an empty draft is discarded, and a failed add keeps the draft
+current expense or repayment yet, and a last + Add a person row. Typing a name there and pressing
+Enter or Done adds the person without a confirm step and clears the field,
+which keeps focus so the next name can follow; leaving the field also adds
+what was typed, and Enter on an empty field finishes. An empty draft is
+discarded, and a failed add keeps the draft
 with inline feedback. Each row shows the name, the balance as a bar growing
 from a central ink line (orange to the left for what they owe, green to the
 right for what they get back, scaled to the largest balance), and the signed

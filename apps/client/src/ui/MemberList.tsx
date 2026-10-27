@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { TextInput, View, type StyleProp, type TextStyle } from 'react-native';
+import { Platform, TextInput, View, type StyleProp, type TextStyle } from 'react-native';
 import type { ClientReplicaState } from '@splitnext/client';
 import { memberStatus, type ParticipantMarker } from '../model/memberPresentation';
 import type { AppController } from '../model/controller';
@@ -53,6 +53,8 @@ export function MemberNameInput(props: {
   /** What the field is called, when its placeholder says more. */
   label?: string;
   onSave: () => void;
+  /** Takes Enter, keeping focus when it returns true; without it, Enter leaves the field. */
+  onSubmit?: () => boolean;
   onFocus?: () => void;
   /** Takes the typing instead of the shared member-name draft. */
   onChangeText?: ((value: string) => void) | undefined;
@@ -78,11 +80,21 @@ export function MemberNameInput(props: {
       maxLength={100}
       style={props.style ?? s.memberNameInput}
       returnKeyType="done"
-      submitBehavior="blurAndSubmit"
+      submitBehavior={props.onSubmit ? 'submit' : 'blurAndSubmit'}
       onBlur={props.onSave}
-      onSubmitEditing={() => input.current?.blur()}
+      onSubmitEditing={() => {
+        if (!props.onSubmit?.()) input.current?.blur();
+      }}
       onKeyPress={(event) => {
         if (event.nativeEvent.key === 'Escape') input.current?.blur();
+
+        // React Native Web ignores submitBehavior and blurs on Enter, unless
+        // the key is handled here first.
+        if (Platform.OS === 'web' && props.onSubmit && event.nativeEvent.key === 'Enter') {
+          event.preventDefault();
+
+          if (!props.onSubmit()) input.current?.blur();
+        }
       }}
     />
   );
@@ -90,10 +102,11 @@ export function MemberNameInput(props: {
 
 /**
  * The last row of the balances: typing a name adds that person once typing
- * ends, without a confirm step. The field keeps its own text, and leaving it
- * queues the name and clears it at once, so the next name can be typed while
- * earlier ones are still saving; a save holds the member editor, which would
- * otherwise drop that typing.
+ * ends, without a confirm step. The field keeps its own text. Enter queues
+ * the name and clears the field while it keeps focus, so several people can
+ * be added in a row; Enter on an empty field, or leaving it, finishes. The
+ * next name can be typed while earlier ones are still saving; a save holds
+ * the member editor, which would otherwise drop that typing.
  */
 export function AddPersonRow() {
   const actions = useActions();
@@ -102,6 +115,19 @@ export function AddPersonRow() {
   const queue = useRef<string[]>([]);
   const draining = useRef(false);
   const focused = useRef(false);
+
+  /** Queues the typed name, if any, and clears the field. */
+  function take(): boolean {
+    const name = text.trim();
+
+    setText('');
+
+    if (!name) return false;
+    queue.current.push(name);
+    void drain();
+
+    return true;
+  }
 
   /** Opens an add, which hides Add expense while the field is in use; skipped while a save holds the editor. */
   function begin(): void {
@@ -163,16 +189,11 @@ export function AddPersonRow() {
 
             if (!draining.current) begin();
           }}
+          onSubmit={take}
           onSave={() => {
-            const name = text.trim();
-
             focused.current = false;
-            setText('');
 
-            if (name) {
-              queue.current.push(name);
-              void drain();
-            } else if (!draining.current && actions.ui.snapshot().memberEdit?.memberId === null) {
+            if (!take() && !draining.current && actions.ui.snapshot().memberEdit?.memberId === null) {
               void actions.dispatch('cancelMemberEdit', {}, { origin: 'ui' });
             }
           }}
