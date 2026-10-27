@@ -172,6 +172,33 @@ test('creates a group, adds people inline, and manages a person from their detai
   await expect(page.getByTestId('toast')).toHaveCount(0);
 });
 
+test('removes someone no expense names with the X on their row', async ({ page }) => {
+  await createGroup(page, 'Rows', 'Ana');
+  await addMember(page, 'Ben');
+  await addMember(page, 'Cy');
+
+  // Before any expense, everyone has the X; afterwards only Cy, whom it leaves out.
+  await expect(button(page, 'Remove Ben')).toBeVisible();
+  await button(page, 'Add expense').click();
+  await field(page, 'Amount').fill('20');
+  await field(page, 'Description').fill('Lunch');
+  await page.getByRole('checkbox', { name: 'Cy shares this expense' }).click();
+  await button(page, 'Save').click();
+  await expect(button(page, 'Remove Ana')).toHaveCount(0);
+  await expect(button(page, 'Remove Ben')).toHaveCount(0);
+
+  // The X sits at the end of Cy's row and removes Cy at once, without opening the details.
+  const row = (await person(page, 'Cy').boundingBox())!;
+  const x = (await button(page, 'Remove Cy').boundingBox())!;
+
+  expect(x.x).toBeGreaterThanOrEqual(row.x + row.width - 1);
+  expect(Math.abs(x.y + x.height / 2 - (row.y + row.height / 2))).toBeLessThanOrEqual(1);
+  await button(page, 'Remove Cy').click();
+  await expect(person(page, 'Cy')).toHaveCount(0);
+  await expect(page.getByTestId('toast')).toHaveText('Cy removed.');
+  await expect(heading(page, 'Rows')).toBeVisible();
+});
+
 test('uses one large title on every screen and opens the join field in place', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Headers', 'Ana');
