@@ -143,13 +143,18 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
   private fly(snapshot: Snapshot, overlay: HTMLDivElement, old: HTMLElement, animations: Animation[], landed: HTMLElement[]): void {
     const root = this.root.current;
 
-    if (!root) return;
+    const content = root?.firstElementChild;
+
+    if (!root || !(content instanceof HTMLElement)) return;
     const pairs: { element: HTMLElement; from: Part; to: Box; style: CSSStyleDeclaration }[] = [];
+    // The new screen has already begun sliding in; parts land where they sit once it stops.
+    const shift = this.within(content.getBoundingClientRect());
 
     root.querySelectorAll<HTMLElement>('[data-morph]').forEach((element) => {
       if (overlay.contains(element)) return;
       const from = element.dataset.morph ? snapshot.parts.get(element.dataset.morph) : undefined;
-      const to = this.within(element.getBoundingClientRect());
+      const sliding = this.within(element.getBoundingClientRect());
+      const to = { ...sliding, x: sliding.x - shift.x, y: sliding.y - shift.y };
 
       if (from && this.visible(element, to)) pairs.push({ element, from, to, style: getComputedStyle(element) });
     });
@@ -193,6 +198,8 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
         : [{ transform: 'none', width: `${a.w}px`, opacity: 1 }, { opacity: 0, offset: 0.45 }, { transform: `translate(${to.x - a.x}px,${to.y - a.y}px) scale(${scale})`, width: `${to.w / scale}px`, opacity: 0 }], { duration, easing: easeOut, fill: 'forwards' }));
 
       const arriving = copy(element);
+
+      arriving.dataset.morphArriving = '';
 
       Object.assign(arriving.style, base, cut(style.textOverflow === 'ellipsis'), { left: `${to.x}px`, top: `${to.y}px`, width: `${to.w}px`, height: `${to.h}px`, color: style.color, font: style.font });
       overlay.appendChild(arriving);
