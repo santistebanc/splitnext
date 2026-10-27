@@ -38,7 +38,20 @@ main action and links, and blue and orange only for money someone gets back or
 owes; green means settled or online; a brighter orange marks the Activity
 badge and changes to review. Body text uses local IBM Plex Sans, amounts, currency codes
 and invite links local IBM Plex Mono, and titles local Bricolage Grotesque.
-Icons are stroked outlines in `ui/icons.tsx`.
+Icons are stroked outlines in `ui/icons.tsx`. `theme.ts` also holds the corner
+radii (`radius`: small controls, fields and buttons, cards, sheets, pills) and
+two shadows (`raised`, `floating`).
+
+Screens build from the shared pieces in `ui/components.tsx` rather than their
+own copies: `Button` for buttons (filled, secondary, quiet text links, small
+ones inside rows), `Pill` for rounded actions such as Invite people, Settle up,
+and the floating Add expense, `SectionHeading` for section and currency titles,
+`s.listCard` with `ListRow` for cards of rows, `Notice` for tinted messages,
+`EmptyState`, `Tag`, and `signedMoney` with `balanceColor` for balances.
+Recorded repayments use the expense list's `RepaymentRow` everywhere, and
+confirmations use `Confirmation` from `ConfirmSheet`. Pressing a control fades
+and shrinks it (`s.pressed`), pressing a row tints it (`s.rowPressed`), and
+`s.dim` only marks something unavailable.
 
 Screens follow the agreed phone design, in one narrow column on every device.
 `AppScreen` picks each view's fixed header, body, and main action, and `Frame`

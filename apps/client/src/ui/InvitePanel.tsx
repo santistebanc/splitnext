@@ -2,9 +2,10 @@ import { Platform, Pressable, Text, View } from 'react-native';
 import { formatInviteLink } from '@splitnext/client';
 import type { AppController } from '../model/controller';
 import { Button, ErrorMessage, s } from './components';
+import { Confirmation } from './ConfirmSheet';
 import { Drawer } from './Drawer';
 import { CheckIcon, ShareIcon } from './icons';
-import { colors, fontFamily, monoFamily } from './theme';
+import { colors, fontFamily, monoFamily, radius } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 export type InvitePanelApp = Pick<AppController, 'snapshot'>;
@@ -53,13 +54,7 @@ export function InviteSheet(props: { app: InvitePanelApp }) {
     <Drawer title={title} onClose={dismiss}>
 
       {confirming ? (
-        <>
-          <Text style={{ fontFamily, fontSize: 15, lineHeight: 22, color: colors.soft }}>{confirming.message}</Text>
-          <View style={s.actions}>
-            <Button grow secondary disabled={replace.busy} onPress={replace.cancel}>Cancel</Button>
-            <Button grow dark disabled={replace.busy} onPress={confirming.confirm}>Replace link</Button>
-          </View>
-        </>
+        <Confirmation message={confirming.message} confirmLabel="Replace link" busy={replace.busy} onConfirm={confirming.confirm} onCancel={replace.cancel} />
       ) : (
         <>
           {link ? (
@@ -77,7 +72,7 @@ export function InviteSheet(props: { app: InvitePanelApp }) {
                 testID="invite-link"
                 nativeID={linkId}
                 selectable
-                style={{ paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: copied ? colors.action : colors.background, backgroundColor: colors.background, fontFamily: monoFamily, fontSize: 15, fontWeight: '500', color: colors.ink }}
+                style={{ paddingVertical: 14, paddingHorizontal: 16, borderRadius: radius.control, borderWidth: 1, borderColor: copied ? colors.action : colors.background, backgroundColor: colors.background, fontFamily: monoFamily, fontSize: 15, fontWeight: '500', color: colors.ink }}
               >
                 {link}
               </Text>
@@ -93,25 +88,19 @@ export function InviteSheet(props: { app: InvitePanelApp }) {
           )}
           <View style={s.actions}>
             {link && canShare ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Share link"
+              <Button
+                grow
+                label="Share link"
+                icon={<ShareIcon size={18} color={colors.actionInk} />}
                 disabled={!action.can('shareInviteLink')}
                 onPress={() => { void action.call('shareInviteLink', {}); }}
-                style={({ pressed }) => [{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: 12, backgroundColor: colors.action }, pressed && s.dim]}
               >
-                <ShareIcon size={18} color={colors.actionInk} />
-                <Text style={{ fontFamily, fontSize: 15, fontWeight: '600', color: colors.actionInk }}>Share</Text>
-              </Pressable>
+                Share
+              </Button>
             ) : null}
-            <Pressable
-              accessibilityRole="button"
-              disabled={!replace.can('regenerateInvite')}
-              onPress={() => { void replace.call('regenerateInvite', {}); }}
-              style={({ pressed }) => [{ flex: 1, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 12, borderWidth: 1, borderColor: colors.field, backgroundColor: colors.surface }, (pressed || !replace.can('regenerateInvite')) && s.dim]}
-            >
-              <Text style={{ fontFamily, fontSize: 15, fontWeight: '600', color: colors.ink }}>{replace.busy ? 'Replacing…' : 'Replace link'}</Text>
-            </Pressable>
+            <Button grow secondary disabled={!replace.can('regenerateInvite')} onPress={() => { void replace.call('regenerateInvite', {}); }}>
+              {replace.busy ? 'Replacing…' : 'Replace link'}
+            </Button>
           </View>
           {!online ? <Text style={s.caption}>Connect to replace the link.</Text> : null}
         </>

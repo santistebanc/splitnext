@@ -120,7 +120,7 @@ function LinkEntry(props: JoinGroupProps) {
                 .then(() => navigator.clipboard.readText())
                 .then(setLink, () => undefined);
             }}
-            style={({ pressed }) => [s.fieldButton, { paddingHorizontal: 16 }, pressed && s.dim]}
+            style={({ pressed }) => [s.fieldButton, { paddingHorizontal: 16 }, pressed && s.pressed]}
           >
             <Text style={s.fieldButtonText}>Paste</Text>
           </Pressable>
@@ -160,7 +160,7 @@ export function JoinGroup(props: JoinGroupProps) {
             accessibilityRole="button"
             disabled={!props.previewing.can('clearInvitePreview')}
             onPress={() => { void props.previewing.call('clearInvitePreview', {}); }}
-            style={({ pressed }) => [{ height: 44, justifyContent: 'center' }, pressed && s.dim]}
+            style={({ pressed }) => [{ height: 44, justifyContent: 'center' }, pressed && s.pressed]}
           >
             <Text style={s.rowAction}>Change link</Text>
           </Pressable>

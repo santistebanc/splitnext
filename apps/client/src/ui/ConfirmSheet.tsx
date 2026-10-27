@@ -1,6 +1,5 @@
 import { Modal, Pressable, Text, View } from 'react-native';
 import { Button, s } from './components';
-import { colors, fontFamily } from './theme';
 
 type ConfirmSheetProps = {
   title: string;
@@ -12,6 +11,23 @@ type ConfirmSheetProps = {
   onCancel: () => void;
 };
 
+/** An action's confirmation message, with Cancel beside the dark button that confirms it. */
+export function Confirmation(props: Omit<ConfirmSheetProps, 'title'>) {
+  return (
+    <>
+      <Text style={s.lead}>{props.message}</Text>
+      <View style={[s.actions, { marginTop: 8 }]}>
+        <Button grow secondary disabled={props.busy} onPress={props.onCancel}>
+          Cancel
+        </Button>
+        <Button grow dark disabled={props.busy} onPress={props.onConfirm}>
+          {props.confirmLabel}
+        </Button>
+      </View>
+    </>
+  );
+}
+
 /** A bottom sheet asking the person to approve an action that returned a confirmation. */
 export function ConfirmSheet(props: ConfirmSheetProps) {
   return (
@@ -22,15 +38,7 @@ export function ConfirmSheet(props: ConfirmSheetProps) {
           <Text accessibilityRole="header" style={s.drawerTitle}>
             {props.title}
           </Text>
-          <Text style={{ fontFamily, fontSize: 15, lineHeight: 22, color: colors.soft }}>{props.message}</Text>
-          <View style={[s.actions, { marginTop: 8 }]}>
-            <Button grow secondary disabled={props.busy} onPress={props.onCancel}>
-              Cancel
-            </Button>
-            <Button grow dark disabled={props.busy} onPress={props.onConfirm}>
-              {props.confirmLabel}
-            </Button>
-          </View>
+          <Confirmation {...props} />
         </View>
       </View>
     </Modal>

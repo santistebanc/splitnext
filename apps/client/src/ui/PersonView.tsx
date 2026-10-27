@@ -5,11 +5,11 @@ import { memberBreakdown } from '../model/breakdown';
 import { balanceRows, memberName } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
 import { BackHeader } from './BackHeader';
-import { ErrorMessage, balanceColor, colors, s, signedFigure, signedMoney } from './components';
+import { Button, ErrorMessage, ListRow, Notice, SectionHeading, balanceColor, colors, s, signedFigure, signedMoney } from './components';
 import { repaymentTitle } from './ExpenseList';
-import { ChevronRightIcon, PencilIcon, PersonIcon, TrashIcon, UndoIcon, WarningIcon } from './icons';
+import { ChevronRightIcon, PencilIcon, PersonIcon, TrashIcon, UndoIcon } from './icons';
 import { MemberIcon, MemberNameInput, presenceText, type MemberListApp } from './MemberList';
-import { fontFamily, monoFamily } from './theme';
+import { fontFamily, monoFamily, radius } from './theme';
 import { useActionCall, useUiState } from './useActionCall';
 
 /** The person details header: back to the group, the group named quietly above the person's name, which Rename edits in place. */
@@ -37,15 +37,9 @@ export function PersonHeader(props: { app: MemberListApp }) {
             placeholder="Name"
             autoFocus
             onSave={finishRename}
-            style={[s.screenTitle, { flex: 1, minWidth: 0, height: 36, paddingHorizontal: 8, borderRadius: 10, borderWidth: 2, borderColor: colors.action, backgroundColor: colors.surface }]}
+            style={[s.screenTitle, { flex: 1, minWidth: 0, height: 40, paddingHorizontal: 8, borderRadius: radius.small, borderWidth: 2, borderColor: colors.action, backgroundColor: colors.surface }]}
           />
-          <Pressable
-            accessibilityRole="button"
-            onPress={finishRename}
-            style={({ pressed }) => [{ height: 36, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.action, justifyContent: 'center' }, pressed && s.pressed]}
-          >
-            <Text style={{ fontFamily, fontSize: 15, fontWeight: '600', color: colors.actionInk }}>Done</Text>
-          </Pressable>
+          <Button small onPress={finishRename}>Done</Button>
         </View>
       ) : undefined}
     />
@@ -67,9 +61,10 @@ function Tile(props: { icon: ReactNode; text: string; label?: string; danger?: b
       disabled={props.disabled}
       onPress={props.onPress}
       style={({ pressed }) => [
-        { flex: 1, minHeight: 64, borderRadius: 14, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 4 },
+        { flex: 1, minHeight: 64, borderRadius: radius.card, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 4 },
         props.pressed && { backgroundColor: colors.youRow },
-        (pressed || props.disabled) && s.dim,
+        pressed && s.pressed,
+        props.disabled && s.dim,
       ]}
     >
       {props.icon}
@@ -132,12 +127,12 @@ export function PersonDetails(props: { app: MemberListApp }) {
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {balances.length ? balances.map(({ currency, amount }) => (
-          <View key={currency} style={{ flexGrow: 1, flexBasis: '45%', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 16, backgroundColor: colors.surface, gap: 2 }}>
+          <View key={currency} style={{ flexGrow: 1, flexBasis: '45%', paddingVertical: 14, paddingHorizontal: 16, borderRadius: radius.card, backgroundColor: colors.surface, gap: 2 }}>
             <Text style={{ fontFamily, fontSize: 13, fontWeight: '600', color: colors.muted }}>{amount > 0 ? 'Gets back' : amount < 0 ? 'Owes' : 'Settled'} · {currency}</Text>
             <Text style={[money(amount), { fontSize: 22 }]}>{signedFigure(amount, currency)}</Text>
           </View>
         )) : (
-          <View style={{ flex: 1, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 16, backgroundColor: colors.surface, gap: 2 }}>
+          <View style={{ flex: 1, paddingVertical: 14, paddingHorizontal: 16, borderRadius: radius.card, backgroundColor: colors.surface, gap: 2 }}>
             <Text style={{ fontFamily, fontSize: 13, fontWeight: '600', color: colors.muted }}>Balance</Text>
             {breakdown.length ? (
               <Text style={{ fontFamily, fontSize: 18, fontWeight: '600', color: colors.settled }}>Settled</Text>
@@ -153,11 +148,11 @@ export function PersonDetails(props: { app: MemberListApp }) {
             accessibilityLabel={`Settle up, ${payments === 1 ? '1 payment' : `${payments} payments`}`}
             disabled={!settle.can('showSettleUp', { memberId: member.id })}
             onPress={() => { void settle.call('showSettleUp', { memberId: member.id }); }}
-            style={({ pressed }) => [{ flexGrow: 1, flexBasis: '45%', flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 56, paddingVertical: 12, paddingLeft: 16, paddingRight: 12, borderRadius: 16, backgroundColor: colors.action }, pressed && s.pressed]}
+            style={({ pressed }) => [{ flexGrow: 1, flexBasis: '45%', flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 56, paddingVertical: 12, paddingLeft: 16, paddingRight: 12, borderRadius: radius.card, backgroundColor: colors.action }, pressed && s.pressed]}
           >
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={{ fontFamily, fontSize: 16, fontWeight: '600', color: colors.actionInk }}>Settle up</Text>
-              <Text style={{ fontFamily, fontSize: 13, fontWeight: '500', color: '#d6e6ff' }}>{payments === 1 ? '1 payment' : `${payments} payments`}</Text>
+              <Text style={{ fontFamily, fontSize: 13, fontWeight: '500', color: colors.actionInkSoft }}>{payments === 1 ? '1 payment' : `${payments} payments`}</Text>
             </View>
             <ChevronRightIcon size={18} color={colors.actionInk} strokeWidth={2.2} />
           </Pressable>
@@ -205,12 +200,11 @@ export function PersonDetails(props: { app: MemberListApp }) {
           </View>
         )}
         {isYou && claimed === member.id && others ? (
-          <View role="status" style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, backgroundColor: colors.warning }}>
-            <WarningIcon color={colors.warningInk} />
-            <Text style={{ flex: 1, fontFamily, fontSize: 14, lineHeight: 20, color: colors.warningInk }}>
-              {name} is already taken on {others === 1 ? 'another device' : `${others} other devices`}. It’s now taken on this device too.
-            </Text>
-          </View>
+          <Notice
+            tone="warning"
+            role="status"
+            message={`${name} is already taken on ${others === 1 ? 'another device' : `${others} other devices`}. It’s now taken on this device too.`}
+          />
         ) : null}
         {active && unsettled ? (
           <Text style={{ paddingHorizontal: 4, fontFamily, fontSize: 13, color: colors.muted }}>Settle up first to hide {isYou ? 'yourself' : name}.</Text>
@@ -219,30 +213,29 @@ export function PersonDetails(props: { app: MemberListApp }) {
       </View>
 
       {breakdown.map((group) => (
-        <View key={group.currency} style={{ gap: 6 }}>
-          <Text accessibilityRole="header" style={{ paddingHorizontal: 4, fontFamily, fontSize: 15, fontWeight: '600', color: colors.ink }}>{group.currency}</Text>
-          <View style={{ borderRadius: 16, backgroundColor: colors.surface, overflow: 'hidden' }}>
+        <View key={group.currency}>
+          <SectionHeading title={group.currency} />
+          <View style={s.listCard}>
             {group.rows.map((row, index) => {
               const title = row.kind === 'expense' ? row.title : repaymentTitle(replica, { from_member_id: row.from, to_member_id: row.to });
 
               return (
-                <Pressable
+                <ListRow
                   key={row.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${title}, ${signedMoney(row.amount, group.currency)}`}
+                  first={index === 0}
+                  label={`${title}, ${signedMoney(row.amount, group.currency)}`}
                   disabled={row.kind === 'expense' ? !open.can('showExpense', { expenseId: row.id }) : !open.can('showSettlement', { settlementId: row.id })}
                   onPress={() => {
                     if (row.kind === 'expense') void open.call('showExpense', { expenseId: row.id });
                     else void open.call('showSettlement', { settlementId: row.id });
                   }}
-                  style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 60, paddingVertical: 8, paddingHorizontal: 16 }, index > 0 && s.ruled, pressed && { backgroundColor: colors.background }]}
                 >
-                  <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                    <Text numberOfLines={1} style={{ fontFamily, fontSize: 15, color: colors.ink }}>{title}</Text>
-                    <Text numberOfLines={1} style={{ fontFamily, fontSize: 13, color: colors.muted }}>{row.detail}</Text>
+                  <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+                    <Text numberOfLines={1} style={s.name}>{title}</Text>
+                    <Text numberOfLines={1} style={s.rowCaption}>{row.detail}</Text>
                   </View>
-                  <Text style={[money(row.amount), { fontSize: 15 }]}>{signedFigure(row.amount, group.currency)}</Text>
-                </Pressable>
+                  <Text style={[money(row.amount), { fontSize: 16 }]}>{signedFigure(row.amount, group.currency)}</Text>
+                </ListRow>
               );
             })}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingHorizontal: 16, borderTopWidth: 2, borderColor: colors.track, backgroundColor: colors.totalRow }}>

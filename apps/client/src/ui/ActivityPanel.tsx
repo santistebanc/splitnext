@@ -1,14 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { reversibleEffect, undoProblem, undoExplanation, type ClientReplicaState } from '@splitnext/client';
 import { describeActivity, newActivity, visibleActivity, type ActivityKind } from '../model/activity';
 import { reviewDetail, reviewTitle } from '../model/notices';
 import { BackHeader } from './BackHeader';
-import { ErrorMessage, colors, s } from './components';
-import { GridIcon, InfoIcon, PersonIcon, ReceiptIcon, RepayIcon, UndoIcon, WarningIcon } from './icons';
+import { Button, EmptyState, ErrorMessage, Notice, SectionHeading, Tag, colors, s } from './components';
+import { BellIcon, GridIcon, InfoIcon, PersonIcon, ReceiptIcon, RepayIcon, UndoIcon, WarningIcon } from './icons';
 import type { MemberListApp } from './MemberList';
 import { StickyTop } from './StickyTop';
-import { displayFamily, fontFamily } from './theme';
+import { fontFamily, radius } from './theme';
 import { useActionCall, useUiState } from './useActionCall';
 
 type Event = ClientReplicaState['activity'][number];
@@ -54,13 +54,7 @@ export function ActivityHeader(props: { app: MemberListApp }) {
       title="Activity"
       error={seen.error}
       end={seen.can('markActivitySeen') ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => { void seen.call('markActivitySeen', {}); }}
-          style={({ pressed }) => [{ height: 44, paddingHorizontal: 10, justifyContent: 'center' }, pressed && s.dim]}
-        >
-          <Text style={{ fontFamily, fontSize: 14, fontWeight: '600', color: colors.action }}>Mark all seen</Text>
-        </Pressable>
+        <Button quiet small onPress={() => { void seen.call('markActivitySeen', {}); }}>Mark all seen</Button>
       ) : undefined}
     />
   );
@@ -73,24 +67,12 @@ const tones: Record<ActivityKind, { background: string; ink: string; icon: (colo
   group: { background: colors.pale, ink: colors.soft, icon: (color) => <GridIcon size={18} color={color} /> },
 };
 
-/** A white action button inside an entry, with its icon. */
+/** A small action inside an entry, white unless it is the entry's main one. */
 function EntryAction(props: { text: string; label: string; disabled: boolean; onPress: () => void; primary?: boolean; icon?: boolean }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={props.label}
-      accessibilityState={{ disabled: props.disabled }}
-      disabled={props.disabled}
-      onPress={props.onPress}
-      style={({ pressed }) => [
-        { flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, minWidth: 44, paddingHorizontal: 14, borderRadius: 10 },
-        props.primary ? { backgroundColor: colors.action } : { borderWidth: 1, borderColor: colors.field, backgroundColor: colors.surface },
-        (pressed || props.disabled) && s.dim,
-      ]}
-    >
-      {props.icon ? <UndoIcon /> : null}
-      <Text style={{ fontFamily, fontSize: 14, fontWeight: '600', color: props.primary ? colors.actionInk : colors.ink }}>{props.text}</Text>
-    </Pressable>
+    <Button small secondary={!props.primary} label={props.label} disabled={props.disabled} onPress={props.onPress} icon={props.icon ? <UndoIcon /> : undefined}>
+      {props.text}
+    </Button>
   );
 }
 
@@ -98,13 +80,11 @@ function EntryAction(props: { text: string; label: string; disabled: boolean; on
  * A section's title, such as Today: it stays at the top of the page while its
  * entries scroll under it, until the next section's title takes its place.
  */
-function DayHeading(props: { children: ReactNode; color?: string }) {
+function DayHeading(props: { title: string; color?: string }) {
   return (
     <StickyTop>
-      <View style={{ backgroundColor: colors.background }}>
-        <Text accessibilityRole="header" style={{ paddingTop: 10, paddingBottom: 8, paddingHorizontal: 4, fontFamily, fontSize: 15, fontWeight: '600', color: props.color ?? colors.ink }}>
-          {props.children}
-        </Text>
+      <View style={{ paddingTop: 8, paddingBottom: 4, backgroundColor: colors.background }}>
+        <SectionHeading title={props.title} {...(props.color !== undefined && { color: props.color })} />
       </View>
     </StickyTop>
   );
@@ -126,15 +106,15 @@ function NeedsReview(props: { replica: ClientReplicaState }) {
 
   return (
     <View role="region" aria-label="Needs your review" style={{ paddingBottom: 8 }}>
-      <DayHeading color={colors.owes}>Needs your review · {notices.length}</DayHeading>
-      <View style={{ borderRadius: 16, borderWidth: 2, borderColor: colors.warningEdge, backgroundColor: colors.surface, overflow: 'hidden' }}>
+      <DayHeading color={colors.owes} title={`Needs your review · ${notices.length}`} />
+      <View style={[s.listCard, { borderWidth: 2, borderColor: colors.warningEdge }]}>
         {notices.map((notice, index) => {
           const commandId = notice.command.command_id;
 
           return (
             <View key={commandId} style={[{ gap: 10, paddingVertical: 14, paddingLeft: 12, paddingRight: 16 }, index > 0 && s.ruled]}>
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-                <View aria-hidden style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: colors.warning, alignItems: 'center', justifyContent: 'center' }}>
+                <View aria-hidden style={{ width: 32, height: 32, borderRadius: radius.small, backgroundColor: colors.warning, alignItems: 'center', justifyContent: 'center' }}>
                   <WarningIcon color={colors.owes} />
                 </View>
                 <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
@@ -186,16 +166,17 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
       <NeedsReview replica={props.replica} />
       {load.busy && !events.length ? <Text role="status" style={s.caption}>Loading Activity…</Text> : null}
       {!load.busy && !events.length ? (
-        <View style={{ alignItems: 'center', gap: 8, paddingVertical: 80, paddingHorizontal: 24 }}>
-          <Text style={{ fontFamily: displayFamily, fontWeight: '700', fontSize: 22, color: colors.ink }}>Nothing here yet</Text>
-          <Text style={{ fontFamily, fontSize: 15, color: colors.muted, textAlign: 'center' }}>Changes people make in this group show up here.</Text>
-        </View>
+        <EmptyState
+          icon={<BellIcon size={34} color={colors.action} strokeWidth={1.6} />}
+          title="Nothing here yet"
+          text="Changes people make in this group show up here."
+        />
       ) : null}
       <ErrorMessage message={load.error ?? action.error} />
       {days.map((day) => (
         <View key={day.label} style={{ paddingBottom: 8 }}>
-          <DayHeading>{day.label}</DayHeading>
-          <View style={{ borderRadius: 16, backgroundColor: colors.surface, overflow: 'hidden' }}>
+          <DayHeading title={day.label} />
+          <View style={s.listCard}>
             {day.events.map((event, index) => {
               const entry = describeActivity(event, props.replica);
               const tone = tones[entry.kind];
@@ -215,7 +196,7 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
               return (
                 <View key={event.id} testID={`activity-${event.id}`} style={[{ gap: 10, paddingVertical: 14, paddingLeft: 12, paddingRight: 16 }, isNew && { backgroundColor: colors.fresh }, index > 0 && s.ruled]}>
                   <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-                    <View aria-hidden style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: tone.background, alignItems: 'center', justifyContent: 'center' }}>
+                    <View aria-hidden style={{ width: 32, height: 32, borderRadius: radius.small, backgroundColor: tone.background, alignItems: 'center', justifyContent: 'center' }}>
                       {tone.icon(tone.ink)}
                     </View>
                     <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
@@ -226,7 +207,7 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
                     </View>
                     <View style={{ alignItems: 'flex-end', gap: 6, paddingTop: 2 }}>
                       <Text style={{ fontFamily, fontSize: 12, color: colors.muted }}>{timeLabel(new Date(event.occurred_at))}</Text>
-                      {isNew ? <Text style={{ fontFamily, fontSize: 11, fontWeight: '700', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, overflow: 'hidden', backgroundColor: colors.action, color: colors.actionInk }}>New</Text> : null}
+                      {isNew ? <Tag tone="action">New</Tag> : null}
                     </View>
                   </View>
                   {reversible && !problem ? (
@@ -242,9 +223,8 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
                     </View>
                   ) : null}
                   {problem ? (
-                    <View style={{ marginLeft: 44, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, backgroundColor: colors.background }}>
-                      <InfoIcon color={colors.soft} />
-                      <Text style={{ flex: 1, fontFamily, fontSize: 13, lineHeight: 18, color: colors.soft }}>{undoExplanation(problem)}</Text>
+                    <View style={{ marginLeft: 44 }}>
+                      <Notice tone="info" icon={<InfoIcon color={colors.soft} />} message={undoExplanation(problem)} />
                     </View>
                   ) : null}
                 </View>

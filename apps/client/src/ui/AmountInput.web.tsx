@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NumericFormat } from 'react-number-format';
 import { formatAmount, minorDigits } from '@splitnext/client';
-import { colors, monoFamily } from './theme';
+import { colors, monoFamily, radius } from './theme';
 import type { AmountInputProps } from './AmountInput';
 
 /** Fixed decimal places with cursor-aware insertion, replacement, and deletion. */
@@ -58,7 +58,7 @@ export function AmountInput(props: AmountInputProps) {
       }}
       style={{
         flex: 1, minWidth: 0, height: props.height, padding: '0 15px', border: 0,
-        borderRadius: 12, boxSizing: 'border-box', background: 'transparent',
+        borderRadius: radius.control, boxSizing: 'border-box', background: 'transparent',
         color: colors.ink, fontFamily: monoFamily, fontSize: props.fontSize,
         fontWeight: 600, letterSpacing: -0.8,
         outline: focused ? `2px solid ${colors.action}` : 'none', outlineOffset: -2,

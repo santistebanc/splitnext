@@ -5,12 +5,12 @@ import { hasRecords } from '../model/breakdown';
 import { balanceRows, currentExpenses, memberName, moneyLabel } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
 import { createValueStore } from './pageScroll';
-import { ErrorMessage, SectionHeading, balanceColor, colors, headerGap, s, signedMoney } from './components';
+import { ErrorMessage, ListRow, Pill, SectionHeading, balanceColor, colors, headerGap, s, signedMoney } from './components';
 import { AddPersonRow, MemberIcon, type MemberListApp, type Replica } from './MemberList';
 import { AnimatedHeight, usePrefersReducedMotion } from './AnimatedHeight';
 import { PlusIcon } from './icons';
 import { StickyTop } from './StickyTop';
-import { fontFamily, monoFamily } from './theme';
+import { fontFamily, radius, shadows } from './theme';
 import { useActionCall, useUiState } from './useActionCall';
 import { YouBadge } from './YouBadge';
 
@@ -271,7 +271,6 @@ function BalancesHeading(props: BalancesProps) {
   const settle = useActionCall();
   const you = preferredMember(props.replica.projected_snapshot, props.replica.session?.identity.id);
   const empty = !currentExpenses(props.replica.projected_snapshot).length;
-  const ink = empty ? colors.actionInk : colors.action;
 
   return (
     <View onLayout={(event) => props.layout.measure({ heading: event.nativeEvent.layout.height })}>
@@ -281,31 +280,17 @@ function BalancesHeading(props: BalancesProps) {
         end={
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             {settle.can('showSettleUp', {}) ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Settle up the group"
-                onPress={() => { void settle.call('showSettleUp', {}); }}
-                hitSlop={6}
-                style={({ pressed }) => [{ justifyContent: 'center', height: 32, paddingHorizontal: 12, borderRadius: 999, backgroundColor: colors.actionSoft }, pressed && s.dim]}
-              >
-                <Text style={{ fontFamily, fontSize: 14, fontWeight: '600', color: colors.action }}>Settle up</Text>
-              </Pressable>
+              <Pill text="Settle up" label="Settle up the group" onPress={() => { void settle.call('showSettleUp', {}); }} />
             ) : null}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Invite people"
+            {/* Invite leads setup, then yields emphasis without moving or resizing. */}
+            <Pill
+              filled={empty}
+              text="Invite people"
+              label="Invite people"
+              icon={(color) => <PlusIcon size={14} color={color} strokeWidth={2.6} />}
               disabled={!invite.can('showInvite')}
               onPress={() => { void invite.call('showInvite', {}); }}
-              hitSlop={6}
-              style={({ pressed }) => [
-                // Invite leads setup, then yields emphasis without moving or resizing.
-                { flexDirection: 'row', alignItems: 'center', gap: 4, height: 32, paddingLeft: 10, paddingRight: 12, borderRadius: 999, backgroundColor: empty ? colors.action : colors.actionSoft },
-                (pressed || !invite.can('showInvite')) && s.dim,
-              ]}
-            >
-              <PlusIcon size={14} color={ink} strokeWidth={2.6} />
-              <Text style={{ fontFamily, fontSize: 14, fontWeight: '600', color: ink }}>Invite people</Text>
-            </Pressable>
+            />
           </View>
         }
       />
@@ -447,7 +432,7 @@ function BalancesCard(props: BalancesProps & { card?: number | undefined }) {
   return (
     <>
       <View style={{ zIndex: 1 }}>
-        <View style={[s.listCard, { borderRadius: 16, borderWidth: 0, overflow: 'hidden' }, (cardHeight ?? closingCard) !== undefined && { height: cardHeight ?? closingCard }]}>
+        <View style={[s.listCard, (cardHeight ?? closingCard) !== undefined && { height: cardHeight ?? closingCard }]}>
           <AnimatedHeight height={cut ? list : growing} animate={!cut}>
             {members.map((member, index) => (
               <PersonRow
@@ -484,8 +469,8 @@ function BalancesCard(props: BalancesProps & { card?: number | undefined }) {
               hitSlop={10}
               style={({ pressed }) => [
                 // Floats over the card's edge, so it reads as a button rather than a row.
-                { alignItems: 'center', justifyContent: 'center', height: moreHeight, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, boxShadow: '0 2px 8px rgba(16, 22, 29, 0.14)' },
-                pressed && { backgroundColor: colors.background },
+                { alignItems: 'center', justifyContent: 'center', height: moreHeight, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, boxShadow: shadows.raised },
+                pressed && s.pressed,
               ]}
             >
               <Text numberOfLines={1} style={{ fontFamily, fontSize: 16, lineHeight: 16, letterSpacing: 2, color: colors.faint }}>
@@ -526,12 +511,11 @@ function PersonRow(props: {
       style={[!props.first && s.ruled, props.you && { backgroundColor: colors.youRow }]}
       onLayout={props.onLayout ? (event) => props.onLayout?.(event.nativeEvent.layout.height) : undefined}
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${name}${props.you ? ' (you)' : ''}${props.removed ? ', removed' : ''}, ${amounts.join(', ') || (props.recorded ? 'settled' : 'no expenses yet')}. Show details`}
+      <ListRow
+        label={`${name}${props.you ? ' (you)' : ''}${props.removed ? ', removed' : ''}, ${amounts.join(', ') || (props.recorded ? 'settled' : 'no expenses yet')}. Show details`}
         disabled={props.hidden || !open.can('showPerson', { memberId: props.memberId })}
         onPress={() => { void open.call('showPerson', { memberId: props.memberId }); }}
-        style={({ pressed }) => [s.listRow, { minHeight: 44 }, pressed && { backgroundColor: colors.background }]}
+        style={{ minHeight: 44 }}
       >
         <MemberIcon participants={participants} />
         <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -541,12 +525,12 @@ function PersonRow(props: {
         </View>
         <View style={{ alignItems: 'flex-end', gap: 1 }}>
           {props.balances.map((entry) => (
-            <Text key={entry.currency} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} style={{ fontFamily: monoFamily, fontWeight: '600', fontSize: 16, color: balanceColor(entry.amount) }}>
+            <Text key={entry.currency} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} style={[s.amount, { color: balanceColor(entry.amount) }]}>
               {signedMoney(entry.amount, entry.currency)}
             </Text>
           ))}
         </View>
-      </Pressable>
+      </ListRow>
       <ErrorMessage message={open.error} />
     </View>
   );

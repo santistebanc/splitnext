@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { formatAmount, parseAmount, preferredMember, repaymentMembers, settlementSuggestions, type ClientReplicaState } from '@splitnext/client';
+import { parseAmount, preferredMember, repaymentMembers, settlementSuggestions, type ClientReplicaState } from '@splitnext/client';
 import { memberName, moneyLabel, recentCurrencies } from '../model/expenses';
-import { ErrorMessage, HeaderAction, RadioRow, ScreenHeader, colors, s } from './components';
+import { ErrorMessage, HeaderAction, RadioRow, ScreenHeader, SectionHeading, colors, s } from './components';
+import { RepaymentRow } from './ExpenseList';
 import { CurrencyPicker } from './CurrencyPicker';
 import { Drawer } from './Drawer';
 import { ChevronDownIcon } from './icons';
-import { displayFamily, fontFamily, monoFamily } from './theme';
+import { displayFamily, radius } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 type Snapshot = ClientReplicaState['projected_snapshot'];
@@ -72,7 +73,7 @@ function NameChip(props: { label: string; name: string; open: boolean; onPress: 
       accessibilityLabel={`${props.label} ${props.name}. Change`}
       accessibilityState={{ expanded: props.open }}
       onPress={props.onPress}
-      style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 4, height: 48, paddingHorizontal: 10, borderRadius: 12, backgroundColor: props.open ? colors.actionSoft : colors.track }, pressed && s.dim]}
+      style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 4, height: 48, paddingHorizontal: 10, borderRadius: radius.control, backgroundColor: props.open ? colors.actionSoft : colors.track }, pressed && s.pressed]}
     >
       <Text style={{ fontFamily: displayFamily, fontSize: 26, fontWeight: '700', color: colors.ink }}>{props.name}</Text>
       <ChevronDownIcon color={colors.ink} strokeWidth={2.2} />
@@ -165,42 +166,20 @@ export function SettlementsPanel(props: { replica: ClientReplicaState }) {
 
 /** Recorded repayments, newest first; each opens in the repayment form. */
 function RepaymentHistory(props: { replica: ClientReplicaState }) {
-  const action = useActionCall();
   const snapshot = props.replica.projected_snapshot;
   const draft = useUiState().repayment;
 
   if (!snapshot) return null;
-  const you = preferredMember(snapshot, props.replica.session?.identity.id)?.id;
   const recorded = snapshot.settlements.filter((entry) => entry.status === 'active' && entry.id !== draft.settlementId).toReversed();
 
   if (!recorded.length) return null;
 
   return (
-    <View style={{ gap: 8, marginTop: 16 }}>
-      <Text accessibilityRole="header" style={{ paddingHorizontal: 4, fontFamily, fontSize: 15, fontWeight: '600', color: colors.ink }}>Earlier repayments</Text>
-      <View style={{ borderRadius: 16, backgroundColor: colors.surface, overflow: 'hidden' }}>
-        {recorded.map((entry, index) => {
-          const from = personName(snapshot, entry.from_member_id, you, true);
-          const to = personName(snapshot, entry.to_member_id, you);
-
-          return (
-            <Pressable
-              key={entry.id}
-              accessibilityRole="button"
-              accessibilityLabel={`Change repayment: ${from} paid ${to} ${moneyLabel(entry.amount, entry.currency)}`}
-              disabled={!action.can('showSettlement', { settlementId: entry.id })}
-              onPress={() => { void action.call('showSettlement', { settlementId: entry.id }); }}
-              style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingHorizontal: 16 }, index > 0 && s.ruled, pressed && { backgroundColor: colors.background }]}
-            >
-              <Text style={{ flex: 1, fontFamily, fontSize: 15, color: colors.ink }}>
-                {from} <Text style={{ color: colors.muted }}>→</Text> {to}
-              </Text>
-              <Text style={{ fontFamily: monoFamily, fontSize: 15, fontWeight: '600', color: colors.ink }}>{`${formatAmount(entry.amount, entry.currency)} ${entry.currency}`}</Text>
-            </Pressable>
-          );
-        })}
+    <View style={{ marginTop: 16 }}>
+      <SectionHeading title="Earlier repayments" />
+      <View style={s.listCard}>
+        {recorded.map((entry, index) => <RepaymentRow key={entry.id} replica={props.replica} settlement={entry} first={index === 0} />)}
       </View>
-      <ErrorMessage message={action.error} />
     </View>
   );
 }

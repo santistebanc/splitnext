@@ -1,11 +1,10 @@
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { preferredMember, type ClientReplicaState, type Expense, type Settlement } from '@splitnext/client';
 import { currentExpenses, expenseLabel, memberName, moneyLabel } from '../model/expenses';
 import { needsReview } from '../model/notices';
 import { StickyTop } from './StickyTop';
-import { ErrorMessage, SectionHeading, colors, s } from './components';
+import { ErrorMessage, ListRow, Pill, SectionHeading, colors, s } from './components';
 import { PlusIcon } from './icons';
-import { fontFamily, monoFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 type Replica = ClientReplicaState;
@@ -52,7 +51,7 @@ export function ExpenseList(props: { replica: Replica; stickyTop?: number | unde
           <SectionHeading title="Expenses" onPress={props.onHeadingPress} />
         </View>
       </StickyTop>
-      <View style={[s.listCard, { borderRadius: 16, borderWidth: 0 }]}>
+      <View style={s.listCard}>
         {entries.map((entry, index) =>
           entry.kind === 'expense'
             ? <ExpenseRow key={entry.expense.id} replica={props.replica} expense={entry.expense} first={index === 0} />
@@ -71,13 +70,7 @@ function ReviewDot() {
 function Row(props: { first: boolean; label: string; title: string; meta: string; amount: string; quiet?: boolean; review: boolean; disabled: boolean; onPress: () => void; error: string | null }) {
   return (
     <View style={!props.first && s.ruled}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={props.label}
-        disabled={props.disabled}
-        onPress={props.onPress}
-        style={({ pressed }) => [s.listRow, pressed && { backgroundColor: colors.background }]}
-      >
+      <ListRow label={props.label} disabled={props.disabled} onPress={props.onPress}>
         <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text numberOfLines={1} style={[s.name, { flexShrink: 1 }]}>{props.title}</Text>
@@ -85,8 +78,8 @@ function Row(props: { first: boolean; label: string; title: string; meta: string
           </View>
           <Text numberOfLines={1} style={s.rowCaption}>{props.meta}</Text>
         </View>
-        <Text style={{ fontFamily: monoFamily, fontWeight: '600', fontSize: 16, color: props.quiet ? colors.muted : colors.ink }}>{props.amount}</Text>
-      </Pressable>
+        <Text style={[s.amount, props.quiet && { color: colors.muted }]}>{props.amount}</Text>
+      </ListRow>
       <ErrorMessage message={props.error} />
     </View>
   );
@@ -113,7 +106,8 @@ function ExpenseRow(props: { replica: Replica; expense: Expense; first: boolean 
   );
 }
 
-function RepaymentRow(props: { replica: Replica; settlement: Settlement; first: boolean }) {
+/** A recorded repayment, which opens in the repayment form. */
+export function RepaymentRow(props: { replica: Replica; settlement: Settlement; first: boolean }) {
   const open = useActionCall();
   const entry = props.settlement;
   const title = repaymentTitle(props.replica, entry);
@@ -138,26 +132,21 @@ function RepaymentRow(props: { replica: Replica; settlement: Settlement; first: 
 export function AddExpenseButton(props: { secondary?: boolean }) {
   const add = useActionCall();
   const editingMember = useUiState().memberEdit !== null;
-  const ink = props.secondary ? colors.action : colors.actionInk;
 
   // A floating button would cover a name being typed above the keyboard.
   if (editingMember) return null;
 
   return (
     <>
-      <Pressable
-        accessibilityRole="button"
+      <Pill
+        large
+        filled={!props.secondary}
+        text="Add expense"
+        label="Add expense"
+        icon={(color) => <PlusIcon size={20} color={color} strokeWidth={2.2} />}
         disabled={!add.can('showExpense', {})}
         onPress={() => { void add.call('showExpense', {}); }}
-        style={({ pressed }) => [
-          { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, paddingLeft: 16, paddingRight: 20, borderRadius: 999, backgroundColor: props.secondary ? colors.actionSoft : colors.action, boxShadow: '0 6px 18px rgba(16, 22, 29, 0.2)' },
-          !add.can('showExpense', {}) && s.dim,
-          pressed && s.pressed,
-        ]}
-      >
-        <PlusIcon size={20} color={ink} strokeWidth={2.2} />
-        <Text style={{ fontFamily, fontSize: 16, fontWeight: '600', color: ink }}>Add expense</Text>
-      </Pressable>
+      />
       <ErrorMessage message={add.error} />
     </>
   );

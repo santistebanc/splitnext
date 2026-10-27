@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import type { ClientGroupSummary } from '@splitnext/client';
 import type { AppController } from '../model/controller';
 import { BrandMark } from './BrandMark';
-import { Button, EmptyState, balanceColor, ErrorMessage, FooterButton, ScreenHeader, s, signedMoney } from './components';
+import { Button, EmptyState, ErrorMessage, FooterButton, Pill, ScreenHeader, SectionHeading, balanceColor, s, signedMoney } from './components';
 import { CheckIcon, ChevronDownIcon, LinkIcon, PeopleIcon, PlusIcon } from './icons';
 import { colors, fontFamily, monoFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
@@ -46,18 +46,18 @@ export function GroupsHeader() {
           </View>
         )}
         end={(
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Join with an invite link"
+          <Button
+            small
+            secondary
+            label="Join with an invite link"
+            icon={<LinkIcon />}
             disabled={!join.can('showJoinGroup', {})}
             onPress={() => {
               void join.call('showJoinGroup', {});
             }}
-            style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 44, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }, (pressed || !join.can('showJoinGroup', {})) && s.dim]}
           >
-            <LinkIcon />
-            <Text style={{ fontFamily, fontSize: 14, fontWeight: '500', color: colors.ink }}>Join</Text>
-          </Pressable>
+            Join
+          </Button>
         )}
       />
       <ErrorMessage message={join.error} />
@@ -147,7 +147,7 @@ export function GroupsView(props: GroupsViewProps) {
             {isLeft ? (
               <Text style={s.rowAction}>Rejoin</Text>
             ) : balances === null ? (
-              <Text style={{ height: 32, lineHeight: 32, paddingHorizontal: 12, borderRadius: 999, overflow: 'hidden', backgroundColor: colors.actionSoft, color: colors.actionDark, fontFamily, fontSize: 14, fontWeight: '600' }}>Choose who you are</Text>
+              <Pill text="Choose who you are" />
             ) : balances === undefined ? (
               <Text style={[s.amount, { fontSize: 17, color: colors.muted }]}>—</Text>
             ) : balances.length ? (
@@ -173,9 +173,7 @@ export function GroupsView(props: GroupsViewProps) {
 
   return (
     <View style={{ gap: 10 }}>
-      <Text accessibilityRole="header" style={{ paddingHorizontal: 4, fontFamily, fontSize: 14, fontWeight: '600', color: colors.muted }}>
-        Your groups
-      </Text>
+      <SectionHeading title="Your groups" />
       {active.length ? (
         active.map(card)
       ) : (
@@ -187,21 +185,21 @@ export function GroupsView(props: GroupsViewProps) {
       )}
       {left.length ? (
         <View style={{ flexDirection: 'row' }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded: showLeft }}
+          <Button
+            quiet
+            small
+            expanded={showLeft}
+            icon={(
+              <View style={showLeft ? { transform: [{ rotate: '180deg' }] } : null}>
+                <ChevronDownIcon color={colors.action} strokeWidth={1.8} />
+              </View>
+            )}
             onPress={() => {
               void actions.dispatch('setLeftGroupsVisible', { visible: !showLeft }, { origin: 'ui' });
             }}
-            style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 44, marginTop: 4, paddingHorizontal: 4 }, pressed && s.dim]}
           >
-            <View style={showLeft ? { transform: [{ rotate: '180deg' }] } : null}>
-              <ChevronDownIcon color={colors.action} strokeWidth={1.8} />
-            </View>
-            <Text style={{ fontFamily, fontSize: 14, fontWeight: '500', color: colors.action }}>
-              {showLeft ? 'Hide' : 'Show'} {left.length === 1 ? '1 group' : `${left.length} groups`} you left
-            </Text>
-          </Pressable>
+            {`${showLeft ? 'Hide' : 'Show'} ${left.length === 1 ? '1 group' : `${left.length} groups`} you left`}
+          </Button>
         </View>
       ) : null}
       {showLeft && left.length ? left.map(card) : null}
