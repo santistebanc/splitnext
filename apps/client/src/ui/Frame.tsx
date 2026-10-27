@@ -28,8 +28,9 @@ type FrameProps = {
   /** A rule above the pinned footer, for screens whose content scrolls under it. */
   ruledFooter?: boolean | undefined;
   /** Content offset and the space released by its header. Collapse follows their
-   * sum, which stays fixed when header reflow clamps the scroll position. */
-  onScroll?: ((y: number, headerCollapse: number) => void) | undefined;
+   * sum, which stays fixed when header reflow clamps the scroll position.
+   * `restored` marks the position a screen opens at rather than a scroll. */
+  onScroll?: ((y: number, headerCollapse: number, restored?: boolean) => void) | undefined;
   /** Receives a way to scroll the content, smoothly unless told not to, such as back to the top. */
   scrollControl?: { current: ((y: number, animated?: boolean) => void) | null } | undefined;
 };
@@ -69,7 +70,7 @@ export function Frame(props: FrameProps) {
     restoring.current = true;
     scrolled.current = restored;
     scroll.current?.scrollTo({ y: restored, animated: false });
-    props.onScroll?.(restored, 0);
+    props.onScroll?.(restored, 0, true);
 
     const frame = requestAnimationFrame(() => {
       restoring.current = false;

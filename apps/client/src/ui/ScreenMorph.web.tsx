@@ -65,10 +65,17 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
     return { x: rect.left - (origin?.left ?? 0), y: rect.top - (origin?.top ?? 0), w: rect.width, h: rect.height };
   }
 
-  private visible(box: Box): boolean {
+  /**
+   * Whether a part can be seen: inside the screen, and for content of the
+   * page, inside the page's visible part rather than scrolled under the
+   * header or past the foot.
+   */
+  private visible(element: HTMLElement, box: Box): boolean {
     const height = this.root.current?.clientHeight ?? 0;
+    const page = element.closest(`#${pageId}`);
+    const area = page ? this.within(page.getBoundingClientRect()) : { y: 0, h: height };
 
-    return box.w >= 1 && box.h >= 1 && box.y < height && box.y + box.h > 0;
+    return box.w >= 1 && box.h >= 1 && box.y < Math.min(height, area.y + area.h) && box.y + box.h > Math.max(0, area.y);
   }
 
   override getSnapshotBeforeUpdate(previous: Props): Snapshot | null {
@@ -83,7 +90,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
       const key = element.dataset.morph;
       const box = this.within(element.getBoundingClientRect());
 
-      if (!key || !this.visible(box)) return;
+      if (!key || !this.visible(element, box)) return;
       const style = getComputedStyle(element);
 
       parts.set(key, { box, clone: copy(element), background: style.backgroundColor, radius: style.borderRadius, border: style.borderTopColor, borderWidth: style.borderTopWidth, color: style.color, font: style.font, clips: style.textOverflow === 'ellipsis' });
@@ -102,23 +109,11 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
     const dx = direction > 0 ? -slide : direction < 0 ? slide : 0;
     const animations: Animation[] = [];
     const landed: HTMLElement[] = [];
-    const pairs: { element: HTMLElement; from: Part; to: Box; style: CSSStyleDeclaration }[] = [];
-
-    root.querySelectorAll<HTMLElement>('[data-morph]').forEach((element) => {
-      const from = element.dataset.morph ? snapshot.parts.get(element.dataset.morph) : undefined;
-      const to = this.within(element.getBoundingClientRect());
-
-      if (from && this.visible(to)) pairs.push({ element, from, to, style: getComputedStyle(element) });
-    });
 
     overlay.replaceChildren();
-    const keys = new Set(pairs.map((pair) => pair.element.dataset.morph));
     const old = snapshot.screen;
 
     Object.assign(old.style, { position: 'absolute', inset: '0', pointerEvents: 'none' });
-    old.querySelectorAll<HTMLElement>('[data-morph]').forEach((element) => {
-      if (keys.has(element.dataset.morph)) element.style.visibility = 'hidden';
-    });
     overlay.appendChild(old);
     // The copy keeps the old page's scroll position.
     const page = old.querySelector('[data-copied-page]');
@@ -127,6 +122,43 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
 
     animations.push(old.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translateX(${dx}px)` }], { duration: duration * 0.42, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' }));
     animations.push(content.animate([{ opacity: 0, transform: `translateX(${-dx}px)` }, { opacity: 1, transform: 'none' }], { duration: duration * 0.7, delay: duration * 0.2, easing: easeOut, fill: 'backwards' }));
+
+    // Where parts land is measured a frame later: the new screen settles its
+    // own header first, such as growing back to full size from the compact
+    // one the old screen was scrolled to. It is still invisible meanwhile.
+    const frame = requestAnimationFrame(() => this.fly(snapshot, overlay, old, animations, landed));
+    const timer = setTimeout(() => this.finish?.(), duration + 60);
+
+    this.finish = () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+      overlay.replaceChildren();
+      landed.forEach((element) => { element.style.visibility = ''; });
+      animations.forEach((animation) => animation.cancel());
+      this.finish = null;
+    };
+  }
+
+  /** Flies each part shown on both screens from where it was to where it has landed. */
+  private fly(snapshot: Snapshot, overlay: HTMLDivElement, old: HTMLElement, animations: Animation[], landed: HTMLElement[]): void {
+    const root = this.root.current;
+
+    if (!root) return;
+    const pairs: { element: HTMLElement; from: Part; to: Box; style: CSSStyleDeclaration }[] = [];
+
+    root.querySelectorAll<HTMLElement>('[data-morph]').forEach((element) => {
+      if (overlay.contains(element)) return;
+      const from = element.dataset.morph ? snapshot.parts.get(element.dataset.morph) : undefined;
+      const to = this.within(element.getBoundingClientRect());
+
+      if (from && this.visible(element, to)) pairs.push({ element, from, to, style: getComputedStyle(element) });
+    });
+
+    const keys = new Set(pairs.map((pair) => pair.element.dataset.morph));
+
+    old.querySelectorAll<HTMLElement>('[data-morph]').forEach((element) => {
+      if (keys.has(element.dataset.morph)) element.style.visibility = 'hidden';
+    });
 
     for (const { element, from, to, style } of pairs) {
       const a = from.box;
@@ -167,16 +199,6 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
         ? [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / sx},${1 / scale})`, opacity: 0 }, { transform: 'none', opacity: 1 }]
         : [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / scale})`, width: `${a.w * scale}px`, opacity: 0 }, { opacity: 0, offset: 0.3 }, { transform: 'none', width: `${to.w}px`, opacity: 1 }], { duration, easing: easeOut, fill: 'forwards' }));
     }
-
-    const timer = setTimeout(() => this.finish?.(), duration + 40);
-
-    this.finish = () => {
-      clearTimeout(timer);
-      overlay.replaceChildren();
-      landed.forEach((element) => { element.style.visibility = ''; });
-      animations.forEach((animation) => animation.cancel());
-      this.finish = null;
-    };
   }
 
   override componentWillUnmount(): void {

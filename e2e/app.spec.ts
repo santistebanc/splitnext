@@ -1255,6 +1255,69 @@ test('keeps a cut-off name cut off while it flies to its title', async ({ page }
   expect(widths.size).toBeGreaterThan(4);
 });
 
+test('lands flying names where they end up when leaving a scrolled screen', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await createGroup(page, 'Scrolled', 'Ana');
+
+  for (const name of ['Ben', 'Cy', 'Dana', 'Eli']) await addMember(page, name);
+
+  for (let index = 0; index < 12; index++) await addExpense(page, `Thing ${index}`, String(10 + index));
+
+  const scroller = page.locator('#splitnext-page');
+
+  type Spot = { y: number; height: number };
+
+  // The last frame of Ben's name in flight, and where the real name then sits.
+  async function flight(go: () => Promise<void>): Promise<{ last: Spot | undefined; landed: Spot }> {
+    const watching = page.evaluate(() => new Promise<Spot[]>((resolve) => {
+      const start = performance.now();
+      const spots: Spot[] = [];
+
+      (function frame() {
+        for (const node of document.querySelectorAll('[aria-hidden] *')) {
+          if (node.childElementCount || node.textContent !== 'Ben' || Number(getComputedStyle(node).opacity) < 0.9) continue;
+          const box = node.getBoundingClientRect();
+
+          spots.push({ y: box.y, height: box.height });
+        }
+
+        if (performance.now() - start < 900) requestAnimationFrame(frame);
+        else resolve(spots);
+      })();
+    }));
+
+    await go();
+    const spots = await watching;
+    const landed = (await page.getByText('Ben', { exact: true }).boundingBox())!;
+
+    return { last: spots.at(-1), landed: { y: landed.y, height: landed.height } };
+  }
+
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+  // From the group screen scrolled to its compact header, Ben's page opens at full size.
+  await scroller.evaluate((node) => { node.scrollTop = 400; });
+  await page.waitForTimeout(600);
+  const opening = await flight(() => person(page, 'Ben').click());
+
+  expect(Math.abs(opening.last!.y - opening.landed.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(opening.last!.height - opening.landed.height)).toBeLessThanOrEqual(1);
+
+  // From Ben's page scrolled to its compact header, back to the group at its top.
+  await button(page, 'Back to Scrolled').click();
+  await page.waitForTimeout(800);
+  await scroller.evaluate((node) => { node.scrollTop = 0; });
+  await page.waitForTimeout(600);
+  await person(page, 'Ben').click();
+  await page.waitForTimeout(800);
+  await scroller.evaluate((node) => { node.scrollTop = 400; });
+  await page.waitForTimeout(600);
+  const returning = await flight(() => button(page, 'Back to Scrolled').click());
+
+  expect(Math.abs(returning.last!.y - returning.landed.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(returning.last!.height - returning.landed.height)).toBeLessThanOrEqual(1);
+});
+
 test('closes panels in place without the content returning at the end', async ({ page }) => {
   await createGroup(page, 'Panels', 'Ana');
   await addMember(page, 'Ben');

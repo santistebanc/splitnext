@@ -86,6 +86,17 @@ export function createCompactProgress() {
       last = null;
       frame = requestAnimationFrame(step);
     },
+    /**
+     * Takes the shrink for this scroll position at once, as when another
+     * screen opens at its own position: the change of screen is the movement.
+     */
+    jump(scrolled: number): void {
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = null;
+      last = null;
+      target = Math.min(1, Math.max(0, scrolled / shrinkDistance));
+      store.set(target);
+    },
   };
 }
 
