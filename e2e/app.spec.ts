@@ -1579,6 +1579,52 @@ test('lands flying names where they end up when leaving a scrolled screen', asyn
   expect(Math.abs(returning.last!.height - returning.landed.height)).toBeLessThanOrEqual(1);
 });
 
+test('closes each dropdown on a tap outside it, and still lets that tap act', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 760 });
+  await createGroup(page, 'Outside', 'Ana');
+  await addMember(page, 'Ben');
+  const elsewhere = () => page.mouse.click(200, 120);
+
+  // Who paid: open, tap away, gone; its own button still toggles it.
+  await button(page, 'Add expense').click();
+  await field(page, 'Amount').fill('10');
+  await page.getByRole('button', { name: /^Paid by / }).click();
+  await expect(page.getByRole('radio')).toHaveCount(2);
+  await field(page, 'Description').click();
+  await expect(page.getByRole('radio')).toHaveCount(0);
+  await expect(field(page, 'Description')).toBeFocused();
+  await page.getByRole('button', { name: /^Paid by / }).click();
+  await expect(page.getByRole('radio')).toHaveCount(2);
+  await page.getByRole('button', { name: /^Paid by / }).click();
+  await expect(page.getByRole('radio')).toHaveCount(0);
+  await button(page, 'Cancel').click();
+
+  // The invite link: a tap away closes it; a tap on Activity opens Activity, and Back returns to the group.
+  await button(page, 'Invite people').click();
+  await expect(page.getByRole('region', { name: 'Invite people' })).toBeVisible();
+  await elsewhere();
+  await expect(page.getByRole('region', { name: 'Invite people' })).toHaveCount(0);
+  await button(page, 'Invite people').click();
+  await expect(page.getByRole('region', { name: 'Invite people' })).toBeVisible();
+  await bell(page).click();
+  await expect(heading(page, 'Activity')).toBeVisible();
+  await page.waitForTimeout(200);
+  await expect(heading(page, 'Activity')).toBeVisible();
+  await button(page, 'Back to Outside').click();
+  await expect(heading(page, 'Outside')).toBeVisible();
+
+  // Joining with a link, and leaving a group, on the groups list.
+  await button(page, 'Back to groups').click();
+  await button(page, 'Join with an invite link').click();
+  await expect(field(page, 'Invite link')).toBeVisible();
+  await elsewhere();
+  await expect(field(page, 'Invite link')).toHaveCount(0);
+  await button(page, 'Leave Outside').click();
+  await expect(page.getByText(/^Leave Outside on this device/)).toBeVisible();
+  await elsewhere();
+  await expect(page.getByText(/^Leave Outside on this device/)).toHaveCount(0);
+});
+
 test('closes panels in place without the content returning at the end', async ({ page }) => {
   await createGroup(page, 'Panels', 'Ana');
   await addMember(page, 'Ben');

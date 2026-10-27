@@ -56,7 +56,10 @@ person's row becomes their page, Add expense becomes the new expense's title, an
 into its new shape, such as from a person's row to the bar on their page),
 while the rest fades and slides 28px, forward when going deeper and back when
 returning. Panels that open in place, such as the invite link, the join field,
-and who paid, grow down into place and shrink away when closed. Balance bars
+and who paid, grow down into place and shrink away when closed. A tap outside
+an open dropdown (who paid, the join field, the invite link, or a leave
+confirmation) closes it, and still reaches whatever was tapped; its own button
+still toggles it, and starting to scroll leaves it open. Balance bars
 ease to their new width. Reduced motion shows every change at once.
 Avoid repeated explanatory text, duplicate actions, unsupported controls, and rename
 save actions before a name changes. Use precise control labels rather than

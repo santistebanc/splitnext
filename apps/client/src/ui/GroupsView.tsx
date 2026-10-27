@@ -46,6 +46,7 @@ export function GroupsHeader() {
   const [link, setLink] = useState('');
   const [invalid, setInvalid] = useState(false);
   const field = useRef<TextInput>(null);
+  const joinToggle = useRef<View>(null);
 
   function submit(): void {
     if (!parseInviteLink(link.trim())) {
@@ -63,6 +64,7 @@ export function GroupsHeader() {
         start={<Text style={[s.headerActionText, { paddingLeft: 24, fontWeight: '700' }]}>splitnext</Text>}
         end={(
           <Pressable
+            ref={joinToggle}
             accessibilityRole="button"
             accessibilityLabel="Join with an invite link"
             accessibilityState={{ expanded: open }}
@@ -77,7 +79,7 @@ export function GroupsHeader() {
           </Pressable>
         )}
         underRow={(
-          <Reveal>
+          <Reveal toggle={joinToggle} onOutsidePress={() => { setOpen(false); setInvalid(false); }}>
             {open ? (
               <View style={{ gap: 8, paddingTop: 4 }}>
                 <View style={[s.fieldRow, invalid && { borderColor: colors.owes }]}>
@@ -156,6 +158,8 @@ export function GroupsView(props: GroupsViewProps) {
   // The row last pressed, so a failure appears beside that row.
   const [target, setTarget] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<string | null>(null);
+  // The open confirmation's own trash button, which toggles it.
+  const leaveToggle = useRef<View>(null);
   const action = useActionCall();
   const active = state.groups.filter((group) => group.status === 'active');
   const left = state.groups.filter((group) => group.status === 'left');
@@ -209,6 +213,7 @@ export function GroupsView(props: GroupsViewProps) {
               {review ? <Text style={[s.caption, { fontWeight: '600', color: colors.warningInk }]}>A change needs review</Text> : null}
             </View>
             <Pressable
+              ref={leaving === group.group_id ? leaveToggle : undefined}
               accessibilityRole="button"
               accessibilityLabel={`Leave ${group.name}`}
               onPress={() => setLeaving(leaving === group.group_id ? null : group.group_id)}
@@ -218,7 +223,7 @@ export function GroupsView(props: GroupsViewProps) {
             </Pressable>
           </View>
         </Pressable>
-        <Reveal>
+        <Reveal toggle={leaveToggle} onOutsidePress={() => setLeaving(null)}>
           {leaving === group.group_id ? (
             <View style={{ gap: 10, paddingBottom: 18 }}>
               <Text style={s.body}>Leave {group.name} on this device? You can rejoin it later.</Text>

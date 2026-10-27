@@ -262,6 +262,7 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
   const draft = useUiState().expense;
   const edit = useActionCall();
   const [choosingPayer, setChoosingPayer] = useState(false);
+  const payerToggle = useRef<View>(null);
   const allMembers = snapshot?.members ?? [];
 
   // Active members, and anyone the expense already names who was removed since.
@@ -281,6 +282,7 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
   return (
     <View style={{ paddingBottom: 24 }}>
       <Pressable
+        ref={payerToggle}
         accessibilityRole="button"
         accessibilityLabel={`Paid by ${draft.paidBy ? `${memberName(snapshot, draft.paidBy)}${draft.paidBy === you ? ' (you)' : ''}` : 'nobody yet'}. Change payer`}
         accessibilityState={{ expanded: choosingPayer }}
@@ -293,7 +295,7 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
           <Text style={withTransition({ fontSize: 14, color: colors.ink, transform: [{ rotate: choosingPayer ? '180deg' : '0deg' }] }, 'transform', 350)}>▾</Text>
         </View>
       </Pressable>
-      <Reveal>
+      <Reveal toggle={payerToggle} onOutsidePress={() => setChoosingPayer(false)}>
         {choosingPayer ? (
           <View role="radiogroup" aria-label="Paid by">
             {payers.map((member) => (
