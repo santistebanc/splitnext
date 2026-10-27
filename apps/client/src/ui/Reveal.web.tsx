@@ -1,6 +1,8 @@
 import { useLayoutEffect, useReducer, useRef, useState, type ReactNode } from 'react';
 import { easeOut } from './theme';
 
+type Frame = { height: string; opacity: string | number; transform: string };
+
 /**
  * Content that opens in place, such as the invite link or the join field: it
  * grows from nothing and settles down into place, and on closing shrinks away
@@ -11,6 +13,7 @@ export function Reveal(props: { children: ReactNode }) {
   const element = useRef<HTMLDivElement>(null);
   const last = useRef<ReactNode>(null);
   const shown = useRef(present);
+  const running = useRef<Animation | null>(null);
   const [closing, setClosing] = useState(false);
   const [, rerender] = useReducer((count: number) => count + 1, 0);
 
@@ -24,10 +27,19 @@ export function Reveal(props: { children: ReactNode }) {
 
     if (!node || was === present) return;
 
+    // Changing course mid-way starts from where the last movement got to,
+    // and the movement it replaces must not finish closing afterwards.
+    const style = getComputedStyle(node);
+    const current: Frame | null = running.current ? { height: style.height, opacity: style.opacity, transform: style.transform } : null;
+
+    running.current?.cancel();
+    running.current = null;
+
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       // This render still showed the closed content; render again without it.
       if (!present) {
         last.current = null;
+        setClosing(false);
         rerender();
       }
 
@@ -35,24 +47,38 @@ export function Reveal(props: { children: ReactNode }) {
     }
 
     const height = `${node.offsetHeight}px`;
-    const open = { height, opacity: 1, transform: 'none' };
-    const shut = { height: '0px', opacity: 0, transform: 'translateY(-8px)' };
+    const open: Frame = { height, opacity: 1, transform: 'none' };
+    const shut: Frame = { height: '0px', opacity: 0, transform: 'translateY(-8px)' };
 
     if (present) {
-      node.animate([shut, open], { duration: 340, easing: easeOut });
+      setClosing(false);
+      const animation = node.animate([current ?? shut, open], { duration: 340, easing: easeOut });
+
+      running.current = animation;
+      animation.onfinish = () => { running.current = null; };
 
       return;
     }
 
     setClosing(true);
-    const animation = node.animate([open, shut], { duration: 260, easing: easeOut, fill: 'forwards' });
+    const animation = node.animate([current ?? open, shut], { duration: 260, easing: easeOut, fill: 'forwards' });
 
+    running.current = animation;
+    // The last frame holds until the content has gone; letting go first would
+    // show the content at full size for a frame.
     animation.onfinish = () => {
       last.current = null;
       setClosing(false);
-      animation.cancel();
     };
   }, [present]);
+
+  // Once closed content has left the page, let go of the held last frame,
+  // before the browser paints.
+  useLayoutEffect(() => {
+    if (present || closing || running.current?.playState !== 'finished') return;
+    running.current.cancel();
+    running.current = null;
+  });
 
   const content = present || shown.current || closing ? last.current : null;
 
