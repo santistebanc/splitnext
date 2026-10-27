@@ -229,7 +229,7 @@ function People(props: { app: MemberListApp; replica: Replica }) {
   const max = Math.max(0, ...[...owing.values()].map((entries) => Math.abs(entries[0]?.amount ?? 0)));
 
   return (
-    <View role="list" aria-label="Balances">
+    <View role="region" aria-label="Balances">
       {members.map((member) => (
         <PersonRow
           key={member.id}

@@ -29,10 +29,11 @@ How it fits together, and the rules each part keeps, is in
   edit/remove/restore commands.
 - Cached, attributed Activity and safe compensating undo, including reversing a
   reversal while preserving immutable history and later changes.
-- An Activity bell counting new changes from other identities and changes
-  waiting for review, with New tags and Mark all seen in Activity.
-- Group settings, opened by the gear beside the Activity bell, for renaming
-  the group and leaving it on this device.
+- An Activity count in the group header for new changes from other
+  identities and changes waiting for review, with new entries marked in
+  Activity and Mark all seen.
+- Renaming a group in place from its header, and leaving it on this device
+  from its row in the groups list.
 - Nonexclusive preferred-member selection (the member the UI calls “you”).
 - Leaving and rejoining a group without revoking its permanent access grant.
 - A per-identity list of accessible groups, marking the ones it left, backed
@@ -53,15 +54,15 @@ How it fits together, and the rules each part keeps, is in
   screens are
   described in [docs/architecture.md](./docs/architecture.md#the-web-app) and
   specified in [docs/product-spec.md](./docs/product-spec.md).
-- One group screen with collapsible balances above the expenses and
-  repayments; person details with a balance breakdown, Settle up, rename,
+- One group screen with everyone's balance as ruled rows above the expenses
+  and repayments; person details with a balance breakdown, Settle up, rename,
   “I’m …” and remove; and browser Back/Forward support. Forms return to where
   they were opened.
 - A `/components` workbench and in-app devtools, enabled with debug
   inspection, for previewing components and calling any app action.
-- One fixed light theme with locally served IBM Plex Sans, IBM Plex Mono, and
-  Bricolage Grotesque fonts. The original blue split-S mark appears on the
-  groups list and the join screen. Theme assets are precached with the app shell
+- One fixed light theme on warm paper with square black controls, locally
+  served Instrument Sans and Geist Mono fonts, and morphing screen changes on
+  the web. Theme assets are precached with the app shell
   for offline reloads; changing a theme asset invalidates that cache.
 - Amounts are plain numbers with two decimals, never shown with a currency.
   Expenses and repayments record the no-currency code XXX, and the ledger keeps
@@ -73,7 +74,7 @@ How it fits together, and the rules each part keeps, is in
   and balances that net to zero per currency; see
   [ADR 0017](./docs/adr/0017-allocate-money-in-whole-minor-units-with-burden-fair-rounding.md).
 
-Repayments, cached Activity, safe undo and the Activity bell are
+Repayments, cached Activity, safe undo and the Activity count are
 implemented. Their agreed behavior is in
 [the product specification](./docs/product-spec.md#agreed-feature-port-from-the-earlier-app).
 

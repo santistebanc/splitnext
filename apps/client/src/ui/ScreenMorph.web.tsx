@@ -32,7 +32,12 @@ function copy(element: HTMLElement): HTMLElement {
   if (element instanceof HTMLInputElement && clone instanceof HTMLInputElement) clone.setAttribute('value', element.value);
 
   clone.removeAttribute('data-morph');
-  clone.removeAttribute('id');
+
+  // Ids stay unique: the copy's page is found by its mark instead.
+  for (const node of [clone, ...clone.querySelectorAll<HTMLElement>('[id]')]) {
+    if (node.id === pageId) node.dataset.copiedPage = '';
+    node.removeAttribute('id');
+  }
 
   return clone;
 }
@@ -115,7 +120,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
     });
     overlay.appendChild(old);
     // The copy keeps the old page's scroll position.
-    const page = old.querySelector(`#${pageId}`);
+    const page = old.querySelector('[data-copied-page]');
 
     if (page) page.scrollTop = snapshot.scrolled;
 

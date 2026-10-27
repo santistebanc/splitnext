@@ -159,11 +159,15 @@ export function GroupsView(props: GroupsViewProps) {
     void action.call('openGroup', { groupId: group.group_id });
   }
 
-  function leave(group: ClientGroupSummary): void {
+  // Leaving waits for the group to open: a call made from inside another's
+  // callback would find the control still busy and be dropped.
+  async function leave(group: ClientGroupSummary): Promise<void> {
+    let opened = false;
+
     setTarget(group.group_id);
-    void action.call('openGroup', { groupId: group.group_id }, () => {
-      void action.call('leaveGroup', {}, () => setLeaving(null), true);
-    });
+    await action.call('openGroup', { groupId: group.group_id }, () => { opened = true; });
+
+    if (opened) await action.call('leaveGroup', {}, () => setLeaving(null), true);
   }
 
   function row(group: ClientGroupSummary) {
@@ -209,7 +213,7 @@ export function GroupsView(props: GroupsViewProps) {
               <Text style={s.body}>Leave {group.name} on this device? You can rejoin it later.</Text>
               <View style={s.actions}>
                 <Button grow secondary disabled={action.busy} onPress={() => setLeaving(null)}>Cancel</Button>
-                <Button grow disabled={action.busy || !state.online} onPress={() => leave(group)}>Leave</Button>
+                <Button grow disabled={action.busy || !state.online} onPress={() => { void leave(group); }}>Leave</Button>
               </View>
               {!state.online ? <Text style={s.caption}>You’re offline. Connect to leave.</Text> : null}
             </View>

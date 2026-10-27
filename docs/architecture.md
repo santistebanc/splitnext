@@ -32,156 +32,154 @@ How the system fits together and the rules each part keeps. The
 The Worker serves a public homepage, invite entry pages, and the Expo web app
 at `/app`.
 
-The app uses one fixed light palette from `ui/theme.ts`: white cards with a
-hairline edge on a cool grey page, near-black ink, one blue for each page's
-main action and links, and blue and orange only for money someone gets back or
-owes; green means settled or online; a brighter orange marks the Activity
-badge and changes to review. Body text uses local IBM Plex Sans, amounts
-and invite links local IBM Plex Mono, and titles local Bricolage Grotesque.
-Icons are stroked outlines in `ui/icons.tsx`. `theme.ts` also holds the corner
-radii (`radius`: small controls, fields and buttons, cards, sheets, pills) and
-two shadows (`raised`, `floating`).
+The app uses one fixed light palette from `ui/theme.ts`: near-black ink on
+warm paper, hairline rules instead of cards, square black main actions, green
+for money someone gets back and orange for money someone owes, each as an ink
+figure and a lighter bar, and a brighter orange for the Activity count, new
+Activity entries, and changes to review. `splitHues` colours each person in an
+expense's split. Body text and titles use local Instrument Sans, amounts and
+invite links local Geist Mono. Icons are stroked outlines in `ui/icons.tsx`.
+Everything is square (`radius` is 0 except for dots and counts), and nothing
+casts a shadow: a header shows a hairline once content scrolls under it.
 
 Screens build from the shared pieces in `ui/components.tsx` rather than their
-own copies: `Button` for buttons (filled, secondary, quiet text links, small
-ones inside rows), `Pill` for rounded actions such as Invite people, Settle up,
-and the floating Add expense, `SectionHeading` for section titles,
-`s.listCard` with `ListRow` for cards of rows, `Notice` for tinted messages,
+own copies: `Button` (black, outlined `secondary`, underlined `quiet`),
+`FooterButton` for a screen's one main action, `HeaderAction` for Cancel,
+Delete, and Save, `BackButton` for the text back action named after where it
+goes, `Choice` for square chips, `RadioRow`, `ListRow` for ruled rows,
+`BalanceBar` for a balance growing either side of an ink line, `Notice`,
 `EmptyState`, `Tag`, and `signedFigure` with `balanceColor` for balances.
-Recorded repayments use the expense list's `RepaymentRow` everywhere, and
-confirmations use `Confirmation` from `ConfirmSheet`. Pressing a control fades
-and shrinks it (`s.pressed`), pressing a row tints it (`s.rowPressed`), and
-`s.dim` only marks something unavailable.
+`withTransition` in `theme.ts` eases a style property on the web, where views
+are elements, with the shared `easeOut` curve. Recorded repayments use the
+expense list's `RepaymentRow` everywhere. Pressing a control fades it
+(`s.pressed`), pressing a row tints it (`s.rowPressed`), and `s.dim` only
+marks something unavailable.
 
-Screens follow the agreed phone design, in one narrow column on every device.
-`AppScreen` picks each view's fixed header, body, and main action, and `Frame`
-lays them out: a header (`ScreenHeader` with Back or Cancel, an optional title,
-and an optional end action such as Save, `BackHeader` for details pages, or
-`GroupHeader` for a group), the scrolling content, and the main action pinned
-at the foot or floating over the content. The groups list pins New group; New
-group pins Create group; the join screen pins Open link or Join as the chosen
-name; the group screen always floats + Add expense, including when there are
-no expenses or repayments, without an empty-expenses message; the expense and repayment forms
-save from their headers. Screen, page, and drawer titles share the 18px
-`viewTitle` style; scrolling compacts header spacing and context without
-scaling the title. A saved repayment also has a short Delete header action,
-using the existing removal action and returning to its opening view.
+Screens follow the agreed prototype, in one narrow column on every device.
+`AppScreen` picks each view's header, body, and main action, and `Frame` lays
+them out: a header (`ScreenHeader`: a first row with the back or Cancel action
+and actions at its end, then the large title, then anything `below` it such as
+the invite link or a balance), the scrolling content, and the main action
+pinned at the foot. The title is 42px and shrinks to 22px with compact
+progress (`titleStyle`), which follows 72px of content travel; screens that
+shrink more, such as the expense amount and the person's balance, read the
+same progress. The groups list pins New group; New group pins Create group;
+the join screen pins Open link or Join as the chosen name; the group screen
+pins Add expense; a person pins Settle up while they are in a planned payment;
+the repayment form pins Record or Save. The expense editor saves from its
+header.
 
-A group has one screen (`home`) without tabs. `GroupHeader` holds the group
-name, which opens the groups list, the `ActivityBell`, and a gear button opening `settings`
-(`GroupSettings`). `Frame` holds a thin `SyncStatus` strip above the header
-across all views while offline or unreachable. Its measured height reduces
-the available room used by `useBalancesLayout`. Tapping it
-opens a `Drawer` with the connection state, locally queued change count, and
-Retry when online. Reconnecting closes it and hides the strip. Background
-network/offline errors use this status rather than a second banner; other
-background errors remain visible. The web `AmountInput` uses
-`react-number-format` to keep two fixed decimals while managing the
-caret, accepts dot/comma entry, and rejects ambiguous pasted amounts.
-Settings contains the group name field, Save group name
-only after a change, and Leave group with its confirmation sheet. Below the
-group header, `Frame`'s one `ScrollView` is
-the only scroll area on every screen.
-On the web its scroll anchoring is disabled: automatic anchor adjustments
-during header resizing would feed back into compact progress.
+`ScreenMorph` moves screens as the prototype does. It wraps `Frame` and, being
+a class component, measures the old screen in `getSnapshotBeforeUpdate` just
+before React replaces it: every element marked with `morph(key)` (a ref that
+sets `data-morph`), and a copy of the whole screen. After the update, the copy
+fades and slides 28px out over the new screen while the new screen slides in;
+each key on both screens flies from its old box to its new one, crossfading
+the old and new text as it scales, over 560ms. Depth from `AppScreen` picks
+the direction. Keys pair a group's name in the list with its title, your
+balance with your row, a person's row with their page, an expense row's title
+and amount with the editor's, Add expense with a new expense's title, Settle
+up, New group, and Activity with their titles. `Reveal` opens content in place,
+growing it down from nothing and shrinking it away before it unmounts. Both
+skip motion when reduced motion is preferred, and native shows changes at once.
+
+A group has one screen (`home`) without tabs. `GroupHeader` holds ‹ Groups,
+Activity with its count, the group's name with a pencil that renames it in
+place through `renameGroup`, and Invite people, which shows `InvitePanel` in a
+`Reveal` under the name while the view is `invite`, so Back closes it. `Frame`
+holds a thin `SyncStatus` strip above the header across all views while
+offline or unreachable. Tapping it opens a `Drawer` with the connection state,
+locally queued change count, and Retry when online. Reconnecting closes it and
+hides the strip. Background network/offline errors use this status rather than
+a second banner; other background errors remain visible. The web
+`AmountInput` uses `react-number-format` to keep two fixed decimals while
+managing the caret, accepts dot/comma entry, and rejects ambiguous pasted
+amounts. Below the header, `Frame`'s one `ScrollView` is the only scroll area
+on every screen. On the web its scroll anchoring is disabled: automatic anchor
+adjustments during header resizing would feed back into compact progress.
 Header collapse follows content travel: the scroll offset plus the measured
 height released by the header. At the bottom, shrinking the header can force
 the scroll offset down by the same amount; this leaves content travel unchanged
 instead of reversing the collapse and making the header oscillate. The collapse
 distance exceeds the header's height change so expanding back to the top also
 converges. Each screen measures its own full header height.
-The group screen's content is `GroupBalances` and `ExpenseList`, sections sharing `SectionHeading` and the
-same card rows. `useBalancesLayout` measures the Balances heading, each row,
-and the Add a person line, plans the default level from the window and header
-heights (people that leave room for the Expenses heading, two expenses, and
-the floating button, then a faded “more” item), and keeps the page's scroll
-position in a small store that only the balances read, so scrolling
-re-renders nothing else. At the default level the section is a `StickyTop`
-(CSS sticky on the web) inside the page, followed by a spacer of its height;
-its card's height follows the scroll, cut from the bottom until only the
-heading is left; whole people show, with only the lower half of the “···”
-button reserved below the card. Expenses follow with the normal section
-spacing rather than filling the unused viewport allowance. Invite people
-uses the solid action color while there are no active expenses, with Add
-expense using the soft action color; once an expense exists they swap emphasis
-without changing their labels, position, or size.
-One `StickyTop` holds the Balances heading and Invite action in both levels,
-above the card's layer; a measured placeholder keeps their space in the
-section. `AppUiState.balancesExpanded` is Show all: the card then flows with
-the page beneath the same heading, without mounting a second heading.
-Tapping the heading calls `Frame`'s `scrollControl` to scroll smoothly to
-the top. The Expenses heading is a `StickyTop` offset by the pinned Balances
-heading, and tapping it scrolls the expenses up to it. `ExpenseList` shows expenses and
-repayments newest first. Tapping a person opens
-`person` (`PersonDetails`), whose Settle up opens `settle` (`SettleUp`) for that
-person; the Balances heading's Settle up opens it with no person, for the
-whole group. Its payments open the repayment form (`settlements`) filled in. `AppUiState.trail`
-records the views a page was opened from, so Back, Cancel, and saving return
-there, and history restores the trail with the view and the person. Invite
-opens `InviteSheet` as a bottom sheet over the group screen; leaving a group
-confirms in a `ConfirmSheet`. Removing a member sets `AppUiState.removal`,
-which `RemovalToast` shows without an Undo action until it is dismissed or times out. The
-original split-S mark is rendered by `ui/BrandMark.tsx` on the groups list and
-the join screen. The browser favicon uses the same artwork. Appearance assets
-are served locally and precached; their contents contribute to the service
-worker's release cache key.
+The group screen's content is `GroupView`: everyone's balance as ruled rows
+with a `BalanceBar` scaled to the largest balance, ending with `AddPersonRow`,
+then `ExpenseList` with expenses and repayments newest first. Tapping a person
+opens `person` (`PersonDetails`), whose Settle up opens `settle` (`SettleUp`)
+for that person. Record there records a planned payment through
+`recordSettlement` at once; Record a different payment opens the repayment
+form (`settlements`) filled in with the first planned payment.
+`AppUiState.trail` records the views a page was opened from, so Back, Cancel,
+and saving return there, and history restores the trail with the view and the
+person. Leaving a group is asked in place on its row in the groups list, then
+opens the group and leaves it confirmed. Removing a member sets
+`AppUiState.removal`, which `RemovalToast` shows without an Undo action until it
+is dismissed or times out. `GroupSettings` stays in the catalog as `settings`
+without an entry point on screen. Appearance assets are served locally and
+precached; their contents contribute to the service worker's release cache
+key.
 
 - Creating a group uses one form for group name and your name in it, with
   Create group and Back to groups actions. The app remembers the last name used
   as you on this installation in localStorage and prefills it when creating a
   group or joining as someone new. The name stays editable. The group opens on
-  its group screen with the balances expanded.
-- Invite recipients preview the group and choose an existing name, even when
-  it is already taken on another device, or add their own as a new member. Invite
-  links for a group already joined on this installation open that group
-  directly, keeping the selected member. The invite entry route remains
-  available for future native app handoff. A link that no longer works shows
-  why and a field to try a different one.
-- The invite sheet shows the link, which selects and copies itself when
-  tapped, then native sharing when supported and Replace link side by side,
-  which regenerates the invitation after confirming, in the same sheet, that
-  the old link will stop working.
-- The groups list has the logo and Join in its header above group cards, or No
-  groups yet when there are none. Leaving asks for confirmation with a Cancel
-  option. Offline captions name the blocked action. When joining or rejoining,
-  names already taken by a current participant are marked Taken.
-- Group cards show the people count and who you are; left groups appear as
-  cards with Rejoin. Locally stored active cards also show the preferred
-  member's nonzero balance as a signed plain number, Settled when it
-  is zero, or Choose who you are when unassigned. Summaries derive
-  from the same projected snapshot, without additional storage reads or
-  currency conversion. A placeholder list shows while local storage opens.
-  Errors appear beside the row or button that caused them; background sync
-  errors appear at the top of the page. Every control has a visible keyboard
-  focus outline.
+  its group screen.
+- Join with a link on the groups list opens a link field in place; Open checks
+  that it is an invite link (`parseInviteLink`) before opening the join screen
+  with it. Invite recipients preview the group and choose an existing name,
+  even when it is already taken on another device, or type their own in the
+  last row as a new member. Invite links for a group already joined on this
+  installation open that group directly, keeping the selected member. The
+  invite entry route remains available for future native app handoff. A link
+  that no longer works shows why and a field to try a different one.
+- The invite link shows between two rules with Copy link, native sharing when
+  supported, and Replace link side by side, which regenerates the invitation
+  after confirming, in the same place, that the old link will stop working.
+- The groups list shows each group as a ruled row with your balance and bar,
+  the people count and who you are, and a bin that asks in place before
+  leaving; left groups list with Rejoin. Offline captions name the blocked
+  action. When joining or rejoining, names already taken by a current
+  participant are marked Taken.
+- Locally stored active groups show the preferred member's nonzero balance as
+  a signed plain number, settled when it is zero, or choose who you are when
+  unassigned. Summaries derive from the same projected snapshot, without
+  additional storage reads or currency conversion. A placeholder list shows
+  while local storage opens. Errors appear beside the row or button that
+  caused them; background sync errors appear at the top of the page. Every
+  control except a text field has a visible keyboard focus outline; fields
+  show focus by their caret.
 - The balances list everyone with a balance or still active, you first, and
   end with an Add a person field that adds on blur without confirm/cancel
   controls. They show a numeric zero when a person with current records is
-  settled; people without current records keep a blank amount.
-  Person details use the same balance, with Settled and zero
-  shown together. They rename inline, choose the member as you without a
-  confirmation (warning afterward when the name is already taken on another device), and remove the
-  member immediately, including your own. `memberBreakdown` in
-  `model/breakdown.ts` lists the expenses and repayments behind a balance,
-  adding up exactly to it. Presence markers show online, offline, or
-  unused; multiple tabs count once.
+  settled; people without current records keep a blank amount and bar.
+  Person details show the balance large over its bar with Owes, Gets back,
+  Settled, or No expenses yet. They rename inline, choose the member as you
+  without a confirmation (warning afterward when the name is already taken on
+  another device), and remove the member immediately, including your own.
+  `memberBreakdown` in `model/breakdown.ts` lists the expenses and repayments
+  behind a balance, adding up exactly to it. Presence markers show online,
+  offline, or unused; multiple tabs count once.
 - Forms are pages with keyboard-aware scrolling on every device. Member
   editing is allowed on the group screen and in person details.
 - Settle up shows the payments in `planTransfers` (`src/domain/settlements.ts`)
-  that involve one person, or all of them for the whole group. The plan has the fewest payments: it
-  splits nonzero balances into as many zero-sum sets as possible with a bitmask
-  search for up to 14 people, and settles each set greedily; larger groups use
-  the greedy plan alone. Picking a payment opens the repayment form filled in;
-  the form also lists earlier repayments. The expense editor has Cancel and
-  Save, a payer row, a large centered amount, per-person split controls, Occasion,
-  and Remove expense for an existing expense. `ExpenseDraft.parts` retains each
-  person's whole shares or typed fixed amount independently. Per-person actions
-  increase or decrease shares, include or exclude a person, and fix or clear an
-  amount; the catalog protects the last person sharing the remainder. The
-  preview uses the shared allocator, including the rounding burden with the
-  edited expense excluded. Mixed weights and fixed amounts survive reopening
-  and saving. Removal excludes an expense from balances while retaining it for
-  future restoration. The SDK and server share the same money and command rules.
+  that involve one person. The plan has the fewest payments: it splits nonzero
+  balances into as many zero-sum sets as possible with a bitmask search for up
+  to 14 people, and settles each set greedily; larger groups use the greedy
+  plan alone. The repayment form chooses From and To with square chips and
+  also lists earlier repayments. The expense editor has Cancel, Delete, and
+  Save, a large amount and description that shrink as the split scrolls, Paid
+  by opening the names in place, a bar of each person's share, and one row per
+  person with a checkbox, − and + for whole shares, and an amount that can be
+  fixed in place. `splitExpenseEqually` returns a custom split to equal shares.
+  `ExpenseDraft.parts` retains each person's whole shares or typed fixed amount
+  independently. Per-person actions increase or decrease shares, include or
+  exclude a person, and fix or clear an amount; the catalog protects the last
+  person sharing the remainder. The preview uses the shared allocator,
+  including the rounding burden with the edited expense excluded. Mixed
+  weights and fixed amounts survive reopening and saving. Removal excludes an
+  expense from balances while retaining it for future restoration. The SDK and
+  server share the same money and command rules.
 
 Browser app replicas use IndexedDB; the installation credential and last group
 are retained in localStorage. Losing that credential loses this installation's
@@ -212,7 +210,7 @@ workbench. Search the sidebar, pick a component, and edit its controls;
 callbacks such as presses appear in the Events log. `MemberIcon` has an
 explicit `isYou` switch, separate presence controls, and an other-participant
 count; turn `isYou` off with one other participant to preview a dot without
-the YOU badge. `BalancesPanel` runs against an in-memory group, with controls for
+the YOU badge. `GroupView balances` runs against an in-memory group, with controls for
 members, who is you, other participants, presence, connection, latency, and
 forced command errors. The viewport presets resize the canvas only; components
 that read the window size still see the real window. The Screens group
@@ -665,4 +663,4 @@ Undo is a retry-safe change.undo command naming a canonical audit event. The ser
 
 Group renames compare their affected state and the latest audit event for that target, including intervening changes that returned to an earlier value. Member actions and earlier member reversals have no reversible effect: Activity offers no Undo and the shared client/server rules reject `change.undo` for them. Restoring a member remains a separate manual action. Group creation, access changes and invite replacement have no reversal.
 
-The Activity bell refreshes canonical Activity for the open group on each new revision while connected (`useActivityFeed`). It counts visible events from other identities after the installation's seen sequence for that group, plus the replica's conflict notices. `AppUiState.activitySeen` keeps seen sequences per group in localStorage through a `SeenStorage` adapter; the first Activity read for a group sets the baseline, so existing history never counts as new. `markActivitySeen` advances it. Conflict notices are reviewed in Activity's Needs your review block, and affected expenses and repayments show a dot; nothing else shows review status. Sync errors and outbox indicators stay independent.
+The Activity count refreshes canonical Activity for the open group on each new revision while connected (`useActivityFeed`). It counts visible events from other identities after the installation's seen sequence for that group, plus the replica's conflict notices. `AppUiState.activitySeen` keeps seen sequences per group in localStorage through a `SeenStorage` adapter; the first Activity read for a group sets the baseline, so existing history never counts as new. `markActivitySeen` advances it. Conflict notices are reviewed in Activity's Needs your review block, and affected expenses and repayments show a dot; nothing else shows review status. Sync errors and outbox indicators stay independent.

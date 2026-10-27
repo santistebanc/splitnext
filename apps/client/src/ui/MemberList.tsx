@@ -50,6 +50,8 @@ export function presenceText(participants: ParticipantMarker[]): string {
 export function MemberNameInput(props: {
   name: string;
   placeholder?: string;
+  /** What the field is called, when its placeholder says more. */
+  label?: string;
   onSave: () => void;
   onFocus?: () => void;
   /** Takes the typing instead of the shared member-name draft. */
@@ -63,7 +65,7 @@ export function MemberNameInput(props: {
   return (
     <TextInput
       ref={input}
-      accessibilityLabel={props.placeholder ?? 'Member name'}
+      accessibilityLabel={props.label ?? props.placeholder ?? 'Member name'}
       placeholder={props.placeholder}
       placeholderTextColor={colors.muted}
       value={props.name}
@@ -151,6 +153,7 @@ export function AddPersonRow() {
         <MemberNameInput
           name={text}
           placeholder="+ Add a person"
+          label="Add a person"
           onChangeText={(value) => {
             setText(value);
             setError(null);

@@ -86,6 +86,7 @@ function ShareStep(props: { sign: '−' | '+'; label: string; disabled: boolean;
 function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; hue: string; part: ExpenseDraftPart | undefined; owed: number | undefined; currency: string; hasAmount: boolean }) {
   const edit = useActionCall();
   const [editing, setEditing] = useState(false);
+  const input = useRef<TextInput>(null);
   const fixed = props.part?.kind === 'exact';
   const included = Boolean(props.part);
   const shares = props.part?.kind === 'shares' ? props.part.shares : 1;
@@ -96,6 +97,12 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
   const member = { memberId: props.memberId };
   const canFix = props.hasAmount && edit.can('setExpenseFixedAmount', fixing);
   const canToggle = edit.can('toggleExpenseParticipant', member);
+
+  // Fixing the amount shows the field before editing starts, so autoFocus
+  // would come too late; focus it once editing begins.
+  useEffect(() => {
+    if (editing) input.current?.focus();
+  }, [editing]);
 
   return (
     <View>
@@ -128,13 +135,14 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
         <View style={{ width: 72, alignItems: 'flex-end' }}>
           {included && (editing || fixed) ? (
             <TextInput
+              ref={input}
               accessibilityLabel={`Amount for ${props.name}`}
-              autoFocus={editing}
               selectTextOnFocus
               inputMode="decimal"
               value={fixed ? value : ''}
               editable={edit.can('setExpenseFixedAmount', { memberId: props.memberId, amount: '' })}
               onChangeText={(amount) => { void edit.call('setExpenseFixedAmount', { memberId: props.memberId, amount }); }}
+              onFocus={() => setEditing(true)}
               onBlur={() => setEditing(false)}
               onSubmitEditing={() => setEditing(false)}
               returnKeyType="done"

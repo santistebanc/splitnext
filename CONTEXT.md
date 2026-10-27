@@ -170,7 +170,7 @@ _Avoid_: History record, log
 
 **New activity**:
 Activity events from other identities after the sequence this installation
-last marked seen for the group. The bell counts them together with conflict
+last marked seen for the group. The Activity count includes them together with conflict
 notices.
 _Avoid_: Notification, unread message
 
