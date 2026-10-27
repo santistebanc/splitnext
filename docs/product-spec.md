@@ -220,7 +220,8 @@ while it changes the split: on a fixed amount, or when more than one person
 divides by shares; on a fixed amount it returns them to the nearest whole
 shares. Tapping an amount fixes it in place; everybody else divides the
 remainder by their shares, and clearing it restores one share. Without a
-positive total the amounts show —. Excluded people stay in place, faded, with
+positive total each row shows only its checkbox, without +, an amount, or −;
+they appear once a valid amount is entered. Excluded people stay in place, faded, with
 an empty checkbox and no amount. Keep one person sharing the
 remainder. Preserve both fixed amounts and weights when reopening and saving
 an expense. Invalid precision or amounts above the total retain their input,
