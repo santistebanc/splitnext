@@ -225,13 +225,14 @@ export function PageTitle(props: { children: ReactNode }) {
  * hairline appearing below. A heading that is more than text stands in for
  * the title and styles its text with `titleStyle(progress)`. `underRow`
  * opens directly under the row, such as a field for one of its actions;
- * `below` follows the title.
+ * `below` follows the title. Set `scrollRule` false when a pinned section
+ * heading draws the divider beneath the header instead.
  */
-export function ScreenHeader(props: { title?: string | undefined; heading?: ReactNode; context?: string | undefined; start?: ReactNode; end?: ReactNode; underRow?: ReactNode; below?: ReactNode; morph?: string | undefined }) {
+export function ScreenHeader(props: { title?: string | undefined; heading?: ReactNode; context?: string | undefined; start?: ReactNode; end?: ReactNode; underRow?: ReactNode; below?: ReactNode; morph?: string | undefined; scrollRule?: boolean | undefined }) {
   const progress = useCompactProgress();
 
   return (
-    <View style={[s.screenHeader, { paddingBottom: between(14, 6, progress), boxShadow: `0 1px 0 rgba(20, 20, 19, ${(0.14 * progress).toFixed(3)})` }]}>
+    <View style={[s.screenHeader, { paddingBottom: between(14, 6, progress), boxShadow: props.scrollRule === false ? 'none' : `0 1px 0 rgba(20, 20, 19, ${(0.14 * progress).toFixed(3)})` }]}>
       <View style={s.screenHeaderRow}>
         <View style={s.screenHeaderStart}>{props.start}</View>
         {props.end ? <View style={s.screenHeaderEnd}>{props.end}</View> : null}

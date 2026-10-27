@@ -4,7 +4,7 @@ import { BackButton, ErrorMessage, ScreenHeader } from './components';
 import { useActionCall } from './useActionCall';
 
 /** A details screen's header: back to where it was opened from, named in the first row, then the title. */
-export function BackHeader(props: { title: string; heading?: ReactNode; context: string; end?: ReactNode; error?: string | null; morph?: string }) {
+export function BackHeader(props: { title: string; heading?: ReactNode; context: string; end?: ReactNode; error?: string | null; morph?: string; scrollRule?: boolean }) {
   const back = useActionCall();
 
   return (
@@ -15,6 +15,7 @@ export function BackHeader(props: { title: string; heading?: ReactNode; context:
         heading={props.heading}
         end={props.end}
         morph={props.morph}
+        scrollRule={props.scrollRule}
       />
       <ErrorMessage message={back.error ?? props.error ?? null} />
     </View>
