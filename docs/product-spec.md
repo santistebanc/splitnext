@@ -35,7 +35,8 @@ person row, and Invite people under the group's name opens the invite link in
 place, so adding names and inviting can happen in either order. The groups
 list shows each locally stored group's people count and the member this
 installation uses. The invite link shows in the monospaced face, without
-https://, in one row between an ink rule and a hairline: a Share icon on its
+https://, on one line that never wraps, smaller where it would not fit, in one
+row between an ink rule and a hairline: a Share icon on its
 left where the device can share, and a Replace icon on its right. Tapping the
 link highlights it and copies it, with https://, and the caption below changes
 from Tap the link to copy it to Copied; Share also sends it with https://, and
@@ -171,10 +172,10 @@ light/dark switching, or system appearance switching.
 Follow the agreed prototype. App screens use one narrow column on every
 device.
 
-The groups list has splitnext and Join with a link in its first row, then the
-split-S mark, in ink with paper lines, where other screens have their large
-title: as tall and shrinking the same way as the page scrolls, with no Your
-groups title. Join with a link opens a link field with Open directly under
+The groups list has Join with a link in its first row, then the split-S mark,
+in ink with paper lines, with splitnext beside it at title size, where other
+screens have their large title: as tall and shrinking the same way as the page
+scrolls, with no Your groups title. Join with a link opens a link field with Open directly under
 that row, above the mark; a link that is not an invite says so there, and a
 valid one opens the join screen. Each group is a ruled row with its name, your balance (settled when
 zero, choose who you are when unassigned), your balance as a bar scaled to

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { formatInviteLink } from '@splitnext/client';
 import type { AppController } from '../model/controller';
@@ -59,6 +59,13 @@ export function InvitePanel(props: { app: InvitePanelApp }) {
       ? formatInviteLink(window.location.origin, replica.group_id, invite.token)
       : null;
 
+  const shown = link?.replace(/^https?:\/\//, '') ?? '';
+  // The link stays on one line, smaller where it would not fit: its code is
+  // at the end, so cutting it short would hide the part that matters. A
+  // monospaced character takes about 0.6 of the size across.
+  const [room, setRoom] = useState(0);
+  const linkSize = room && shown ? Math.min(15, room / (shown.length * 0.6)) : 15;
+
   return (
     <View role="region" aria-label="Invite people" style={{ gap: 8, paddingTop: 4, paddingBottom: 8 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 56, borderTopWidth: 1.5, borderBottomWidth: 1, borderTopColor: colors.ink, borderBottomColor: colors.rule }}>
@@ -78,10 +85,11 @@ export function InvitePanel(props: { app: InvitePanelApp }) {
               selectLink();
               void action.call('copyInviteLink', {});
             }}
+            onLayout={(event) => setRoom(event.nativeEvent.layout.width)}
             style={({ pressed }) => [{ flex: 1, minWidth: 0, paddingVertical: 14 }, pressed && s.pressed]}
           >
-            <Text testID="invite-link" nativeID={linkId} selectable style={{ fontFamily: monoFamily, fontSize: 15, lineHeight: 21, fontWeight: '500', color: colors.ink }}>
-              {link.replace(/^https?:\/\//, '')}
+            <Text testID="invite-link" nativeID={linkId} selectable numberOfLines={1} style={{ fontFamily: monoFamily, fontSize: linkSize, lineHeight: 21, fontWeight: '500', color: colors.ink }}>
+              {shown}
             </Text>
           </Pressable>
         ) : (

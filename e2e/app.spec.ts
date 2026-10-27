@@ -215,9 +215,18 @@ test('uses one large title on every screen and opens the join field in place', a
   await expect(heading(page, 'Activity')).toHaveCSS('font-size', '42px');
   await button(page, 'Back to Headers').click();
   await button(page, 'Back to groups').click();
-  // The groups list shows the mark, about as tall as a title, instead of one.
+  // The groups list shows the mark, about as tall as a title, with the name
+  // beside it at title size, instead of a title.
   await expect(page.getByText('Your groups', { exact: true })).toHaveCount(0);
   await expect(page.getByTestId('splitnext-logo')).toHaveAttribute('height', '44');
+  const name = page.getByText('splitnext', { exact: true });
+  const logo = (await page.getByTestId('splitnext-logo').boundingBox())!;
+  const nameBox = (await name.boundingBox())!;
+
+  await expect(name).toHaveCSS('font-size', '42px');
+  expect(nameBox.x).toBeGreaterThan(logo.x + logo.width);
+  expect(nameBox.x - (logo.x + logo.width)).toBeLessThan(20);
+  expect(Math.abs(nameBox.y + nameBox.height / 2 - (logo.y + logo.height / 2))).toBeLessThanOrEqual(3);
   await button(page, 'New group').click();
   await expect(heading(page, 'New group')).toHaveCSS('font-size', '42px');
   await button(page, 'Back to groups').click();
@@ -784,6 +793,17 @@ test('renames the group in place, copies the invite link, and replaces it after 
   expect(Math.abs(replaceBox.y + replaceBox.height / 2 - (linkBox.y + linkBox.height / 2))).toBeLessThanOrEqual(2);
   expect(replaceBox.width).toBeLessThanOrEqual(44);
   await expect(panel.getByText('Copy link', { exact: true })).toHaveCount(0);
+
+  // The link never wraps, even on a narrow screen: it stays whole on one line, smaller if need be.
+  for (const width of [375, 320]) {
+    await page.setViewportSize({ width, height: 812 });
+    await page.waitForTimeout(300);
+    const text = panel.getByTestId('invite-link');
+    const lines = await text.evaluate((node) => Math.round(node.getBoundingClientRect().height / parseFloat(getComputedStyle(node).lineHeight)));
+
+    expect(lines).toBe(1);
+    expect(await text.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  }
 
   // Tapping the link itself highlights and copies it.
   await panel.getByTestId('invite-link').click();
