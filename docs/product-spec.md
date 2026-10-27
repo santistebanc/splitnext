@@ -50,7 +50,8 @@ under the header, with a hairline appearing below the header. Fields are bare
 text over an ink underline and show focus by their caret. Changing screens
 moves as the prototype does: parts shown on both screens fly from one place to
 the other and change shape on the way (a group's name becomes its title, a
-person's row becomes their page, Add expense becomes the new expense's title),
+person's row becomes their page, Add expense becomes the new expense's title, and a balance bar stretches
+into its new shape, such as from a person's row to the bar on their page),
 while the rest fades and slides 28px, forward when going deeper and back when
 returning. Panels that open in place, such as the invite link, the join field,
 and who paid, grow down into place and shrink away when closed. Balance bars

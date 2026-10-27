@@ -192,14 +192,14 @@ export function balanceColor(amount: number): string {
  * left in orange, what they get back grows right in green, both as a share of
  * the largest balance shown beside it.
  */
-export function BalanceBar(props: { amount: number; max: number; height?: number; track?: boolean }) {
+export function BalanceBar(props: { amount: number; max: number; height?: number; track?: boolean; morph?: string | null | undefined }) {
   const share = props.max > 0 ? Math.min(1, Math.abs(props.amount) / props.max) : 0;
   const width = `${share * 100}%` as const;
   const half = { flex: 1, flexDirection: 'row', alignItems: 'center' } as const;
   const grow = withTransition({ height: props.track ? '100%' : (props.height ?? 14) }, 'width', 600);
 
   return (
-    <View aria-hidden style={{ flexDirection: 'row', height: props.track ? (props.height ?? 6) : '100%', alignSelf: 'stretch' }}>
+    <View aria-hidden ref={morph(props.morph, { stretch: true })} style={{ flexDirection: 'row', height: props.track ? (props.height ?? 6) : '100%', alignSelf: 'stretch' }}>
       <View style={[half, { justifyContent: 'flex-end', borderRightWidth: 1.5, borderColor: colors.ink }, props.track && { backgroundColor: colors.track }]}>
         <View style={[grow, { width: props.amount < 0 ? width : '0%', backgroundColor: colors.owesBar }]} />
       </View>
