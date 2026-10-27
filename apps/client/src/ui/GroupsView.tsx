@@ -194,7 +194,7 @@ export function GroupsView(props: GroupsViewProps) {
         >
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
             <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-start' }}>
-              <Text ref={morph(`gname-${group.group_id}`)} numberOfLines={1} style={{ maxWidth: '100%', fontFamily, fontSize: 20, lineHeight: 21, fontWeight: '600', color: colors.ink }}>{group.name}</Text>
+              <Text ref={morph(`gname-${group.group_id}`)} numberOfLines={1} style={{ maxWidth: '100%', fontFamily, fontSize: 20, lineHeight: 25, fontWeight: '600', color: colors.ink }}>{group.name}</Text>
             </View>
             <GroupBalance group={group} />
           </View>
