@@ -190,22 +190,35 @@ export function balanceColor(amount: number): string {
 /**
  * A balance as two halves meeting at an ink line: what someone owes grows
  * left in orange, what they get back grows right in green, both as a share of
- * the largest balance shown beside it.
+ * the largest balance shown beside it. With a track it is a short strip;
+ * without, as in a row of people, the strip sits in the middle of an ink line
+ * running the row's full height.
  */
 export function BalanceBar(props: { amount: number; max: number; height?: number; track?: boolean; morph?: string | null | undefined }) {
   const share = props.max > 0 ? Math.min(1, Math.abs(props.amount) / props.max) : 0;
   const width = `${share * 100}%` as const;
-  const half = { flex: 1, flexDirection: 'row', alignItems: 'center' } as const;
-  const grow = withTransition({ height: props.track ? '100%' : (props.height ?? 14) }, 'width', 600);
+  const half = { flex: 1, flexDirection: 'row' } as const;
+  const grow = withTransition({ height: '100%' }, 'width', 600);
 
-  return (
-    <View aria-hidden ref={morph(props.morph, { stretch: true })} style={{ flexDirection: 'row', height: props.track ? (props.height ?? 6) : '100%', alignSelf: 'stretch' }}>
-      <View style={[half, { justifyContent: 'flex-end', borderRightWidth: 1.5, borderColor: colors.ink }, props.track && { backgroundColor: colors.track }]}>
+  // Only the strip flies between screens, so a row's bar and a page's bar
+  // meet as like shapes rather than the strip stretching to the row's height.
+  const strip = (
+    <View ref={morph(props.morph, { stretch: true })} style={{ flexDirection: 'row', height: props.height ?? (props.track ? 6 : 14), alignSelf: 'stretch' }}>
+      <View style={[half, { justifyContent: 'flex-end' }, props.track && { borderRightWidth: 1.5, borderColor: colors.ink, backgroundColor: colors.track }]}>
         <View style={[grow, { width: props.amount < 0 ? width : '0%', backgroundColor: colors.owesBar }]} />
       </View>
       <View style={[half, props.track && { backgroundColor: colors.track }]}>
         <View style={[grow, { width: props.amount > 0 ? width : '0%', backgroundColor: colors.owedBar }]} />
       </View>
+    </View>
+  );
+
+  if (props.track) return <View aria-hidden>{strip}</View>;
+
+  return (
+    <View aria-hidden style={{ height: '100%', alignSelf: 'stretch', justifyContent: 'center' }}>
+      {strip}
+      <View style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1.5, marginLeft: -1.5, backgroundColor: colors.ink }} />
     </View>
   );
 }

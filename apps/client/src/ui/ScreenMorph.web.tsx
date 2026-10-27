@@ -187,8 +187,9 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
       Object.assign(leaving.style, base, cut(from.clips), { left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px`, color: from.color, font: from.font });
       overlay.appendChild(leaving);
       animations.push(leaving.animate(stretch
-        // Stays solid under the arriving copy, so the bar never thins out midway.
-        ? [{ transform: 'none' }, { transform: `translate(${to.x - a.x}px,${to.y - a.y}px) scale(${sx},${scale})` }]
+        // Fades only once the arriving copy is mostly in, so the bar never
+        // thins out midway, and gone by the end, so nothing of it pops away.
+        ? [{ transform: 'none', opacity: 1 }, { opacity: 1, offset: 0.4 }, { transform: `translate(${to.x - a.x}px,${to.y - a.y}px) scale(${sx},${scale})`, opacity: 0 }]
         : [{ transform: 'none', width: `${a.w}px`, opacity: 1 }, { opacity: 0, offset: 0.45 }, { transform: `translate(${to.x - a.x}px,${to.y - a.y}px) scale(${scale})`, width: `${to.w / scale}px`, opacity: 0 }], { duration, easing: easeOut, fill: 'forwards' }));
 
       const arriving = copy(element);
@@ -196,7 +197,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
       Object.assign(arriving.style, base, cut(style.textOverflow === 'ellipsis'), { left: `${to.x}px`, top: `${to.y}px`, width: `${to.w}px`, height: `${to.h}px`, color: style.color, font: style.font });
       overlay.appendChild(arriving);
       animations.push(arriving.animate(stretch
-        ? [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / sx},${1 / scale})`, opacity: 0 }, { transform: 'none', opacity: 1 }]
+        ? [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / sx},${1 / scale})`, opacity: 0 }, { opacity: 1, offset: 0.6 }, { transform: 'none', opacity: 1 }]
         : [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / scale})`, width: `${a.w * scale}px`, opacity: 0 }, { opacity: 0, offset: 0.3 }, { transform: 'none', width: `${to.w}px`, opacity: 1 }], { duration, easing: easeOut, fill: 'forwards' }));
     }
   }
