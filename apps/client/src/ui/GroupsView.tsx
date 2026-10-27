@@ -3,10 +3,11 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { parseInviteLink, type ClientGroupSummary } from '@splitnext/client';
 import type { AppController } from '../model/controller';
 import { BrandMark } from './BrandMark';
+import { CreateGroup, useSubmitCreate } from './CreateGroup';
 import { between, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
 import { morph } from './ScreenMorph';
-import { BalanceBar, Button, ErrorMessage, FooterButton, ScreenHeader, balanceColor, s, signedFigure, titleStyle } from './components';
+import { BalanceBar, Button, ErrorMessage, FooterButton, Notice, ScreenHeader, balanceColor, s, signedFigure, titleStyle } from './components';
 import { TrashIcon } from './icons';
 import { colors, fontFamily, monoFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
@@ -16,22 +17,62 @@ export type GroupsViewApp = Pick<AppController, 'snapshot'>;
 type GroupsViewProps = { app: GroupsViewApp };
 
 /** The groups list's main action, pinned at the foot of the screen. */
-export function GroupsFooter() {
+export function GroupsFooter(props: { app: GroupsViewApp }) {
+  const ui = useUiState();
+  const actions = useActions();
   const action = useActionCall();
+  const { action: create, submit } = useSubmitCreate();
+  const footer = useRef<View>(null);
+  const creating = ui.view === 'create';
+  const busy = ui.phase === 'creating' || create.busy;
+  const { online, reachable } = props.app.snapshot();
+
+  function close(): void {
+    void actions.dispatch('showGroups', {}, { origin: 'ui' });
+  }
 
   return (
-    <>
+    <View ref={footer} style={{ gap: 10 }}>
+      <Reveal upward toggle={footer} onOutsidePress={creating && !busy ? close : undefined}>
+        {creating ? (
+          <View role="region" aria-label="New group" style={{ paddingBottom: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1.5, borderColor: colors.ink }}>
+              <Text accessibilityRole="header" style={[s.headerActionText, { fontSize: 16 }]}>New group</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Back to groups"
+                disabled={busy}
+                onPress={close}
+                style={({ pressed }) => [{ height: 44, justifyContent: 'center', paddingLeft: 16 }, pressed && s.pressed]}
+              >
+                <Text style={[s.headerActionText, { color: colors.muted }]}>Cancel</Text>
+              </Pressable>
+            </View>
+            <CreateGroup app={props.app} />
+            {!online || !reachable ? (
+              <Notice
+                tone="danger"
+                role="alert"
+                message={`Can’t create the group. ${!online ? 'You’re offline.' : 'Splitnext can’t be reached.'} Nothing you typed was lost.`}
+              />
+            ) : null}
+            <ErrorMessage message={create.error} />
+          </View>
+        ) : null}
+      </Reveal>
       <ErrorMessage message={action.error} />
       <FooterButton
         morph="newgroup"
-        disabled={!action.can('showCreateGroup')}
+        busy={creating && busy}
+        disabled={creating ? !create.can('submitCreateGroup') : !action.can('showCreateGroup')}
         onPress={() => {
-          void action.call('showCreateGroup', {});
+          if (creating) submit();
+          else void action.call('showCreateGroup', {});
         }}
       >
-        New group
+        {creating ? (busy ? 'Creating…' : create.error ? 'Try again' : 'Create group') : 'New group'}
       </FooterButton>
-    </>
+    </View>
   );
 }
 

@@ -76,7 +76,7 @@ export function Reveal(props: RevealProps) {
 
     const height = `${node.offsetHeight}px`;
     const open: Frame = { height, opacity: 1, transform: 'none' };
-    const shut: Frame = { height: '0px', opacity: 0, transform: 'translateY(-8px)' };
+    const shut: Frame = { height: '0px', opacity: 0, transform: `translateY(${props.upward ? 8 : -8}px)` };
 
     if (present) {
       setClosing(false);

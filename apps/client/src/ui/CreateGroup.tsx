@@ -1,14 +1,14 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { View, type TextInput } from 'react-native';
 import type { AppController } from '../model/controller';
-import { ErrorMessage, Field, FooterButton, Notice } from './components';
+import { Field } from './components';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 export type CreateGroupApp = Pick<AppController, 'snapshot'>;
 
 type CreateGroupProps = { app: CreateGroupApp; close?: () => void };
 
-function useSubmitCreate(close?: () => void) {
+export function useSubmitCreate(close?: () => void) {
   const action = useActionCall();
 
   function submit(): void {
@@ -20,36 +20,20 @@ function useSubmitCreate(close?: () => void) {
   return { action, submit };
 }
 
-/** The New group screen's footer: why it could not be created, and Create group. */
-export function CreateGroupFooter(props: { app: CreateGroupApp; close?: () => void }) {
-  const ui = useUiState();
-  const { action, submit } = useSubmitCreate(props.close);
-  const { online, reachable } = props.app.snapshot();
-  const busy = ui.phase === 'creating' || action.busy;
-
-  return (
-    <>
-      {!online || !reachable ? (
-        <Notice
-          tone="danger"
-          role="alert"
-          message={`Can’t create the group. ${!online ? 'You’re offline.' : 'Splitnext can’t be reached.'} Nothing you typed was lost.`}
-        />
-      ) : null}
-      <ErrorMessage message={action.error} />
-      <FooterButton onPress={submit} busy={busy} disabled={!action.can('submitCreateGroup')}>
-        {busy ? 'Creating…' : action.error ? 'Try again' : 'Create group'}
-      </FooterButton>
-    </>
-  );
-}
-
 /** One form for the group name and the creator's own member name. */
 export function CreateGroup(props: CreateGroupProps) {
   const ui = useUiState();
   const { name, yourName: person } = ui.create;
   const actions = useActions();
   const personInput = useRef<TextInput>(null);
+  const nameInput = useRef<TextInput>(null);
+
+  // Opening dismisses the keyboard after this form's effects, so focus waits a frame.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => nameInput.current?.focus());
+
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const { submit } = useSubmitCreate(props.close);
 
   return (
@@ -57,6 +41,7 @@ export function CreateGroup(props: CreateGroupProps) {
       <Field
         label="Group name"
         hideLabel
+        inputRef={nameInput}
         placeholder="Group name"
         value={name}
         editable={actions.availability('changeDraft', { field: 'create.name', value: name }).available}

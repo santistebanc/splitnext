@@ -63,7 +63,8 @@ the invite link or a balance), the scrolling content, and the main action
 pinned at the foot. The title is 42px and shrinks to 22px with compact
 progress (`titleStyle`), which follows 72px of content travel; screens that
 shrink more, such as the expense amount and the person's balance, read the
-same progress. The groups list pins New group; New group pins Create group;
+same progress. The groups list pins New group, which opens the create form upward above
+itself (the `create` view, drawn on the groups list) and becomes Create group;
 the join screen pins Open link or Join as the chosen name; the group screen
 pins Add expense; a person pins Settle up while they are in a planned payment;
 the expense editor pins Save. The repayment form puts Record or Save in its

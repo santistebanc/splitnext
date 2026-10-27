@@ -9,7 +9,6 @@ import { browserActionPlatform } from './browserPlatform';
 import { createBrowserApp } from '../model/browser';
 import { ViewTransition } from './ViewTransition';
 import { SyncStatus } from './ConnectionStatus';
-import { CreateGroup, CreateGroupFooter } from './CreateGroup';
 import { Frame } from './Frame';
 import { ScreenMorph } from './ScreenMorph';
 import { ExpenseControls, ExpenseEditor, ExpenseEditorFooter, ExpenseEditorHeader } from './ExpenseEditor';
@@ -317,9 +316,10 @@ function ReadyApp(props: AppProps) {
   function screenFor(join: JoinCalls): Screen {
     if (view === 'create')
       return {
-        header: <ScreenHeader title="New group" morph="newgroup" start={<BackButton label="Back to groups" disabled={!actions.availability('showGroups', {}).available} onPress={() => dispatch('showGroups')} />} />,
-        body: <CreateGroup app={app} />,
-        footer: <CreateGroupFooter app={app} />,
+        // New group opens upward from its button over the groups list, without leaving it.
+        header: <GroupsHeader />,
+        body: <GroupsView app={app} />,
+        footer: <GroupsFooter app={app} />,
       };
 
     if (view === 'join' || view === 'rejoin') {
@@ -337,7 +337,7 @@ function ReadyApp(props: AppProps) {
       return {
         header: <GroupsHeader />,
         body: <GroupsView app={app} />,
-        footer: <GroupsFooter />,
+        footer: <GroupsFooter app={app} />,
       };
 
     switch (view) {
@@ -375,9 +375,11 @@ function ReadyApp(props: AppProps) {
     }
   }
 
-  const pageKey = onGroupScreen ? `group:${group?.group_id}` : `${view}:${group?.group_id ?? ''}:${ui.person ?? ''}`;
+  // New group opens on the groups list itself, so it is the same screen.
+  const screenView = view === 'create' ? 'home' : view;
+  const pageKey = onGroupScreen ? `group:${group?.group_id}` : `${screenView}:${group?.group_id ?? ''}:${ui.person ?? ''}`;
   // How deep the screen is, so moving deeper slides forward and returning slides back.
-  const depth = !open ? (view === 'home' ? 0 : 1) : onGroupScreen ? 1 : 1 + Math.max(1, ui.trail.length);
+  const depth = !open ? (screenView === 'home' ? 0 : 1) : onGroupScreen ? 1 : 1 + Math.max(1, ui.trail.length);
 
   return (
     <ActionsProvider value={actions}>
