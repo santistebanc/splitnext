@@ -37,6 +37,12 @@ export function ExpenseEditorHeader(props: ExpenseEditorProps) {
           </>
         )}
       />
+      {expense ? (
+        <Text testID="expense-timestamp" style={s.caption}>
+          {expense.updated_at === expense.created_at ? 'Created' : 'Last updated'}{' '}
+          {new Date(expense.updated_at).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+        </Text>
+      ) : null}
       <ErrorMessage message={back.error ?? save.error ?? remove.error} />
     </>
   );
