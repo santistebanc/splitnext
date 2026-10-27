@@ -8,7 +8,7 @@ import { between, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
 import { morph } from './ScreenMorph';
 import { BalanceBar, Button, ErrorMessage, FooterButton, Notice, ScreenHeader, balanceColor, s, signedFigure, titleStyle } from './components';
-import { TrashIcon } from './icons';
+import { ArrowRightIcon, TrashIcon } from './icons';
 import { colors, fontFamily, monoFamily, withTransition } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
@@ -147,10 +147,16 @@ export function GroupsHeader() {
                     autoCapitalize="none"
                     autoCorrect={false}
                     returnKeyType="go"
-                    style={[s.input, { fontFamily: monoFamily, fontSize: 15 }]}
+                    style={[s.input, { height: 40, fontFamily: monoFamily, fontSize: 13 }]}
                   />
-                  <Pressable accessibilityRole="button" onPress={submit} style={({ pressed }) => [s.fieldButton, pressed && s.pressed]}>
-                    <Text style={s.fieldButtonText}>Open</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Open"
+                    onPress={submit}
+                    hitSlop={6}
+                    style={({ pressed }) => [{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.action }, pressed && s.pressed]}
+                  >
+                    <ArrowRightIcon size={16} color={colors.actionInk} />
                   </Pressable>
                 </View>
                 {invalid ? <Text style={[s.caption, { color: colors.owes }]}>That isn’t a splitnext invite link.</Text> : null}
