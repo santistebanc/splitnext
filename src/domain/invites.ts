@@ -126,11 +126,14 @@ export function formatInviteLink(
 /** An invite link's secret, and its group when the link names one. */
 export type ParsedInviteLink = { group_id: string | null; token: string };
 
+/** Reads a pasted invite link, with or without its `https://`, as the invite panel shows it. */
 export function parseInviteLink(link: string): ParsedInviteLink | null {
+  const text = link.trim();
   let url: URL;
 
   try {
-    url = new URL(link.trim());
+    // Only the path and the part after `#` matter, so any scheme will do.
+    url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(text) ? text : `https://${text}`);
   } catch {
     return null;
   }
