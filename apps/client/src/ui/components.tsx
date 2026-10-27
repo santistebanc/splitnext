@@ -892,7 +892,9 @@ export const s = StyleSheet.create({
     paddingBottom: 34,
     gap: 12,
   },
+  // Above the header, so a drawer opening from the foot can dim the whole screen.
   footerBar: {
+    zIndex: 6,
     backgroundColor: colors.background,
     paddingTop: 16,
     paddingBottom: 34,

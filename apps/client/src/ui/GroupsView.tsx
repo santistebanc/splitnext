@@ -9,7 +9,7 @@ import { Reveal } from './Reveal';
 import { morph } from './ScreenMorph';
 import { BalanceBar, Button, ErrorMessage, FooterButton, Notice, ScreenHeader, balanceColor, s, signedFigure, titleStyle } from './components';
 import { TrashIcon } from './icons';
-import { colors, fontFamily, monoFamily } from './theme';
+import { colors, fontFamily, monoFamily, withTransition } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 export type GroupsViewApp = Pick<AppController, 'snapshot'>;
@@ -22,7 +22,6 @@ export function GroupsFooter(props: { app: GroupsViewApp }) {
   const actions = useActions();
   const action = useActionCall();
   const { action: create, submit } = useSubmitCreate();
-  const footer = useRef<View>(null);
   const creating = ui.view === 'create';
   const busy = ui.phase === 'creating' || create.busy;
   const { online, reachable } = props.app.snapshot();
@@ -32,12 +31,22 @@ export function GroupsFooter(props: { app: GroupsViewApp }) {
   }
 
   return (
-    <View ref={footer} style={{ gap: 10 }}>
-      <Reveal upward toggle={footer} onOutsidePress={creating && !busy ? close : undefined}>
+    // A drawer: while New group is open, the list above dims and a tap on it
+    // closes the drawer. The footer's own top padding belongs to the drawer.
+    <View style={{ gap: 10, marginTop: -16, paddingTop: 16, zIndex: 10 }}>
+      <Pressable
+        accessibilityLabel="Close New group"
+        aria-hidden={!creating}
+        tabIndex={-1}
+        disabled={!creating || busy}
+        onPress={close}
+        style={withTransition({ position: 'absolute', bottom: '100%', top: -4000, left: -4000, right: -4000, backgroundColor: 'rgba(20, 20, 19, 0.32)', opacity: creating ? 1 : 0, pointerEvents: creating ? 'auto' : 'none' }, 'opacity', creating ? 340 : 260)}
+      />
+      <Reveal upward>
         {creating ? (
-          <View role="region" aria-label="New group" style={{ paddingBottom: 6 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1.5, borderColor: colors.ink }}>
-              <Text accessibilityRole="header" style={[s.headerActionText, { fontSize: 16 }]}>New group</Text>
+          <View role="region" aria-label="New group" style={{ paddingBottom: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text accessibilityRole="header" style={[s.headerActionText, { fontSize: 17, fontWeight: '700' }]}>New group</Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Back to groups"
