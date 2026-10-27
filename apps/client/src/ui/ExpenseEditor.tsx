@@ -8,6 +8,7 @@ import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { between, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
 import { morph } from './ScreenMorph';
+import { whenLabel } from './relativeTime';
 import { YouBadge } from './YouBadge';
 import { fontFamily, monoFamily, splitHues, withTransition } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
@@ -34,9 +35,8 @@ export function ExpenseEditorHeader(props: ExpenseEditorProps) {
         scrollRule={false}
       />
       {expense ? (
-        <Text testID="expense-timestamp" style={s.caption}>
-          {expense.updated_at === expense.created_at ? 'Created' : 'Last updated'}{' '}
-          {new Date(expense.updated_at).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+        <Text testID="expense-timestamp" style={[s.caption, { textAlign: 'right' }]}>
+          {expense.updated_at === expense.created_at ? 'Created' : 'Last updated'} {whenLabel(new Date(expense.updated_at))}
         </Text>
       ) : null}
       <ErrorMessage message={back.error ?? remove.error} />

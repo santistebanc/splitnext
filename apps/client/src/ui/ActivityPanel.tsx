@@ -9,39 +9,10 @@ import { InfoIcon } from './icons';
 import type { MemberListApp } from './MemberList';
 import { StickyTop } from './StickyTop';
 import { fontFamily, monoFamily } from './theme';
+import { dayLabel, timeLabel } from './relativeTime';
 import { useActionCall, useUiState } from './useActionCall';
 
 type Event = ClientReplicaState['activity'][number];
-
-/** The day an entry belongs to: "Today", "Yesterday", a weekday this week, or a date. */
-function dayLabel(date: Date): string {
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-
-  if (date.toDateString() === today.toDateString()) return 'Today';
-
-  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-
-  if (today.getTime() - date.getTime() < 7 * 24 * 60 * 60_000) return date.toLocaleDateString(undefined, { weekday: 'long' });
-
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-/** When it happened within its day: "Just now", "5m ago", "2h ago" today, a clock time before. */
-function timeLabel(date: Date): string {
-  const minutes = Math.floor((Date.now() - date.getTime()) / 60_000);
-
-  if (date.toDateString() === new Date().toDateString()) {
-    if (minutes < 1) return 'Just now';
-
-    if (minutes < 60) return `${minutes}m ago`;
-
-    return `${Math.floor(minutes / 60)}h ago`;
-  }
-
-  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-}
 
 /** Activity's header: back to the group, the title, and Mark all seen while anything is new. */
 export function ActivityHeader(props: { app: MemberListApp }) {

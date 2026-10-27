@@ -386,7 +386,9 @@ test('records, changes, and removes an expense with plain-number balances', asyn
   expect(await save.boundingBox()).toEqual(savePosition);
   const timestamp = page.getByTestId('expense-timestamp');
 
-  await expect(timestamp).toHaveText(/^Created .+\d{4}.+/);
+  // The same relative wording as Activity, at the right.
+  await expect(timestamp).toHaveText(/^Created (just now|\d+m ago)$/);
+  await expect(timestamp).toHaveCSS('text-align', 'right');
   const created = await timestamp.textContent();
   const timestampBox = await timestamp.boundingBox();
   const amountBox = await field(page, 'Amount').boundingBox();
@@ -408,7 +410,7 @@ test('records, changes, and removes an expense with plain-number balances', asyn
   // Deleting happens from the expense's own screen, which returns to the group.
   await page.reload();
   await button(page, 'Change Dinner · 40.00').click();
-  await expect(timestamp).toHaveText(/^Last updated .+\d{4}.+/);
+  await expect(timestamp).toHaveText(/^Last updated (just now|\d+m ago)$/);
   await button(page, 'Delete Dinner · 40.00').click();
   await expect(page.getByText('No expenses yet', { exact: true })).toHaveCount(0);
   await expect(addButton).toBeVisible();

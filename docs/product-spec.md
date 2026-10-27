@@ -221,9 +221,11 @@ Cancel and Record return to where the form was opened, such as Settle up.
 
 The expense editor has Cancel in the header, alongside Delete when changing a
 recorded expense. Save stays pinned at the foot like the other main actions.
-When editing a recorded expense, show Created and its recorded date and time
-above the amount, or Last updated and its latest change date and time
-when it has changed, formatted in the device's locale and time zone. New expense
+When editing a recorded expense, show Created and when it was recorded, or
+Last updated and when it last changed, right-aligned above the amount, in
+Activity's relative wording: just now or 5m ago today, otherwise its day and
+time, such as yesterday, 14:05 or Monday, 09:30, in the device's locale and
+time zone. New expense
 drafts have no date label. Then show a large monospaced amount over an ink rule,
 a plain number with no currency (ADR 0025), and what it was for (New expense) under it. Both
 shrink as the split scrolls under them. The amount accepts digits and a
