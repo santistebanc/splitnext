@@ -223,9 +223,11 @@ export function PageTitle(props: { children: ReactNode }) {
  * A screen's fixed header: a row with a text back action and actions at the
  * end, then a large title that shrinks as the page scrolls under it, with a
  * hairline appearing below. A heading that is more than text stands in for
- * the title and styles its text with `titleStyle(progress)`.
+ * the title and styles its text with `titleStyle(progress)`. `underRow`
+ * opens directly under the row, such as a field for one of its actions;
+ * `below` follows the title.
  */
-export function ScreenHeader(props: { title?: string | undefined; heading?: ReactNode; context?: string | undefined; start?: ReactNode; end?: ReactNode; below?: ReactNode; morph?: string | undefined }) {
+export function ScreenHeader(props: { title?: string | undefined; heading?: ReactNode; context?: string | undefined; start?: ReactNode; end?: ReactNode; underRow?: ReactNode; below?: ReactNode; morph?: string | undefined }) {
   const progress = useCompactProgress();
 
   return (
@@ -234,6 +236,7 @@ export function ScreenHeader(props: { title?: string | undefined; heading?: Reac
         <View style={s.screenHeaderStart}>{props.start}</View>
         {props.end ? <View style={s.screenHeaderEnd}>{props.end}</View> : null}
       </View>
+      {props.underRow}
       {props.heading ?? props.title ? (
         <View style={[s.screenHeaderTitle, { paddingTop: between(16, 4, progress) }]}>
           {props.heading ?? (

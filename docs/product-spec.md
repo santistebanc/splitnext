@@ -162,10 +162,12 @@ light/dark switching, or system appearance switching.
 Follow the agreed prototype. App screens use one narrow column on every
 device.
 
-The groups list has splitnext and Join with a link in its first row, then a
-large Your groups. Join with a link opens a link field with Open in place; a
-link that is not an invite says so there, and a valid one opens the join
-screen. Each group is a ruled row with its name, your balance (settled when
+The groups list has splitnext and Join with a link in its first row, then the
+split-S mark, in ink with paper lines, where other screens have their large
+title: as tall and shrinking the same way as the page scrolls, with no Your
+groups title. Join with a link opens a link field with Open directly under
+that row, above the mark; a link that is not an invite says so there, and a
+valid one opens the join screen. Each group is a ruled row with its name, your balance (settled when
 zero, choose who you are when unassigned), your balance as a bar scaled to
 your largest balance across groups, the people count with You're and the
 member name, and a bin that asks in place before leaving the group on this
