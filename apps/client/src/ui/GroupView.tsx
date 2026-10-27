@@ -112,6 +112,7 @@ function GroupName(props: { name: string; groupId: string }) {
 export function GroupHeader(props: { app: MemberListApp }) {
   const actions = useActions();
   const invite = useActionCall();
+  const inviteToggle = useRef<View>(null);
   const ui = useUiState();
   const replica = props.app.snapshot().group;
   const snapshot = replica?.projected_snapshot;
@@ -131,6 +132,7 @@ export function GroupHeader(props: { app: MemberListApp }) {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
             <Text style={[s.caption, { fontSize: 14 }]}>{people === 1 ? '1 person' : `${people} people`}</Text>
             <Pressable
+              ref={inviteToggle}
               accessibilityRole="button"
               accessibilityState={{ expanded: inviting }}
               disabled={!invite.can(inviting ? 'closePanel' : 'showInvite', {})}
@@ -140,7 +142,16 @@ export function GroupHeader(props: { app: MemberListApp }) {
               <Text style={[s.headerActionText, s.link, { fontSize: 14, fontWeight: '400' }]}>Invite people</Text>
             </Pressable>
           </View>
-          <Reveal>{inviting ? <InvitePanel app={props.app} /> : null}</Reveal>
+          <Reveal
+            toggle={inviteToggle}
+            // A tap elsewhere may open another view; it acts first, and the
+            // link closes only if it is still the view after that.
+            onOutsidePress={() => setTimeout(() => {
+              if (actions.ui.snapshot().view === 'invite') void actions.dispatch('closePanel', {}, { origin: 'ui' });
+            }, 0)}
+          >
+            {inviting ? <InvitePanel app={props.app} /> : null}
+          </Reveal>
           <ErrorMessage message={invite.error} />
         </View>
       ) : undefined}

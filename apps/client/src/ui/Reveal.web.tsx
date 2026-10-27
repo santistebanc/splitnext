@@ -1,4 +1,5 @@
-import { useLayoutEffect, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from 'react';
+import type { RevealProps } from './Reveal';
 import { easeOut } from './theme';
 
 type Frame = { height: string; opacity: string | number; transform: string };
@@ -6,9 +7,10 @@ type Frame = { height: string; opacity: string | number; transform: string };
 /**
  * Content that opens in place, such as the invite link or the join field: it
  * grows from nothing and settles down into place, and on closing shrinks away
- * before it leaves. Without content it takes no room.
+ * before it leaves. Without content it takes no room. With `onOutsidePress`,
+ * a tap anywhere else closes it, and still reaches what was tapped.
  */
-export function Reveal(props: { children: ReactNode }) {
+export function Reveal(props: RevealProps) {
   const present = props.children !== null && props.children !== undefined && props.children !== false;
   const element = useRef<HTMLDivElement>(null);
   const last = useRef<ReactNode>(null);
@@ -16,8 +18,34 @@ export function Reveal(props: { children: ReactNode }) {
   const running = useRef<Animation | null>(null);
   const [closing, setClosing] = useState(false);
   const [, rerender] = useReducer((count: number) => count + 1, 0);
+  const dismiss = useRef(props.onOutsidePress);
+
+  dismiss.current = props.onOutsidePress;
 
   if (present) last.current = props.children;
+
+  // A finished tap, not a touch, so starting to scroll the page leaves it open.
+  // Taps on the content, or on the control that toggles it, are its own.
+  useEffect(() => {
+    if (!present || !props.onOutsidePress) return;
+
+    const toggle = props.toggle;
+
+    function outside(event: MouseEvent): void {
+      const target = event.target;
+
+      if (!(target instanceof Node) || !target.isConnected) return;
+
+      const control: unknown = toggle?.current;
+
+      if (element.current?.contains(target) || (control instanceof Node && control.contains(target))) return;
+      dismiss.current?.();
+    }
+
+    document.addEventListener('click', outside, true);
+
+    return () => document.removeEventListener('click', outside, true);
+  }, [present, Boolean(props.onOutsidePress), props.toggle]);
 
   useLayoutEffect(() => {
     const node = element.current;
