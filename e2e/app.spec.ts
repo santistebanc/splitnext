@@ -1075,3 +1075,48 @@ test('morphs between screens and leaves nothing behind', async ({ page }) => {
   expect(samples.at(-1)?.copies).toBe(0);
   await expect(heading(page, 'Morphing')).toBeVisible();
 });
+
+test('closes panels in place without the content returning at the end', async ({ page }) => {
+  await createGroup(page, 'Panels', 'Ana');
+  await addMember(page, 'Ben');
+  await button(page, 'Add expense').click();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const payer = page.getByRole('button', { name: /^Paid by / });
+
+  await payer.click();
+  await expect(page.getByRole('radio')).toHaveCount(2);
+  await page.waitForTimeout(500);
+
+  // Every frame of closing, until well after the movement ends.
+  const watching = page.evaluate(() => new Promise<{ height: number; content: number }[]>((resolve) => {
+    let panel = document.querySelector<HTMLElement>('[role="radiogroup"]');
+
+    while (panel && getComputedStyle(panel).overflow !== 'hidden') panel = panel.parentElement;
+    const samples: { height: number; content: number }[] = [];
+    const start = performance.now();
+
+    (function frame() {
+      samples.push({ height: panel!.getBoundingClientRect().height, content: panel!.childElementCount });
+
+      if (performance.now() - start < 900) requestAnimationFrame(frame);
+      else resolve(samples);
+    })();
+  }));
+
+  await payer.click();
+  const samples = await watching;
+  const growth = samples.slice(1).map((sample, index) => sample.height - samples[index]!.height);
+
+  expect(Math.max(...growth), JSON.stringify(samples)).toBeLessThanOrEqual(0);
+  expect(samples.at(-1)).toEqual({ height: 0, content: 0 });
+
+  // Opening again before it has finished closing leaves it open.
+  await payer.click();
+  await page.waitForTimeout(500);
+  await payer.click();
+  await page.waitForTimeout(80);
+  await payer.click();
+  await page.waitForTimeout(600);
+  await expect(page.getByRole('radio')).toHaveCount(2);
+  await expect(page.getByRole('radio', { name: /^Ben/ })).toBeVisible();
+});
