@@ -53,6 +53,7 @@ export function ActivityHeader(props: { app: MemberListApp }) {
       context={name}
       title="Activity"
       morph="activity"
+      scrollRule={false}
       error={seen.error}
       end={seen.can('markActivitySeen') ? (
         <HeaderAction text="Mark all seen" label="Mark all seen" onPress={() => { void seen.call('markActivitySeen', {}); }} />
@@ -92,9 +93,11 @@ function EntryAction(props: { text: string; label: string; disabled: boolean; on
  * entries scroll under it, until the next section's title takes its place.
  */
 function DayHeading(props: { title: string; color?: string }) {
+  const [pinned, setPinned] = useState(false);
+
   return (
-    <StickyTop>
-      <View style={{ paddingTop: 8, paddingBottom: 4, backgroundColor: colors.background }}>
+    <StickyTop onPinnedChange={setPinned}>
+      <View style={{ paddingTop: 8, paddingBottom: 4, backgroundColor: colors.background, boxShadow: pinned ? '0 1px 0 rgba(20, 20, 19, 0.14)' : 'none' }}>
         <SectionHeading title={props.title} {...(props.color !== undefined && { color: props.color })} />
       </View>
     </StickyTop>

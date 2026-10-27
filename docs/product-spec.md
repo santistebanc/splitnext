@@ -239,7 +239,11 @@ say so under the split, and prevent saving. Save remains unavailable until
 the required fields are filled. Expense rows have no inline remove action.
 
 Activity is one chronological list grouped by day, without filters, below a
-Needs your review block (see Conflict-notice experience). Each entry names who
+Needs your review block (see Conflict-notice experience). Section headings stay
+at the top while their entries scroll beneath them, until the next section
+takes their place. The scroll divider sits below the pinned section heading,
+including Needs your review, rather than below the Activity title; it is hidden
+at the top of the list and on headings that are not pinned. Each entry names who
 did what, with its detail in the monospaced face, an orange mark when it is
 new, and Undo or, for removals, Restore where safe.
 

@@ -997,6 +997,60 @@ test('edits and removes a repayment offline', async ({ page, context }, testInfo
   await expect(button(page, 'Ben, −12.00. Show details')).toBeVisible();
 });
 
+test('puts the Activity scroll divider under the pinned day heading', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 500 });
+  await page.route('**/groups/*/activity', async (route) => {
+    const response = await route.fetch();
+    // SAFETY: This is the local Worker's schema-validated Activity response.
+    const body = await response.json() as { events: { occurred_at: string }[] };
+    const today = new Date();
+    const yesterday = new Date();
+
+    today.setHours(12, 0, 0, 0);
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(12, 0, 0, 0);
+
+    for (const [index, event] of body.events.entries()) {
+      event.occurred_at = (index < body.events.length - 6 ? yesterday : today).toISOString();
+    }
+
+    await route.fulfill({ response, json: body });
+  });
+  await createGroup(page, 'Days', 'Ana');
+
+  for (const name of ['Ben', 'Cy', 'Dee', 'Eli', 'Fran', 'Gus', 'Hal', 'Inez', 'Jo', 'Kai', 'Lee', 'Mo']) await addMember(page, name);
+
+  await bell(page).click();
+  const title = heading(page, 'Activity');
+  const header = title.locator('..').locator('..');
+  const today = heading(page, 'Today').locator('..').locator('..');
+  const yesterday = heading(page, 'Yesterday').locator('..').locator('..');
+  const scroller = page.locator('#splitnext-page');
+
+  await expect(today).toBeVisible();
+  await expect(yesterday).toBeAttached();
+  await expect(today).toHaveCSS('box-shadow', 'none');
+  await scroller.evaluate((node) => { node.scrollTop = 150; });
+  await expect(title).toHaveCSS('font-size', '22px');
+  await expect(today).not.toHaveCSS('box-shadow', 'none');
+  await expect(header).toHaveCSS('box-shadow', 'none');
+  await expect(yesterday).toHaveCSS('box-shadow', 'none');
+  await page.screenshot({ path: testInfo.outputPath('activity-today-divider.png') });
+
+  await yesterday.evaluate((node) => {
+    const scroller = document.getElementById('splitnext-page')!;
+
+    scroller.scrollTop += node.getBoundingClientRect().top - scroller.getBoundingClientRect().top + 24;
+  });
+  await expect(yesterday).not.toHaveCSS('box-shadow', 'none');
+  await expect(today).toHaveCSS('box-shadow', 'none');
+  await expect(header).toHaveCSS('box-shadow', 'none');
+  await page.screenshot({ path: testInfo.outputPath('activity-yesterday-divider.png') });
+  await scroller.evaluate((node) => { node.scrollTop = 0; });
+  await expect(title).toHaveCSS('font-size', '42px');
+  await expect(today).toHaveCSS('box-shadow', 'none');
+});
+
 test('reads Activity offline and restores a removed expense', async ({ page, context }) => {
   await createGroup(page, 'History', 'Ana');
   await addMember(page, 'Ben');
