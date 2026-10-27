@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { formatAmount, formatInviteLink, repaymentMembers, settlementSuggestions } from '@splitnext/client';
 import { newActivity } from '../activity';
-import { canExcludeExpensePart, decreaseExpenseShare, fixExpenseAmount, increaseExpenseShare, suggestedCurrency } from '../expenses';
+import { canExcludeExpensePart, decreaseExpenseShare, fixExpenseAmount, increaseExpenseShare, noCurrency } from '../expenses';
 import { draftFields, groupViews, personFits, viewFits, viewNames } from '../uiState';
 import { workflowGuard, type WorkflowIntent } from '../workflow';
 import { requireSettlement, unavailable, editorLock, navigationLock, defineAction, openSnapshot, requireExpense, requireOpenable, requireMember, requireNotice, requireJoin, joinMembers, requireConfirmation, requireInvite, memberResource, noticeResources, empty, choice, type ActionHost, type ActionPlatform } from './define';
@@ -81,9 +81,9 @@ export const uiActions = {
   }),
   prepareRepayment: defineAction({
     workflow: 'draft', group: 'UI', description: 'Review a suggested or manual repayment.',
-    input: z.object({ from: choice('repaymentMember', 'Who paid.'), to: choice('repaymentMember', 'Who received it.'), amount: z.string(), currency: z.string(), keepEditing: z.boolean().optional(), manual: z.boolean().optional() }),
-    example: { from: 'member-1', to: 'member-2', amount: '10.00', currency: 'EUR' }, requires: ['openGroup'],
-    run: async (host, input, ui) => ui.changeRepayment({ ...input, manual: input.manual ?? false, settlementId: input.keepEditing ? ui.snapshot().repayment.settlementId : null, expectedVersion: input.keepEditing ? ui.snapshot().repayment.expectedVersion : null }),
+    input: z.object({ from: choice('repaymentMember', 'Who paid.'), to: choice('repaymentMember', 'Who received it.'), amount: z.string(), currency: z.string().optional(), keepEditing: z.boolean().optional(), manual: z.boolean().optional() }),
+    example: { from: 'member-1', to: 'member-2', amount: '10.00' }, requires: ['openGroup'],
+    run: async (host, input, ui) => ui.changeRepayment({ ...input, currency: input.currency ?? noCurrency, manual: input.manual ?? false, settlementId: input.keepEditing ? ui.snapshot().repayment.settlementId : null, expectedVersion: input.keepEditing ? ui.snapshot().repayment.expectedVersion : null }),
   }),
   showCreateGroup: defineAction({
     workflow: 'navigate',
@@ -294,8 +294,7 @@ export const uiActions = {
     example: {},
     requires: ['openGroup'],
     unavailable: ({ state }, input) => (input?.expenseId ? requireExpense(state, input.expenseId, 'active') : null),
-    run: async (host, input, ui, platform) =>
-      ui.showExpense(input.expenseId ?? null, suggestedCurrency(openSnapshot(host.snapshot()), platform.localeRegion)),
+    run: async (host, input, ui) => ui.showExpense(input.expenseId ?? null),
   }),
   chooseExpensePayer: defineAction({
     workflow: 'expenseDraft',

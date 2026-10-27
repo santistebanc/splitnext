@@ -11,7 +11,7 @@ import { addExpense, addMember, baseURL, bell, button, createGroup, field, headi
 /** The flows in the order the page lists them. */
 const flows = {
   start: { order: 1, title: 'Getting started', summary: 'A fresh install opens on the welcome screen. Create a group, then add people right in the balances.' },
-  expenses: { order: 2, title: 'Recording expenses', summary: 'Enter an amount, pick who paid, and split it equally, by shares, or by exact amounts, in any currency.' },
+  expenses: { order: 2, title: 'Recording expenses', summary: 'Enter an amount, pick who paid, and split it equally, by shares, or by exact amounts.' },
   people: { order: 3, title: 'People in a group', summary: 'Open someone to see how their balance adds up, rename them, or remove someone who has no records.' },
   settle: { order: 4, title: 'Settling up', summary: 'The plan shows the fewest payments. Record a planned payment in full or in part, then change it later.' },
   invite: { order: 5, title: 'Renaming and inviting', summary: 'Rename the group, copy its invite link, and replace the link when it has gone too far.' },
@@ -250,26 +250,15 @@ test('recording expenses', async ({ browser }) => {
   await field(page, 'Amount for Ben').press('Enter');
   await tap(rec, button(page, 'Decrease share for Cy'));
   await tap(rec, button(page, 'Save'));
-  await expect(button(page, 'Change Dinner at Taberna · 90.00 USD')).toBeVisible();
+  await expect(button(page, 'Change Dinner at Taberna · 90.00')).toBeVisible();
   await shot(rec, 'group-expense', 'Balances and expenses');
 
-  await step(rec, 'Add an expense in another currency');
-  await tap(rec, button(page, 'Add expense'));
-  await typeInto(rec, field(page, 'Amount'), '240');
-  await tap(rec, button(page, /^Currency: .*\. Change currency$/));
-  await typeInto(rec, field(page, 'Search currencies'), 'EUR');
-  await tap(rec, page.getByRole('radio', { name: 'EUR, Euro' }));
-  await typeInto(rec, field(page, 'Description'), 'Hotel');
-  await tap(rec, button(page, 'Save'));
-  await expect(button(page, 'Change Hotel · 240.00 EUR')).toBeVisible();
-  await shot(rec, 'group-currencies', 'Several currencies');
-
   await step(rec, 'Open an expense to change it');
-  await tap(rec, button(page, 'Change Dinner at Taberna · 90.00 USD'));
+  await tap(rec, button(page, 'Change Dinner at Taberna · 90.00'));
   await shot(rec, 'expense-edit', 'Changing an expense');
   await typeInto(rec, field(page, 'Amount'), '96');
   await tap(rec, button(page, 'Save'));
-  await expect(button(page, 'Change Dinner at Taberna · 96.00 USD')).toBeVisible();
+  await expect(button(page, 'Change Dinner at Taberna · 96.00')).toBeVisible();
   await pause(rec, 800);
   await finish(rec);
 });
@@ -279,7 +268,7 @@ test('people in a group', async ({ browser }) => {
     await createGroup(page, 'Lisbon trip', 'Ana');
     await addMember(page, 'Ben');
     await addMember(page, 'Cy');
-    await addExpense(page, 'Dinner', '90', 'EUR');
+    await addExpense(page, 'Dinner', '90');
   });
 
   const rec = await record(browser, 'people', { storageState });
@@ -327,8 +316,8 @@ test('settling up', async ({ browser }) => {
     await createGroup(page, 'Weekend', 'Ana');
     await addMember(page, 'Ben');
     await addMember(page, 'Cy');
-    await addExpense(page, 'Dinner', '90', 'EUR');
-    await addExpense(page, 'Taxi', '30', 'EUR', 'Ben');
+    await addExpense(page, 'Dinner', '90');
+    await addExpense(page, 'Taxi', '30', 'Ben');
   });
 
   const rec = await record(browser, 'settle', { storageState });
@@ -345,14 +334,14 @@ test('settling up', async ({ browser }) => {
   await shot(rec, 'settle-plan', 'Settle up');
 
   await step(rec, 'Record a planned payment');
-  await tap(rec, button(page, 'Ben pays you 10.00 EUR. Record this payment'));
+  await tap(rec, button(page, 'Ben pays you 10.00. Record this payment'));
   await expect(field(page, 'Amount')).toHaveValue('10.00');
   await shot(rec, 'repayment-form', 'Recording a repayment');
 
   await step(rec, 'Pay part of it');
   await typeInto(rec, field(page, 'Amount'), '4');
   await tap(rec, button(page, 'Record repayment'));
-  await expect(button(page, 'Ben pays you 6.00 EUR. Record this payment')).toBeVisible();
+  await expect(button(page, 'Ben pays you 6.00. Record this payment')).toBeVisible();
   await shot(rec, 'settle-partial', 'After a partial payment');
 
   await step(rec, 'A payment outside the plan');
@@ -362,7 +351,7 @@ test('settling up', async ({ browser }) => {
   await expect(heading(page, 'Settle up')).toBeVisible();
 
   await step(rec, 'Record the rest');
-  await tap(rec, button(page, 'Ben pays you 6.00 EUR. Record this payment'));
+  await tap(rec, button(page, 'Ben pays you 6.00. Record this payment'));
   await tap(rec, button(page, 'Record repayment'));
   await expect(page.getByText('All settled up', { exact: true })).toBeVisible();
   await shot(rec, 'settle-done', 'All settled up');
@@ -372,11 +361,11 @@ test('settling up', async ({ browser }) => {
   await tap(rec, button(page, 'Back to Weekend'));
 
   await step(rec, 'Repayments sit with the expenses');
-  await expect(button(page, 'Change repayment: Ben paid you back 4.00 EUR')).toBeVisible();
+  await expect(button(page, 'Change repayment: Ben paid you back 4.00')).toBeVisible();
   await shot(rec, 'group-repayments', 'Repayments in the list');
 
   await step(rec, 'Open a repayment to change it');
-  await tap(rec, button(page, 'Change repayment: Ben paid you back 4.00 EUR'));
+  await tap(rec, button(page, 'Change repayment: Ben paid you back 4.00'));
   await shot(rec, 'repayment-edit', 'Changing a repayment');
   await tap(rec, button(page, 'Cancel'));
   await expect(heading(page, 'Weekend')).toBeVisible();
@@ -432,7 +421,7 @@ test('joining from an invite', async ({ browser }) => {
   await prepare(browser, async (page) => {
     await createGroup(page, 'Lisbon', 'Ana');
     await addMember(page, 'Ben');
-    await addExpense(page, 'Dinner', '60', 'EUR');
+    await addExpense(page, 'Dinner', '60');
     link = await inviteLink(page);
   });
 
@@ -503,8 +492,8 @@ test('live changes and the bell', async ({ browser }) => {
 
   await landOn(rec, 'Shared');
   await step(rec, 'Ben adds an expense on their phone');
-  await addExpense(visitor, 'Fresh dinner', '20', 'EUR');
-  await expect(button(page, 'Change Fresh dinner · 20.00 EUR')).toBeVisible();
+  await addExpense(visitor, 'Fresh dinner', '20');
+  await expect(button(page, 'Change Fresh dinner · 20.00')).toBeVisible();
   await pause(rec, 800);
   await shot(rec, 'realtime', 'A live change');
 
@@ -526,8 +515,8 @@ test('activity, restore, and undo', async ({ browser }) => {
   const storageState = await prepare(browser, async (page) => {
     await createGroup(page, 'Trip', 'Ana');
     await addMember(page, 'Ben');
-    await addExpense(page, 'Lunch', '24', 'EUR');
-    await addExpense(page, 'Dinner', '40', 'EUR');
+    await addExpense(page, 'Lunch', '24');
+    await addExpense(page, 'Dinner', '40');
     await renameGroup(page, 'Porto weekend');
   });
 
@@ -536,9 +525,9 @@ test('activity, restore, and undo', async ({ browser }) => {
 
   await landOn(rec, 'Porto weekend');
   await step(rec, 'Remove an expense');
-  await tap(rec, button(page, 'Change Dinner · 40.00 EUR'));
-  await tap(rec, button(page, 'Delete Dinner · 40.00 EUR'));
-  await expect(button(page, 'Change Dinner · 40.00 EUR')).toHaveCount(0);
+  await tap(rec, button(page, 'Change Dinner · 40.00'));
+  await tap(rec, button(page, 'Delete Dinner · 40.00'));
+  await expect(button(page, 'Change Dinner · 40.00')).toHaveCount(0);
 
   await step(rec, 'Activity lists every change');
   await tap(rec, bell(page));
@@ -555,7 +544,7 @@ test('activity, restore, and undo', async ({ browser }) => {
   await shot(rec, 'activity-undone', 'A change undone');
   await tap(rec, button(page, /^Back to /));
   await expect(heading(page, 'Trip')).toBeVisible();
-  await expect(button(page, 'Change Dinner · 40.00 EUR')).toBeVisible();
+  await expect(button(page, 'Change Dinner · 40.00')).toBeVisible();
   await pause(rec, 800);
   await finish(rec);
 });
@@ -564,7 +553,7 @@ test('working offline', async ({ browser }) => {
   const storageState = await prepare(browser, async (page) => {
     await createGroup(page, 'Trip', 'Ana');
     await addMember(page, 'Ben');
-    await addExpense(page, 'Lunch', '24', 'EUR');
+    await addExpense(page, 'Lunch', '24');
   });
 
   const rec = await record(browser, 'offline', { storageState });
@@ -607,10 +596,10 @@ test('leaving and rejoining', async ({ browser }) => {
   const storageState = await prepare(browser, async (page) => {
     await createGroup(page, 'Porto', 'Ana');
     await addMember(page, 'Ben');
-    await addExpense(page, 'Lunch', '30', 'EUR', 'Ben');
+    await addExpense(page, 'Lunch', '30', 'Ben');
     await createGroup(page, 'Madrid', 'Ana');
     await addMember(page, 'Cy');
-    await addExpense(page, 'Tapas', '48', 'EUR');
+    await addExpense(page, 'Tapas', '48');
     await createGroup(page, 'Lisbon', 'Ana');
     await addMember(page, 'Dana');
   });
@@ -650,7 +639,7 @@ test('a big group', async ({ browser }) => {
 
     for (const name of ['Ben', 'Cy', 'Dana', 'Eli', 'Fran', 'Gus', 'Hana', 'Ida', 'Jo', 'Kai', 'Lea', 'Max']) await addMember(page, name);
 
-    for (const name of ['Cabin', 'Train', 'Groceries', 'Boat', 'Lunch', 'Taxi', 'Bakery', 'Museum', 'Dinner']) await addExpense(page, name, '60', 'EUR');
+    for (const name of ['Cabin', 'Train', 'Groceries', 'Boat', 'Lunch', 'Taxi', 'Bakery', 'Museum', 'Dinner']) await addExpense(page, name, '60');
   });
 
   const rec = await record(browser, 'big', { storageState });

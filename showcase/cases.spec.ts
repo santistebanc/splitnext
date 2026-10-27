@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
-import { addExpense, addMember, baseURL, bell, button, chooseCurrency, createGroup, field, heading, inviteLink, openGroup, out, person, phone, prepare, recordPlanned, setOffline, synced, toGroups, type StorageState } from './helpers';
+import { addExpense, addMember, baseURL, bell, button, createGroup, field, heading, inviteLink, openGroup, out, person, phone, prepare, recordPlanned, setOffline, synced, toGroups, type StorageState } from './helpers';
 
 /**
  * Every piece of UI that appears only under a condition: empty states,
@@ -174,22 +174,22 @@ test('balances and people', async ({ browser }) => {
     await createGroup(page, 'Trip', 'Ana');
     await addMember(page, 'Ben');
     await addMember(page, 'Cy');
-    await addExpense(page, 'Dinner', '90', 'EUR');
-    await addExpense(page, 'Taxi', '30', 'USD', 'Ben');
+    await addExpense(page, 'Dinner', '90');
+    await addExpense(page, 'Taxi', '30', 'Ben');
   });
 
   const { context, page } = await device(browser, { storageState });
 
   await openGroup(page, 'Trip');
-  await spot(page, person(page, 'Ana'), 'balance-you', 'Balances', 'Your row', 'Always first, tinted, with the You badge; one line per currency you owe or are owed.');
+  await spot(page, person(page, 'Ana'), 'balance-you', 'Balances', 'Your row', 'Always first, tinted, with the You badge and what you owe or are owed.');
   await spot(page, person(page, 'Ben'), 'presence-unclaimed', 'Balances', 'Dashed ring', 'No device has joined as this person.');
 
   await person(page, 'Ben').click();
   await spot(page, page.getByText('Not taken on any device'), 'person-unclaimed', 'People', 'Not taken on any device', 'Nobody has joined as this person.');
-  await spot(page, page.getByText(/^Owes · EUR/).locator('../..'), 'person-balances', 'People', 'Balance per currency', 'Owes or Gets back, one card per currency.');
+  await spot(page, page.getByText('Owes', { exact: true }).locator('../..'), 'person-balances', 'People', 'Balance', 'Owes or Gets back.');
   await spot(page, button(page, /^Settle up, \d+ payments?$/), 'person-settle', 'People', 'Settle up', 'The person is in at least one payment of the settle-up plan.');
   await spot(page, page.getByText('Settle up first to hide Ben.'), 'person-hide-blocked', 'People', 'Why Hide is unavailable', 'They still owe or are owed.');
-  await spot(page, heading(page, 'EUR').locator('..'), 'person-breakdown', 'People', 'Breakdown', 'Their part of each expense and repayment, adding up to the balance.');
+  await spot(page, heading(page, 'Expenses and repayments').locator('..'), 'person-breakdown', 'People', 'Breakdown', 'Their part of each expense and repayment, adding up to the balance.');
   await button(page, 'Rename Ben').click();
   await spot(page, field(page, 'Name').locator('../../..'), 'person-renaming', 'People', 'Renaming in place', 'The name becomes a field, with Done.');
   await field(page, 'Name').press('Escape');
@@ -216,8 +216,7 @@ test('settling up', async ({ browser }) => {
     await createGroup(page, 'Weekend', 'Ana');
     await addMember(page, 'Ben');
     await addMember(page, 'Cy');
-    await addExpense(page, 'Dinner', '90', 'EUR');
-    await addExpense(page, 'Taxi', '30', 'USD', 'Ben');
+    await addExpense(page, 'Dinner', '90', 'Ben');
   });
 
   const { context, page } = await device(browser, { storageState });
@@ -225,33 +224,31 @@ test('settling up', async ({ browser }) => {
   await openGroup(page, 'Weekend');
   await person(page, 'Ben').click();
   await button(page, /^Settle up, \d+ payments?$/).click();
-  await spot(page, heading(page, 'USD').locator('..'), 'settle-currency', 'Settling up', 'A plan per currency', 'Balances in more than one currency are settled separately.');
   await spot(page, button(page, /^You pay Ben /), 'settle-you-pay', 'Settling up', 'A payment you make', 'You owe in the plan: “You → Ben”.');
 
-  await button(page, /^Ben pays you 30\.00 EUR/).click();
-  await spot(page, page.getByText(/^Full amount Ben owes/), 'repay-full', 'Settling up', 'The full planned amount', 'The amount matches what the plan says is owed.');
+  await button(page, /^You pay Ben 30\.00/).click();
+  await spot(page, page.getByText(/^Full amount you owe/), 'repay-full', 'Settling up', 'The full planned amount', 'The amount matches what the plan says is owed.');
   await field(page, 'Amount').fill('12');
-  await spot(page, page.getByText(/^Ben owes 30\.00 EUR/), 'repay-partial', 'Settling up', 'Part of a planned payment', 'The amount differs from the plan, which is named for comparison.');
-  await button(page, 'Paid to you. Change').click();
+  await spot(page, page.getByText(/^You owe 30\.00/), 'repay-partial', 'Settling up', 'Part of a planned payment', 'The amount differs from the plan, which is named for comparison.');
+  await button(page, 'Paid to Ben. Change').click();
   await spot(page, page.getByRole('radiogroup', { name: 'Paid to' }), 'repay-picker', 'Settling up', 'Choosing who was paid', 'After tapping a name in the sentence.');
   await page.getByRole('radio', { name: /^Cy/ }).click();
   await spot(page, page.getByText('Paid outside splitnext.', { exact: true }), 'repay-manual', 'Settling up', 'A payment outside the plan', 'Nobody in the plan owes this pair.');
   await button(page, 'Cancel').click();
 
-  await recordPlanned(page, /^Ben pays you 30\.00 EUR/);
-  await recordPlanned(page, /^You pay Ben 10\.00 USD/);
-  await recordPlanned(page, /^Cy pays Ben 10\.00 USD/);
+  await recordPlanned(page, /^You pay Ben 30\.00/);
+  await recordPlanned(page, /^Cy pays Ben 30\.00/);
   await spot(page, page.getByText('All settled up', { exact: true }).locator('..'), 'settle-done', 'Settling up', 'All settled up', 'No payment involves this person any more.');
   await button(page, 'Record a different payment').click();
   await spot(page, heading(page, 'Earlier repayments').locator('..'), 'repay-earlier', 'Settling up', 'Earlier repayments', 'Repayments are already recorded in the group.');
   await button(page, 'Cancel').click();
 
   await button(page, 'Back to Ben').click();
-  await spot(page, page.getByText('Settled · EUR', { exact: true }).locator('..'), 'person-settled', 'People', 'Settled', 'In expenses, with a numeric zero in each settled currency.');
+  await spot(page, page.getByText('Settled', { exact: true }).locator('..'), 'person-settled', 'People', 'Settled', 'In expenses, with a numeric zero.');
   await button(page, 'Back to Weekend').click();
-  await spot(page, person(page, 'Ben'), 'balance-settled', 'Balances', 'Settled person', 'A numeric zero in each currency with records; people with no expenses keep a blank amount.');
-  await spot(page, button(page, /^Change repayment: Ben paid you back 30\.00 EUR/), 'row-repayment', 'Group screen', 'Repayment row', 'A recorded repayment, listed with the expenses in a quieter amount.');
-  await button(page, /^Change repayment: Ben paid you back 30\.00 EUR/).click();
+  await spot(page, person(page, 'Ben'), 'balance-settled', 'Balances', 'Settled person', 'A numeric zero for people with records; people with no expenses keep a blank amount.');
+  await spot(page, button(page, /^Change repayment: You paid Ben back 30\.00/), 'row-repayment', 'Group screen', 'Repayment row', 'A recorded repayment, listed with the expenses in a quieter amount.');
+  await button(page, /^Change repayment: You paid Ben back 30\.00/).click();
   await spot(page, button(page, 'Delete'), 'repay-remove', 'Settling up', 'Delete repayment', 'Opening a recorded repayment to change it.');
   await button(page, 'Cancel').click();
   await person(page, 'Ben').click();
@@ -278,12 +275,8 @@ test('expense form', async ({ browser }) => {
   await spot(page, field(page, 'Description'), 'expense-describe', 'Expense form', 'Description required', 'An amount is entered, but Save stays unavailable until the expense has a description.');
   await spot(page, button(page, 'Save'), 'expense-save-disabled', 'Expense form', 'Save, unavailable', 'Until the expense is complete.');
   await field(page, 'Description').fill('Dinner');
-  await button(page, /^Currency: .*\. Change currency$/).click();
-  await field(page, 'Search currencies').fill('eu');
-  await spot(page, page.getByRole('dialog', { name: 'Currency' }), 'expense-currency', 'Expense form', 'Choosing a currency', 'The search is ready to type in; the group’s and the common currencies come first.');
-  await page.getByRole('radio', { name: 'EUR, Euro' }).click();
   await field(page, 'Amount').fill('');
-  await spot(page, page.getByText(/^Enter an amount in EUR/), 'expense-amount', 'Expense form', 'Enter an amount', 'The amount is empty or not a number.');
+  await spot(page, page.getByText(/^Enter an amount/), 'expense-amount', 'Expense form', 'Enter an amount', 'The amount is empty or not a number.');
   await field(page, 'Amount').fill('30');
 
   await button(page, /^Paid by .*Change payer$/).click();
@@ -303,7 +296,7 @@ test('expense form', async ({ browser }) => {
   await button(page, /^Amount for Ben:/).click();
   await spot(page, field(page, 'Amount for Ben'), 'expense-amount-field', 'Expense form', 'Fix an amount', 'Tap a person’s amount to fix it, keeping the others’ shares.');
   await field(page, 'Amount for Ben').fill('abc');
-  await spot(page, page.getByText(/^Enter each amount in EUR/), 'expense-each-amount', 'Expense form', 'Enter each amount', 'A person’s amount is not a number.');
+  await spot(page, page.getByText(/^Enter each amount/), 'expense-each-amount', 'Expense form', 'Enter each amount', 'A person’s amount is not a number.');
   await field(page, 'Amount for Ben').fill('20');
   await field(page, 'Amount for Ben').press('Enter');
   await button(page, /^Amount for Cy:/).click();
@@ -329,7 +322,7 @@ test('offline and unreachable', async ({ browser }) => {
   const storageState = await prepare(browser, async (page) => {
     await createGroup(page, 'Trip', 'Ana');
     await addMember(page, 'Ben');
-    await addExpense(page, 'Lunch', '24', 'EUR');
+    await addExpense(page, 'Lunch', '24');
   });
 
   const { context, page } = await device(browser, { storageState });
@@ -503,7 +496,7 @@ test('two devices: presence, conflicts, and removal', async ({ browser }) => {
   await createGroup(page, 'Shared', 'Ana');
   await addMember(page, 'Cy');
   await addMember(page, 'Eli');
-  await addExpense(page, 'Dinner', '30', 'EUR');
+  await addExpense(page, 'Dinner', '30');
   // In no expense yet, so the other device can remove her outright.
   await addMember(page, 'Fay');
   const link = await inviteLink(page);
@@ -546,7 +539,6 @@ test('two devices: presence, conflicts, and removal', async ({ browser }) => {
   // Shared with Fay, whom the other device is about to remove, but not with Ben, so Ben can be removed later.
   await button(page, 'Add expense').click();
   await field(page, 'Amount').fill('12');
-  await chooseCurrency(page, 'EUR');
   await field(page, 'Description').fill('Snacks');
   await page.getByRole('checkbox', { name: 'Ben shares this expense' }).click();
   await button(page, 'Save').click();
@@ -600,8 +592,8 @@ test('activity', async ({ browser }) => {
   const storageState = await prepare(browser, async (page) => {
     await createGroup(page, 'History', 'Ana');
     await addMember(page, 'Ben');
-    await addExpense(page, 'Lunch', '24', 'EUR');
-    await addExpense(page, 'Taxi', '18', 'EUR');
+    await addExpense(page, 'Lunch', '24');
+    await addExpense(page, 'Taxi', '18');
     // In no expense, so she can be removed rather than hidden.
     await addMember(page, 'Dee');
     await person(page, 'Ben').click();
@@ -612,8 +604,8 @@ test('activity', async ({ browser }) => {
     await button(page, /^Change repayment: /).click();
     await button(page, 'Delete').click();
     await expect(heading(page, 'History')).toBeVisible();
-    await button(page, 'Change Taxi · 18.00 EUR').click();
-    await button(page, 'Delete Taxi · 18.00 EUR').click();
+    await button(page, 'Change Taxi · 18.00').click();
+    await button(page, 'Delete Taxi · 18.00').click();
     await person(page, 'Dee').click();
     await button(page, 'Remove Dee').click();
     await button(page, 'Group settings').click();
@@ -668,11 +660,11 @@ test('groups list', async ({ browser }) => {
   const storageState = await prepare(browser, async (page) => {
     await createGroup(page, 'Porto', 'Ana');
     await addMember(page, 'Ben');
-    await addExpense(page, 'Lunch', '30', 'EUR', 'Ben');
+    await addExpense(page, 'Lunch', '30', 'Ben');
     await createGroup(page, 'Madrid', 'Ana');
     await addMember(page, 'Cy');
-    await addExpense(page, 'Tapas', '48', 'EUR');
-    await addExpense(page, 'Museum', '20', 'USD');
+    await addExpense(page, 'Tapas', '48');
+    await addExpense(page, 'Museum', '20');
     await createGroup(page, 'Lisbon', 'Ana');
     await addMember(page, 'Dana');
   });
@@ -680,7 +672,7 @@ test('groups list', async ({ browser }) => {
   const { context, page } = await device(browser, { storageState, clipboard: true });
 
   await toGroups(page);
-  await spot(page, button(page, 'Open Madrid'), 'groups-owed', 'Welcome and groups', 'Owed, per currency', 'Your balance in the group, one line per currency, blue when you get money back.');
+  await spot(page, button(page, 'Open Madrid'), 'groups-owed', 'Welcome and groups', 'Owed', 'Your balance in the group, blue when you get money back.');
   await spot(page, button(page, 'Open Porto'), 'groups-owes', 'Welcome and groups', 'Owing', 'Orange when you owe.');
   await spot(page, button(page, 'Open Lisbon'), 'groups-settled', 'Welcome and groups', 'Settled', 'Nothing owed either way.');
   await context.close();
@@ -694,7 +686,7 @@ test('a long balances list', async ({ browser }) => {
 
     for (const name of ['Ben', 'Cy', 'Dana', 'Eli', 'Fran', 'Gus', 'Hana', 'Ida', 'Jo', 'Kai', 'Lea', 'Max']) await addMember(page, name);
 
-    for (const name of ['Cabin', 'Train', 'Groceries', 'Boat', 'Lunch', 'Taxi']) await addExpense(page, name, '60', 'EUR');
+    for (const name of ['Cabin', 'Train', 'Groceries', 'Boat', 'Lunch', 'Taxi']) await addExpense(page, name, '60');
   });
 
   const { context, page } = await device(browser, { storageState });

@@ -55,9 +55,7 @@ function payment(snapshot: Snapshot, entry: Settlement, amount = moneyLabel(entr
 
 function edited(before: Expense, after: Expense): string {
   if (before.total !== after.total || before.currency !== after.currency)
-    return before.currency === after.currency
-      ? `Amount ${moneyLabel(before.total, before.currency).replace(` ${before.currency}`, '')} → ${moneyLabel(after.total, after.currency)}`
-      : `Amount ${moneyLabel(before.total, before.currency)} → ${moneyLabel(after.total, after.currency)}`;
+    return `Amount ${moneyLabel(before.total, before.currency)} → ${moneyLabel(after.total, after.currency)}`;
 
   if (before.description !== after.description) return `Was ${before.description}`;
 

@@ -36,7 +36,7 @@ The app uses one fixed light palette from `ui/theme.ts`: white cards with a
 hairline edge on a cool grey page, near-black ink, one blue for each page's
 main action and links, and blue and orange only for money someone gets back or
 owes; green means settled or online; a brighter orange marks the Activity
-badge and changes to review. Body text uses local IBM Plex Sans, amounts, currency codes
+badge and changes to review. Body text uses local IBM Plex Sans, amounts
 and invite links local IBM Plex Mono, and titles local Bricolage Grotesque.
 Icons are stroked outlines in `ui/icons.tsx`. `theme.ts` also holds the corner
 radii (`radius`: small controls, fields and buttons, cards, sheets, pills) and
@@ -45,9 +45,9 @@ two shadows (`raised`, `floating`).
 Screens build from the shared pieces in `ui/components.tsx` rather than their
 own copies: `Button` for buttons (filled, secondary, quiet text links, small
 ones inside rows), `Pill` for rounded actions such as Invite people, Settle up,
-and the floating Add expense, `SectionHeading` for section and currency titles,
+and the floating Add expense, `SectionHeading` for section titles,
 `s.listCard` with `ListRow` for cards of rows, `Notice` for tinted messages,
-`EmptyState`, `Tag`, and `signedMoney` with `balanceColor` for balances.
+`EmptyState`, `Tag`, and `signedFigure` with `balanceColor` for balances.
 Recorded repayments use the expense list's `RepaymentRow` everywhere, and
 confirmations use `Confirmation` from `ConfirmSheet`. Pressing a control fades
 and shrinks it (`s.pressed`), pressing a row tints it (`s.rowPressed`), and
@@ -76,7 +76,7 @@ opens a `Drawer` with the connection state, locally queued change count, and
 Retry when online. Reconnecting closes it and hides the strip. Background
 network/offline errors use this status rather than a second banner; other
 background errors remain visible. The web `AmountInput` uses
-`react-number-format` to keep fixed currency precision while managing the
+`react-number-format` to keep two fixed decimals while managing the
 caret, accepts dot/comma entry, and rejects ambiguous pasted amounts.
 Settings contains the group name field, Save group name
 only after a change, and Leave group with its confirmation sheet. Below the
@@ -147,8 +147,8 @@ worker's release cache key.
   names already taken by a current participant are marked Taken.
 - Group cards show the people count and who you are; left groups appear as
   cards with Rejoin. Locally stored active cards also show the preferred
-  member's nonzero balances as signed amounts per currency, Settled when all
-  are zero, or Choose who you are when unassigned. Summaries derive
+  member's nonzero balance as a signed plain number, Settled when it
+  is zero, or Choose who you are when unassigned. Summaries derive
   from the same projected snapshot, without additional storage reads or
   currency conversion. A placeholder list shows while local storage opens.
   Errors appear beside the row or button that caused them; background sync
@@ -156,19 +156,19 @@ worker's release cache key.
   focus outline.
 - The balances list everyone with a balance or still active, you first, and
   end with an Add a person field that adds on blur without confirm/cancel
-  controls. They show a numeric zero in each currency a person has current
-  records in when settled; people without current records keep a blank amount.
-  Person details use the same per-currency balances, with Settled and zero
+  controls. They show a numeric zero when a person with current records is
+  settled; people without current records keep a blank amount.
+  Person details use the same balance, with Settled and zero
   shown together. They rename inline, choose the member as you without a
   confirmation (warning afterward when the name is already taken on another device), and remove the
   member immediately, including your own. `memberBreakdown` in
-  `model/breakdown.ts` lists the expenses and repayments behind a balance, per
-  currency, adding up exactly to it. Presence markers show online, offline, or
+  `model/breakdown.ts` lists the expenses and repayments behind a balance,
+  adding up exactly to it. Presence markers show online, offline, or
   unused; multiple tabs count once.
 - Forms are pages with keyboard-aware scrolling on every device. Member
   editing is allowed on the group screen and in person details.
 - Settle up shows the payments in `planTransfers` (`src/domain/settlements.ts`)
-  that involve one person, or all of them for the whole group. The plan has the fewest payments per currency: it
+  that involve one person, or all of them for the whole group. The plan has the fewest payments: it
   splits nonzero balances into as many zero-sum sets as possible with a bitmask
   search for up to 14 people, and settles each set greedily; larger groups use
   the greedy plan alone. Picking a payment opens the repayment form filled in;
@@ -655,7 +655,7 @@ Debug-only routes, hidden unless `ENABLE_DEBUG_INSPECTION` is enabled:
 - `GET /debug/groups`
 - `GET /debug/groups/{groupId}`
 
-Repayments are explicit versioned settlement records in the group snapshot. They use the same durable outbox and command rules as expenses, contribute only to balances, and retain both member references even when removed. Settle up derives the fewest deterministic transfers from each currency's net balances and provides a catalog-backed review form.
+Repayments are explicit versioned settlement records in the group snapshot. They use the same durable outbox and command rules as expenses, contribute only to balances, and retain both member references even when removed. Settle up derives the fewest deterministic transfers from the net balances and provides a catalog-backed review form.
 
 Settlement edits preserve the version opened by the editor. Removal and restoration retain the recorded amount and both member references, following the expense command lifecycle.
 

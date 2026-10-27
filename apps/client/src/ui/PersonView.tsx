@@ -5,7 +5,7 @@ import { memberBreakdown } from '../model/breakdown';
 import { balanceRows, memberName } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
 import { BackHeader } from './BackHeader';
-import { Button, ErrorMessage, ListRow, Notice, SectionHeading, balanceColor, colors, s, signedFigure, signedMoney } from './components';
+import { Button, ErrorMessage, ListRow, Notice, SectionHeading, balanceColor, colors, s, signedFigure } from './components';
 import { repaymentTitle } from './ExpenseList';
 import { ChevronRightIcon, PencilIcon, PersonIcon, TrashIcon, UndoIcon } from './icons';
 import { MemberIcon, MemberNameInput, presenceText, type MemberListApp } from './MemberList';
@@ -128,7 +128,7 @@ export function PersonDetails(props: { app: MemberListApp }) {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {balances.length ? balances.map(({ currency, amount }) => (
           <View key={currency} style={{ flexGrow: 1, flexBasis: '45%', paddingVertical: 14, paddingHorizontal: 16, borderRadius: radius.card, backgroundColor: colors.surface, gap: 2 }}>
-            <Text style={{ fontFamily, fontSize: 13, fontWeight: '600', color: colors.muted }}>{amount > 0 ? 'Gets back' : amount < 0 ? 'Owes' : 'Settled'} · {currency}</Text>
+            <Text style={{ fontFamily, fontSize: 13, fontWeight: '600', color: colors.muted }}>{amount > 0 ? 'Gets back' : amount < 0 ? 'Owes' : 'Settled'}</Text>
             <Text style={[money(amount), { fontSize: 22 }]}>{signedFigure(amount, currency)}</Text>
           </View>
         )) : (
@@ -214,7 +214,7 @@ export function PersonDetails(props: { app: MemberListApp }) {
 
       {breakdown.map((group) => (
         <View key={group.currency}>
-          <SectionHeading title={group.currency} />
+          <SectionHeading title="Expenses and repayments" />
           <View style={s.listCard}>
             {group.rows.map((row, index) => {
               const title = row.kind === 'expense' ? row.title : repaymentTitle(replica, { from_member_id: row.from, to_member_id: row.to });
@@ -223,7 +223,7 @@ export function PersonDetails(props: { app: MemberListApp }) {
                 <ListRow
                   key={row.id}
                   first={index === 0}
-                  label={`${title}, ${signedMoney(row.amount, group.currency)}`}
+                  label={`${title}, ${signedFigure(row.amount, group.currency)}`}
                   disabled={row.kind === 'expense' ? !open.can('showExpense', { expenseId: row.id }) : !open.can('showSettlement', { settlementId: row.id })}
                   onPress={() => {
                     if (row.kind === 'expense') void open.call('showExpense', { expenseId: row.id });
@@ -240,7 +240,7 @@ export function PersonDetails(props: { app: MemberListApp }) {
             })}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingHorizontal: 16, borderTopWidth: 2, borderColor: colors.track, backgroundColor: colors.totalRow }}>
               <Text style={{ flex: 1, fontFamily, fontSize: 15, fontWeight: '600', color: colors.ink }}>Balance</Text>
-              <Text style={[money(group.total), { fontSize: 17 }]}>{signedMoney(group.total, group.currency)}</Text>
+              <Text style={[money(group.total), { fontSize: 17 }]}>{signedFigure(group.total, group.currency)}</Text>
             </View>
           </View>
         </View>

@@ -5,7 +5,7 @@ import { hasRecords } from '../model/breakdown';
 import { balanceRows, currentExpenses, memberName, moneyLabel } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
 import { createValueStore } from './pageScroll';
-import { ErrorMessage, ListRow, Pill, SectionHeading, balanceColor, colors, headerGap, s, signedMoney } from './components';
+import { ErrorMessage, ListRow, Pill, SectionHeading, balanceColor, colors, headerGap, s, signedFigure } from './components';
 import { AddPersonRow, MemberIcon, type MemberListApp, type Replica } from './MemberList';
 import { AnimatedHeight, usePrefersReducedMotion } from './AnimatedHeight';
 import { PlusIcon } from './icons';
@@ -503,7 +503,7 @@ function PersonRow(props: {
   const name = memberName(props.replica.projected_snapshot, props.memberId);
   const state = props.app.snapshot();
   const participants = participantMarkers(props.replica, props.memberId, props.app.client.presence(props.replica.group_id), state.online && state.reachable);
-  const amounts = props.balances.map((entry) => signedMoney(entry.amount, entry.currency));
+  const amounts = props.balances.map((entry) => signedFigure(entry.amount, entry.currency));
 
   return (
     <View
@@ -526,7 +526,7 @@ function PersonRow(props: {
         <View style={{ alignItems: 'flex-end', gap: 1 }}>
           {props.balances.map((entry) => (
             <Text key={entry.currency} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} style={[s.amount, { color: balanceColor(entry.amount) }]}>
-              {signedMoney(entry.amount, entry.currency)}
+              {signedFigure(entry.amount, entry.currency)}
             </Text>
           ))}
         </View>

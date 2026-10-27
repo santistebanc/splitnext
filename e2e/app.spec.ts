@@ -57,21 +57,11 @@ async function addMember(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('button', { name: new RegExp(`^${escaped(name)}, .*\\. Show details$`), includeHidden: true })).toBeAttached();
 }
 
-/** Chooses a currency from the currency drawer by searching for its code. */
-async function chooseCurrency(page: Page, currency: string): Promise<void> {
-  await button(page, /^Currency: .*\. Change currency$/).click();
-  await field(page, 'Search currencies').fill(currency);
-  await page.getByRole('radio', { name: new RegExp(`^${escaped(currency)}, `) }).click();
-  await expect(page.getByRole('dialog', { name: 'Currency' })).toHaveCount(0);
-}
-
 /** Adds an expense from the group screen and returns to it. */
-async function addExpense(page: Page, description: string, amount: string, currency?: string, payer?: string): Promise<void> {
+async function addExpense(page: Page, description: string, amount: string, payer?: string): Promise<void> {
   await button(page, 'Add expense').click();
   await expect(field(page, 'Amount')).toBeVisible();
   await field(page, 'Amount').fill(amount);
-
-  if (currency) await chooseCurrency(page, currency);
 
   if (payer) {
     await button(page, /^Paid by .*Change payer$/).click();
@@ -157,7 +147,7 @@ test('uses the same compact title size across app views', async ({ page }, testI
   await createGroup(page, 'Headers', 'Ana');
   await expect(heading(page, 'Headers')).toHaveCSS('font-size', '18px');
   await addMember(page, 'Ben');
-  await addExpense(page, 'Lunch', '20', 'EUR');
+  await addExpense(page, 'Lunch', '20');
   await person(page, 'Ben').click();
   await expect(heading(page, 'Ben')).toHaveCSS('font-size', '18px');
   await button(page, 'Settle up, 1 payment').click();
@@ -234,28 +224,27 @@ test('keeps the fixed theme and group-list branding when offline', async ({ page
   expect(appearance.assets).toEqual([true, true, true, true, true]);
 });
 
-test('shows separate currency summaries offline and keeps people who still owe or are owed', async ({ page, context }) => {
-  await createGroup(page, 'Currencies', 'Ana');
+test('shows balance summaries offline and keeps people who still owe or are owed', async ({ page, context }) => {
+  await createGroup(page, 'Summaries', 'Ana');
   await addMember(page, 'Ben');
 
-  await button(page, 'Currencies. Switch group').click();
+  await button(page, 'Summaries. Switch group').click();
   await expect(page.getByText('Settled', { exact: true })).toBeVisible();
-  await button(page, 'Open Currencies').click();
-  await addExpense(page, 'Dinner', '60', 'EUR', 'Ana');
-  await addExpense(page, 'Tickets', '40', 'USD', 'Ben');
-  await expect(button(page, 'Ana (you), +30.00 EUR, −20.00 USD. Show details')).toBeVisible();
+  await button(page, 'Open Summaries').click();
+  await addExpense(page, 'Dinner', '60', 'Ana');
+  await addExpense(page, 'Tickets', '40', 'Ben');
+  await expect(button(page, 'Ana (you), +10.00. Show details')).toBeVisible();
 
   await goOffline(page, context);
-  await button(page, 'Currencies. Switch group').click();
-  await expect(page.getByText('+30.00 EUR', { exact: true })).toBeVisible();
-  await expect(page.getByText('−20.00 USD', { exact: true })).toBeVisible();
-  await button(page, 'Open Currencies').click();
+  await button(page, 'Summaries. Switch group').click();
+  await expect(page.getByText('+10.00', { exact: true })).toBeVisible();
+  await button(page, 'Open Summaries').click();
   await person(page, 'Ana').click();
 
   // Ana still has balances, so she cannot be hidden until settled.
   await expect(button(page, 'Hide Ana')).toBeDisabled();
   await expect(page.getByText('Settle up first to hide yourself.', { exact: true })).toBeVisible();
-  await button(page, 'Back to Currencies').click();
+  await button(page, 'Back to Summaries').click();
 });
 
 test('emphasizes inviting in an empty group without moving the action', async ({ page }, testInfo) => {
@@ -274,7 +263,7 @@ test('emphasizes inviting in an empty group without moving the action', async ({
   await expect(page.getByRole('dialog', { name: 'Invite people' })).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath('empty-group-invite.png') });
-  await addExpense(page, 'Lunch', '20', 'EUR');
+  await addExpense(page, 'Lunch', '20');
   await expect(invite).toHaveCSS('background-color', 'rgb(230, 239, 252)');
   await expect(add).toHaveCSS('background-color', 'rgb(27, 95, 193)');
   await expect.poll(async () => {
@@ -288,7 +277,7 @@ test('emphasizes inviting in an empty group without moving the action', async ({
   await expect(page.getByRole('dialog', { name: 'Invite people' })).toBeVisible();
 });
 
-test('records, changes, and removes an expense with balances per currency', async ({ page }) => {
+test('records, changes, and removes an expense with plain-number balances', async ({ page }) => {
   await createGroup(page, 'Trip', 'Ana');
   await addMember(page, 'Ben');
   await expect(page.getByText('No expenses yet', { exact: true })).toHaveCount(0);
@@ -303,24 +292,24 @@ test('records, changes, and removes an expense with balances per currency', asyn
   // A new expense starts in its amount.
   await expect(field(page, 'Amount')).toBeFocused();
 
-  // The browser locale names the US, so the first expense suggests dollars.
-  await expect(button(page, 'Currency: USD. Change currency')).toBeVisible();
+  // Amounts are plain numbers: there is no currency to choose.
+  await expect(button(page, /Change currency$/)).toHaveCount(0);
   await field(page, 'Amount').fill('30');
   await expect(page.getByTestId('split-summary')).toHaveText('15.00 each · 2 people');
   await expect(field(page, 'Amount for Ben')).toHaveCount(0);
   await field(page, 'Description').fill('Dinner');
   await button(page, 'Save').click();
-  await expect(button(page, 'Change Dinner · 30.00 USD')).toBeVisible();
+  await expect(button(page, 'Change Dinner · 30.00')).toBeVisible();
   await expect(addButton).toBeVisible();
   expect(await addButton.boundingBox()).toEqual(addPosition);
-  await expect(button(page, 'Ana (you), +15.00 USD. Show details')).toBeVisible();
-  await expect(button(page, 'Ben, −15.00 USD. Show details')).toBeVisible();
+  await expect(button(page, 'Ana (you), +15.00. Show details')).toBeVisible();
+  await expect(button(page, 'Ben, −15.00. Show details')).toBeVisible();
 
-  await button(page, 'Change Dinner · 30.00 USD').click();
+  await button(page, 'Change Dinner · 30.00').click();
   await expect(field(page, 'Amount')).not.toBeFocused();
   await field(page, 'Amount').fill('40');
   await button(page, 'Save').click();
-  await expect(button(page, 'Change Dinner · 40.00 USD')).toBeVisible();
+  await expect(button(page, 'Change Dinner · 40.00')).toBeVisible();
 
   // Ben owes, so he stays until settled.
   await person(page, 'Ben').click();
@@ -329,8 +318,8 @@ test('records, changes, and removes an expense with balances per currency', asyn
   await button(page, 'Back to Trip').click();
 
   // Deleting happens from the expense's own screen, which returns to the group.
-  await button(page, 'Change Dinner · 40.00 USD').click();
-  await button(page, 'Delete Dinner · 40.00 USD').click();
+  await button(page, 'Change Dinner · 40.00').click();
+  await button(page, 'Delete Dinner · 40.00').click();
   await expect(page.getByText('No expenses yet', { exact: true })).toHaveCount(0);
   await expect(addButton).toBeVisible();
   expect(await addButton.boundingBox()).toEqual(addPosition);
@@ -373,19 +362,9 @@ test('keeps the expense amount formatted while typing and accepts dots or commas
   await expect(amount).toHaveValue('193.50');
   await field(page, 'Description').fill('Lunch');
 
-  // Other currencies retain their own minor-unit precision.
-  await chooseCurrency(page, 'JPY');
-  await amount.fill('42');
-  await field(page, 'Description').click();
-  await expect(amount).toHaveValue('42');
-  await chooseCurrency(page, 'KWD');
-  await amount.fill('42,5');
-  await field(page, 'Description').click();
-  await expect(amount).toHaveValue('42.500');
-  await chooseCurrency(page, 'EUR');
   await amount.fill('12,5');
   await button(page, 'Save').click();
-  await expect(button(page, 'Change Lunch · 12.50 EUR')).toBeVisible();
+  await expect(button(page, 'Change Lunch · 12.50')).toBeVisible();
 });
 
 test('keeps zero-amount split rows simple and aligned, then restores their controls', async ({ page }, testInfo) => {
@@ -432,7 +411,7 @@ test('keeps zero-amount split rows simple and aligned, then restores their contr
   await expect(page.getByRole('checkbox', { name: 'Ana shares this expense' })).toBeChecked();
   await field(page, 'Amount').fill('100');
   await expect(button(page, 'Decrease share for Ana')).toBeVisible();
-  await expect(button(page, 'Amount for Ana: 50.00 USD. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Ana: 50.00. Change amount')).toBeVisible();
 });
 
 test('aligns split controls in columns for weighted, fixed, and excluded people', async ({ page }, testInfo) => {
@@ -473,16 +452,6 @@ test('mixes fixed amounts and weighted shares, preserves them offline, and clear
   await button(page, 'Add expense').click();
   await field(page, 'Amount').fill('100');
 
-  // The currency drawer opens ready to search, with the common currencies first.
-  await button(page, 'Currency: USD. Change currency').click();
-  await expect(field(page, 'Search currencies')).toBeFocused();
-  await expect(page.getByRole('radio').first()).toHaveAccessibleName('USD, US Dollar');
-  await expect(page.getByRole('radio', { name: 'USD, US Dollar' })).toBeChecked();
-  await field(page, 'Search currencies').fill('yen');
-  await expect(page.getByRole('radio').first()).toHaveAccessibleName('JPY, Japanese Yen');
-  await field(page, 'Search currencies').fill('EUR');
-  await page.getByRole('radio', { name: 'EUR, Euro' }).click();
-  await expect(button(page, 'Currency: EUR. Change currency')).toBeVisible();
   await field(page, 'Description').fill('Mixed dinner');
   const checkboxIcon = page.getByRole('checkbox', { name: 'Cy shares this expense' }).locator('svg');
   const checkboxFill = await checkboxIcon.evaluate((icon) => getComputedStyle(icon.parentElement!).backgroundColor);
@@ -495,9 +464,9 @@ test('mixes fixed amounts and weighted shares, preserves them offline, and clear
   await button(page, 'Increase share for Ana').click();
   await button(page, 'Increase share for Ben').click();
   await expect(page.getByTestId('split-summary')).toHaveText('Custom split · 3 people');
-  await expect(button(page, 'Amount for Ana: 50.00 EUR. Change amount')).toBeVisible();
-  await expect(button(page, 'Amount for Ben: 33.33 EUR. Change amount')).toBeVisible();
-  await expect(button(page, 'Amount for Cy: 16.67 EUR. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Ana: 50.00. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Ben: 33.33. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Cy: 16.67. Change amount')).toBeVisible();
 
   // Fix one person while the others retain their 3:2 weights.
   await button(page, /^Amount for Cy:/).click();
@@ -507,39 +476,39 @@ test('mixes fixed amounts and weighted shares, preserves them offline, and clear
   await expect(page.getByText('The amounts add up to more than the total.', { exact: true })).toBeVisible();
   await field(page, 'Amount for Cy').fill('20');
   await field(page, 'Amount for Cy').press('Enter');
-  await expect(button(page, 'Amount for Ana: 48.00 EUR. Change amount')).toBeVisible();
-  await expect(button(page, 'Amount for Ben: 32.00 EUR. Change amount')).toBeVisible();
-  await expect(button(page, 'Amount for Cy: 20.00 EUR, fixed. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Ana: 48.00. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Ben: 32.00. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Cy: 20.00, fixed. Change amount')).toBeVisible();
   await field(page, 'Amount').fill('130');
-  await expect(button(page, 'Amount for Ana: 66.00 EUR. Change amount')).toBeVisible();
-  await expect(button(page, 'Amount for Ben: 44.00 EUR. Change amount')).toBeVisible();
-  await expect(button(page, 'Amount for Cy: 20.00 EUR, fixed. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Ana: 66.00. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Ben: 44.00. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Cy: 20.00, fixed. Change amount')).toBeVisible();
   await field(page, 'Amount').fill('100');
 
   await goOffline(page, context);
   await button(page, 'Save').click();
-  await button(page, 'Change Mixed dinner · 100.00 EUR').click();
-  await expect(button(page, 'Delete Mixed dinner · 100.00 EUR')).toBeVisible();
-  await expect(button(page, 'Amount for Ana: 48.00 EUR. Change amount')).toBeVisible();
-  await expect(button(page, 'Amount for Ben: 32.00 EUR. Change amount')).toBeVisible();
-  await expect(button(page, 'Amount for Cy: 20.00 EUR, fixed. Change amount')).toBeVisible();
+  await button(page, 'Change Mixed dinner · 100.00').click();
+  await expect(button(page, 'Delete Mixed dinner · 100.00')).toBeVisible();
+  await expect(button(page, 'Amount for Ana: 48.00. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Ben: 32.00. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Cy: 20.00, fixed. Change amount')).toBeVisible();
 
   // Editing only the occasion must keep both the fixed value and the weights.
   await field(page, 'Description').fill('Mixed dinner edited');
   await button(page, 'Save').click();
-  await button(page, 'Change Mixed dinner edited · 100.00 EUR').click();
-  await expect(button(page, 'Amount for Ana: 48.00 EUR. Change amount')).toBeVisible();
-  await expect(button(page, 'Amount for Ben: 32.00 EUR. Change amount')).toBeVisible();
+  await button(page, 'Change Mixed dinner edited · 100.00').click();
+  await expect(button(page, 'Amount for Ana: 48.00. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Ben: 32.00. Change amount')).toBeVisible();
   await button(page, /^Amount for Cy:/).click();
   await field(page, 'Amount for Cy').fill('');
   await field(page, 'Amount for Cy').press('Enter');
-  await expect(button(page, 'Amount for Ana: 50.00 EUR. Change amount')).toBeVisible();
-  await expect(button(page, 'Amount for Ben: 33.33 EUR. Change amount')).toBeVisible();
-  await expect(button(page, 'Amount for Cy: 16.67 EUR. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Ana: 50.00. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Ben: 33.33. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Cy: 16.67. Change amount')).toBeVisible();
   await page.getByRole('checkbox', { name: 'Cy shares this expense' }).click();
   await expect(button(page, /^Amount for Cy:/)).toHaveCount(0);
   await page.getByRole('checkbox', { name: 'Cy shares this expense' }).click();
-  await expect(button(page, 'Amount for Cy: 16.67 EUR. Change amount')).toBeVisible();
+  await expect(button(page, 'Amount for Cy: 16.67. Change amount')).toBeVisible();
   await button(page, 'Cancel').click();
   await goOnline(page, context);
 });
@@ -548,52 +517,53 @@ test('explains a balance and settles it with the fewest payments', async ({ page
   await createGroup(page, 'Settle', 'Ana');
   await addMember(page, 'Ben');
   await addMember(page, 'Cy');
-  await addExpense(page, 'Dinner', '90', 'EUR');
-  await addExpense(page, 'Taxi', '30', 'EUR', 'Ben');
+  await addExpense(page, 'Dinner', '90');
+  await addExpense(page, 'Taxi', '30', 'Ben');
 
   // You first, then whoever owes most: Cy owes 40, Ben 10.
   expect(await page.getByRole('button', { name: /Show details$/ }).evaluateAll((rows) => rows.map((row) => row.getAttribute('aria-label')))).toEqual([
-    'Ana (you), +50.00 EUR. Show details',
-    'Cy, −40.00 EUR. Show details',
-    'Ben, −10.00 EUR. Show details',
+    'Ana (you), +50.00. Show details',
+    'Cy, −40.00. Show details',
+    'Ben, −10.00. Show details',
   ]);
 
   // Ben paid 30 and owes 40: the breakdown adds up to his balance.
   await person(page, 'Ben').click();
-  await expect(page.getByText('Owes · EUR', { exact: true })).toBeVisible();
-  await expect(button(page, 'Dinner, −30.00 EUR')).toBeVisible();
-  await expect(button(page, 'Taxi, +20.00 EUR')).toBeVisible();
-  await expect(page.getByText('−10.00 EUR', { exact: true })).toBeVisible();
+  await expect(page.getByText('Owes', { exact: true })).toBeVisible();
+  await expect(button(page, 'Dinner, −30.00')).toBeVisible();
+  await expect(button(page, 'Taxi, +20.00')).toBeVisible();
+  // The balance card and the breakdown's Balance row show the same total.
+  await expect(page.getByText('−10.00', { exact: true })).toHaveCount(2);
 
   // Ben pays Ana directly; Cy's debt is a separate payment Ben is not part of.
   await button(page, 'Settle up, 1 payment').click();
   await expect(heading(page, 'Settle up')).toBeVisible();
-  await button(page, 'Ben pays you 10.00 EUR. Record this payment').click();
+  await button(page, 'Ben pays you 10.00. Record this payment').click();
   await expect(field(page, 'Amount')).toHaveValue('10.00');
   await button(page, 'Cancel').click();
   await expect(heading(page, 'Settle up')).toBeVisible();
 
   // A partial payment leaves the rest in the plan.
-  await button(page, 'Ben pays you 10.00 EUR. Record this payment').click();
+  await button(page, 'Ben pays you 10.00. Record this payment').click();
   await field(page, 'Amount').fill('4');
   await button(page, 'Record repayment').click();
-  await expect(button(page, 'Ben pays you 6.00 EUR. Record this payment')).toBeVisible();
-  await button(page, 'Ben pays you 6.00 EUR. Record this payment').click();
+  await expect(button(page, 'Ben pays you 6.00. Record this payment')).toBeVisible();
+  await button(page, 'Ben pays you 6.00. Record this payment').click();
   await button(page, 'Record repayment').click();
   await expect(page.getByText('All settled up', { exact: true })).toBeVisible();
   await button(page, 'Back to Ben').click();
   await expect(button(page, /^Settle up/)).toHaveCount(0);
   await button(page, 'Back to Settle').click();
-  await expect(button(page, 'Change repayment: Ben paid you back 4.00 EUR')).toBeVisible();
-  await expect(button(page, 'Ben, 0.00 EUR. Show details')).toBeVisible();
-  await expect(person(page, 'Ben').getByText('0.00 EUR', { exact: true })).toBeVisible();
+  await expect(button(page, 'Change repayment: Ben paid you back 4.00')).toBeVisible();
+  await expect(button(page, 'Ben, 0.00. Show details')).toBeVisible();
+  await expect(person(page, 'Ben').getByText('0.00', { exact: true })).toBeVisible();
 
   // Settled people sort before people in no expense yet.
   await addMember(page, 'Dee');
   expect(await page.getByRole('button', { name: /Show details$/ }).evaluateAll((rows) => rows.map((row) => row.getAttribute('aria-label')))).toEqual([
     expect.stringMatching(/^Ana \(you\), /),
     expect.stringMatching(/^Cy, /),
-    'Ben, 0.00 EUR. Show details',
+    'Ben, 0.00. Show details',
     'Dee, no expenses yet. Show details',
   ]);
   await expect(person(page, 'Dee')).toHaveText('Dee');
@@ -601,8 +571,8 @@ test('explains a balance and settles it with the fewest payments', async ({ page
   await expect(page.getByText('No expenses yet', { exact: true })).toBeVisible();
   await button(page, 'Back to Settle').click();
   await person(page, 'Ben').click();
-  await expect(page.getByText('Settled · EUR', { exact: true })).toBeVisible();
-  await expect(page.getByText('0.00', { exact: true })).toBeVisible();
+  await expect(page.getByText('Settled', { exact: true })).toBeVisible();
+  await expect(page.getByText('0.00', { exact: true })).toHaveCount(2);
 
   // Settled people with expenses are hidden, not removed, and can come back.
   await button(page, 'Hide Ben').click();
@@ -621,8 +591,8 @@ test('settles up the whole group from the balances', async ({ page }) => {
   await addMember(page, 'Ben');
   await addMember(page, 'Cy');
   await expect(button(page, 'Settle up the group')).toHaveCount(0);
-  await addExpense(page, 'Dinner', '90', 'EUR');
-  await addExpense(page, 'Taxi', '30', 'EUR', 'Ben');
+  await addExpense(page, 'Dinner', '90');
+  await addExpense(page, 'Taxi', '30', 'Ben');
 
   // Settle up and Invite share the heading row, even on a narrow screen.
   const settle = (await button(page, 'Settle up the group').boundingBox())!;
@@ -634,36 +604,31 @@ test('settles up the whole group from the balances', async ({ page }) => {
   await button(page, 'Settle up the group').click();
   await expect(heading(page, 'Settle up')).toBeVisible();
   await expect(page.getByText('These payments settle everyone completely. Tap one once it’s paid.', { exact: true })).toBeVisible();
-  await expect(button(page, 'Cy pays you 40.00 EUR. Record this payment')).toBeVisible();
-  await expect(button(page, 'Ben pays you 10.00 EUR. Record this payment')).toBeVisible();
+  await expect(button(page, 'Cy pays you 40.00. Record this payment')).toBeVisible();
+  await expect(button(page, 'Ben pays you 10.00. Record this payment')).toBeVisible();
 
-  await button(page, 'Ben pays you 10.00 EUR. Record this payment').click();
+  await button(page, 'Ben pays you 10.00. Record this payment').click();
   await button(page, 'Record repayment').click();
-  await expect(button(page, 'Ben pays you 10.00 EUR. Record this payment')).toHaveCount(0);
-  await button(page, 'Cy pays you 40.00 EUR. Record this payment').click();
+  await expect(button(page, 'Ben pays you 10.00. Record this payment')).toHaveCount(0);
+  await button(page, 'Cy pays you 40.00. Record this payment').click();
   await button(page, 'Record repayment').click();
   await expect(page.getByText('Everyone is settled up.', { exact: true })).toBeVisible();
   await button(page, 'Back to Whole group').click();
   await expect(button(page, 'Settle up the group')).toHaveCount(0);
 });
 
-test('keeps drawer titles and controls at the currency drawer scale', async ({ page }, testInfo) => {
+test('keeps drawer titles and controls at one compact scale', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Drawers', 'Ana');
   await addMember(page, 'Ben');
   await button(page, 'Add expense').click();
-  await button(page, 'Currency: USD. Change currency').click();
-  const currency = page.getByRole('dialog', { name: 'Currency' });
-  const referenceSize = await currency.getByText('US Dollar', { exact: true }).evaluate((text) => getComputedStyle(text).fontSize);
-  const referenceHeight = (await currency.getByRole('radio', { name: 'USD, US Dollar', exact: true }).boundingBox())!.height;
-
-  await expect(currency.getByRole('heading', { name: 'Currency', exact: true })).toHaveCSS('font-size', '18px');
-  await currency.getByRole('radio', { name: 'USD, US Dollar', exact: true }).click();
   await button(page, 'Paid by Ana (you). Change payer').click();
   const payer = page.getByRole('dialog', { name: 'Paid by' });
+  const referenceSize = '15px';
+  const referenceHeight = (await payer.getByRole('radio', { name: 'Ben', exact: true }).boundingBox())!.height;
 
+  await expect(payer.getByRole('heading', { name: 'Paid by', exact: true })).toHaveCSS('font-size', '18px');
   await expect(payer.getByText('Ben', { exact: true })).toHaveCSS('font-size', referenceSize);
-  expect((await payer.getByRole('radio', { name: 'Ben', exact: true }).boundingBox())!.height).toBe(referenceHeight);
   await page.screenshot({ path: testInfo.outputPath('payer-drawer.png') });
   await payer.getByRole('button', { name: 'Close', exact: true }).click();
   await button(page, 'Cancel').click();
@@ -925,26 +890,26 @@ test('leaves after confirming and rejoins as an existing member', async ({ page 
 test('records planned and other repayments offline', async ({ page, context }) => {
   await createGroup(page, 'Repayments', 'Ana');
   await addMember(page, 'Benjamin Alexander');
-  await addExpense(page, 'Dinner', '60', 'EUR');
+  await addExpense(page, 'Dinner', '60');
   await page.setViewportSize({ width: 390, height: 844 });
   await person(page, 'Benjamin Alexander').click();
   await goOffline(page, context);
   await button(page, 'Settle up, 1 payment').click();
-  await button(page, 'Benjamin Alexander pays you 30.00 EUR. Record this payment').click();
+  await button(page, 'Benjamin Alexander pays you 30.00. Record this payment').click();
   await expect(page.getByRole('radiogroup', { name: 'Paid by', exact: true })).toHaveCount(0);
   await field(page, 'Amount').fill('10');
   await button(page, 'Record repayment').click();
-  await expect(button(page, 'Benjamin Alexander pays you 20.00 EUR. Record this payment')).toBeVisible();
+  await expect(button(page, 'Benjamin Alexander pays you 20.00. Record this payment')).toBeVisible();
   expect(await page.locator('#splitnext-page').evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 
   await button(page, 'Record a different payment').click();
-  await expect(button(page, 'Change repayment: Benjamin Alexander paid you back 10.00 EUR')).toBeVisible();
+  await expect(button(page, 'Change repayment: Benjamin Alexander paid you back 10.00')).toBeVisible();
   await field(page, 'Amount').fill('5');
   await button(page, 'Record repayment').click();
-  await expect(button(page, 'Benjamin Alexander pays you 15.00 EUR. Record this payment')).toBeVisible();
+  await expect(button(page, 'Benjamin Alexander pays you 15.00. Record this payment')).toBeVisible();
   await page.reload();
-  await expect(button(page, 'Change repayment: Benjamin Alexander paid you back 10.00 EUR')).toBeVisible();
-  await expect(button(page, 'Change repayment: Benjamin Alexander paid you back 5.00 EUR')).toBeVisible();
+  await expect(button(page, 'Change repayment: Benjamin Alexander paid you back 10.00')).toBeVisible();
+  await expect(button(page, 'Change repayment: Benjamin Alexander paid you back 5.00')).toBeVisible();
   await goOnline(page, context);
   await expect(page.getByText(/saved here/)).toHaveCount(0);
 });
@@ -953,10 +918,10 @@ test('edits and removes a repayment offline', async ({ page, context }, testInfo
   await page.setViewportSize({ width: 320, height: 760 });
   await createGroup(page, 'Repayment changes', 'Ana');
   await addMember(page, 'Ben');
-  await addExpense(page, 'Lunch', '24', 'EUR');
+  await addExpense(page, 'Lunch', '24');
   await person(page, 'Ben').click();
   await button(page, 'Settle up, 1 payment').click();
-  await button(page, 'Ben pays you 12.00 EUR. Record this payment').click();
+  await button(page, 'Ben pays you 12.00. Record this payment').click();
   await expect(button(page, 'Delete')).toHaveCount(0);
   await button(page, 'Record repayment').click();
   await expect(page.getByText('All settled up', { exact: true })).toBeVisible();
@@ -964,12 +929,12 @@ test('edits and removes a repayment offline', async ({ page, context }, testInfo
   await button(page, 'Back to Repayment changes').click();
 
   await goOffline(page, context);
-  await button(page, 'Change repayment: Ben paid you back 12.00 EUR').click();
+  await button(page, 'Change repayment: Ben paid you back 12.00').click();
   await field(page, 'Amount').fill('15');
   await button(page, 'Save repayment').click();
-  await expect(button(page, 'Change repayment: Ben paid you back 15.00 EUR')).toBeVisible();
-  await expect(button(page, 'Ben, +3.00 EUR. Show details')).toBeVisible();
-  await button(page, 'Change repayment: Ben paid you back 15.00 EUR').click();
+  await expect(button(page, 'Change repayment: Ben paid you back 15.00')).toBeVisible();
+  await expect(button(page, 'Ben, +3.00. Show details')).toBeVisible();
+  await button(page, 'Change repayment: Ben paid you back 15.00').click();
   const remove = button(page, 'Delete');
   const save = button(page, 'Save repayment');
 
@@ -985,15 +950,15 @@ test('edits and removes a repayment offline', async ({ page, context }, testInfo
   await remove.click();
   await expect(heading(page, 'Repayment changes')).toBeVisible();
   await expect(button(page, /^Change repayment:/)).toHaveCount(0);
-  await expect(button(page, 'Ben, −12.00 EUR. Show details')).toBeVisible();
+  await expect(button(page, 'Ben, −12.00. Show details')).toBeVisible();
 });
 
 test('reads Activity offline and restores a removed expense', async ({ page, context }) => {
   await createGroup(page, 'History', 'Ana');
   await addMember(page, 'Ben');
-  await addExpense(page, 'Dinner', '24', 'EUR');
-  await button(page, 'Change Dinner · 24.00 EUR').click();
-  await button(page, 'Delete Dinner · 24.00 EUR').click();
+  await addExpense(page, 'Dinner', '24');
+  await button(page, 'Change Dinner · 24.00').click();
+  await button(page, 'Delete Dinner · 24.00').click();
   await bell(page).click();
   await expect(heading(page, 'Activity')).toBeVisible();
   await expect(page.getByText('All caught up. Every change from this device is in.')).toHaveCount(0);
@@ -1006,16 +971,16 @@ test('reads Activity offline and restores a removed expense', async ({ page, con
   await expect(page.getByText('You removed Dinner', { exact: true })).toBeVisible();
   await button(page, 'Restore expense').click();
   await button(page, 'Back to History').click();
-  await expect(button(page, 'Change Dinner · 24.00 EUR')).toBeVisible();
+  await expect(button(page, 'Change Dinner · 24.00')).toBeVisible();
 });
 
 test('undoes a money change and then reverses that undo through Activity', async ({ page }) => {
   await createGroup(page, 'Money undo', 'Ana');
   await addMember(page, 'Ben');
-  await addExpense(page, 'Lunch', '24', 'EUR');
+  await addExpense(page, 'Lunch', '24');
   await person(page, 'Ben').click();
   await button(page, 'Settle up, 1 payment').click();
-  await button(page, 'Ben pays you 12.00 EUR. Record this payment').click();
+  await button(page, 'Ben pays you 12.00. Record this payment').click();
   await button(page, 'Record repayment').click();
   await button(page, 'Back to Ben').click();
   await button(page, 'Back to Money undo').click();
@@ -1028,7 +993,7 @@ test('undoes a money change and then reverses that undo through Activity', async
   // Two undo entries, the newer one naming the undo it reverses in its detail.
   await expect(page.getByText('You undid a change', { exact: true })).toHaveCount(3);
   await button(page, 'Back to Money undo').click();
-  await expect(button(page, 'Change repayment: Ben paid you back 12.00 EUR')).toBeVisible();
+  await expect(button(page, 'Change repayment: Ben paid you back 12.00')).toBeVisible();
 });
 
 test('keeps member actions out of Undo while group rename remains reversible', async ({ page }) => {
@@ -1062,9 +1027,9 @@ test('counts changes from others on the bell without pop-ups and marks them seen
   await expect(visitor.getByText('Ana is already taken on another device. You can still continue as Ana.')).toBeVisible();
   await button(visitor, 'Join as Ana').click();
   await expect(heading(visitor, 'Shared')).toBeVisible();
-  await addExpense(visitor, 'Fresh dinner', '20', 'EUR');
+  await addExpense(visitor, 'Fresh dinner', '20');
 
-  await expect(button(page, 'Change Fresh dinner · 20.00 EUR')).toBeVisible();
+  await expect(button(page, 'Change Fresh dinner · 20.00')).toBeVisible();
   await expect(bell(page)).toHaveAccessibleName('Activity: 2 new updates');
   await expect(page.getByTestId('activity-count')).toHaveText('2');
   await expect(page.getByTestId('toast')).toHaveCount(0);
@@ -1160,7 +1125,7 @@ test('shows as many balances as leave room for two expenses, shrinks them to you
   // Adding the later people listed everyone; show fewer again.
   await button(page, 'Show fewer people').click();
 
-  for (const name of ['Cabin', 'Train', 'Groceries', 'Boat', 'Lunch', 'Taxi', 'Bakery', 'Museum', 'Dinner']) await addExpense(page, name, '60', 'EUR');
+  for (const name of ['Cabin', 'Train', 'Groceries', 'Boat', 'Lunch', 'Taxi', 'Bakery', 'Museum', 'Dinner']) await addExpense(page, name, '60');
 
   const scroller = page.locator('#splitnext-page');
   // Where something sits in the page's scroll area: the header above it shrinks as the page scrolls,
@@ -1180,8 +1145,8 @@ test('shows as many balances as leave room for two expenses, shrinks them to you
   await expect(showAll).toBeVisible();
   // Adding a person waits until everyone shows.
   await expect(field(page, 'Add a person')).toHaveCount(0);
-  await expect(button(page, 'Change Dinner · 60.00 EUR')).toBeInViewport();
-  await expect(button(page, 'Change Museum · 60.00 EUR')).toBeInViewport();
+  await expect(button(page, 'Change Dinner · 60.00')).toBeInViewport();
+  await expect(button(page, 'Change Museum · 60.00')).toBeInViewport();
 
   // Ending at a whole person must not reserve the unused part of the viewport.
   // Expenses follow the disclosure with just the normal section spacing.
@@ -1206,9 +1171,9 @@ test('shows as many balances as leave room for two expenses, shrinks them to you
   const balancesHeading = heading(page, 'Balances');
   const rows = page.getByRole('button', { name: /Show details$/ });
   const shown = await rows.count();
-  const top = await inPage(button(page, 'Change Dinner · 60.00 EUR'));
+  const top = await inPage(button(page, 'Change Dinner · 60.00'));
   await scroller.evaluate((node) => { node.scrollTop = 20; });
-  await expect.poll(() => off(button(page, 'Change Dinner · 60.00 EUR'), top - 20)).toBeLessThanOrEqual(1);
+  await expect.poll(() => off(button(page, 'Change Dinner · 60.00'), top - 20)).toBeLessThanOrEqual(1);
 
   // Past the empty base, the people are cut, and the floating “···” button rides the card's cut edge.
   await expect.poll(async () => {
@@ -1324,7 +1289,7 @@ test('shows as many balances as leave room for two expenses, shrinks them to you
   // The first expense sits right under the pinned Expenses heading.
   await expect.poll(async () => {
     const expensesBox = await heading(page, 'Expenses').boundingBox();
-    const firstBox = await button(page, 'Change Dinner · 60.00 EUR').boundingBox();
+    const firstBox = await button(page, 'Change Dinner · 60.00').boundingBox();
 
     return Boolean(expensesBox && firstBox && Math.abs(firstBox.y - (expensesBox.y + expensesBox.height)) <= 8);
   }).toBe(true);
@@ -1343,7 +1308,7 @@ test('shows as many balances as leave room for two expenses, shrinks them to you
   await heading(page, 'Expenses').click({ position: { x: 20, y: 8 } });
   await expect.poll(async () => {
     const expensesBox = await heading(page, 'Expenses').boundingBox();
-    const firstBox = await button(page, 'Change Dinner · 60.00 EUR').boundingBox();
+    const firstBox = await button(page, 'Change Dinner · 60.00').boundingBox();
 
     return Boolean(expensesBox && firstBox && Math.abs(firstBox.y - (expensesBox.y + expensesBox.height)) <= 8);
   }).toBe(true);

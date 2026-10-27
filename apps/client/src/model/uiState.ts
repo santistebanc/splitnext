@@ -1,5 +1,5 @@
 import { repaymentMembers, type InvitePreview } from '@splitnext/client';
-import { draftForExpense, type ExpenseDraft } from './expenses';
+import { draftForExpense, noCurrency, type ExpenseDraft } from './expenses';
 import type { AppState } from './controller';
 import {
   enterView,
@@ -18,12 +18,10 @@ export const draftFields = [
   'settings.name',
   'expense.description',
   'expense.amount',
-  'expense.currency',
   'join.link',
   'join.name',
   'member.name',
   'repayment.amount',
-  'repayment.currency',
 ] as const;
 
 /** The group screen and the views that open over it, each returning to the view below. */
@@ -139,8 +137,8 @@ export class AppUiState {
       navigation: { revision: 0, mode: 'replace' },
       create: { name: '', yourName: readName() ?? '' },
       settings: { name, expectedName: name },
-      expense: draftForExpense(null, null, 'EUR'),
-      repayment: { from: '', to: '', amount: '', currency: 'EUR', settlementId: null, expectedVersion: null, manual: false },
+      expense: draftForExpense(null, null, noCurrency),
+      repayment: { from: '', to: '', amount: '', currency: noCurrency, settlementId: null, expectedVersion: null, manual: false },
       join: {
         link: initialLink,
         name: readName() ?? '',
@@ -259,7 +257,7 @@ export class AppUiState {
   }
 
   /** Opens the expense editor on a new expense, or on one to change. */
-  showExpense(expenseId: string | null, currency: string): void {
+  showExpense(expenseId: string | null): void {
     const snapshot = this.readApp().group?.projected_snapshot ?? null;
     const expense = snapshot?.expenses.find((entry) => entry.id === expenseId && entry.status === 'active') ?? null;
 
@@ -271,7 +269,7 @@ export class AppUiState {
         confirmation: null,
         memberEdit: null,
         trail: this.trailTo('expense'),
-        expense: draftForExpense(snapshot, expense, currency, this.readApp().group?.session?.identity.id),
+        expense: draftForExpense(snapshot, expense, noCurrency, this.readApp().group?.session?.identity.id),
       },
     );
     this.confirmRun = null;
@@ -361,14 +359,8 @@ export class AppUiState {
       case 'expense.amount':
         this.changeExpense(() => ({ amount: value }));
         break;
-      case 'expense.currency':
-        this.changeExpense(() => ({ currency: value.trim().toUpperCase() }));
-        break;
       case 'repayment.amount':
         this.changeRepayment({ amount: value });
-        break;
-      case 'repayment.currency':
-        this.changeRepayment({ currency: value.trim().toUpperCase() });
         break;
       case 'join.name':
         this.move({ type: 'edit', intent: 'joinName' });

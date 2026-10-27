@@ -1,7 +1,6 @@
 import {
   activeMembers,
   allocate,
-  currencyCodeSchema,
   expenseDescriptionSchema,
   formatAmount,
   groupBalances,
@@ -16,7 +15,6 @@ import {
   type ExpenseEntry,
   type LedgerMember,
 } from '@splitnext/client';
-import { regionCurrency } from './currency';
 
 type Snapshot = ClientReplicaState['projected_snapshot'] | undefined;
 
@@ -25,12 +23,18 @@ export function currentExpenses(snapshot: Snapshot): Expense[] {
   return (snapshot?.expenses ?? []).filter((expense) => expense.status === 'active').reverse();
 }
 
-/** An amount as people read it, such as "42.50 EUR". */
+/**
+ * The ISO 4217 code for no currency. Amounts are plain numbers with two
+ * decimals, so every new expense and repayment records this code.
+ */
+export const noCurrency = 'XXX';
+
+/** An amount as people read it, such as "42.50", never with a currency. */
 export function moneyLabel(amount: number, currency: string): string {
-  return `${formatAmount(amount, currency)} ${currency}`;
+  return formatAmount(amount, currency);
 }
 
-/** An expense as people refer to it, such as "Dinner · 42.50 EUR". */
+/** An expense as people refer to it, such as "Dinner · 42.50". */
 export function expenseLabel(expense: Pick<Expense, 'description' | 'total' | 'currency'>): string {
   return `${expense.description} · ${moneyLabel(expense.total, expense.currency)}`;
 }
@@ -38,22 +42,6 @@ export function expenseLabel(expense: Pick<Expense, 'description' | 'total' | 'c
 /** One share for every active member, the default split. */
 export function equalParts(snapshot: Snapshot): Extract<AllocationPart, { kind: 'shares' }>[] {
   return activeMembers(snapshot).map((member) => ({ kind: 'shares', member_id: member.id, shares: 1 }));
-}
-
-/**
- * Currencies the group used recently, most used first among its last ten
- * current expenses, with ties going to the most recent.
- */
-export function recentCurrencies(snapshot: Snapshot): string[] {
-  const recent = currentExpenses(snapshot).slice(0, 10).map((expense) => expense.currency);
-  const count = (currency: string) => recent.filter((entry) => entry === currency).length;
-
-  return [...new Set(recent)].sort((left, right) => count(right) - count(left) || recent.indexOf(left) - recent.indexOf(right));
-}
-
-/** The currency a new expense starts with: the group's habit, then the locale's region, then EUR. */
-export function suggestedCurrency(snapshot: Snapshot, region: string | null | undefined): string {
-  return recentCurrencies(snapshot)[0] ?? regionCurrency(region) ?? 'EUR';
 }
 
 /** One person's split, keeping a fixed amount exactly as it is being typed. */
@@ -173,10 +161,9 @@ export function entryFromDraft(draft: ExpenseDraft): DraftEntry {
 
   if (!description.success) return fail('Describe the expense.');
 
-  if (!currencyCodeSchema.safeParse(draft.currency).success) return fail('Enter a three-letter currency, such as EUR.');
   const total = parseAmount(draft.amount, draft.currency);
 
-  if (!total) return fail(`Enter an amount in ${draft.currency}, such as ${formatAmount(1250, draft.currency)}.`);
+  if (!total) return fail(`Enter an amount, such as ${formatAmount(1250, draft.currency)}.`);
 
   if (!draft.paidBy) return fail('Choose who paid.');
 
@@ -190,7 +177,7 @@ export function entryFromDraft(draft: ExpenseDraft): DraftEntry {
     } else {
       const amount = parseAmount(part.amount, draft.currency);
 
-      if (amount === null) return fail(`Enter each amount in ${draft.currency}.`);
+      if (amount === null) return fail('Enter each amount as a number.');
       parts.push({ kind: 'exact', member_id: part.member_id, amount });
     }
   }

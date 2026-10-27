@@ -2,9 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { activeMembers, formatAmount, parseAmount, preferredMember } from '@splitnext/client';
 import type { AppController } from '../model/controller';
-import { entryFromDraft, expenseLabel, memberName, previewAllocation, recentCurrencies, type ExpenseDraft, type ExpenseDraftPart } from '../model/expenses';
+import { entryFromDraft, expenseLabel, memberName, previewAllocation, type ExpenseDraft, type ExpenseDraftPart } from '../model/expenses';
 import { ErrorMessage, HeaderAction, RadioRow, ScreenHeader, colors, s } from './components';
-import { CurrencyPicker } from './CurrencyPicker';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { Drawer } from './Drawer';
 import { between, useCompactProgress } from './pageScroll';
@@ -41,13 +40,6 @@ export function ExpenseEditorHeader(props: ExpenseEditorProps) {
       <ErrorMessage message={back.error ?? save.error ?? remove.error} />
     </>
   );
-}
-
-/** A display symbol; the editable currency code still identifies the currency. */
-function currencySymbol(currency: string): string {
-  if (!/^[A-Z]{3}$/.test(currency)) return currency;
-
-  return new Intl.NumberFormat('en', { style: 'currency', currency, currencyDisplay: 'narrowSymbol' }).formatToParts(0).find((part) => part.type === 'currency')?.value ?? currency;
 }
 
 /** One caption for equal shares or a mixture of weights and fixed amounts. */
@@ -129,14 +121,14 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
                 ) : included ? (
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={`Amount for ${props.name}: ${shown} ${props.currency}${fixed ? ', fixed' : ''}. Change amount`}
+                    accessibilityLabel={`Amount for ${props.name}: ${shown}${fixed ? ', fixed' : ''}. Change amount`}
                     accessibilityState={{ disabled: !canFix }}
                     disabled={!canFix}
                     onPress={() => { void edit.call('setExpenseFixedAmount', fixing, () => setEditing(true)); }}
                     style={({ pressed }) => [{ minHeight: 44, justifyContent: 'center' }, pressed && s.pressed]}
                   >
                     <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ textAlign: 'right', fontFamily: monoFamily, fontSize: 14, lineHeight: 20, fontWeight: '600', color: fixed ? colors.action : colors.muted }}>
-                      {`${currencySymbol(props.currency)} ${shown}`}
+                      {shown}
                     </Text>
                   </Pressable>
                 ) : null}
@@ -195,7 +187,7 @@ export function ExpenseControls(props: ExpenseEditorProps) {
   const payers = (snapshot?.members ?? []).filter((member) => member.status === 'active' || member.id === draft.paidBy);
   const preview = previewAllocation(snapshot, draft);
 
-  function change(field: 'expense.description' | 'expense.amount' | 'expense.currency', value: string): void {
+  function change(field: 'expense.description' | 'expense.amount', value: string): void {
     void actions.dispatch('changeDraft', { field, value }, { origin: 'ui' });
   }
 
@@ -216,7 +208,6 @@ export function ExpenseControls(props: ExpenseEditorProps) {
             height={between(64, 40, progress)}
             fontSize={between(44, 28, progress)}
           />
-          <CurrencyPicker height={between(44, 34, progress)} value={draft.currency} recent={recentCurrencies(snapshot)} onChange={(value) => change('expense.currency', value)} />
         </View>
         <TextInput
           accessibilityLabel="Description"

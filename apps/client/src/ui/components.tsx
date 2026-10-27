@@ -183,12 +183,7 @@ export function SectionHeading(props: { title: string; end?: ReactNode; onPress?
   );
 }
 
-/** An amount with its direction, such as "+12.50 EUR" or "−12.50 EUR". */
-export function signedMoney(amount: number, currency: string): string {
-  return `${signedFigure(amount, currency)} ${currency}`;
-}
-
-/** A balance figure without its currency, such as "+12.50", "−12.50", or "0.00". */
+/** A balance figure, such as "+12.50", "−12.50", or "0.00". */
 export function signedFigure(amount: number, currency: string): string {
   return `${amount > 0 ? '+' : amount < 0 ? '−' : ''}${formatAmount(Math.abs(amount), currency)}`;
 }

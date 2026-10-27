@@ -78,8 +78,8 @@ An expense excluded from balances but kept, and restorable, in the group.
 _Avoid_: Deleted expense
 
 **Expense currency**:
-The currency in which an expense's original amount and allocations are recorded.
-A group may contain expenses in several currencies.
+The currency code an expense's amount and allocations are recorded in. The app
+records XXX, no currency, and shows amounts as plain numbers (ADR 0025).
 _Avoid_: Group currency, global currency, display currency
 
 **Minor unit**:

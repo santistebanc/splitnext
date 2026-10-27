@@ -18,7 +18,7 @@ Group recovery remains accepted future behavior. Account sign-in is not planned.
 The first app beta exposes the existing groups, ledger members, and invitations
 to friends traveling together. Anyone can create a group without a beta access
 gate. Ship the responsive web app, public homepage, and invite join flow first;
-native releases follow. Expense entry and per-currency balances are now
+native releases follow. Expense entry and balances are now
 available, together with repayments, cached Activity, safe undo and an
 Activity bell.
 
@@ -46,7 +46,7 @@ Creating a link does not imply anyone has joined.
 
 Use a calm visual direction and animated state-driven views. Use compact mobile
 layouts with clear labels and usable touch targets.
-Drawers share the currency picker's compact scale: 15px body and action text,
+Drawers share one compact scale: 15px body and action text,
 48px rows and buttons. Screen headers, standalone page titles, drawer titles,
 and confirmation titles share one 18px title style. Titles keep the same size
 when scrolling; header spacing and context labels can still compact.
@@ -68,15 +68,14 @@ Keep rejected/superseded changes for review as described below. Add expense is
 the primary group action and does not require invitation acceptance. See
 [the app plan](./app-product-plan.md) for product direction.
 
-The balances list everyone in the group with their balance per currency, you
+The balances list everyone in the group with their balance, you
 first on a tinted row with a blue You label, then everyone else from most
-negative to most positive balance (owing first, then settled, then owed; in
-several currencies, a debt in any currency sorts first), then people in no
+negative to most positive balance (owing first, then settled, then owed), then people in no
 current expense or repayment yet, and a last Add a person row. Typing a name there and ending
 the typing (leaving the field, Enter, or Done) adds the person without a
 confirm step; an empty draft is discarded, and a failed add keeps the draft
 with inline feedback. Keep rows compact without avatars. Show a settled zero,
-such as 0.00 EUR, in green for each currency the person has current records in;
+such as 0.00, in green when the person has current records;
 leave the amount blank only when no current expense or repayment names them.
 A presence marker beside each name shows a filled green dot when at least one
 identity selecting the name is connected, a gray ring when they are known to be
@@ -86,16 +85,16 @@ device. This follows current preferred-member choices, not a permanent
 ownership or historical attendance record. Multiple tabs for one identity count
 once.
 
-Tapping a person opens their details: their name and presence, their balance in
-each currency (Owes or Gets back), or a numeric zero labelled Settled when their expenses and
-repayments cancel out in that currency, or No expenses yet when no current expense or
+Tapping a person opens their details: their name and presence, their balance
+(Owes or Gets back), or a numeric zero labelled Settled when their expenses and
+repayments cancel out, or No expenses yet when no current expense or
 repayment names them, Settle up with the number of payments in the
 group's plan that involve them, and Rename, I’m [name], and Remove. Settle up is
 hidden for a settled person. Rename edits the name in place, committing on
 leaving the field or Done; an empty name restores the saved name. I’m [name]
 makes that member you on this device without asking first; when another device
 already has the name taken, an inline warning says so afterward. Only someone with a
-zero balance in every currency can be taken out; otherwise the action is
+zero balance can be taken out; otherwise the action is
 disabled with Settle up first. It is called Hide when any expense or repayment
 has named them, removed ones included, since they are kept for history, and
 Remove otherwise. Either is immediate, without a confirmation, including the
@@ -103,8 +102,8 @@ current you member. A toast names the person, hidden or removed, without Undo,
 and Activity can restore them later. A hidden member who has a balance again,
 such as from an offline change, stays in the balances marked removed, with
 Restore in their details. Below the actions, the details list every current expense and
-repayment behind the balance, one row each, newest first, grouped by currency,
-and end each currency with a Balance row; the rows add up exactly to it.
+repayment behind the balance, one row each, newest first, under Expenses and
+repayments, and end with a Balance row; the rows add up exactly to it.
 
 Every app screen is a page on every device: a fixed header with Back or Cancel,
 an optional compact title or a matching page title below it, an optional end
@@ -142,7 +141,7 @@ continue to govern identity, invitations, member removal, money, and sync.
 
 Use one fixed light theme, which replaced the earlier Calm receipt theme:
 white cards with a hairline edge on a cool grey page (`#F2F4F6`) with near-black
-ink (`#10161D`). Body text uses IBM Plex Sans, amounts, currency codes and
+ink (`#10161D`). Body text uses IBM Plex Sans, amounts and
 invite links use IBM Plex Mono, and page titles, group names and empty-state
 titles use Bricolage Grotesque. One blue (`#1B5FC1`) marks the main action on
 each page and links. Blue figures mean someone gets money back and orange
@@ -162,7 +161,7 @@ device.
 
 The groups list has the logo, the name and a Join button in its header, a
 large Your groups title, and one card per group showing its name, people
-count, You’re and the member name, and your balance per currency as a signed
+count, You’re and the member name, and your balance as a signed
 amount, Settled with a check when every balance is zero, or Choose who you are.
 Show N groups you left expands the left groups, and New group is pinned at the
 foot. New group is a page with a large title, Group name and Your name in this
@@ -206,11 +205,11 @@ show no empty-expenses illustration or message. An unassigned installation is as
 to tap its name in the balances.
 
 Tapping a person opens their details (see above), and their Settle up opens the
-payments in the group's plan that involve them, per currency, each From → To
+payments in the group's plan that involve them, each From → To
 with its amount and Record, plus Record a different payment. Tapping a payment
 opens the repayment form filled in. The repayment form is a page with Cancel and
 Record (Save when changing one), then a sentence, “Jonas paid you”, whose names
-open the people in place, a large amount with its currency, a caption saying
+open the people in place, a large amount, a caption saying
 whether it is the full amount owed, and earlier repayments, each opening in the
 form. Editing a saved repayment shows a short Delete action beside Save in
 the header, with no second delete action in the body. New repayments have no
@@ -219,11 +218,10 @@ opened, such as Settle up.
 
 The expense editor follows the original Splitnext form: Cancel, Add (Edit
 expense when changing one), and Save in the header; Paid by opening the names
-in place; a large centered monospaced amount with its currency symbol and an
-editable currency code; Split between; then Occasion. The amount accepts
-digits and a decimal dot or comma, displaying a dot and fixed decimal places
-after each keystroke (two for EUR/USD, the currency's minor-unit precision
-otherwise). Keep the caret usable for insertion, replacement, and deletion.
+in place; a large centered monospaced amount, a plain number with no currency
+(ADR 0025); Split between; then Occasion. The amount accepts
+digits and a decimal dot or comma, displaying a dot and two fixed decimal
+places after each keystroke. Keep the caret usable for insertion, replacement, and deletion.
 Reject ambiguous or over-precise pasted amounts. Show the member's actual
 name with a You badge rather than replacing it with You. While the total is
 empty or zero, split rows show only the vertically centered name, You badge,
@@ -260,8 +258,8 @@ with the balances expanded.
 
 ### Group summaries
 
-Each group row shows the preferred member's nonzero balances separately by
-currency. Show Settled only when every currency balance is zero. When the
+Each group row shows the preferred member's nonzero balance. Show Settled only
+when it is zero. When the
 identity has no preferred member, show Choose who you are rather than a zero
 balance or Settled. Retain member counts, preferred-member labels, offline
 access, and left-group/rejoin behavior.
@@ -273,16 +271,15 @@ from an ordinary expense's payer and allocation. Settlements affect balances
 but do not count as spending. They record money already paid outside the app;
 recording requires no recipient approval and never executes a payment.
 
-Settle up plans the fewest payments that settle the whole group, separately
-within each currency, and may skip people in the middle: if Ana owes Ben EUR 20
-and Ben owes Cara EUR 20, Ana pays Cara EUR 20. The plan is exact for up to 14
-people with a balance in a currency and falls back to a deterministic greedy
+Settle up plans the fewest payments that settle the whole group, and may skip
+people in the middle: if Ana owes Ben 20 and Ben owes Cara 20, Ana pays Cara
+20. The plan is exact for up to 14 people with a balance and falls back to a deterministic greedy
 plan above that. A person's Settle up shows only the plan's payments involving
 them; the group's Settle up, opened from the Balances heading, shows every
 payment in the plan. The payments themselves are not listed on the group screen.
 
-Picking a payment opens the repayment form with payer, recipient, amount, and
-currency filled in and the amount editable for a partial payment. Record a
+Picking a payment opens the repayment form with payer, recipient, and amount
+filled in and the amount editable for a partial payment. Record a
 different payment opens the same form for any other repayment. A repayment may
 be any positive amount between two distinct ledger members, including partial
 repayments and overpayments. An overpayment reverses the remaining balance
@@ -296,8 +293,8 @@ offline. Apply the expense lifecycle's intent and conflict rules: edit against
 the version opened, reject editing a removed record, remove without silently
 discarding history, and restore exactly the recorded repayment. Balance and
 history references to removed members remain valid. Settlement arithmetic uses
-the existing currency precision and pure money boundary, without conversion
-or silently forgiving small balances.
+the pure money boundary's two-decimal precision, without silently forgiving
+small balances.
 
 ### Activity and safe undo
 
@@ -421,8 +418,8 @@ operations remain available without opening an editor, including offline.
   input is a conflict. The creation request includes a client-generated invite
   id and token. Retries reuse them and cannot restore a link replaced later.
 - A group can be renamed. It is never closed or deleted.
-- Groups have no currency or currency setting. Currency is selected when an
-  expense is added; there is no installation-wide currency preference.
+- Groups have no currency or currency setting, and amounts never show one: the
+  app deals in plain numbers with two decimals (ADR 0025).
 - Leaving a group clears the identity's preferred member, hides the group from
   that identity, and stops its synchronization and realtime notifications.
   It does not revoke access or alter any ledger member. A preferred-member
@@ -655,16 +652,11 @@ a later rejection produces a new notice.
 
 Expenses and settlements are accepted behavior.
 
-- Each expense records a required description, its original amount, an
-  explicit currency code, its payer, and allocations in that currency. It has
-  no expense date; the list shows expenses newest recorded first. A group may
-  contain expenses in several currencies. Currency selection belongs in
-  expense entry, not group setup.
-- Expense entry suggests the currency used most often among the group's last
-  ten current expenses, ties going to the most recent; then the currency of an
-  explicit device/browser locale region; then EUR. Language alone is not a
-  country; unknown regions fall through. The person can change the suggestion
-  before saving, and a suggestion never changes an existing expense.
+- Each expense records a required description, its amount, its payer, and
+  its allocations. It has no expense date; the list shows expenses newest
+  recorded first. Expense entry has no currency choice: new expenses and
+  repayments record the ISO 4217 no-currency code XXX, so every amount has
+  two decimal places (ADR 0025).
 - Entry starts with the person's you member as payer, when they have one, and
   every active member sharing equally.
 - Any participant may record, edit, remove, or restore any expense.
@@ -675,13 +667,12 @@ Expenses and settlements are accepted behavior.
   saw, since restoring undoes it. A removed expense is kept and can be
   restored exactly as recorded, with its original allocation. Restoring will
   be offered through the group's Activity; there is no removed-expense list.
-- Balances are calculated and shown separately for each member and currency.
-  For example, if Santi is owed EUR 30 and owes USD 20, show both balances;
-  never net them into a single number. Expenses in the same currency combine
-  normally. There is no combined converted total or exchange-rate dependency.
-- A recorded settlement includes its amount and currency and reduces only the
-  corresponding currency balances. The settle-up plan keeps currencies
-  separate, with no automatic cross-currency offset or conversion.
+- Each member has one balance. The ledger still keeps balances per recorded
+  code, so data recorded with a real currency before ADR 0025 stays separate
+  from plain amounts and is shown as a second unlabelled figure; there is no
+  conversion.
+- A recorded settlement includes its amount and reduces the balance it
+  settles.
 - The first expense version has one payer, but the persisted model and money
   module must be extendable to multiple payers without redefining an expense.
 - An expense may include any subset of active ledger members, and its payer
