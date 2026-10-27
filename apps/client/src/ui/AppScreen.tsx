@@ -395,6 +395,8 @@ function ReadyApp(props: AppProps) {
                   footer={screen.footer}
                   ruledFooter={screen.ruledFooter}
                   scrollKey={pageKey}
+                  navigationDepth={depth}
+                  restoreScroll={ui.navigation.mode === 'restore'}
                   onScroll={(y, headerCollapse, restored) => (restored ? compact.jump(y + headerCollapse) : compact.follow(y + headerCollapse))}
                 >
                   <ViewTransition key={pageKey} mobile={mobile}>
