@@ -206,12 +206,17 @@ keystroke. Keep the caret usable for insertion, replacement, and deletion.
 Reject ambiguous or over-precise pasted amounts. Paid by opens the names in
 place as a list of radio rows. Then the split: its caption (28.20 each for an
 equal split, or 5 people for a custom one) with Split equally when it is
-custom, a bar of each person's share in their colour, and one row per person:
-a checkbox, their colour, the name with "you", − and + for their whole shares
-(− stops at one share), and their amount. Tapping an amount fixes it in place;
-everybody else divides the remainder by their shares, and clearing it restores
-one share. Without a positive total the amounts show —. Excluded people stay
-in place, faded, with an empty checkbox. Keep one person sharing the
+custom, a bar of each person's share in their colour, and one row per person,
+as in the earlier app: their colour, the name with "you", + for another share,
+their amount, and at the end a checkbox for whether they share it. The checkbox
+becomes − once they have more than one share or a fixed amount; − takes a
+share away, and on a fixed amount or the last share leaves them out. + shows
+while it changes the split: on a fixed amount, or when more than one person
+divides by shares; on a fixed amount it returns them to the nearest whole
+shares. Tapping an amount fixes it in place; everybody else divides the
+remainder by their shares, and clearing it restores one share. Without a
+positive total the amounts show —. Excluded people stay in place, faded, with
+an empty checkbox and no amount. Keep one person sharing the
 remainder. Preserve both fixed amounts and weights when reopening and saving
 an expense. Invalid precision or amounts above the total retain their input,
 say so under the split, and prevent saving. Save remains unavailable until

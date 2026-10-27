@@ -79,11 +79,12 @@ function ShareStep(props: { sign: '−' | '+'; label: string; disabled: boolean;
 }
 
 /**
- * One person in the split: whether they share it, their colour in the bar,
- * their shares, and their amount, which can be tapped to fix it while the
- * others divide the rest.
+ * One person in the split: their colour in the bar, + for another share,
+ * their amount, which can be tapped to fix it while the others divide the
+ * rest, and at the end whether they share it, or − to take a share away.
+ * `sharing` counts the people dividing the rest by shares.
  */
-function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; hue: string; part: ExpenseDraftPart | undefined; owed: number | undefined; currency: string; hasAmount: boolean }) {
+function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; hue: string; part: ExpenseDraftPart | undefined; owed: number | undefined; currency: string; hasAmount: boolean; sharing: number }) {
   const edit = useActionCall();
   const [editing, setEditing] = useState(false);
   const input = useRef<TextInput>(null);
@@ -97,6 +98,10 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
   const member = { memberId: props.memberId };
   const canFix = props.hasAmount && edit.can('setExpenseFixedAmount', fixing);
   const canToggle = edit.can('toggleExpenseParticipant', member);
+  // As in the earlier app: the checkbox becomes − once someone has more than
+  // one share or a fixed amount, and + shows while it changes the split.
+  const stepping = included && (fixed || shares > 1);
+  const canIncrease = included && (fixed || props.sharing > 1);
 
   // Fixing the amount shows the field before editing starts, so autoFocus
   // would come too late; focus it once editing begins.
@@ -107,33 +112,18 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
   return (
     <View>
       <View style={withTransition({ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 60, borderBottomWidth: 1, borderColor: colors.rule, opacity: included ? 1 : 0.4 }, 'opacity', 200)}>
-        <Pressable
-          accessibilityRole="checkbox"
-          accessibilityLabel={`${props.name} shares this expense`}
-          accessibilityState={{ checked: included, disabled: !canToggle }}
-          aria-checked={included}
-          disabled={!canToggle}
-          onPress={() => { void edit.call('toggleExpenseParticipant', member); }}
-          style={({ pressed }) => [{ width: 44, height: 60, marginHorizontal: -13, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed]}
-        >
-          <View style={[s.checkbox, included && { backgroundColor: colors.ink }]}>
-            {included ? <Text style={{ color: colors.actionInk, fontSize: 11, lineHeight: 12 }}>✓</Text> : null}
-          </View>
-        </Pressable>
         <View aria-hidden style={{ width: 4, height: 18, backgroundColor: props.hue }} />
         <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Text numberOfLines={1} style={[s.name, { flexShrink: 1 }]}>{props.name}</Text>
           {props.you ? <YouBadge /> : null}
         </View>
-        {included && !fixed ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <ShareStep sign="−" label={`Decrease share for ${props.name}`} disabled={shares <= 1 || !edit.can('decreaseExpenseShare', member)} onPress={() => { void edit.call('decreaseExpenseShare', member); }} />
-            <Text style={{ width: 22, textAlign: 'center', fontFamily: monoFamily, fontSize: 13, fontWeight: '500', color: colors.ink }}>{shares}×</Text>
+        <View style={{ width: 44, marginRight: -10 }}>
+          {canIncrease ? (
             <ShareStep sign="+" label={`Increase share for ${props.name}`} disabled={!edit.can('increaseExpenseShare', member)} onPress={() => { void edit.call('increaseExpenseShare', member); }} />
-          </View>
-        ) : null}
+          ) : null}
+        </View>
         <View style={{ width: 72, alignItems: 'flex-end' }}>
-          {included && (editing || fixed) ? (
+          {!included ? null : editing || fixed ? (
             <TextInput
               ref={input}
               accessibilityLabel={`Amount for ${props.name}`}
@@ -151,15 +141,34 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
           ) : (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={included && props.hasAmount ? `Amount for ${props.name}: ${shown}. Change amount` : `${props.name}: no amount`}
-              accessibilityState={{ disabled: !canFix || !included }}
-              disabled={!canFix || !included}
+              accessibilityLabel={props.hasAmount ? `Amount for ${props.name}: ${shown}. Change amount` : `${props.name}: no amount`}
+              accessibilityState={{ disabled: !canFix }}
+              disabled={!canFix}
               onPress={() => { void edit.call('setExpenseFixedAmount', fixing, () => setEditing(true)); }}
               style={({ pressed }) => [{ height: 44, justifyContent: 'center' }, pressed && s.pressed]}
             >
               <Text numberOfLines={1} style={{ textAlign: 'right', fontFamily: monoFamily, fontSize: 15, fontWeight: '500', color: colors.ink }}>
-                {included && props.hasAmount ? shown : '—'}
+                {props.hasAmount ? shown : '—'}
               </Text>
+            </Pressable>
+          )}
+        </View>
+        <View style={{ width: 44, marginHorizontal: -13 }}>
+          {stepping ? (
+            <ShareStep sign="−" label={`Decrease share for ${props.name}`} disabled={!edit.can('decreaseExpenseShare', member)} onPress={() => { void edit.call('decreaseExpenseShare', member); }} />
+          ) : (
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityLabel={`${props.name} shares this expense`}
+              accessibilityState={{ checked: included, disabled: !canToggle }}
+              aria-checked={included}
+              disabled={!canToggle}
+              onPress={() => { void edit.call('toggleExpenseParticipant', member); }}
+              style={({ pressed }) => [{ width: 44, height: 60, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !canToggle && included && s.dim]}
+            >
+              <View style={[s.checkbox, included && { backgroundColor: colors.ink }]}>
+                {included ? <Text style={{ color: colors.actionInk, fontSize: 11, lineHeight: 12 }}>✓</Text> : null}
+              </View>
             </Pressable>
           )}
         </View>
@@ -257,6 +266,7 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
   const hue = (memberId: string) => splitHues[Math.max(0, allMembers.findIndex((member) => member.id === memberId)) % splitHues.length] ?? colors.ink;
   const custom = isCustom(draft, allMembers);
   const included = draft.parts.map((part) => part.member_id);
+  const sharing = draft.parts.filter((part) => part.kind === 'shares').length;
 
   return (
     <View style={{ paddingBottom: 24 }}>
@@ -320,7 +330,7 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
       </View>
       <View style={{ paddingTop: 8 }}>
         {members.map((member) => (
-          <ExpenseSplitRow key={member.id} memberId={member.id} name={memberName(snapshot, member.id)} you={member.id === you} hue={hue(member.id)} part={draft.parts.find((part) => part.member_id === member.id)} owed={preview.get(member.id)} currency={draft.currency} hasAmount={hasAmount} />
+          <ExpenseSplitRow key={member.id} memberId={member.id} name={memberName(snapshot, member.id)} you={member.id === you} hue={hue(member.id)} part={draft.parts.find((part) => part.member_id === member.id)} owed={preview.get(member.id)} currency={draft.currency} hasAmount={hasAmount} sharing={sharing} />
         ))}
       </View>
 
