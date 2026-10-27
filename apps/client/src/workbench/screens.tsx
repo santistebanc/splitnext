@@ -6,9 +6,8 @@ import { CreateGroup } from '../ui/CreateGroup';
 import { GroupSettings } from '../ui/GroupSettings';
 import { GroupsView } from '../ui/GroupsView';
 import { GroupHeader, GroupView } from '../ui/GroupView';
-import { useBalancesLayout } from '../ui/BalancesPanel';
 import { SyncStatus } from '../ui/ConnectionStatus';
-import { InviteSheet } from '../ui/InvitePanel';
+import { InvitePanel } from '../ui/InvitePanel';
 import { JoinGroup, JoinGroupFooter, type JoinCalls } from '../ui/JoinGroup';
 import { ActivityPanel } from '../ui/ActivityPanel';
 import { s } from '../ui/components';
@@ -91,18 +90,15 @@ function ScreenDemo(props: ScreenDemoProps) {
   );
 }
 
-/** The group screen's header and content, sharing the balances layout as the app does. */
+/** The group screen's header and content, as the app shows them. */
 function GroupScreenDemo(props: { app: FakeApp; onRetry: () => void }) {
-  const layout = useBalancesLayout();
   const state = props.app.snapshot();
 
   return (
     <>
-      <View onLayout={(event) => layout.measureStatus(event.nativeEvent.layout.height)}>
-        <SyncStatus online={state.online} reachable={state.reachable} pending={0} busy={false} onRetry={props.onRetry} />
-      </View>
-      <GroupHeader app={props.app} onLayout={layout.measureHeader} />
-      <GroupView app={props.app} layout={layout} />
+      <SyncStatus online={state.online} reachable={state.reachable} pending={0} busy={false} onRetry={props.onRetry} />
+      <GroupHeader app={props.app} />
+      <GroupView app={props.app} />
     </>
   );
 }
@@ -244,10 +240,10 @@ export const screenStories: Story[] = [
     ),
   }),
   defineStory({
-    id: 'invite-sheet',
+    id: 'invite-panel',
     group: 'Screens',
-    title: 'InviteSheet',
-    description: 'Copy, share, and replace the invite link, with confirmation.',
+    title: 'InvitePanel',
+    description: 'Copy, share, and replace the invite link, opened in place, with confirmation.',
     controls: { ...commandControls },
     render: (values, log) => (
       <ScreenDemo
@@ -258,7 +254,7 @@ export const screenStories: Story[] = [
           log,
         }}
       >
-        {(app) => <InviteSheet app={app} />}
+        {(app) => <InvitePanel app={app} />}
       </ScreenDemo>
     ),
   }),

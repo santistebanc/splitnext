@@ -1,9 +1,7 @@
 import { useRef } from 'react';
-import { Text, View, type TextInput } from 'react-native';
+import { View, type TextInput } from 'react-native';
 import type { AppController } from '../model/controller';
-import { ErrorMessage, Field, FooterButton, Notice, s } from './components';
-import { LinkIcon } from './icons';
-import { colors } from './theme';
+import { ErrorMessage, Field, FooterButton, Notice } from './components';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 export type CreateGroupApp = Pick<AppController, 'snapshot'>;
@@ -53,13 +51,13 @@ export function CreateGroup(props: CreateGroupProps) {
   const actions = useActions();
   const personInput = useRef<TextInput>(null);
   const { submit } = useSubmitCreate(props.close);
-  const big = { height: 56, fontSize: 18 };
 
   return (
-    <View style={{ gap: 22 }}>
+    <View style={{ gap: 26, paddingTop: 12 }}>
       <Field
         label="Group name"
-        placeholder="Lisbon, May"
+        hideLabel
+        placeholder="Group name"
         value={name}
         editable={actions.availability('changeDraft', { field: 'create.name', value: name }).available}
         onChangeText={(value) => {
@@ -70,12 +68,12 @@ export function CreateGroup(props: CreateGroupProps) {
         returnKeyType="next"
         submitBehavior="submit"
         onSubmitEditing={() => personInput.current?.focus()}
-        style={big}
       />
       <Field
         label="Your name in this group"
+        hideLabel
         inputRef={personInput}
-        placeholder="Carlos"
+        placeholder="Your name"
         value={person}
         editable={actions.availability('changeDraft', { field: 'create.yourName', value: person }).available}
         onChangeText={(value) => {
@@ -84,11 +82,7 @@ export function CreateGroup(props: CreateGroupProps) {
         maxLength={100}
         returnKeyType="done"
         onSubmitEditing={submit}
-        style={big}
       />
-      <Notice tone="info" icon={<LinkIcon size={20} color={colors.muted} />}>
-        <Text style={[s.body, { flex: 1, fontSize: 14, lineHeight: 20, color: colors.soft }]}>You’ll get an invite link to share right away.</Text>
-      </Notice>
     </View>
   );
 }

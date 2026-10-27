@@ -2,10 +2,8 @@ import { Text, View } from 'react-native';
 import { preferredMember, type ClientReplicaState, type Expense, type Settlement } from '@splitnext/client';
 import { currentExpenses, expenseLabel, memberName, moneyLabel } from '../model/expenses';
 import { needsReview } from '../model/notices';
-import { StickyTop } from './StickyTop';
-import { ErrorMessage, ListRow, Pill, SectionHeading, colors, s } from './components';
-import { PlusIcon } from './icons';
-import { useActionCall, useActions, useUiState } from './useActionCall';
+import { ErrorMessage, FooterButton, ListRow, colors, s } from './components';
+import { useActionCall, useActions } from './useActionCall';
 
 type Replica = ClientReplicaState;
 
@@ -38,19 +36,13 @@ function ledgerEntries(replica: Replica): Entry[] {
 }
 
 /** The group screen's list: expenses and repayments, newest first. */
-export function ExpenseList(props: { replica: Replica; stickyTop?: number | undefined; onHeadingPress?: (() => void) | undefined }) {
+export function ExpenseList(props: { replica: Replica }) {
   const entries = ledgerEntries(props.replica);
 
   if (!entries.length) return null;
 
   return (
-    <View style={{ gap: 0 }}>
-      {/* Stays under the pinned Balances heading while the expenses scroll. */}
-      <StickyTop top={props.stickyTop ?? 0} layer={1}>
-        <View style={{ backgroundColor: colors.background }}>
-          <SectionHeading title="Expenses" onPress={props.onHeadingPress} />
-        </View>
-      </StickyTop>
+    <View role="list" aria-label="Expenses">
       <View style={s.listCard}>
         {entries.map((entry, index) =>
           entry.kind === 'expense'
@@ -67,16 +59,16 @@ function ReviewDot() {
   return <View role="img" aria-label="Needs review" style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: colors.alert }} />;
 }
 
-function Row(props: { first: boolean; label: string; title: string; meta: string; amount: string; quiet?: boolean; review: boolean; disabled: boolean; onPress: () => void; error: string | null }) {
+function Row(props: { first: boolean; label: string; title: string; meta?: string; amount: string; quiet?: boolean; review: boolean; disabled: boolean; onPress: () => void; error: string | null }) {
   return (
-    <View style={!props.first && s.ruled}>
+    <View>
       <ListRow label={props.label} disabled={props.disabled} onPress={props.onPress}>
-        <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+        <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text numberOfLines={1} style={[s.name, { flexShrink: 1 }]}>{props.title}</Text>
+            <Text numberOfLines={1} style={[s.name, { flexShrink: 1, fontSize: 17, lineHeight: 18 }]}>{props.title}</Text>
             {props.review ? <ReviewDot /> : null}
           </View>
-          <Text numberOfLines={1} style={s.rowCaption}>{props.meta}</Text>
+          {props.meta ? <Text numberOfLines={1} style={s.rowCaption}>{props.meta}</Text> : null}
         </View>
         <Text style={[s.amount, props.quiet && { color: colors.muted }]}>{props.amount}</Text>
       </ListRow>
@@ -117,7 +109,6 @@ export function RepaymentRow(props: { replica: Replica; settlement: Settlement; 
       first={props.first}
       label={`Change repayment: ${title} ${moneyLabel(entry.amount, entry.currency)}`}
       title={title}
-      meta="Repayment"
       amount={moneyLabel(entry.amount, entry.currency)}
       quiet
       review={needsReview(props.replica, 'settlement', entry.id)}
@@ -128,26 +119,16 @@ export function RepaymentRow(props: { replica: Replica; settlement: Settlement; 
   );
 }
 
-/** Add expense floats at the foot of the screen, yielding emphasis to Invite during setup. */
-export function AddExpenseButton(props: { secondary?: boolean }) {
+/** Add expense, the group screen's main action, pinned at its foot. */
+export function AddExpenseButton() {
   const add = useActionCall();
-  const editingMember = useUiState().memberEdit !== null;
-
-  // A floating button would cover a name being typed above the keyboard.
-  if (editingMember) return null;
 
   return (
     <>
-      <Pill
-        large
-        filled={!props.secondary}
-        text="Add expense"
-        label="Add expense"
-        icon={(color) => <PlusIcon size={20} color={color} strokeWidth={2.2} />}
-        disabled={!add.can('showExpense', {})}
-        onPress={() => { void add.call('showExpense', {}); }}
-      />
       <ErrorMessage message={add.error} />
+      <FooterButton disabled={!add.can('showExpense', {})} onPress={() => { void add.call('showExpense', {}); }}>
+        Add expense
+      </FooterButton>
     </>
   );
 }

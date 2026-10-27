@@ -1,16 +1,13 @@
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { formatInviteLink } from '@splitnext/client';
 import type { AppController } from '../model/controller';
 import { Button, ErrorMessage, s } from './components';
-import { Confirmation } from './ConfirmSheet';
-import { Drawer } from './Drawer';
-import { CheckIcon, ShareIcon } from './icons';
-import { colors, fontFamily, monoFamily, radius } from './theme';
+import { colors, monoFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 export type InvitePanelApp = Pick<AppController, 'snapshot'>;
 
-/** Selects the link's text on the web, so tapping it shows what was copied. */
+/** Selects the link's text on the web, so copying shows what was copied. */
 function selectLink(): void {
   if (Platform.OS !== 'web') return;
 
@@ -23,18 +20,17 @@ function selectLink(): void {
 const linkId = 'invite-link-text';
 
 /**
- * The invite link in a drawer over the group: tapping the link selects
- * and copies it; Share and Replace link sit side by side, and replacing asks
- * first in the same sheet because the old link stops working.
+ * The invite link, opened in place under the group's name: the link between
+ * two rules, then Copy link beside Replace link. Replacing asks first in the
+ * same place, because the old link stops working.
  */
-export function InviteSheet(props: { app: InvitePanelApp }) {
+export function InvitePanel(props: { app: InvitePanelApp }) {
   const replica = props.app.snapshot().group;
   const invite = replica?.projected_snapshot?.invite;
   const copied = useUiState().copiedInviteId === invite?.id;
   const canShare = useActions().capabilities.shareLink;
   const action = useActionCall();
   const replace = useActionCall();
-  const close = useActionCall();
   const online = props.app.snapshot().online;
   const confirming = replace.confirmation;
 
@@ -43,69 +39,52 @@ export function InviteSheet(props: { app: InvitePanelApp }) {
       ? formatInviteLink(window.location.origin, replica.group_id, invite.token)
       : null;
 
-  function dismiss(): void {
-    if (confirming) replace.cancel();
-    else void close.call('closePanel', {});
-  }
-
-  const title = confirming ? 'Replace invite link?' : 'Invite people';
-
   return (
-    <Drawer title={title} onClose={dismiss}>
-
+    <View role="region" aria-label="Invite people" style={{ gap: 12, paddingTop: 4, paddingBottom: 8 }}>
+      <View style={{ paddingVertical: 14, borderTopWidth: 1.5, borderBottomWidth: 1, borderTopColor: colors.ink, borderBottomColor: colors.rule }}>
+        {link ? (
+          <Text testID="invite-link" nativeID={linkId} selectable style={{ fontFamily: monoFamily, fontSize: 15, lineHeight: 21, fontWeight: '500', color: colors.ink }}>
+            {link}
+          </Text>
+        ) : (
+          <Text style={s.lead}>No invite link yet</Text>
+        )}
+      </View>
       {confirming ? (
-        <Confirmation message={confirming.message} confirmLabel="Replace link" busy={replace.busy} onConfirm={confirming.confirm} onCancel={replace.cancel} />
+        <View style={{ gap: 10 }}>
+          <Text style={[s.body, { fontWeight: '500' }]}>{confirming.message}</Text>
+          <View style={s.actions}>
+            <Button grow secondary disabled={replace.busy} onPress={replace.cancel}>Cancel</Button>
+            <Button grow disabled={replace.busy} onPress={confirming.confirm}>{replace.busy ? 'Replacing…' : 'Replace'}</Button>
+          </View>
+        </View>
       ) : (
-        <>
+        <View style={s.actions}>
           {link ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={copied ? 'Link copied' : 'Copy link'}
+            <Button
+              grow
+              label={copied ? 'Link copied' : 'Copy link'}
               disabled={!action.can('copyInviteLink')}
               onPress={() => {
                 selectLink();
                 void action.call('copyInviteLink', {});
               }}
-              style={{ gap: 6 }}
             >
-              <Text
-                testID="invite-link"
-                nativeID={linkId}
-                selectable
-                style={{ paddingVertical: 14, paddingHorizontal: 16, borderRadius: radius.control, borderWidth: 1, borderColor: copied ? colors.action : colors.background, backgroundColor: colors.background, fontFamily: monoFamily, fontSize: 15, fontWeight: '500', color: colors.ink }}
-              >
-                {link}
-              </Text>
-              <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 }}>
-                {copied ? <CheckIcon size={14} color={colors.action} strokeWidth={2.4} /> : null}
-                <Text style={{ fontFamily, fontSize: 13, fontWeight: copied ? '600' : '400', color: copied ? colors.action : colors.muted }}>
-                  {copied ? 'Copied' : action.can('copyInviteLink') ? 'Tap the link to copy it' : 'Select the link to copy it'}
-                </Text>
-              </View>
-            </Pressable>
-          ) : (
-            <Text style={{ fontFamily, fontSize: 15, color: colors.muted }}>No invite link yet</Text>
-          )}
-          <View style={s.actions}>
-            {link && canShare ? (
-              <Button
-                grow
-                label="Share link"
-                icon={<ShareIcon size={18} color={colors.actionInk} />}
-                disabled={!action.can('shareInviteLink')}
-                onPress={() => { void action.call('shareInviteLink', {}); }}
-              >
-                Share
-              </Button>
-            ) : null}
-            <Button grow secondary disabled={!replace.can('regenerateInvite')} onPress={() => { void replace.call('regenerateInvite', {}); }}>
-              {replace.busy ? 'Replacing…' : 'Replace link'}
+              {copied ? 'Copied' : 'Copy link'}
             </Button>
-          </View>
-          {!online ? <Text style={s.caption}>Connect to replace the link.</Text> : null}
-        </>
+          ) : null}
+          {link && canShare ? (
+            <Button grow secondary label="Share link" disabled={!action.can('shareInviteLink')} onPress={() => { void action.call('shareInviteLink', {}); }}>
+              Share
+            </Button>
+          ) : null}
+          <Button grow secondary disabled={!replace.can('regenerateInvite')} onPress={() => { void replace.call('regenerateInvite', {}); }}>
+            Replace link
+          </Button>
+        </View>
       )}
-      <ErrorMessage message={replace.error ?? action.error ?? close.error} />
-    </Drawer>
+      {!online && !confirming ? <Text style={s.caption}>Connect to replace the link.</Text> : null}
+      <ErrorMessage message={replace.error ?? action.error} />
+    </View>
   );
 }

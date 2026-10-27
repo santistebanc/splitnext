@@ -4,7 +4,6 @@ import { router } from 'expo-router';
 import { z } from 'zod';
 import { clientErrorKind, parseInviteLink } from '@splitnext/client';
 import { AppController } from '../model/controller';
-import { currentExpenses } from '../model/expenses';
 import { createDispatcher } from '../model/actions';
 import { browserActionPlatform } from './browserPlatform';
 import { createBrowserApp } from '../model/browser';
@@ -18,13 +17,11 @@ import { ActivityHeader, ActivityPanel } from './ActivityPanel';
 import { PersonDetails, PersonHeader } from './PersonView';
 import { SettleUp, SettleUpHeader } from './SettleUp';
 import { GroupSettings, GroupSettingsFooter } from './GroupSettings';
-import { GroupsFooter, GroupsHeader, GroupsView, WelcomeView } from './GroupsView';
+import { GroupsFooter, GroupsHeader, GroupsView } from './GroupsView';
 import { Toast } from './Toast';
 import { useActivityFeed } from './useActivityFeed';
 import { SettlementsHeader, SettlementsPanel } from './SettlementsPanel';
 import { GroupHeader, GroupView } from './GroupView';
-import { InviteSheet } from './InvitePanel';
-import { useBalancesLayout } from './BalancesPanel';
 import { CompactProgressContext, createCompactProgress } from './pageScroll';
 import { JoinGroup, JoinGroupFooter, type JoinCalls } from './JoinGroup';
 import { navigationSchema } from './navigation';
@@ -284,7 +281,6 @@ function ReadyApp(props: AppProps) {
     if (props.invite && ui.view === 'home') enterApp();
   }, [ui.navigation.revision]);
 
-  const balances = useBalancesLayout();
   const compact = useMemo(createCompactProgress, []);
 
   const group = state.group;
@@ -302,7 +298,7 @@ function ReadyApp(props: AppProps) {
 
   const onGroupScreen = open && (view === 'home' || view === 'invite');
   const joined = Boolean(group && !group.hidden);
-  const addsExpenses = open && view === 'home' && joined;
+  const addsExpenses = onGroupScreen && joined;
 
   function retry(): void {
     void connection.run(async () => {
@@ -335,8 +331,6 @@ function ReadyApp(props: AppProps) {
         ruledFooter: true,
       };
     }
-
-    if ((!open || !group) && !state.groups.length) return { body: <WelcomeView /> };
 
     if (!open || !group)
       return {
@@ -372,14 +366,9 @@ function ReadyApp(props: AppProps) {
         };
       default:
         return {
-          header: <GroupHeader app={app} onLayout={balances.measureHeader} />,
-          body: (
-            <>
-              <GroupView app={app} layout={balances} />
-              {view === 'invite' ? <InviteSheet app={app} /> : null}
-            </>
-          ),
-          footer: addsExpenses ? <View pointerEvents="box-none" style={{ alignItems: 'flex-end' }}><AddExpenseButton secondary={!currentExpenses(group?.projected_snapshot).length} /></View> : undefined,
+          header: <GroupHeader app={app} />,
+          body: <GroupView app={app} />,
+          footer: addsExpenses ? <AddExpenseButton /> : undefined,
         };
     }
   }
@@ -397,18 +386,11 @@ function ReadyApp(props: AppProps) {
               <View style={s.page}>
                 <Frame
                   status={<SyncStatus online={state.online} reachable={state.reachable} pending={pending} busy={connection.busy} onRetry={retry} retryError={connection.error} />}
-                  onStatusLayout={balances.measureStatus}
                   header={screen.header}
                   footer={screen.footer}
-                  floatingFooter={addsExpenses}
                   ruledFooter={screen.ruledFooter}
                   scrollKey={pageKey}
-                  onScroll={(y, headerCollapse) => {
-                    compact.follow(y + headerCollapse);
-
-                    if (onGroupScreen) balances.scroll.set(y);
-                  }}
-                  scrollControl={onGroupScreen ? balances.scrollControl : undefined}
+                  onScroll={(y, headerCollapse) => compact.follow(y + headerCollapse)}
                 >
                   <ViewTransition key={pageKey} mobile={mobile}>
                     <ErrorMessage message={backgroundError} />

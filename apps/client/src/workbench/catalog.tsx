@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Frame } from '../ui/Frame';
 import {
@@ -17,8 +17,7 @@ import {
   MemberIcon,
   type ParticipantMarker,
 } from '../ui/MemberList';
-import { GroupBalances, useBalancesLayout } from '../ui/BalancesPanel';
-import type { MemberListApp, Replica } from '../ui/MemberList';
+import { GroupView } from '../ui/GroupView';
 import { YouBadge } from '../ui/YouBadge';
 import { ActionsProvider } from '../ui/useActionCall';
 import { useFakeApp, useFakeDispatcher } from './fakeApp';
@@ -232,7 +231,7 @@ export const stories: Story[] = [
   defineStory({
     id: 'member-list',
     group: 'Members',
-    title: 'BalancesPanel',
+    title: 'GroupView balances',
     description:
       'Everyone’s balances with the inline Add a person row, through the real ' +
       'client and memory server; change a control to start over.',
@@ -391,7 +390,7 @@ type MemberListDemoProps = {
   log: Log;
 };
 
-/** Runs BalancesPanel through the real client over an in-memory server. */
+/** Runs the group's balances through the real client over an in-memory server. */
 function MemberListDemo(props: MemberListDemoProps) {
   const app = useFakeApp({
     scenario: props.scenario,
@@ -406,18 +405,9 @@ function MemberListDemo(props: MemberListDemoProps) {
 
   return replica && app && actions ? (
     <ActionsProvider value={actions}>
-      <BalancesDemo app={app} replica={replica} />
+      <GroupView app={app} />
     </ActionsProvider>
   ) : null;
 }
 
-/** The balances at their default level, as if under a group header of the given height. */
-function BalancesDemo(props: { app: MemberListApp; replica: Replica }) {
-  const layout = useBalancesLayout();
 
-  useEffect(() => {
-    layout.measureHeader(60);
-  }, []);
-
-  return <GroupBalances app={props.app} replica={props.replica} layout={layout} />;
-}

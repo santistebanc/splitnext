@@ -4,7 +4,6 @@ import type { ClientReplicaState } from '@splitnext/client';
 import { memberStatus, type ParticipantMarker } from '../model/memberPresentation';
 import type { AppController } from '../model/controller';
 import { ErrorMessage, colors, errorMessage, s } from './components';
-import { PlusIcon } from './icons';
 import { fontFamily } from './theme';
 import { useActions } from './useActionCall';
 
@@ -66,7 +65,7 @@ export function MemberNameInput(props: {
       ref={input}
       accessibilityLabel={props.placeholder ?? 'Member name'}
       placeholder={props.placeholder}
-      placeholderTextColor={colors.faint}
+      placeholderTextColor={colors.muted}
       value={props.name}
       onFocus={props.onFocus}
       onChangeText={(value) => {
@@ -148,11 +147,10 @@ export function AddPersonRow() {
 
   return (
     <View>
-      <View style={[s.ruled, { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44, paddingLeft: 16, paddingRight: 12 }]}>
-        <PlusIcon size={14} color={colors.action} strokeWidth={2.6} />
+      <View style={[s.ruled, { flexDirection: 'row', alignItems: 'center', minHeight: 52 }]}>
         <MemberNameInput
           name={text}
-          placeholder="Add a person"
+          placeholder="+ Add a person"
           onChangeText={(value) => {
             setText(value);
             setError(null);
@@ -175,7 +173,7 @@ export function AddPersonRow() {
               void actions.dispatch('cancelMemberEdit', {}, { origin: 'ui' });
             }
           }}
-          style={{ flex: 1, minWidth: 0, height: 44, marginLeft: -10, paddingHorizontal: 10, borderWidth: 0, borderRadius: 8, backgroundColor: 'transparent', fontFamily, fontSize: 15, color: colors.ink }}
+          style={{ flex: 1, minWidth: 0, height: 52, paddingHorizontal: 0, borderWidth: 0, backgroundColor: 'transparent', fontFamily, fontSize: 15, fontWeight: '500', color: colors.ink }}
         />
       </View>
       <ErrorMessage message={error} />

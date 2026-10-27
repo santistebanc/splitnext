@@ -30,7 +30,7 @@ export type ValueStore = ReturnType<typeof createValueStore>;
 
 /** Content travel, including the header's own collapse. Larger than its shrink
  * so expanding back to the top converges rather than amplifying layout changes. */
-const shrinkDistance = 128;
+const shrinkDistance = 72;
 
 /** The largest change followed at once: a finger or trackpad moves the page in steps this small. */
 const followedStep = 0.15;

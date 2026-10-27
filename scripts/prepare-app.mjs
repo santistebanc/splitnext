@@ -41,10 +41,8 @@ const serializedManifest = await readFile(
 const manifest = JSON.parse(serializedManifest);
 
 const publicAssets = [
-  '/assets/ibm-plex-sans.woff2',
-  '/assets/ibm-plex-mono-500.woff2',
-  '/assets/ibm-plex-mono-600.woff2',
-  '/assets/bricolage-grotesque.woff2',
+  '/assets/instrument-sans.woff2',
+  '/assets/geist-mono.woff2',
   '/icon.svg',
   '/manifest.webmanifest',
 ];
