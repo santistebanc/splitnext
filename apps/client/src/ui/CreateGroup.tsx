@@ -20,6 +20,9 @@ export function useSubmitCreate(close?: () => void) {
   return { action, submit };
 }
 
+/** The drawer's fields, smaller than a screen's own. */
+const compact = { height: 44, fontSize: 17 };
+
 /** One form for the group name and the creator's own member name. */
 export function CreateGroup(props: CreateGroupProps) {
   const ui = useUiState();
@@ -28,16 +31,25 @@ export function CreateGroup(props: CreateGroupProps) {
   const personInput = useRef<TextInput>(null);
   const nameInput = useRef<TextInput>(null);
 
-  // Opening dismisses the keyboard after this form's effects, so focus waits a frame.
+  // Opening dismisses the keyboard after this form's effects, so focus waits a
+  // frame, and tries again once the drawer has opened in case it was taken.
   useEffect(() => {
-    const frame = requestAnimationFrame(() => nameInput.current?.focus());
+    const focus = () => {
+      if (!(document.activeElement instanceof HTMLInputElement)) nameInput.current?.focus();
+    };
 
-    return () => cancelAnimationFrame(frame);
+    const frame = requestAnimationFrame(focus);
+    const opened = setTimeout(focus, 360);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(opened);
+    };
   }, []);
   const { submit } = useSubmitCreate(props.close);
 
   return (
-    <View style={{ gap: 26, paddingTop: 12 }}>
+    <View style={{ gap: 12, paddingTop: 4 }}>
       <Field
         label="Group name"
         hideLabel
@@ -53,6 +65,7 @@ export function CreateGroup(props: CreateGroupProps) {
         returnKeyType="next"
         submitBehavior="submit"
         onSubmitEditing={() => personInput.current?.focus()}
+        style={compact}
       />
       <Field
         label="Your name in this group"
@@ -67,6 +80,7 @@ export function CreateGroup(props: CreateGroupProps) {
         maxLength={100}
         returnKeyType="done"
         onSubmitEditing={submit}
+        style={compact}
       />
     </View>
   );
