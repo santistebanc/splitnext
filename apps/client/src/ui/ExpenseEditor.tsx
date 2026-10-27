@@ -87,7 +87,7 @@ function ShareStep(props: { sign: '−' | '+'; label: string; disabled: boolean;
 function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; hue: string; part: ExpenseDraftPart | undefined; owed: number | undefined; currency: string; hasAmount: boolean; sharing: number }) {
   const edit = useActionCall();
   const [editing, setEditing] = useState(false);
-  const input = useRef<TextInput>(null);
+  const input = useRef<AmountInputHandle>(null);
   const fixed = props.part?.kind === 'exact';
   const included = Boolean(props.part);
   const shares = props.part?.kind === 'shares' ? props.part.shares : 1;
@@ -125,22 +125,25 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
             <ShareStep sign="+" label={`Increase share for ${props.name}`} disabled={!edit.can('increaseExpenseShare', member)} onPress={() => { void edit.call('increaseExpenseShare', member); }} />
           ) : null}
         </View>
-        <View style={{ width: 72, alignItems: 'flex-end' }}>
+        <View style={{ width: 92, alignItems: 'flex-end' }}>
           {!dividing ? null : editing || fixed ? (
-            <TextInput
-              ref={input}
-              accessibilityLabel={`Amount for ${props.name}`}
-              selectTextOnFocus
-              inputMode="decimal"
-              value={fixed ? value : ''}
-              editable={edit.can('setExpenseFixedAmount', { memberId: props.memberId, amount: '' })}
-              onChangeText={(amount) => { void edit.call('setExpenseFixedAmount', { memberId: props.memberId, amount }); }}
-              onFocus={() => setEditing(true)}
-              onBlur={() => setEditing(false)}
-              onSubmitEditing={() => setEditing(false)}
-              returnKeyType="done"
-              style={{ width: 72, height: 40, paddingVertical: 2, textAlign: 'right', fontFamily: monoFamily, fontSize: 15, fontWeight: '500', color: colors.ink, borderBottomWidth: 1.5, borderColor: colors.ink }}
-            />
+            // The same field as the expense's own amount: two fixed decimals, dot or comma.
+            <View style={{ width: 92 }}>
+              <AmountInput
+                inline
+                inputRef={input}
+                label={`Amount for ${props.name}`}
+                value={fixed ? value : ''}
+                currency={props.currency}
+                height={40}
+                fontSize={15}
+                editable={edit.can('setExpenseFixedAmount', { memberId: props.memberId, amount: '' })}
+                onChangeText={(amount) => { void edit.call('setExpenseFixedAmount', { memberId: props.memberId, amount }); }}
+                onFocus={() => setEditing(true)}
+                onBlur={() => setEditing(false)}
+                onSubmitEditing={() => setEditing(false)}
+              />
+            </View>
           ) : (
             <Pressable
               accessibilityRole="button"
