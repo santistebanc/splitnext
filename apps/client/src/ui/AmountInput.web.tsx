@@ -1,13 +1,10 @@
-import { useState } from 'react';
 import { NumericFormat } from 'react-number-format';
 import { formatAmount, minorDigits } from '@splitnext/client';
-import { colors, monoFamily, radius } from './theme';
+import { colors, monoFamily } from './theme';
 import type { AmountInputProps } from './AmountInput';
 
 /** Fixed decimal places with cursor-aware insertion, replacement, and deletion. */
 export function AmountInput(props: AmountInputProps) {
-  const [focused, setFocused] = useState(false);
-
   return (
     <NumericFormat
       getInputRef={(input: HTMLInputElement) => { props.inputRef.current = input; }}
@@ -51,17 +48,14 @@ export function AmountInput(props: AmountInputProps) {
         // Reject ambiguous or over-precise pasted amounts rather than changing their meaning.
         if (!/^\d*(?:[.,]\d*)?$/.test(text) || (text.split(/[.,]/)[1]?.length ?? 0) > minorDigits(props.currency)) event.preventDefault();
       }}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
       onKeyDown={(event) => {
         if (event.key === 'Enter') props.onSubmitEditing();
       }}
       style={{
-        flex: 1, minWidth: 0, height: props.height, padding: '0 15px', border: 0,
-        borderRadius: radius.control, boxSizing: 'border-box', background: 'transparent',
+        flex: 1, minWidth: 0, width: '100%', height: props.height, padding: 0, border: 0,
+        boxSizing: 'border-box', background: 'transparent', outline: 'none',
         color: colors.ink, fontFamily: monoFamily, fontSize: props.fontSize,
-        fontWeight: 600, letterSpacing: -0.8,
-        outline: focused ? `2px solid ${colors.action}` : 'none', outlineOffset: -2,
+        fontWeight: 500, letterSpacing: -0.05 * props.fontSize,
       }}
     />
   );

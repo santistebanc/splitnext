@@ -1,12 +1,8 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 import { parseAmount, preferredMember, repaymentMembers, settlementSuggestions, type ClientReplicaState } from '@splitnext/client';
 import { memberName, moneyLabel } from '../model/expenses';
-import { ErrorMessage, HeaderAction, RadioRow, ScreenHeader, SectionHeading, colors, s } from './components';
+import { Choice, ErrorMessage, FooterButton, HeaderAction, ScreenHeader, SectionHeading, colors, s } from './components';
 import { RepaymentRow } from './ExpenseList';
-import { Drawer } from './Drawer';
-import { ChevronDownIcon } from './icons';
-import { displayFamily, radius } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 type Snapshot = ClientReplicaState['projected_snapshot'];
@@ -16,12 +12,43 @@ function personName(snapshot: Snapshot, memberId: string, you: string | undefine
   return memberId === you ? (capital ? 'You' : 'you') : memberName(snapshot, memberId);
 }
 
-/** The repayment form's header: Cancel, Delete for a saved repayment, and Record or Save. */
+/** The repayment form's header: Cancel, Delete for a saved repayment, and its title. */
 export function SettlementsHeader() {
   const draft = useUiState().repayment;
   const back = useActionCall();
-  const save = useActionCall();
   const remove = useActionCall();
+
+  function done(): void {
+    void back.call('closePanel', {});
+  }
+
+  return (
+    <>
+      <ScreenHeader
+        start={<HeaderAction quiet text="Cancel" label="Cancel" disabled={!back.can('closePanel')} onPress={done} />}
+        end={draft.settlementId ? (
+          <HeaderAction
+            danger
+            text="Delete"
+            label="Delete"
+            disabled={!remove.can('removeSettlement', { settlementId: draft.settlementId })}
+            onPress={() => {
+              if (draft.settlementId) void remove.call('removeSettlement', { settlementId: draft.settlementId }, done);
+            }}
+          />
+        ) : undefined}
+        title={draft.settlementId ? 'Change payment' : 'Record a payment'}
+      />
+      <ErrorMessage message={back.error ?? remove.error} />
+    </>
+  );
+}
+
+/** Record, or Save for a recorded repayment, pinned at the foot. */
+export function SettlementsFooter() {
+  const draft = useUiState().repayment;
+  const back = useActionCall();
+  const save = useActionCall();
   const editing = Boolean(draft.settlementId);
   const ready = editing ? save.can('saveRepayment') : save.can('recordSettlement', draft);
 
@@ -31,52 +58,19 @@ export function SettlementsHeader() {
 
   return (
     <>
-      <ScreenHeader
-        start={<HeaderAction text="Cancel" label="Cancel" disabled={!back.can('closePanel')} onPress={done} />}
-        end={(
-          <>
-            {draft.settlementId ? (
-              <HeaderAction
-                danger
-                text="Delete"
-                label="Delete"
-                disabled={!remove.can('removeSettlement', { settlementId: draft.settlementId })}
-                onPress={() => {
-                  if (draft.settlementId) void remove.call('removeSettlement', { settlementId: draft.settlementId }, done);
-                }}
-              />
-            ) : null}
-            <HeaderAction
-              primary
-              text={editing ? 'Save' : 'Record'}
-              label={editing ? 'Save repayment' : 'Record repayment'}
-              disabled={!ready}
-              onPress={() => {
-                if (editing) void save.call('saveRepayment', {}, done);
-                else void save.call('recordSettlement', draft, done);
-              }}
-            />
-          </>
-        )}
-      />
-      <ErrorMessage message={back.error ?? save.error ?? remove.error} />
+      <ErrorMessage message={save.error} />
+      <FooterButton
+        label={editing ? 'Save repayment' : 'Record repayment'}
+        busy={save.busy}
+        disabled={!ready}
+        onPress={() => {
+          if (editing) void save.call('saveRepayment', {}, done);
+          else void save.call('recordSettlement', draft, done);
+        }}
+      >
+        {editing ? 'Save' : 'Record'}
+      </FooterButton>
     </>
-  );
-}
-
-/** One name in the "Santi paid you" sentence, which opens the people to choose from. */
-function NameChip(props: { label: string; name: string; open: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${props.label} ${props.name}. Change`}
-      accessibilityState={{ expanded: props.open }}
-      onPress={props.onPress}
-      style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 4, height: 48, paddingHorizontal: 10, borderRadius: radius.control, backgroundColor: props.open ? colors.actionSoft : colors.track }, pressed && s.pressed]}
-    >
-      <Text style={{ fontFamily: displayFamily, fontSize: 26, fontWeight: '700', color: colors.ink }}>{props.name}</Text>
-      <ChevronDownIcon color={colors.ink} strokeWidth={2.2} />
-    </Pressable>
   );
 }
 
@@ -86,7 +80,6 @@ export function SettlementsPanel(props: { replica: ClientReplicaState }) {
   const action = useActionCall();
   const actions = useActions();
   const draft = useUiState().repayment;
-  const [picking, setPicking] = useState<'from' | 'to' | null>(null);
 
   if (!snapshot) return null;
   const you = preferredMember(snapshot, props.replica.session?.identity.id)?.id;
@@ -96,7 +89,6 @@ export function SettlementsPanel(props: { replica: ClientReplicaState }) {
   const full = owed && parseAmount(draft.amount, draft.currency) === owed.amount;
 
   const prepare = (from: string, to: string) => {
-    setPicking(null);
     void action.call('prepareRepayment', { from, to, amount: draft.amount, currency: draft.currency, keepEditing: Boolean(draft.settlementId), manual: true });
   };
 
@@ -104,42 +96,38 @@ export function SettlementsPanel(props: { replica: ClientReplicaState }) {
     void actions.dispatch('changeDraft', { field, value }, { origin: 'ui' });
   };
 
-  const from = draft.from ? personName(snapshot, draft.from, you, true) : 'Someone';
-  const to = draft.to ? personName(snapshot, draft.to, you) : 'someone';
+  function chips(side: 'from' | 'to') {
+    return (
+      <View role="radiogroup" aria-label={side === 'from' ? 'Paid by' : 'Paid to'} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {members.map((memberId) => (
+          <Choice
+            key={memberId}
+            label={memberName(snapshot, memberId)}
+            selected={(side === 'from' ? draft.from : draft.to) === memberId}
+            onPress={() => (side === 'from' ? prepare(memberId, draft.to) : prepare(draft.from, memberId))}
+          >
+            {personName(snapshot, memberId, you, true)}
+          </Choice>
+        ))}
+      </View>
+    );
+  }
 
   return (
-    <View style={{ gap: 24, paddingHorizontal: 4, paddingBottom: 24 }}>
-      <View style={{ gap: 8 }}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
-          <NameChip label="Paid by" name={from} open={picking === 'from'} onPress={() => setPicking(picking === 'from' ? null : 'from')} />
-          <Text style={{ paddingHorizontal: 4, fontFamily: displayFamily, fontSize: 26, fontWeight: '700', color: colors.ink }}>paid</Text>
-          <NameChip label="Paid to" name={to} open={picking === 'to'} onPress={() => setPicking(picking === 'to' ? null : 'to')} />
-        </View>
-        {picking ? (
-          <Drawer title={picking === 'from' ? 'Paid by' : 'Paid to'} onClose={() => setPicking(null)}>
-            <ScrollView style={{ flexShrink: 1 }}>
-              <View accessibilityRole="radiogroup" accessibilityLabel={picking === 'from' ? 'Paid by' : 'Paid to'} style={{ gap: 6 }}>
-                {members.map((memberId) => (
-                  <RadioRow
-                    compact
-                    key={memberId}
-                    label={`${memberName(snapshot, memberId)}${memberId === you ? ' (you)' : ''}`}
-                    selected={(picking === 'from' ? draft.from : draft.to) === memberId}
-                    onPress={() => (picking === 'from' ? prepare(memberId, draft.to) : prepare(draft.from, memberId))}
-                  />
-                ))}
-              </View>
-            </ScrollView>
-          </Drawer>
-        ) : null}
+    <View style={{ gap: 34, paddingTop: 20, paddingBottom: 24 }}>
+      <View style={{ gap: 12 }}>
+        <Text style={s.label}>From</Text>
+        {chips('from')}
+        <Text style={[s.label, { paddingTop: 14 }]}>To</Text>
+        {chips('to')}
       </View>
 
-      <View style={{ gap: 6 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, borderColor: colors.field }}>
+      <View style={{ gap: 10 }}>
+        <View style={{ paddingBottom: 10, borderBottomWidth: 1.5, borderColor: colors.ink }}>
           <TextInput
             accessibilityLabel="Amount"
             placeholder="0.00"
-            placeholderTextColor={colors.control}
+            placeholderTextColor={colors.placeholder}
             inputMode="decimal"
             value={draft.amount}
             onChangeText={(value) => change('repayment.amount', value)}
@@ -173,7 +161,7 @@ function RepaymentHistory(props: { replica: ClientReplicaState }) {
   if (!recorded.length) return null;
 
   return (
-    <View style={{ marginTop: 16 }}>
+    <View>
       <SectionHeading title="Earlier repayments" />
       <View style={s.listCard}>
         {recorded.map((entry, index) => <RepaymentRow key={entry.id} replica={props.replica} settlement={entry} first={index === 0} />)}

@@ -1,82 +1,172 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { memberHasRecords, memberSettlements, participantsForMember, preferredMember } from '@splitnext/client';
 import { memberBreakdown } from '../model/breakdown';
 import { balanceRows, memberName } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
-import { BackHeader } from './BackHeader';
-import { Button, ErrorMessage, ListRow, Notice, SectionHeading, balanceColor, colors, s, signedFigure } from './components';
+import { BackButton, BalanceBar, Button, ErrorMessage, FooterButton, ListRow, Notice, ScreenHeader, balanceColor, colors, s, signedFigure, titleStyle } from './components';
 import { repaymentTitle } from './ExpenseList';
-import { ChevronRightIcon, PencilIcon, PersonIcon, TrashIcon, UndoIcon } from './icons';
+import { PencilIcon } from './icons';
 import { MemberIcon, MemberNameInput, presenceText, type MemberListApp } from './MemberList';
-import { fontFamily, monoFamily, radius } from './theme';
+import { between, useCompactProgress } from './pageScroll';
+import { fontFamily, monoFamily } from './theme';
+import { morph } from './ScreenMorph';
 import { useActionCall, useUiState } from './useActionCall';
 
-/** The person details header: back to the group, the group named quietly above the person's name, which Rename edits in place. */
+/** A person's balance in each recorded currency, settled zeros included. */
+function personBalances(snapshot: Parameters<typeof balanceRows>[0] | undefined, memberId: string) {
+  return balanceRows(snapshot).flatMap(({ currency, rows }) => {
+    const row = rows.find((entry) => entry.member.id === memberId);
+
+    return row ? [{ currency, amount: row.amount }] : [];
+  });
+}
+
+/** The largest balance anyone in the group has, the bar's full width. */
+function largestBalance(snapshot: Parameters<typeof balanceRows>[0] | undefined): number {
+  return Math.max(0, ...balanceRows(snapshot).flatMap(({ rows }) => rows.map((row) => Math.abs(row.amount))));
+}
+
+/** A balance as a large figure over its bar, with what it means beside it. */
+export function BalanceFigure(props: { amount: number; currency: string; max: number; label: string; size: number; bar: number; morph?: string | null }) {
+  return (
+    <View style={{ gap: 10 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+        <Text style={[s.caption, { fontSize: 15 }]}>{props.label}</Text>
+        <Text ref={morph(props.morph)} style={{ fontFamily: monoFamily, fontSize: props.size, lineHeight: props.size, fontWeight: '500', letterSpacing: -0.03 * props.size, color: balanceColor(props.amount) }}>
+          {signedFigure(props.amount, props.currency)}
+        </Text>
+      </View>
+      <BalanceBar track amount={props.amount} max={props.max} height={props.bar} />
+    </View>
+  );
+}
+
+/**
+ * The person's fixed top: back to the group, their name, which the pencil
+ * edits in place, This is me, and their balance as a figure over its bar.
+ */
 export function PersonHeader(props: { app: MemberListApp }) {
   const ui = useUiState();
+  const progress = useCompactProgress();
+  const back = useActionCall();
   const save = useActionCall();
-  const snapshot = props.app.snapshot().group?.projected_snapshot;
+  const edit = useActionCall();
+  const claim = useActionCall();
+  const state = props.app.snapshot();
+  const replica = state.group;
+  const snapshot = replica?.projected_snapshot;
   const group = snapshot?.group.name ?? '';
-  const name = ui.person ? memberName(snapshot, ui.person) : '';
-  const renaming = Boolean(ui.person) && ui.memberEdit?.memberId === ui.person;
+  const memberId = ui.person;
+  const member = snapshot?.members.find((entry) => entry.id === memberId);
+  const name = memberId ? memberName(snapshot, memberId) : '';
+  const renaming = Boolean(memberId) && ui.memberEdit?.memberId === memberId;
+  const you = preferredMember(snapshot, replica?.session?.identity.id)?.id;
+  const isYou = Boolean(memberId) && memberId === you;
+  const active = member?.status === 'active';
+  const balances = memberId ? personBalances(snapshot, memberId) : [];
+  const first = balances[0];
+  const recorded = memberId && snapshot ? memberBreakdown(snapshot, memberId).length > 0 : false;
+  const participants = replica && memberId ? participantMarkers(replica, memberId, props.app.client.presence(replica.group_id), state.online && state.reachable) : [];
 
   function finishRename(): void {
     if (save.can('saveMemberEdit')) void save.call('saveMemberEdit', {});
   }
 
+  const label = !first ? (recorded ? 'Settled' : 'No expenses yet') : first.amount > 0 ? 'Gets back' : first.amount < 0 ? 'Owes' : 'Settled';
+
   return (
-    <BackHeader
-      context={group}
-      error={save.error}
-      title={name}
-      heading={renaming ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <MemberNameInput
-            name={ui.memberEdit?.name ?? ''}
-            placeholder="Name"
-            autoFocus
-            onSave={finishRename}
-            style={[s.screenTitle, { flex: 1, minWidth: 0, height: 40, paddingHorizontal: 8, borderRadius: radius.small, borderWidth: 2, borderColor: colors.action, backgroundColor: colors.surface }]}
-          />
-          <Button small onPress={finishRename}>Done</Button>
-        </View>
-      ) : undefined}
-    />
+    <>
+      <ScreenHeader
+        start={<BackButton label={`Back to ${group}`} text={group} disabled={!back.can('closePanel')} onPress={() => { void back.call('closePanel', {}); }} />}
+        heading={(
+          <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {renaming ? (
+              <MemberNameInput
+                name={ui.memberEdit?.name ?? ''}
+                placeholder="Name"
+                autoFocus
+                onSave={finishRename}
+                style={[titleStyle(progress), { flex: 1, minWidth: 0, paddingBottom: 4, borderBottomWidth: 1.5, borderColor: colors.ink }]}
+              />
+            ) : (
+              <>
+                <Text ref={morph(replica && memberId ? `pname-${replica.group_id}-${memberId}` : null)} accessibilityRole="header" numberOfLines={1} style={[titleStyle(progress), { flexShrink: 1 }]}>{name}</Text>
+                {isYou ? <Text style={{ fontFamily, fontSize: 15, fontWeight: '500', color: colors.muted }}>you</Text> : null}
+                {active && memberId ? (
+                  <View style={{ marginLeft: 'auto', marginRight: -10, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Rename ${name}`}
+                      disabled={!edit.can('beginEditMember', { memberId })}
+                      onPress={() => { void edit.call('beginEditMember', { memberId }); }}
+                      style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !edit.can('beginEditMember', { memberId }) && s.dim]}
+                    >
+                      <PencilIcon size={18} color={colors.ink} />
+                    </Pressable>
+                    {!isYou ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`I’m ${name}`}
+                        disabled={!claim.can('setPreferredMember', { memberId })}
+                        onPress={() => { void claim.call('setPreferredMember', { memberId }); }}
+                        style={({ pressed }) => [{ height: 44, justifyContent: 'center', paddingHorizontal: 10 }, pressed && s.pressed]}
+                      >
+                        <Text style={[s.headerActionText, s.link, { fontSize: 14 }]}>This is me</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
+              </>
+            )}
+          </View>
+        )}
+        below={(
+          <View style={{ gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: between(8, 2, progress) }}>
+              <MemberIcon participants={participants} size={6} />
+              <Text style={s.caption}>{active ? presenceText(participants) : 'Removed · still in balances until settled'}</Text>
+            </View>
+            <View style={{ paddingTop: between(18, 8, progress) }}>
+              <BalanceFigure amount={first?.amount ?? 0} currency={first?.currency ?? 'XXX'} max={largestBalance(snapshot)} label={label} size={between(30, 20, progress)} bar={between(12, 8, progress)} morph={replica && memberId && first ? (isYou ? `gamt-${replica.group_id}-${first.currency}` : `pamt-${replica.group_id}-${memberId}-${first.currency}`) : null} />
+            </View>
+          </View>
+        )}
+      />
+      <ErrorMessage message={back.error ?? save.error ?? edit.error ?? claim.error} />
+    </>
   );
 }
 
-function money(amount: number) {
-  return { fontFamily: monoFamily, fontWeight: '600', color: balanceColor(amount) } as const;
-}
+/** Settle up, pinned at the foot while the person is in a payment of the group's plan. */
+export function PersonFooter(props: { app: MemberListApp }) {
+  const settle = useActionCall();
+  const memberId = useUiState().person;
+  const snapshot = props.app.snapshot().group?.projected_snapshot;
 
-/** One of the three actions under Settle up. */
-function Tile(props: { icon: ReactNode; text: string; label?: string; danger?: boolean; pressed?: boolean; disabled: boolean; onPress: () => void }) {
+  if (!memberId || !snapshot) return null;
+  const payments = memberSettlements(snapshot, memberId).length;
+
+  if (!payments) return null;
+
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={props.label ?? props.text}
-      accessibilityState={{ disabled: props.disabled, selected: props.pressed }}
-      aria-pressed={props.pressed}
-      disabled={props.disabled}
-      onPress={props.onPress}
-      style={({ pressed }) => [
-        { flex: 1, minHeight: 64, borderRadius: radius.card, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 4 },
-        props.pressed && { backgroundColor: colors.youRow },
-        pressed && s.pressed,
-        props.disabled && s.dim,
-      ]}
-    >
-      {props.icon}
-      <Text numberOfLines={1} style={{ fontFamily, fontSize: 13, fontWeight: '600', color: props.danger ? colors.owes : colors.ink }}>{props.text}</Text>
-    </Pressable>
+    <>
+      <ErrorMessage message={settle.error} />
+      <FooterButton
+        morph={`settle-${memberId}`}
+        label={`Settle up, ${payments === 1 ? '1 payment' : `${payments} payments`}`}
+        disabled={!settle.can('showSettleUp', { memberId })}
+        onPress={() => { void settle.call('showSettleUp', { memberId }); }}
+      >
+        Settle up
+      </FooterButton>
+    </>
   );
 }
 
 /**
- * A person's details, under their name in the header: their presence, their balance per currency,
- * Settle up, renaming, choosing them as you on this device, removing them,
- * and every expense and repayment their balance is made of.
+ * Below the person's balance: Hide or Remove once they are settled, Restore
+ * once removed, and every expense and repayment their balance is made of.
  */
 export function PersonDetails(props: { app: MemberListApp }) {
   const ui = useUiState();
@@ -85,13 +175,10 @@ export function PersonDetails(props: { app: MemberListApp }) {
   const snapshot = replica?.projected_snapshot;
   const memberId = ui.person;
   const member = snapshot?.members.find((entry) => entry.id === memberId);
-  const edit = useActionCall();
-  const claim = useActionCall();
   const remove = useActionCall();
   const restore = useActionCall();
-  const settle = useActionCall();
   const open = useActionCall();
-  const [claimed, setClaimed] = useState<string | null>(null);
+  const [claimedBefore] = useState(() => (member ? preferredMember(snapshot, replica?.session?.identity.id)?.id === member.id : false));
 
   if (!replica || !snapshot || !member || !memberId) return null;
   const identity = replica.session?.identity.id;
@@ -99,149 +186,62 @@ export function PersonDetails(props: { app: MemberListApp }) {
   const isYou = member.id === you;
   const active = member.status === 'active';
   const name = memberName(snapshot, member.id);
-  const renaming = ui.memberEdit?.memberId === member.id;
-  const participants = participantMarkers(replica, member.id, props.app.client.presence(replica.group_id), state.online && state.reachable);
   const others = participantsForMember(snapshot, member.id).filter((grant) => grant.identity_id !== identity).length;
-
-  const balances = balanceRows(snapshot).flatMap(({ currency, rows }) => {
-    const row = rows.find((entry) => entry.member.id === member.id);
-
-    return row ? [{ currency, amount: row.amount }] : [];
-  });
-
-  const unsettled = balances.some(({ amount }) => amount !== 0);
-  const payments = memberSettlements(snapshot, member.id).length;
+  const unsettled = personBalances(snapshot, member.id).some(({ amount }) => amount !== 0);
   const breakdown = memberBreakdown(snapshot, member.id, (id) => (id === you ? 'You' : memberName(snapshot, id)));
   // Taking out someone any expense or repayment has named, removed ones included, hides them for history; anyone else is removed.
   const hides = memberHasRecords(snapshot, member.id);
 
   return (
-    <View style={{ gap: 18, paddingBottom: 32 }}>
-      <View style={{ gap: 6, paddingHorizontal: 4 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <MemberIcon participants={participants} size={10} />
-          <Text style={{ fontFamily, fontSize: 14, color: colors.soft }}>{active ? presenceText(participants) : 'Removed · still in balances until settled'}</Text>
-        </View>
-        <ErrorMessage message={edit.error} />
-      </View>
-
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {balances.length ? balances.map(({ currency, amount }) => (
-          <View key={currency} style={{ flexGrow: 1, flexBasis: '45%', paddingVertical: 14, paddingHorizontal: 16, borderRadius: radius.card, backgroundColor: colors.surface, gap: 2 }}>
-            <Text style={{ fontFamily, fontSize: 13, fontWeight: '600', color: colors.muted }}>{amount > 0 ? 'Gets back' : amount < 0 ? 'Owes' : 'Settled'}</Text>
-            <Text style={[money(amount), { fontSize: 22 }]}>{signedFigure(amount, currency)}</Text>
-          </View>
-        )) : (
-          <View style={{ flex: 1, paddingVertical: 14, paddingHorizontal: 16, borderRadius: radius.card, backgroundColor: colors.surface, gap: 2 }}>
-            <Text style={{ fontFamily, fontSize: 13, fontWeight: '600', color: colors.muted }}>Balance</Text>
-            {breakdown.length ? (
-              <Text style={{ fontFamily, fontSize: 18, fontWeight: '600', color: colors.settled }}>Settled</Text>
-            ) : (
-              <Text style={{ fontFamily, fontSize: 18, fontWeight: '600', color: colors.muted }}>No expenses yet</Text>
-            )}
-          </View>
-        )}
-        {/* Beside what they owe or get back, as tall as it. */}
-        {payments ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Settle up, ${payments === 1 ? '1 payment' : `${payments} payments`}`}
-            disabled={!settle.can('showSettleUp', { memberId: member.id })}
-            onPress={() => { void settle.call('showSettleUp', { memberId: member.id }); }}
-            style={({ pressed }) => [{ flexGrow: 1, flexBasis: '45%', flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 56, paddingVertical: 12, paddingLeft: 16, paddingRight: 12, borderRadius: radius.card, backgroundColor: colors.action }, pressed && s.pressed]}
-          >
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ fontFamily, fontSize: 16, fontWeight: '600', color: colors.actionInk }}>Settle up</Text>
-              <Text style={{ fontFamily, fontSize: 13, fontWeight: '500', color: colors.actionInkSoft }}>{payments === 1 ? '1 payment' : `${payments} payments`}</Text>
-            </View>
-            <ChevronRightIcon size={18} color={colors.actionInk} strokeWidth={2.2} />
-          </Pressable>
-        ) : null}
-      </View>
-      <ErrorMessage message={settle.error} />
-
-      <View style={{ gap: 8 }}>
-        {active ? (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Tile
-              icon={<PencilIcon />}
-              text="Rename"
-              label={`Rename ${name}`}
-              disabled={renaming || !edit.can('beginEditMember', { memberId: member.id })}
-              onPress={() => { void edit.call('beginEditMember', { memberId: member.id }); }}
-            />
-            <Tile
-              icon={<PersonIcon />}
-              text={isYou ? 'That’s you' : `I’m ${name}`}
-              pressed={isYou}
-              disabled={isYou || !claim.can('setPreferredMember', { memberId: member.id })}
-              onPress={() => {
-                void claim.call('setPreferredMember', { memberId: member.id }, () => setClaimed(member.id));
-              }}
-            />
-            <Tile
-              icon={<TrashIcon color={unsettled ? colors.faint : colors.owes} />}
-              text={hides ? 'Hide' : 'Remove'}
-              label={`${hides ? 'Hide' : 'Remove'} ${name}`}
-              danger={!unsettled}
-              disabled={!remove.can('removeMember', { memberId: member.id })}
-              onPress={() => { void remove.call('removeMember', { memberId: member.id }); }}
-            />
-          </View>
+    <View style={{ gap: 22, paddingTop: 12, paddingBottom: 12 }}>
+      {isYou && !claimedBefore && others ? (
+        <Notice
+          tone="warning"
+          role="status"
+          message={`${name} is already taken on ${others === 1 ? 'another device' : `${others} other devices`}. It’s now taken on this device too.`}
+        />
+      ) : null}
+      {active ? (
+        unsettled ? (
+          <Text style={s.caption}>Settle up first to hide {isYou ? 'yourself' : name}.</Text>
         ) : (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Tile
-              icon={<UndoIcon size={20} />}
-              text="Restore"
-              label={`Restore ${name}`}
-              disabled={!restore.can('restoreMember', { memberId: member.id })}
-              onPress={() => { void restore.call('restoreMember', { memberId: member.id }); }}
-            />
-          </View>
-        )}
-        {isYou && claimed === member.id && others ? (
-          <Notice
-            tone="warning"
-            role="status"
-            message={`${name} is already taken on ${others === 1 ? 'another device' : `${others} other devices`}. It’s now taken on this device too.`}
-          />
-        ) : null}
-        {active && unsettled ? (
-          <Text style={{ paddingHorizontal: 4, fontFamily, fontSize: 13, color: colors.muted }}>Settle up first to hide {isYou ? 'yourself' : name}.</Text>
-        ) : null}
-        <ErrorMessage message={claim.error ?? remove.error ?? restore.error} />
-      </View>
+          <Button secondary label={`${hides ? 'Hide' : 'Remove'} ${name}`} disabled={!remove.can('removeMember', { memberId: member.id })} onPress={() => { void remove.call('removeMember', { memberId: member.id }); }}>
+            {hides ? 'Hide' : 'Remove'}
+          </Button>
+        )
+      ) : (
+        <Button secondary label={`Restore ${name}`} disabled={!restore.can('restoreMember', { memberId: member.id })} onPress={() => { void restore.call('restoreMember', { memberId: member.id }); }}>
+          Restore
+        </Button>
+      )}
+      <ErrorMessage message={remove.error ?? restore.error} />
 
       {breakdown.map((group) => (
-        <View key={group.currency}>
-          <SectionHeading title="Expenses and repayments" />
-          <View style={s.listCard}>
-            {group.rows.map((row, index) => {
-              const title = row.kind === 'expense' ? row.title : repaymentTitle(replica, { from_member_id: row.from, to_member_id: row.to });
+        <View key={group.currency} role="list" aria-label="Expenses and repayments" style={{ paddingTop: 12 }}>
+          {group.rows.map((row) => {
+            const title = row.kind === 'expense' ? row.title : repaymentTitle(replica, { from_member_id: row.from, to_member_id: row.to });
 
-              return (
-                <ListRow
-                  key={row.id}
-                  first={index === 0}
-                  label={`${title}, ${signedFigure(row.amount, group.currency)}`}
-                  disabled={row.kind === 'expense' ? !open.can('showExpense', { expenseId: row.id }) : !open.can('showSettlement', { settlementId: row.id })}
-                  onPress={() => {
-                    if (row.kind === 'expense') void open.call('showExpense', { expenseId: row.id });
-                    else void open.call('showSettlement', { settlementId: row.id });
-                  }}
-                >
-                  <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
-                    <Text numberOfLines={1} style={s.name}>{title}</Text>
-                    <Text numberOfLines={1} style={s.rowCaption}>{row.detail}</Text>
-                  </View>
-                  <Text style={[money(row.amount), { fontSize: 16 }]}>{signedFigure(row.amount, group.currency)}</Text>
-                </ListRow>
-              );
-            })}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingHorizontal: 16, borderTopWidth: 2, borderColor: colors.track, backgroundColor: colors.totalRow }}>
-              <Text style={{ flex: 1, fontFamily, fontSize: 15, fontWeight: '600', color: colors.ink }}>Balance</Text>
-              <Text style={[money(group.total), { fontSize: 17 }]}>{signedFigure(group.total, group.currency)}</Text>
-            </View>
+            return (
+              <ListRow
+                key={row.id}
+                label={`${title}, ${signedFigure(row.amount, group.currency)}`}
+                disabled={row.kind === 'expense' ? !open.can('showExpense', { expenseId: row.id }) : !open.can('showSettlement', { settlementId: row.id })}
+                onPress={() => {
+                  if (row.kind === 'expense') void open.call('showExpense', { expenseId: row.id });
+                  else void open.call('showSettlement', { settlementId: row.id });
+                }}
+              >
+                <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+                  <Text numberOfLines={1} style={s.name}>{title}</Text>
+                  <Text numberOfLines={1} style={s.rowCaption}>{row.detail}</Text>
+                </View>
+                <Text style={[s.amount, { color: balanceColor(row.amount) }]}>{signedFigure(row.amount, group.currency)}</Text>
+              </ListRow>
+            );
+          })}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, borderTopWidth: 1.5, borderColor: colors.ink }}>
+            <Text style={{ flex: 1, fontFamily, fontSize: 15, fontWeight: '600', color: colors.ink }}>Balance</Text>
+            <Text style={[s.amount, { color: balanceColor(group.total) }]}>{signedFigure(group.total, group.currency)}</Text>
           </View>
         </View>
       ))}

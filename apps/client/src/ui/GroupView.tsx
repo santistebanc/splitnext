@@ -12,6 +12,7 @@ import { InvitePanel } from './InvitePanel';
 import { AddPersonRow, MemberIcon, type MemberListApp, type Replica } from './MemberList';
 import { useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
+import { morph } from './ScreenMorph';
 import { fontFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 import { YouBadge } from './YouBadge';
@@ -38,7 +39,7 @@ function ActivityLink(props: { app: MemberListApp }) {
       onPress={() => { void open.call('showActivity', {}); }}
       style={({ pressed }) => [{ height: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 }, pressed && s.pressed, !open.can('showActivity') && s.dim]}
     >
-      <Text style={s.headerActionText}>Activity</Text>
+      <Text ref={morph('activity')} style={s.headerActionText}>Activity</Text>
       {count ? (
         <View aria-hidden style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, backgroundColor: colors.alert }}>
           <Text testID="activity-count" style={{ fontFamily, fontSize: 11, fontWeight: '600', color: '#ffffff' }}>{count}</Text>
@@ -49,7 +50,7 @@ function ActivityLink(props: { app: MemberListApp }) {
 }
 
 /** The group's name, large; the pencil turns it into a field that saves on leaving it. */
-function GroupName(props: { name: string }) {
+function GroupName(props: { name: string; groupId: string }) {
   const progress = useCompactProgress();
   const rename = useActionCall();
   const [draft, setDraft] = useState<string | null>(null);
@@ -69,7 +70,7 @@ function GroupName(props: { name: string }) {
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         {draft === null ? (
           <>
-            <Text accessibilityRole="header" numberOfLines={1} style={[titleStyle(progress), { flexShrink: 1 }]}>{props.name}</Text>
+            <Text ref={morph(`gname-${props.groupId}`)} accessibilityRole="header" numberOfLines={1} style={[titleStyle(progress), { flexShrink: 1 }]}>{props.name}</Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Rename group"
@@ -123,7 +124,7 @@ export function GroupHeader(props: { app: MemberListApp }) {
     <ScreenHeader
       start={<BackButton label="Back to groups" disabled={!actions.availability('showGroups', {}).available} onPress={() => { void actions.dispatch('showGroups', {}, { origin: 'ui' }); }} />}
       end={open ? <ActivityLink app={props.app} /> : undefined}
-      heading={open ? <GroupName name={name} /> : undefined}
+      heading={open && replica ? <GroupName name={name} groupId={replica.group_id} /> : undefined}
       title={open ? undefined : name}
       below={open ? (
         <View>
@@ -197,7 +198,7 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
       >
         <View style={{ width: '34%', flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0 }}>
           <MemberIcon participants={participants} size={6} />
-          <Text numberOfLines={1} style={[s.name, { flexShrink: 1 }]}>{name}</Text>
+          <Text ref={morph(`pname-${props.replica.group_id}-${props.memberId}`)} numberOfLines={1} style={[s.name, { flexShrink: 1 }]}>{name}</Text>
           {props.you ? <YouBadge /> : null}
           {props.removed ? <Text style={s.tag}>removed</Text> : null}
         </View>
@@ -206,7 +207,7 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
         </View>
         <View style={{ width: 84, alignItems: 'flex-end', gap: 6 }}>
           {props.balances.length ? props.balances.map((entry) => (
-            <Text key={entry.currency} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} style={[s.amount, { color: balanceColor(entry.amount) }]}>
+            <Text key={entry.currency} ref={morph(props.you ? `gamt-${props.replica.group_id}-${entry.currency}` : `pamt-${props.replica.group_id}-${props.memberId}-${entry.currency}`)} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} style={[s.amount, { color: balanceColor(entry.amount) }]}>
               {signedFigure(entry.amount, entry.currency)}
             </Text>
           )) : null}

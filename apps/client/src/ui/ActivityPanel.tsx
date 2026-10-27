@@ -1,14 +1,14 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { reversibleEffect, undoProblem, undoExplanation, type ClientReplicaState } from '@splitnext/client';
-import { describeActivity, newActivity, visibleActivity, type ActivityKind } from '../model/activity';
+import { describeActivity, newActivity, visibleActivity } from '../model/activity';
 import { reviewDetail, reviewTitle } from '../model/notices';
 import { BackHeader } from './BackHeader';
-import { Button, EmptyState, ErrorMessage, Notice, SectionHeading, Tag, colors, s } from './components';
-import { BellIcon, GridIcon, InfoIcon, PersonIcon, ReceiptIcon, RepayIcon, UndoIcon, WarningIcon } from './icons';
+import { Button, EmptyState, ErrorMessage, HeaderAction, Notice, SectionHeading, Tag, colors, s } from './components';
+import { InfoIcon } from './icons';
 import type { MemberListApp } from './MemberList';
 import { StickyTop } from './StickyTop';
-import { fontFamily, radius } from './theme';
+import { fontFamily, monoFamily } from './theme';
 import { useActionCall, useUiState } from './useActionCall';
 
 type Event = ClientReplicaState['activity'][number];
@@ -52,25 +52,19 @@ export function ActivityHeader(props: { app: MemberListApp }) {
     <BackHeader
       context={name}
       title="Activity"
+      morph="activity"
       error={seen.error}
       end={seen.can('markActivitySeen') ? (
-        <Button quiet small onPress={() => { void seen.call('markActivitySeen', {}); }}>Mark all seen</Button>
+        <HeaderAction text="Mark all seen" label="Mark all seen" onPress={() => { void seen.call('markActivitySeen', {}); }} />
       ) : undefined}
     />
   );
 }
 
-const tones: Record<ActivityKind, { background: string; ink: string; icon: (color: string) => ReactNode }> = {
-  expense: { background: colors.actionSoft, ink: colors.actionDark, icon: (color) => <ReceiptIcon size={18} color={color} /> },
-  repayment: { background: colors.settledSoft, ink: colors.settled, icon: (color) => <RepayIcon color={color} /> },
-  people: { background: colors.peopleSoft, ink: colors.peopleInk, icon: (color) => <PersonIcon size={18} color={color} /> },
-  group: { background: colors.pale, ink: colors.soft, icon: (color) => <GridIcon size={18} color={color} /> },
-};
-
 /** A small action inside an entry, white unless it is the entry's main one. */
 function EntryAction(props: { text: string; label: string; disabled: boolean; onPress: () => void; primary?: boolean; icon?: boolean }) {
   return (
-    <Button small secondary={!props.primary} label={props.label} disabled={props.disabled} onPress={props.onPress} icon={props.icon ? <UndoIcon /> : undefined}>
+    <Button small secondary={!props.primary} label={props.label} disabled={props.disabled} onPress={props.onPress}>
       {props.text}
     </Button>
   );
@@ -107,16 +101,13 @@ function NeedsReview(props: { replica: ClientReplicaState }) {
   return (
     <View role="region" aria-label="Needs your review" style={{ paddingBottom: 8 }}>
       <DayHeading color={colors.owes} title={`Needs your review · ${notices.length}`} />
-      <View style={[s.listCard, { borderWidth: 2, borderColor: colors.warningEdge }]}>
-        {notices.map((notice, index) => {
+      <View style={s.listCard}>
+        {notices.map((notice) => {
           const commandId = notice.command.command_id;
 
           return (
-            <View key={commandId} style={[{ gap: 10, paddingVertical: 14, paddingLeft: 12, paddingRight: 16 }, index > 0 && s.ruled]}>
+            <View key={commandId} style={[{ gap: 10, paddingVertical: 14, paddingLeft: 16 }, s.ruled, { borderLeftWidth: 4, borderLeftColor: colors.alert }]}>
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-                <View aria-hidden style={{ width: 32, height: 32, borderRadius: radius.small, backgroundColor: colors.warning, alignItems: 'center', justifyContent: 'center' }}>
-                  <WarningIcon color={colors.owes} />
-                </View>
                 <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
                   <Text style={{ fontFamily, fontSize: 15, lineHeight: 20, color: colors.ink }}>
                     <Text style={{ fontWeight: '600' }}>{reviewTitle(notice)}</Text> wasn’t applied
@@ -124,7 +115,7 @@ function NeedsReview(props: { replica: ClientReplicaState }) {
                   <Text style={{ fontFamily, fontSize: 13, lineHeight: 19, color: colors.soft }}>{reviewDetail(notice)}</Text>
                 </View>
               </View>
-              <View style={{ flexDirection: 'row', gap: 8, paddingLeft: 44 }}>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
                 <EntryAction primary text="Apply again" label="Apply again" disabled={!action.can('retryNotice', { commandId })} onPress={() => act(commandId, 'retryNotice')} />
                 <EntryAction text="Dismiss" label="Dismiss" disabled={!action.can('dismissNotice', { commandId })} onPress={() => act(commandId, 'dismissNotice')} />
               </View>
@@ -167,7 +158,6 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
       {load.busy && !events.length ? <Text role="status" style={s.caption}>Loading Activity…</Text> : null}
       {!load.busy && !events.length ? (
         <EmptyState
-          icon={<BellIcon size={34} color={colors.action} strokeWidth={1.6} />}
           title="Nothing here yet"
           text="Changes people make in this group show up here."
         />
@@ -177,9 +167,8 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
         <View key={day.label} style={{ paddingBottom: 8 }}>
           <DayHeading title={day.label} />
           <View style={s.listCard}>
-            {day.events.map((event, index) => {
+            {day.events.map((event) => {
               const entry = describeActivity(event, props.replica);
-              const tone = tones[entry.kind];
               const isNew = fresh.has(event.id);
               const label = `${entry.who} ${entry.what}`;
               const change = event.change.action;
@@ -194,39 +183,35 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
               const problem = reversible && snapshot ? undoProblem(snapshot, event, props.replica.activity) : null;
 
               return (
-                <View key={event.id} testID={`activity-${event.id}`} style={[{ gap: 10, paddingVertical: 14, paddingLeft: 12, paddingRight: 16 }, isNew && { backgroundColor: colors.fresh }, index > 0 && s.ruled]}>
+                <View key={event.id} testID={`activity-${event.id}`} style={[{ flexDirection: 'row', gap: 12, paddingVertical: 14 }, s.ruled]}>
+                  <View aria-hidden style={{ width: 4, backgroundColor: isNew ? colors.alert : 'transparent' }} />
+                  <View style={{ flex: 1, minWidth: 0, gap: 10 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-                    <View aria-hidden style={{ width: 32, height: 32, borderRadius: radius.small, backgroundColor: tone.background, alignItems: 'center', justifyContent: 'center' }}>
-                      {tone.icon(tone.ink)}
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-                      <Text style={{ fontFamily, fontSize: 15, lineHeight: 20, color: colors.ink }}>
-                        <Text style={{ fontWeight: '600' }}>{entry.who}</Text> {entry.what}
+                    <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+                      <Text style={{ fontFamily, fontSize: 16, lineHeight: 21, color: colors.ink }}>
+                        <Text style={{ fontWeight: '700' }}>{entry.who}</Text> {entry.what}
                       </Text>
-                      {entry.detail ? <Text style={{ fontFamily, fontSize: 13, color: colors.muted }}>{entry.detail}</Text> : null}
+                      {entry.detail ? <Text style={{ fontFamily: monoFamily, fontSize: 13, fontWeight: '500', color: colors.muted }}>{entry.detail}</Text> : null}
                     </View>
                     <View style={{ alignItems: 'flex-end', gap: 6, paddingTop: 2 }}>
                       <Text style={{ fontFamily, fontSize: 12, color: colors.muted }}>{timeLabel(new Date(event.occurred_at))}</Text>
-                      {isNew ? <Tag tone="action">New</Tag> : null}
+                      {isNew ? <Tag tone="warning">new</Tag> : null}
                     </View>
                   </View>
                   {reversible && !problem ? (
-                    <View style={{ flexDirection: 'row', paddingLeft: 44 }}>
+                    <View style={{ flexDirection: 'row' }}>
                       <EntryAction icon text="Undo" label={`Undo: ${label}`} disabled={!action.can('undoChange', { eventId: event.id })} onPress={() => { void action.call('undoChange', { eventId: event.id }); }} />
                     </View>
                   ) : null}
                   {restorable ? (
-                    <View style={{ flexDirection: 'row', paddingLeft: 44 }}>
+                    <View style={{ flexDirection: 'row' }}>
                       {change === 'expense.removed' ? <EntryAction icon text="Restore" label="Restore expense" disabled={!action.can('restoreExpense', { expenseId: event.target.id })} onPress={() => { void action.call('restoreExpense', { expenseId: event.target.id }); }} /> : null}
                       {change === 'settlement.removed' ? <EntryAction icon text="Restore" label="Restore repayment" disabled={!action.can('restoreSettlement', { settlementId: event.target.id })} onPress={() => { void action.call('restoreSettlement', { settlementId: event.target.id }); }} /> : null}
                       {change === 'member.removed' ? <EntryAction icon text="Restore" label="Restore member" disabled={!action.can('restoreMember', { memberId: event.target.id })} onPress={() => { void action.call('restoreMember', { memberId: event.target.id }); }} /> : null}
                     </View>
                   ) : null}
-                  {problem ? (
-                    <View style={{ marginLeft: 44 }}>
-                      <Notice tone="info" icon={<InfoIcon color={colors.soft} />} message={undoExplanation(problem)} />
-                    </View>
-                  ) : null}
+                  {problem ? <Notice tone="info" icon={<InfoIcon color={colors.soft} />} message={undoExplanation(problem)} /> : null}
+                  </View>
                 </View>
               );
             })}
