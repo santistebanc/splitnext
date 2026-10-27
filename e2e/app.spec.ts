@@ -345,6 +345,13 @@ test('records, changes, and removes an expense with plain-number balances', asyn
   // A new expense starts in its amount.
   await expect(field(page, 'Amount')).toBeFocused();
   await expect(page.getByTestId('expense-timestamp')).toHaveCount(0);
+  const save = button(page, 'Save');
+
+  await expect(save).toBeDisabled();
+  const savePosition = (await save.boundingBox())!;
+
+  expect(savePosition.y + savePosition.height).toBeGreaterThan((page.viewportSize()?.height ?? 0) - 60);
+  expect(savePosition.width).toBeGreaterThan(300);
 
   // Amounts are plain numbers: there is no currency to choose.
   await expect(button(page, /Change currency$/)).toHaveCount(0);
@@ -352,6 +359,8 @@ test('records, changes, and removes an expense with plain-number balances', asyn
   await expect(page.getByTestId('split-summary')).toHaveText('15.00 each');
   await expect(field(page, 'Amount for Ben')).toHaveCount(0);
   await field(page, 'Description').fill('Dinner');
+  await expect(save).toBeEnabled();
+  await expect(save).toHaveCSS('background-color', 'rgb(20, 20, 19)');
   await button(page, 'Save').click();
   await expect(button(page, 'Change Dinner · 30.00')).toBeVisible();
   await expect(addButton).toBeVisible();
@@ -361,6 +370,7 @@ test('records, changes, and removes an expense with plain-number balances', asyn
 
   await button(page, 'Change Dinner · 30.00').click();
   await expect(field(page, 'Amount')).not.toBeFocused();
+  expect(await save.boundingBox()).toEqual(savePosition);
   const timestamp = page.getByTestId('expense-timestamp');
 
   await expect(timestamp).toHaveText(/^Created .+\d{4}.+/);
@@ -661,7 +671,7 @@ test('explains a balance and settles it with the fewest payments', async ({ page
   await expect(button(page, 'Hide Ben')).toHaveCount(0);
 });
 
-test('opens who paid in place and keeps the choice', async ({ page }) => {
+test('opens who paid in place and keeps the choice', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Payers', 'Ana');
   await addMember(page, 'Ben');
@@ -670,10 +680,20 @@ test('opens who paid in place and keeps the choice', async ({ page }) => {
   const payers = page.getByRole('radiogroup', { name: 'Paid by' });
 
   await expect(payers).toBeVisible();
-  await expect(payers.getByRole('radio', { name: 'Ana', exact: true })).toBeChecked();
+  const you = payers.getByRole('radio', { name: 'Ana (you)', exact: true });
+
+  await expect(you).toBeChecked();
+  await expect(you.getByText('you', { exact: true })).toBeVisible();
+  await expect(payers.getByRole('radio', { name: 'Ben', exact: true }).getByText('you', { exact: true })).toHaveCount(0);
   await payers.getByRole('radio', { name: 'Ben', exact: true }).click();
   await expect(payers).toHaveCount(0);
   await expect(button(page, 'Paid by Ben. Change payer')).toBeVisible();
+  await button(page, 'Paid by Ben. Change payer').click();
+  await expect(you).not.toBeChecked();
+  await expect(you.getByText('you', { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('expense-payer-you.png') });
+  await you.click();
+  await expect(button(page, 'Paid by Ana (you). Change payer')).toBeVisible();
 });
 
 test('renames the group in place, copies the invite link, and replaces it after confirming', async ({ page, context }) => {
@@ -1238,6 +1258,12 @@ test('keeps the expense header steady at the bottom of the split list', async ({
 
     await scroller.evaluate((node) => { node.scrollTop = 0; });
     await expect(amount).toHaveCSS('height', '60px');
+    const save = button(page, 'Save');
+
+    await expect(save).toBeInViewport({ ratio: 1 });
+    const savePosition = (await save.boundingBox())!;
+
+    expect(savePosition.y + savePosition.height).toBeGreaterThan(height - 60);
 
     const box = (await scroller.boundingBox())!;
 
@@ -1267,7 +1293,24 @@ test('keeps the expense header steady at the bottom of the split list', async ({
 
     const samples = await collecting;
     const reversals = samples.slice(1).map((sample, index) => sample.header - samples[index]!.header);
-    const settled = samples.filter((sample) => sample.elapsed > 900);
+
+    // Sample settling after the final wheel input; on slower machines that
+    // input can arrive after the old fixed 900ms cutoff.
+    const settled = await page.evaluate(() => new Promise<{ top: number; header: number }[]>((resolve) => {
+      const scroller = document.getElementById('splitnext-page')!;
+      const start = performance.now();
+      const samples: { top: number; header: number }[] = [];
+
+      (function frame() {
+        const elapsed = performance.now() - start;
+
+        if (elapsed > 200) samples.push({ top: scroller.scrollTop, header: scroller.getBoundingClientRect().top });
+
+        if (elapsed < 600) requestAnimationFrame(frame);
+        else resolve(samples);
+      })();
+    }));
+
     const headers = settled.map((sample) => sample.header);
     const positions = settled.map((sample) => sample.top);
     const detail = JSON.stringify({ scenario, reversal: Math.max(...reversals), settled });
@@ -1275,6 +1318,8 @@ test('keeps the expense header steady at the bottom of the split list', async ({
     expect(Math.max(...reversals), detail).toBeLessThanOrEqual(1);
     expect(Math.max(...headers) - Math.min(...headers), detail).toBeLessThanOrEqual(1);
     expect(Math.max(...positions) - Math.min(...positions), detail).toBeLessThanOrEqual(1);
+    await expect(save).toBeInViewport({ ratio: 1 });
+    expect(await save.boundingBox()).toEqual(savePosition);
 
     for (let step = 0; step < 8; step++) await page.mouse.wheel(0, -25);
 

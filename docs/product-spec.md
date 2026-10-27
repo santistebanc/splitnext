@@ -213,9 +213,10 @@ form. The sentence shrinks as the content scrolls, and the header actions stay
 available. Selecting the same member on both sides prevents recording or saving.
 Cancel and Record return to where the form was opened, such as Settle up.
 
-The expense editor has Cancel, Delete when changing an expense, and Save in
-the header. When editing a recorded expense, show Created and its recorded date
-and time above the amount, or Last updated and its latest change date and time
+The expense editor has Cancel in the header, alongside Delete when changing a
+recorded expense. Save stays pinned at the foot like the other main actions.
+When editing a recorded expense, show Created and its recorded date and time
+above the amount, or Last updated and its latest change date and time
 when it has changed, formatted in the device's locale and time zone. New expense
 drafts have no date label. Then show a large monospaced amount over an ink rule,
 a plain number with no currency (ADR 0025), and what it was for (New expense) under it. Both
@@ -223,8 +224,10 @@ shrink as the split scrolls under them. The amount accepts digits and a
 decimal dot or comma, displaying a dot and two fixed decimal places after each
 keystroke. Keep the caret usable for insertion, replacement, and deletion.
 Reject ambiguous or over-precise pasted amounts. Paid by opens the names in
-place as a list of radio rows. Then the split: its caption (28.20 each for an
-equal split, or 5 people for a custom one), a bar of each person's share in their colour, and one row per person,
+place as a list of radio rows, with a "you" badge beside the preferred member
+whether or not they are the selected payer. Then the split: its caption (28.20
+each for an equal split, or 5 people for a custom one), a bar of each person's
+share in their colour, and one row per person,
 as in the earlier app: their colour, the name with "you", + for another share,
 their amount, and at the end a checkbox for whether they share it. The checkbox
 becomes − once they have more than one share or a fixed amount; − takes a

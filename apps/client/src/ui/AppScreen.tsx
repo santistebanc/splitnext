@@ -12,7 +12,7 @@ import { SyncStatus } from './ConnectionStatus';
 import { CreateGroup, CreateGroupFooter } from './CreateGroup';
 import { Frame } from './Frame';
 import { ScreenMorph } from './ScreenMorph';
-import { ExpenseControls, ExpenseEditor, ExpenseEditorHeader } from './ExpenseEditor';
+import { ExpenseControls, ExpenseEditor, ExpenseEditorFooter, ExpenseEditorHeader } from './ExpenseEditor';
 import { AddExpenseButton } from './ExpenseList';
 import { ActivityHeader, ActivityPanel } from './ActivityPanel';
 import { PersonDetails, PersonFooter, PersonHeader } from './PersonView';
@@ -350,6 +350,7 @@ function ReadyApp(props: AppProps) {
             </>
           ),
           body: <ExpenseEditor app={app} />,
+          footer: <ExpenseEditorFooter />,
         };
       case 'settlements':
         return { header: <SettlementsHeader replica={group} />, body: <SettlementsPanel replica={group} /> };
