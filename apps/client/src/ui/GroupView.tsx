@@ -131,7 +131,8 @@ export function GroupHeader(props: { app: MemberListApp }) {
       below={open ? (
         <View>
           {/* Folds away as the page scrolls, for more room, unless the invite is open under it. */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, height: inviting ? 44 : between(44, 0, progress), opacity: inviting ? 1 : 1 - progress, overflow: 'hidden' }}>
+          {/* Mostly folded, it is out of reach rather than a sliver under the title. */}
+          <View aria-hidden={!inviting && progress > 0.5} style={{ flexDirection: 'row', alignItems: 'center', gap: 16, height: inviting ? 44 : between(44, 0, progress), opacity: inviting ? 1 : 1 - progress, overflow: 'hidden', pointerEvents: !inviting && progress > 0.5 ? 'none' : 'auto' }}>
             <Text style={[s.caption, { fontSize: 14 }]}>{people === 1 ? '1 person' : `${people} people`}</Text>
             <Pressable
               ref={inviteToggle}

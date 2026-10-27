@@ -921,10 +921,18 @@ test('opens views at the top and restores context on returning or browsing histo
   await expect(heading(page, 'Gus')).toBeVisible();
   await expect.poll(position).toBeCloseTo(personPosition, 0);
   await button(page, 'Back to Scroll navigation').click();
+  await expect.poll(position).toBeCloseTo(groupPosition, 0);
+
+  // Scrolled, the people line has folded away with Invite people, out of reach; at the top it opens the link in place.
+  await expect(button(page, 'Invite people')).toHaveCount(0);
+  await scroller.evaluate((node) => { node.scrollTop = 0; });
+  await atTop();
   await button(page, 'Invite people').click();
   await expect(page.getByRole('region', { name: 'Invite people' })).toBeVisible();
-  await expect.poll(position).toBeCloseTo(groupPosition, 0);
+  await expect.poll(position).toBe(0);
   await button(page, 'Invite people').click();
+  await expect(page.getByRole('region', { name: 'Invite people' })).toHaveCount(0);
+  await scroller.evaluate((node, top) => { node.scrollTop = top; }, groupPosition);
   await expect.poll(position).toBeCloseTo(groupPosition, 0);
 
   await bell(page).click();

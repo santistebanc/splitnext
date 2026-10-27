@@ -235,8 +235,9 @@ shrink as the split scrolls under them. The amount accepts digits and a
 decimal dot or comma, displaying a dot and two fixed decimal places after each
 keystroke. Keep the caret usable for insertion, replacement, and deletion.
 Reject ambiguous or over-precise pasted amounts. Paid by opens the names in
-place as a list of radio rows, with a "you" badge beside the preferred member
-whether or not they are the selected payer. Then the split: its caption (28.20
+place, each drawn like its row in the balances: full width, tinted when it is
+you, with the presence marker, the name and "you", and a check on the one who
+paid. Then the split: its caption (28.20
 each for an equal split, or 5 people for a custom one), a bar of each person's
 share in their colour, and one row per person,
 their colour, the name with "you", − and + side by side for their shares,
