@@ -224,9 +224,9 @@ test('shows balance summaries offline and keeps people who still owe or are owed
   await button(page, 'Open Summaries').click();
   await person(page, 'Ana').click();
 
-  // Ana still has balances, so she cannot be hidden until settled.
-  await expect(button(page, 'Hide Ana')).toHaveCount(0);
-  await expect(page.getByText('Settle up first to hide yourself.', { exact: true })).toBeVisible();
+  // Expenses name Ana, so her details offer no Remove and no explanation.
+  await expect(button(page, 'Remove Ana')).toHaveCount(0);
+  await expect(page.getByText(/^Settle up first/)).toHaveCount(0);
   await button(page, 'Back to Summaries').click();
 });
 
@@ -284,10 +284,10 @@ test('records, changes, and removes an expense with plain-number balances', asyn
   await button(page, 'Save').click();
   await expect(button(page, 'Change Dinner · 40.00')).toBeVisible();
 
-  // Ben owes, so he stays until settled.
+  // An expense names Ben, so he cannot be removed.
   await person(page, 'Ben').click();
-  await expect(button(page, 'Hide Ben')).toHaveCount(0);
-  await expect(page.getByText('Settle up first to hide Ben.', { exact: true })).toBeVisible();
+  await expect(button(page, 'Remove Ben')).toHaveCount(0);
+  await expect(page.getByText(/^Settle up first/)).toHaveCount(0);
   await button(page, 'Back to Trip').click();
 
   // Deleting happens from the expense's own screen, which returns to the group.
@@ -298,11 +298,11 @@ test('records, changes, and removes an expense with plain-number balances', asyn
   expect(await addButton.boundingBox()).toEqual(addPosition);
   await expect(button(page, 'Ana (you), no expenses yet. Show details')).toBeVisible();
 
-  // Settled again, Ben can go; the removed expense still names him, so he is hidden for history.
+  // Settled again, Ben still stays: the removed expense names him, and only
+  // someone no expense or repayment names can be removed.
   await person(page, 'Ben').click();
-  await button(page, 'Hide Ben').click();
-  await expect(page.getByTestId('toast')).toHaveText('Ben hidden.');
-  await expect(person(page, 'Ben')).toHaveCount(0);
+  await expect(button(page, 'Remove Ben')).toHaveCount(0);
+  await expect(button(page, 'Hide Ben')).toHaveCount(0);
 });
 
 test('keeps the expense amount formatted while typing and accepts dots or commas', async ({ page }) => {
@@ -545,15 +545,9 @@ test('explains a balance and settles it with the fewest payments', async ({ page
   await expect(page.getByText('Settled', { exact: true })).toBeVisible();
   await expect(page.getByText('0.00', { exact: true })).toHaveCount(2);
 
-  // Settled people with expenses are hidden, not removed, and can come back.
-  await button(page, 'Hide Ben').click();
-  await expect(page.getByTestId('toast')).toHaveText('Ben hidden.');
-  await expect(person(page, 'Ben')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toHaveCount(0);
-  await bell(page).click();
-  await button(page, 'Restore member').click();
-  await button(page, 'Back to Settle').click();
-  await expect(person(page, 'Ben')).toBeVisible();
+  // Settled people whose expenses name them stay, without Remove.
+  await expect(button(page, 'Remove Ben')).toHaveCount(0);
+  await expect(button(page, 'Hide Ben')).toHaveCount(0);
 });
 
 test('opens who paid in place and keeps the choice', async ({ page }) => {

@@ -101,13 +101,12 @@ another device already has the name taken, an inline warning says so
 afterward. Below the name: their presence, then their balance as a large
 figure over its bar, labelled Owes, Gets back, Settled for a numeric zero, or
 No expenses yet when no current expense or repayment names them. Settle up is
-pinned at the foot while they are in a payment of the group's plan. Only
-someone with a zero balance can be taken out; until then the details say
-Settle up first. The outlined action is called Hide when any expense or
-repayment has named them, removed ones included, since they are kept for
-history, and Remove otherwise. Either is immediate, without a confirmation,
-including the current you member. A toast names the person, hidden or removed,
-without Undo, and Activity can restore them later. A hidden member who has a
+pinned at the foot while they are in a payment of the group's plan. The
+outlined Remove appears only while no expense or repayment has named them,
+removed ones included; otherwise the details offer no way to take them out
+and say nothing about it. Remove is immediate, without a confirmation,
+including the current you member. A toast names the person, without Undo, and
+Activity can restore them later. A hidden member who has a
 balance again, such as from an offline change, stays in the balances marked
 removed, with Restore in their details. Below, the details list every current
 expense and repayment behind the balance, one row each, newest first, and end
@@ -422,9 +421,9 @@ operations remain available without opening an editor, including offline.
   ordinal is never part of the name and disappears once the name is unique.
 - Any participant may add or rename a member.
 - Removing a member hides it when any expense names it, removed expenses
-  included, and deletes it otherwise (ADR 0018). The app offers it only once
-  the member's balance is zero in every currency, calling it Hide or Remove
-  accordingly. Both are kept in the group:
+  included, and deletes it otherwise (ADR 0018). The app offers only Remove,
+  for a member no expense or repayment names; it does not offer hiding.
+  Hidden and deleted members are both kept in the group:
   historical references remain valid, and neither is offered for new activity.
   A hidden member still appears in a currency's balances while it is not zero.
 - An expense that arrives after its member was removed still applies; a
