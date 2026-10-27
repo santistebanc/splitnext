@@ -786,6 +786,85 @@ test('opens details as pages with Back, browser history, and keyboard focus', as
   await expect(heading(page, 'Trip')).toBeVisible();
 });
 
+test('opens views at the top and restores context on returning or browsing history', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 640 });
+  await createGroup(page, 'Scroll navigation', 'Ana');
+
+  for (const name of ['Ben', 'Cy', 'Dana', 'Eli', 'Fran', 'Gus']) await addMember(page, name);
+
+  for (let index = 0; index < 8; index++) await addExpense(page, `Thing ${index}`, '70');
+
+  const scroller = page.locator('#splitnext-page');
+  const position = () => scroller.evaluate((node) => node.scrollTop);
+  const atTop = async () => { await expect.poll(position).toBe(0); };
+
+  await scroller.evaluate((node) => { node.scrollTop = 160; });
+  await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '22px');
+  const groupPosition = await position();
+
+  await person(page, 'Gus').click();
+  await atTop();
+  await expect(heading(page, 'Gus')).toHaveCSS('font-size', '42px');
+  await scroller.evaluate((node) => { node.scrollTop = 150; });
+  await expect(heading(page, 'Gus')).toHaveCSS('font-size', '22px');
+  await button(page, 'Back to Scroll navigation').click();
+  await expect.poll(position).toBeCloseTo(groupPosition, 0);
+
+  // A fresh opening starts at the top even if this person was scrolled before.
+  await person(page, 'Gus').click();
+  await atTop();
+  await scroller.evaluate((node) => { node.scrollTop = 120; });
+  await expect(heading(page, 'Gus')).toHaveCSS('font-size', '22px');
+  const personPosition = await position();
+
+  await page.goBack();
+  await expect(heading(page, 'Scroll navigation')).toBeVisible();
+  await expect.poll(position).toBeCloseTo(groupPosition, 0);
+  await page.goForward();
+  await expect(heading(page, 'Gus')).toBeVisible();
+  await expect.poll(position).toBeCloseTo(personPosition, 0);
+  await button(page, 'Back to Scroll navigation').click();
+  await button(page, 'Invite people').click();
+  await expect(page.getByRole('region', { name: 'Invite people' })).toBeVisible();
+  await expect.poll(position).toBeCloseTo(groupPosition, 0);
+  await button(page, 'Invite people').click();
+  await expect.poll(position).toBeCloseTo(groupPosition, 0);
+
+  await bell(page).click();
+  await atTop();
+  await scroller.evaluate((node) => { node.scrollTop = 200; });
+  await expect(heading(page, 'Activity')).toHaveCSS('font-size', '22px');
+  await button(page, 'Back to Scroll navigation').click();
+  await bell(page).click();
+  await atTop();
+  await button(page, 'Back to Scroll navigation').click();
+
+  // Each new draft and each recorded expense opens with its amount in view.
+  await button(page, 'Add expense').click();
+  await atTop();
+  await field(page, 'Amount').evaluate((input) => input.blur());
+  await scroller.evaluate((node) => { node.scrollTop = 250; });
+  await expect(field(page, 'Amount')).toHaveCSS('height', '36px');
+  await button(page, 'Cancel').click();
+  await button(page, 'Add expense').click();
+  await atTop();
+  await expect(field(page, 'Amount')).toHaveCSS('height', '60px');
+  await button(page, 'Cancel').click();
+  await button(page, 'Change Thing 7 · 70.00').click();
+  await atTop();
+  await scroller.evaluate((node) => { node.scrollTop = 250; });
+  await expect(field(page, 'Amount')).toHaveCSS('height', '36px');
+  await button(page, 'Cancel').click();
+  await button(page, 'Change Thing 6 · 70.00').click();
+  await atTop();
+  await expect(field(page, 'Amount')).toHaveCSS('height', '60px');
+  await field(page, 'Amount').fill('75');
+  await button(page, 'Save').click();
+  await expect(heading(page, 'Scroll navigation')).toBeVisible();
+  await expect.poll(position).toBeGreaterThan(0);
+  await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '22px');
+});
+
 test('joins from a second device and shows changes on both through realtime', async ({ page, browser }) => {
   await createGroup(page, 'Trip', 'Ana');
   const link = await inviteLink(page);

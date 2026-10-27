@@ -113,9 +113,12 @@ form (`settlements`) filled in with the first planned payment.
 `AppUiState.trail` records the views a page was opened from, so Back, Cancel,
 and saving return there, and history restores the trail with the view and the
 person. Leaving a group is asked in place on its row in the groups list, then
-opens the group and leaves it confirmed. Removing a member sets
-`AppUiState.removal`, which `RemovalToast` shows without an Undo action until it
-is dismissed or times out. `GroupSettings` stays in the catalog as `settings`
+opens the group and leaves it confirmed. `Frame` starts fresh screen openings
+at the top, restoring saved positions when navigation depth decreases or
+browser history is restored. The compact header jumps to the arriving screen's
+position before the transition; in-place panels keep the same scroll key.
+Removing a member sets `AppUiState.removal`, which `RemovalToast` shows without
+an Undo action until it is dismissed or times out. `GroupSettings` stays in the catalog as `settings`
 without an entry point on screen. Appearance assets are served locally and
 precached; their contents contribute to the service worker's release cache
 key.

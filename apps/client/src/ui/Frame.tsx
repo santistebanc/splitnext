@@ -14,8 +14,12 @@ const scrollStyle = Platform.OS === 'web' ? { ...s.page, overflowAnchor: 'none' 
 
 type FrameProps = {
   children: ReactNode;
-  /** Independent scroll positions for sibling views, such as the group screen and a person. */
+  /** The screen whose position is saved when leaving it. */
   scrollKey?: string;
+  /** Returning to a shallower screen restores its saved position. */
+  navigationDepth?: number;
+  /** Browser Back/Forward restores position in either direction. */
+  restoreScroll?: boolean;
   /** A fixed screen header above the scrolling content. */
   header?: ReactNode;
   /** App-wide connection status, fixed above every screen's header. */
@@ -55,6 +59,8 @@ export function Frame(props: FrameProps) {
   }, [control]);
   const positions = useRef(new Map<string, number>());
   const scrollKey = props.scrollKey ?? 'page';
+  const depth = props.navigationDepth ?? 0;
+  const previousDepth = useRef(depth);
   const headerSize = useRef({ key: scrollKey, full: 0, current: 0 });
   const scrolled = useRef(0);
   const homepage = usePathname() === '/';
@@ -64,9 +70,14 @@ export function Frame(props: FrameProps) {
   // left behind, are neither a person scrolling nor this screen's position.
   const restoring = useRef(false);
 
+  // Only a change of screen applies this policy; in-place panels and edits
+  // keep their position even if they update browser history.
   useLayoutEffect(() => {
-    const restored = positions.current.get(scrollKey) ?? 0;
+    const returning = props.restoreScroll || depth < previousDepth.current;
+    const restored = returning ? positions.current.get(scrollKey) ?? 0 : 0;
 
+    previousDepth.current = depth;
+    positions.current.set(scrollKey, restored);
     restoring.current = true;
     scrolled.current = restored;
     scroll.current?.scrollTo({ y: restored, animated: false });

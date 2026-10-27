@@ -258,6 +258,11 @@ new, and Undo or, for removals, Restore where safe.
 Details, Settle up, forms and Activity are pages with Back to where they were
 opened. Every screen, and the invite link opened in place, is in browser
 Back/Forward history, and repayment drafts survive screen changes.
+Opening a view afresh starts at the top with its header expanded, including
+reopening a member, Activity, or a new or recorded expense. Back, Cancel, and
+saving restore the position in the view they return to. Browser Back/Forward
+restores the visited view's position in either direction. Opening or closing
+an in-place panel, such as the invite link, keeps the current scroll position.
 
 ### Group summaries
 
