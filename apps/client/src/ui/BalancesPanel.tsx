@@ -5,8 +5,7 @@ import { hasRecords } from '../model/breakdown';
 import { balanceRows, currentExpenses, memberName, moneyLabel } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
 import { createValueStore } from './pageScroll';
-import { ErrorMessage, colors, headerGap, s } from './components';
-import { SectionHeading, listRow, rowCaption, signedMoney } from './ExpenseList';
+import { ErrorMessage, SectionHeading, balanceColor, colors, headerGap, s, signedMoney } from './components';
 import { AddPersonRow, MemberIcon, type MemberListApp, type Replica } from './MemberList';
 import { AnimatedHeight, usePrefersReducedMotion } from './AnimatedHeight';
 import { PlusIcon } from './icons';
@@ -532,17 +531,17 @@ function PersonRow(props: {
         accessibilityLabel={`${name}${props.you ? ' (you)' : ''}${props.removed ? ', removed' : ''}, ${amounts.join(', ') || (props.recorded ? 'settled' : 'no expenses yet')}. Show details`}
         disabled={props.hidden || !open.can('showPerson', { memberId: props.memberId })}
         onPress={() => { void open.call('showPerson', { memberId: props.memberId }); }}
-        style={({ pressed }) => [listRow, { minHeight: 44 }, pressed && { backgroundColor: colors.background }]}
+        style={({ pressed }) => [s.listRow, { minHeight: 44 }, pressed && { backgroundColor: colors.background }]}
       >
         <MemberIcon participants={participants} />
         <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Text numberOfLines={1} style={[s.name, { flexShrink: 1 }]}>{name}</Text>
           {props.you ? <YouBadge /> : null}
-          {props.removed ? <Text style={rowCaption}>removed</Text> : null}
+          {props.removed ? <Text style={s.rowCaption}>removed</Text> : null}
         </View>
         <View style={{ alignItems: 'flex-end', gap: 1 }}>
           {props.balances.map((entry) => (
-            <Text key={entry.currency} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} style={{ fontFamily: monoFamily, fontWeight: '600', fontSize: 16, color: entry.amount > 0 ? colors.owed : entry.amount < 0 ? colors.owes : colors.settled }}>
+            <Text key={entry.currency} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} style={{ fontFamily: monoFamily, fontWeight: '600', fontSize: 16, color: balanceColor(entry.amount) }}>
               {signedMoney(entry.amount, entry.currency)}
             </Text>
           ))}

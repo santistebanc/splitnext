@@ -11,6 +11,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { formatAmount } from '@splitnext/client';
 import { between, useCompactProgress } from './pageScroll';
 import { AlertIcon, BackIcon, WarningIcon } from './icons';
 import { colors, displayFamily, fontFamily, monoFamily } from './theme';
@@ -168,6 +169,31 @@ export function RadioRow(props: { label: string; selected: boolean; onPress: () 
       {props.children}
     </Pressable>
   );
+}
+
+/** A section's title, such as Balances or a currency, with an optional action at its end. */
+export function SectionHeading(props: { title: string; end?: ReactNode; onPress?: (() => void) | undefined }) {
+  return (
+    <View style={s.sectionHeading}>
+      <Text accessibilityRole="header" onPress={props.onPress} style={s.sectionTitle}>{props.title}</Text>
+      {props.end}
+    </View>
+  );
+}
+
+/** An amount with its direction, such as "+12.50 EUR" or "−12.50 EUR". */
+export function signedMoney(amount: number, currency: string): string {
+  return `${signedFigure(amount, currency)} ${currency}`;
+}
+
+/** A balance figure without its currency, such as "+12.50", "−12.50", or "0.00". */
+export function signedFigure(amount: number, currency: string): string {
+  return `${amount > 0 ? '+' : amount < 0 ? '−' : ''}${formatAmount(Math.abs(amount), currency)}`;
+}
+
+/** A balance's color: blue when money comes back, orange when owed, green when settled. */
+export function balanceColor(amount: number): string {
+  return amount > 0 ? colors.owed : amount < 0 ? colors.owes : colors.settled;
 }
 
 /** A page title matching the size used in screen headers and drawers. */
@@ -515,6 +541,12 @@ export const s = StyleSheet.create({
   },
   wide: { maxWidth: 1040 },
   eyebrow: caps,
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', minHeight: 28, paddingTop: 2, paddingBottom: 4, paddingHorizontal: 4 },
+  sectionTitle: { flex: 1, fontFamily, fontSize: 15, fontWeight: '600', color: colors.ink },
+  /** One row of a card of rows: compact, so more of the page fits on screen. */
+  listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingVertical: 6, paddingHorizontal: 16 },
+  /** A row's second line, smaller than a caption elsewhere. */
+  rowCaption: { color: colors.muted, fontFamily, fontSize: 12, lineHeight: 16 },
   subtitle: { color: colors.muted, fontFamily, fontSize: 15, lineHeight: 22 },
   heading: viewTitle,
   body: { color: colors.ink, fontFamily, fontSize: 15, lineHeight: 22 },

@@ -4,30 +4,13 @@ import { memberHasRecords, memberSettlements, participantsForMember, preferredMe
 import { memberBreakdown } from '../model/breakdown';
 import { balanceRows, memberName } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
-import { BackButton, ErrorMessage, ScreenHeader, colors, s } from './components';
-import { repaymentTitle, signedFigure, signedMoney } from './ExpenseList';
+import { BackHeader } from './BackHeader';
+import { ErrorMessage, balanceColor, colors, s, signedFigure, signedMoney } from './components';
+import { repaymentTitle } from './ExpenseList';
 import { ChevronRightIcon, PencilIcon, PersonIcon, TrashIcon, UndoIcon, WarningIcon } from './icons';
 import { MemberIcon, MemberNameInput, presenceText, type MemberListApp } from './MemberList';
 import { fontFamily, monoFamily } from './theme';
 import { useActionCall, useUiState } from './useActionCall';
-
-/** A details screen's header: back to where it was opened from, which is named quietly above the title. */
-export function BackHeader(props: { title: string; heading?: ReactNode; context: string; end?: ReactNode; error?: string | null }) {
-  const back = useActionCall();
-
-  return (
-    <View>
-      <ScreenHeader
-        start={<BackButton label={`Back to ${props.context}`} disabled={!back.can('closePanel')} onPress={() => { void back.call('closePanel', {}); }} />}
-        context={props.context}
-        title={props.title}
-        heading={props.heading}
-        end={props.end}
-      />
-      <ErrorMessage message={back.error ?? props.error ?? null} />
-    </View>
-  );
-}
 
 /** The person details header: back to the group, the group named quietly above the person's name, which Rename edits in place. */
 export function PersonHeader(props: { app: MemberListApp }) {
@@ -70,7 +53,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
 }
 
 function money(amount: number) {
-  return { fontFamily: monoFamily, fontWeight: '600', color: amount > 0 ? colors.owed : amount < 0 ? colors.owes : colors.settled } as const;
+  return { fontFamily: monoFamily, fontWeight: '600', color: balanceColor(amount) } as const;
 }
 
 /** One of the three actions under Settle up. */

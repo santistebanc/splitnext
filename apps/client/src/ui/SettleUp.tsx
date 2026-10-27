@@ -1,11 +1,11 @@
 import { Pressable, Text, View } from 'react-native';
 import { formatAmount, memberSettlements, preferredMember, repaymentMembers, settlementSuggestions } from '@splitnext/client';
 import { memberName, moneyLabel } from '../model/expenses';
+import { BackHeader } from './BackHeader';
 import { ErrorMessage, colors, s } from './components';
 import { useRepaymentForm } from './ExpenseList';
 import { ArrowRightIcon, CheckIcon } from './icons';
 import type { MemberListApp } from './MemberList';
-import { BackHeader } from './PersonView';
 import { fontFamily, monoFamily } from './theme';
 import { useUiState } from './useActionCall';
 
