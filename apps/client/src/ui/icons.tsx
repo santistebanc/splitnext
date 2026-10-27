@@ -157,6 +157,18 @@ export function ShareIcon(props: IconProps) {
   );
 }
 
+/** Two arrows chasing each other round: make a new one in place of this. */
+export function RefreshIcon(props: IconProps) {
+  return (
+    <Outline strokeWidth={2} {...props} fallback={16}>
+      <Path d="M20 11a8 8 0 0 0-14.3-4.9L4 8" />
+      <Path d="M4 3v5h5" />
+      <Path d="M4 13a8 8 0 0 0 14.3 4.9L20 16" />
+      <Path d="M20 21v-5h-5" />
+    </Outline>
+  );
+}
+
 export function WifiIcon(props: IconProps & { off?: boolean }) {
   return (
     <Outline {...props} fallback={20}>

@@ -676,8 +676,19 @@ test('renames the group in place, copies the invite link, and replaces it after 
   const panel = page.getByRole('region', { name: 'Invite people' });
   const before = (await panel.getByTestId('invite-link').textContent()) ?? '';
 
-  await panel.getByRole('button', { name: 'Copy link', exact: true }).click();
+  // One row: the link, with Replace as an icon at its right; there is no Copy link button.
+  const linkBox = (await panel.getByTestId('invite-link').boundingBox())!;
+  const replaceBox = (await panel.getByRole('button', { name: 'Replace link', exact: true }).boundingBox())!;
+
+  expect(replaceBox.x).toBeGreaterThan(linkBox.x + linkBox.width);
+  expect(Math.abs(replaceBox.y + replaceBox.height / 2 - (linkBox.y + linkBox.height / 2))).toBeLessThanOrEqual(2);
+  expect(replaceBox.width).toBeLessThanOrEqual(44);
+  await expect(panel.getByText('Copy link', { exact: true })).toHaveCount(0);
+
+  // Tapping the link itself highlights and copies it.
+  await panel.getByTestId('invite-link').click();
   await expect(panel.getByRole('button', { name: 'Link copied', exact: true })).toBeVisible();
+  await expect(panel.getByText('✓ Copied', { exact: true })).toBeVisible();
   // The panel shows the link without its scheme; the copy keeps it, so it opens when tapped.
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`http://${before}`);
   expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(before);
