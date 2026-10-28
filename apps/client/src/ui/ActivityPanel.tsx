@@ -4,7 +4,7 @@ import { reversibleEffect, undoProblem, undoExplanation, type ClientReplicaState
 import { describeActivity, newActivity, visibleActivity } from '../model/activity';
 import { reviewDetail, reviewTitle } from '../model/notices';
 import { BackHeader } from './BackHeader';
-import { EmptyState, ErrorMessage, HeaderAction, Notice, SectionHeading, Tag, colors, s } from './components';
+import { EmptyState, ErrorMessage, Notice, SectionHeading, Tag, colors, s } from './components';
 import { InfoIcon } from './icons';
 import type { MemberListApp } from './MemberList';
 import { StickyTop } from './StickyTop';
@@ -14,9 +14,8 @@ import { useActionCall, useUiState } from './useActionCall';
 
 type Event = ClientReplicaState['activity'][number];
 
-/** Activity's header: back to the group, the title, and Mark all seen while anything is new. */
+/** Activity's header: back to the group and the title. */
 export function ActivityHeader(props: { app: MemberListApp }) {
-  const seen = useActionCall();
   const name = props.app.snapshot().group?.projected_snapshot?.group.name ?? '';
 
   return (
@@ -25,10 +24,6 @@ export function ActivityHeader(props: { app: MemberListApp }) {
       title="Activity"
       morph="activity"
       scrollRule={false}
-      error={seen.error}
-      end={seen.can('markActivitySeen') ? (
-        <HeaderAction text="Mark all seen" label="Mark all seen" onPress={() => { void seen.call('markActivitySeen', {}); }} />
-      ) : undefined}
     />
   );
 }
@@ -127,11 +122,18 @@ function NeedsReview(props: { replica: ClientReplicaState }) {
 export function ActivityPanel(props: { replica: ClientReplicaState }) {
   const action = useActionCall();
   const load = useActionCall();
+  const markSeen = useActionCall();
+  // Visiting Activity sees everything in it, but what was new on arrival keeps
+  // its new tag for the visit; so does whatever arrives while it is open.
   const seen = useUiState().activitySeen[props.replica.group_id];
+  const [seenOnArrival] = useState(seen);
   const snapshot = props.replica.projected_snapshot;
   const events = visibleActivity(props.replica.activity).toReversed();
-  const fresh = new Set(newActivity(props.replica, seen).map((event) => event.id));
+  const fresh = new Set(newActivity(props.replica, seenOnArrival).map((event) => event.id));
   useEffect(() => { void load.call('refreshActivity', {}); }, [props.replica.group_id, props.replica.revision]);
+  useEffect(() => {
+    if (markSeen.can('markActivitySeen')) void markSeen.call('markActivitySeen', {});
+  }, [props.replica.group_id, props.replica.activity.length]);
 
   const days: { label: string; events: Event[] }[] = [];
 

@@ -362,8 +362,9 @@ changes waiting for review. Compare identities, not preferred-member names, when
 leaving out this installation's own actions. The first time a group's Activity
 loads on an installation, everything already there counts as seen.
 
-Opening Activity marks new entries in orange with a new tag; Mark all seen clears
-them and the count. Seen positions are kept per group on the installation.
+Opening Activity marks new entries in orange with a new tag and counts them
+all as seen, clearing the count; the tags stay for that visit, and entries
+arriving while it is open are seen too. Seen positions are kept per group on the installation.
 Pending, offline, failed-sync and review feedback stay independently visible.
 Background push is deferred to native releases.
 

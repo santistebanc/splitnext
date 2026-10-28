@@ -1590,13 +1590,17 @@ test('counts changes from others on the bell without pop-ups and marks them seen
   await expect(page.getByTestId('toast')).toHaveCount(0);
   await expect(bell(visitor)).toHaveAccessibleName('Activity, no new updates');
 
+  // Visiting Activity sees it all: what was new keeps its tag for the visit,
+  // and is no longer new on returning.
   await bell(page).click();
   await expect(page.getByText('new', { exact: true })).toHaveCount(2);
-  await button(page, 'Mark all seen').click();
-  await expect(page.getByText('new', { exact: true })).toHaveCount(0);
   await expect(button(page, 'Mark all seen')).toHaveCount(0);
   await button(page, 'Back to Shared').click();
   await expect(bell(page)).toHaveAccessibleName('Activity, no new updates');
+  await bell(page).click();
+  await expect(heading(page, 'Activity')).toBeVisible();
+  await expect(page.getByText('new', { exact: true })).toHaveCount(0);
+  await button(page, 'Back to Shared').click();
   await visitorContext.close();
 });
 
