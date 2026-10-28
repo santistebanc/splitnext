@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import { undoProblem, undoExplanation, memberHasRecords, repaymentMembers, allocate, currencyCodeSchema, expenseDescriptionSchema, groupNameSchema, memberLabel, memberNameSchema, nameOrdinals, parseAmount, requiresServerDecision } from '@splitnext/client';
+import { inverseIntent, undoProblem, undoExplanation, memberHasRecords, repaymentMembers, allocate, currencyCodeSchema, expenseDescriptionSchema, groupNameSchema, memberLabel, memberNameSchema, nameOrdinals, parseAmount, requiresServerDecision } from '@splitnext/client';
 import { balanceRows, entryFromDraft, equalParts, noCurrency } from '../expenses';
 import { requireSettlement, unavailable, editorLock, defineAction, openSnapshot, requireExpense, requireExpenseEntry, expenseResource, requireMember, requireRemovedMember, requireNotice, requireName, memberResource, noticeResources, empty, choice, suggested } from './define';
 
 /** Changes to the shared ledger; they can queue offline. */
 export const ledgerActions = {
   undoChange: defineAction({
-    group: 'Ledger changes', description: 'Safely reverse a recorded action, without overwriting later changes.', input: z.object({ eventId: choice('activity', 'The Activity action to undo.') }), example: { eventId: 'event-1' }, requires: ['openGroup'],
+    group: 'Ledger changes', description: 'Reverse a recorded action with the ordinary opposite action, such as removing what it added or renaming back, without overwriting later changes.', input: z.object({ eventId: choice('activity', 'The Activity action to undo.') }), example: { eventId: 'event-1' }, requires: ['openGroup'],
     unavailable: ({ state }, input) => {
       const snapshot = openSnapshot(state);
       const event = state.group?.activity.find((entry) => input ? entry.id === input.eventId : snapshot && !undoProblem(snapshot, entry));
@@ -16,7 +16,14 @@ export const ledgerActions = {
 
       return problem ? unavailable(problem, undoExplanation(problem)) : null;
     },
-    run: (host, input) => host.submit({ type: 'change.undo', payload: { event_id: input.eventId } }),
+    run: (host, input) => {
+      const event = host.snapshot().group?.activity.find((entry) => entry.id === input.eventId);
+      const intent = event ? inverseIntent(event) : null;
+
+      if (!intent) throw new Error('undo_not_supported');
+
+      return host.submit(intent);
+    },
   }),
   saveRepayment: defineAction({
     workflow: 'draft', group: 'Ledger changes', description: 'Save the repayment at the version opened for editing.', input: empty, example: {}, requires: ['openGroup'],

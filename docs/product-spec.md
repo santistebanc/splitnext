@@ -338,7 +338,9 @@ replacement. Presence and preferred-member selections do not appear in the
 feed. Existing append-only audit attribution remains authoritative.
 
 Any participant may undo another participant's reversible action, without a
-time limit, while it remains safe. Expenses, repayments, group renames, and
+time limit, while it remains safe. Undo is the ordinary opposite action, such
+as removing an added expense or renaming back, and Activity shows it as that
+action; undoing it again is Undo or Restore on that newer entry. Expenses, repayments, group renames, and
 member additions, renames, removals, and restorations have safe Undo in
 Activity; a removed member, like a removed expense, shows Restore there.
 Undoing a member's addition is blocked once expenses or repayments name them.

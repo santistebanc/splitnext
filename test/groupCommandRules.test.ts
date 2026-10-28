@@ -1,6 +1,7 @@
 import { auditEventSchema } from '../src/domain/audit';
 import { describe, expect, it } from 'vitest';
-import { applyGroupCommand, type CommandServerState, type GroupCommand } from '../src/domain/commands';
+import { applyGroupCommand, commandFromIntent, type CommandServerState, type GroupCommand } from '../src/domain/commands';
+import { inverseIntent } from '../src/domain/reversals';
 import type { Expense } from '../src/domain/expenses';
 import type { LedgerMember } from '../src/domain/members';
 import type { GroupSnapshot } from '../src/domain/sync';
@@ -332,4 +333,58 @@ it('rejects duplicate repayment identifiers and invalid edited member references
     expect(edited.status).toBe('rejected');
     expect(edited.reason).toBe(reason);
   }
+});
+
+describe('Undo as the ordinary opposite command', () => {
+  /** Applies a command, then the opposite command its Activity entry undoes with. */
+  function undoWith(start: GroupSnapshot, command: GroupCommand, target: import('../src/domain/audit').AuditEvent['target'], label: string) {
+    const applied = applyGroupCommand(start, me, command, later);
+
+    expect(applied.status).toBe('applied');
+    const event = reversibleEvent(applied.audit, target, label);
+    const intent = inverseIntent(event);
+
+    expect(intent).not.toBeNull();
+
+    return { applied, intent, undone: applyGroupCommand(applied.snapshot, other, commandFromIntent(intent!, applied.snapshot, () => id(`${label}-undo`)), later) };
+  }
+
+  it.each([
+    { label: 'group rename', command: rename('Lisbon'), target: { kind: 'group', id: snapshot.group.id } as const, type: 'group.rename', check: (next: GroupSnapshot) => expect(next.group.name).toBe('Trip') },
+    { label: 'member addition', command: create(id('new-person'), 'New person'), target: { kind: 'member', id: id('new-person') } as const, type: 'member.remove', check: (next: GroupSnapshot) => expect(next.members.find((entry) => entry.id === id('new-person'))?.status).toBe('deleted') },
+    { label: 'member rename', command: renameMember(cy, 'Cynthia', 'Cy'), target: { kind: 'member', id: cy } as const, type: 'member.rename', check: (next: GroupSnapshot) => expect(next.members.find((entry) => entry.id === cy)?.display_name).toBe('Cy') },
+    { label: 'member removal', command: remove(cy), target: { kind: 'member', id: cy } as const, type: 'member.restore', check: (next: GroupSnapshot) => expect(next.members.find((entry) => entry.id === cy)?.status).toBe('active') },
+    { label: 'member restoration', command: restore(old), target: { kind: 'member', id: old } as const, type: 'member.remove', check: (next: GroupSnapshot) => expect(next.members.find((entry) => entry.id === old)?.status).not.toBe('active') },
+    { label: 'expense removal', command: removeExpense(dinner), target: { kind: 'expense', id: dinner } as const, type: 'expense.restore', check: (next: GroupSnapshot) => expect(next.expenses.find((entry) => entry.id === dinner)?.status).toBe('active') },
+  ])('undoes a $label with $type', ({ label, command, target, type, check }) => {
+    const { intent, undone } = undoWith(snapshot, command, target, label.replace(' ', '-'));
+
+    expect(intent?.type).toBe(type);
+    expect(undone.status).toBe('applied');
+    check(undone.snapshot);
+  });
+
+  it('edits an expense back to what it was, at the version the edit left', () => {
+    const intent = inverseIntent(editedEvent);
+
+    expect(intent).toMatchObject({ type: 'expense.edit', payload: { expense_id: dinner, expected_version: 2, total: 600 } });
+    const undone = applyGroupCommand(snapshot, other, commandFromIntent(intent!, snapshot, () => id('edit-undo')), later);
+
+    expect(undone.status).toBe('applied');
+    expect(undone.snapshot.expenses[0]).toMatchObject({ total: 600, version: 3 });
+
+    // A later change to the expense makes the same undo fail instead of overwriting it.
+    const changed = { ...snapshot, expenses: [{ ...snapshot.expenses[0]!, total: 900, version: 3 }] };
+
+    expect(applyGroupCommand(changed, other, commandFromIntent(intent!, snapshot, () => id('edit-undo')), later).status).toBe('superseded');
+  });
+
+  it('refuses to rename back once the name has changed again', () => {
+    const { intent } = undoWith(snapshot, renameMember(cy, 'Cynthia', 'Cy'), { kind: 'member', id: cy }, 'stale-rename');
+    const renamedAgain = { ...snapshot, members: snapshot.members.map((entry) => entry.id === cy ? { ...entry, display_name: 'Cyn' } : entry) };
+    const result = applyGroupCommand(renamedAgain, other, commandFromIntent(intent!, snapshot, () => id('stale-undo')), later);
+
+    expect(result.status).not.toBe('applied');
+    expect(result.snapshot.members.find((entry) => entry.id === cy)?.display_name).toBe('Cyn');
+  });
 });
