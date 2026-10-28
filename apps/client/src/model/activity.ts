@@ -23,9 +23,42 @@ export function newActivity(replica: ClientReplicaState | null, seen: number | u
   return visibleActivity(replica.activity).filter((event) => event.sequence > seen && event.actor_identity_id !== identity);
 }
 
-/** The bell's count: new changes from others plus this device's changes waiting for review. */
+/** Whether an expense edit changes what anyone owes: its amount, who paid, or how it is split. */
+function changesShares(before: Expense, after: Expense): boolean {
+  return before.total !== after.total
+    || before.currency !== after.currency
+    || JSON.stringify(before.paid) !== JSON.stringify(after.paid)
+    || JSON.stringify(before.parts) !== JSON.stringify(after.parts)
+    || JSON.stringify(before.allocations) !== JSON.stringify(after.allocations)
+    || JSON.stringify(before.extras) !== JSON.stringify(after.extras);
+}
+
+/** Whether a change moves balances: expenses and repayments, but not an expense's description alone. */
+export function affectsBalances(event: AuditEvent): boolean {
+  const change = event.change;
+
+  switch (change.action) {
+    case 'expense.recorded':
+    case 'expense.removed':
+    case 'expense.restored':
+    case 'settlement.recorded':
+    case 'settlement.edited':
+    case 'settlement.removed':
+    case 'settlement.restored':
+      return true;
+    case 'expense.edited':
+      return changesShares(change.before, change.after.expense);
+    default:
+      return false;
+  }
+}
+
+/**
+ * The bell's count: new changes from others that move balances, plus this
+ * device's changes waiting for review. Activity still tags every new entry.
+ */
 export function attentionCount(replica: ClientReplicaState | null, seen: number | undefined) {
-  return { fresh: newActivity(replica, seen).length, review: replica?.notices.length ?? 0 };
+  return { fresh: newActivity(replica, seen).filter(affectsBalances).length, review: replica?.notices.length ?? 0 };
 }
 
 /**
