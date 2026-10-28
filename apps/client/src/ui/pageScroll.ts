@@ -114,3 +114,6 @@ export function useCompactProgress(): number {
 
   return useSyncExternalStore(progress.subscribe, progress.get, progress.get);
 }
+
+/** Return the current frame to its start from its title. */
+export const ScrollToTopContext = createContext<(() => void) | null>(null);

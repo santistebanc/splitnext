@@ -1526,6 +1526,7 @@ test('shrinks the large title as the page scrolls and grows it back at the top',
   await expect(title).toHaveCSS('font-size', '32px');
   await scroller.evaluate((node) => { node.scrollTop = 200; });
   await expect(title).toHaveCSS('font-size', '18px');
+  await expect(button(page, 'Rename group')).toHaveCount(0);
   await expect(button(page, 'Add expense')).toBeInViewport();
 
   // The page is the only scroll area.
@@ -1533,8 +1534,10 @@ test('shrinks the large title as the page scrolls and grows it back at the top',
     ['auto', 'scroll'].includes(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight ? [node.id || node.tagName] : []));
 
   expect(scrollAreas).toEqual(['splitnext-page']);
-  await scroller.evaluate((node) => { node.scrollTop = 0; });
+  await button(page, 'Scroll to top').click();
+  await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBe(0);
   await expect(title).toHaveCSS('font-size', '32px');
+  await expect(button(page, 'Rename group')).toBeVisible();
 });
 
 test('morphs between screens and leaves nothing behind', async ({ page }) => {
@@ -1773,4 +1776,17 @@ test('closes panels in place without the content returning at the end', async ({
   await page.waitForTimeout(600);
   await expect(page.getByRole('radio')).toHaveCount(2);
   await expect(page.getByRole('radio', { name: /^Ben/ })).toBeVisible();
+});
+
+
+test('keeps new group labels close to their textboxes', async ({ page }) => {
+  await page.goto('/app');
+  await button(page, /^(New group|Create a group)$/).click();
+
+  for (const label of ['Group name', 'Your name in this group']) {
+    const input = field(page, label);
+    const container = input.locator('..').locator('..');
+
+    await expect(container).toHaveCSS('row-gap', '2px');
+  }
 });

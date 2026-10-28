@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode, type Ref } from 'react';
+import { useContext, useRef, useState, type ReactNode, type Ref } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 
 import { moneyLabel } from '../model/expenses';
-import { between, useCompactProgress } from './pageScroll';
+import { between, ScrollToTopContext, useCompactProgress } from './pageScroll';
 import { AlertIcon, WarningIcon } from './icons';
 import { morph } from './ScreenMorph';
 import { colors, displayFamily, fontFamily, monoFamily, withTransition } from './theme';
@@ -81,6 +81,7 @@ export function Button(props: ButtonProps) {
 type FieldProps = TextInputProps & {
   label: string;
   hideLabel?: boolean;
+  labelGap?: number;
   hint?: string;
   trailing?: ReactNode;
   inputRef?: Ref<TextInput>;
@@ -90,10 +91,10 @@ type FieldProps = TextInputProps & {
 
 /** A bare field over an ink underline, as the prototype's forms use. */
 export function Field(props: FieldProps) {
-  const { label, hideLabel, hint, trailing, inputRef, figure, ...input } = props;
+  const { label, hideLabel, labelGap, hint, trailing, inputRef, figure, ...input } = props;
 
   return (
-    <View style={s.field}>
+    <View style={[s.field, labelGap !== undefined && { gap: labelGap }]}>
       {!hideLabel ? <Text style={s.label}>{label}</Text> : null}
       <View style={s.fieldRow}>
         <TextInput
@@ -243,6 +244,7 @@ export function PageTitle(props: { children: ReactNode }) {
  */
 export function ScreenHeader(props: { title?: string | undefined; heading?: ReactNode; context?: string | undefined; start?: ReactNode; end?: ReactNode; underRow?: ReactNode; below?: ReactNode; morph?: string | undefined; scrollRule?: boolean | undefined }) {
   const progress = useCompactProgress();
+  const scrollToTop = useContext(ScrollToTopContext);
 
   return (
     <View style={[s.screenHeader, { paddingTop: between(4, 0, progress), paddingBottom: between(12, 4, progress), boxShadow: props.scrollRule === false ? 'none' : `0 1px 0 rgba(20, 20, 19, ${(0.14 * progress).toFixed(3)})` }]}>
@@ -258,6 +260,9 @@ export function ScreenHeader(props: { title?: string | undefined; heading?: Reac
               {props.title}
             </Text>
           )}
+          {progress > 0.5 && scrollToTop ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={props.title ? `${props.title}. Scroll to top` : 'Scroll to top'} onPress={scrollToTop} style={s.backdrop} />
+          ) : null}
         </View>
       ) : null}
       {props.below}
