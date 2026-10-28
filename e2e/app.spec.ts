@@ -418,9 +418,20 @@ test('opens a rename where the name already is: full width, the same lines in th
     // The first line breaks where the title's did; the title ends its second line with an ellipsis.
     expect(after[0]).toBe(before[0]);
     expect(after[1]?.split('–')[0]).toBe(before[1]?.split('–')[0]);
+
+    // The whole name is selected, ready to be typed over.
+    await expect(input).toBeFocused();
+    expect(await input.evaluate((node: HTMLTextAreaElement) => [node.selectionStart, node.selectionEnd])).toEqual([0, rename.title.length]);
     await input.press('Escape');
     await expect(input).toHaveCount(0);
   }
+
+  // Typing replaces the name rather than adding to it.
+  await button(page, `Rename ${you}`).click();
+  await page.keyboard.type('Ana');
+  await expect(field(page, 'Name')).toHaveValue('Ana');
+  await page.keyboard.press('Enter');
+  await expect(heading(page, 'Ana')).toBeVisible();
 });
 
 test('keeps the fixed theme and group-list branding when offline', async ({ page, context }) => {
