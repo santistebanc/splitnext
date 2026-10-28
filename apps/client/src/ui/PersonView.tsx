@@ -112,7 +112,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
                     accessibilityLabel={`Rename ${name}`}
                     disabled={!edit.can('beginEditMember', { memberId })}
                     onPress={() => { void edit.call('beginEditMember', { memberId }); }}
-                    style={({ pressed }) => [{ marginLeft: 'auto', marginRight: -12, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !edit.can('beginEditMember', { memberId }) && s.dim]}
+                    style={({ pressed }) => [{ marginLeft: 'auto', marginRight: -12, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: Math.max(0, 1 - 2 * progress) }, pressed && s.pressed, !edit.can('beginEditMember', { memberId }) && s.dim]}
                   >
                     <PencilIcon size={18} color={colors.ink} />
                   </Pressable>

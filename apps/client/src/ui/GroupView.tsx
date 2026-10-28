@@ -96,7 +96,7 @@ function GroupName(props: { name: string; groupId: string }) {
               accessibilityLabel="Rename group"
               disabled={!rename.can('renameGroup', { name })}
               onPress={() => setDraft(name)}
-              style={({ pressed }) => [{ marginLeft: 'auto', marginRight: -10, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !rename.can('renameGroup', { name }) && s.dim]}
+              style={({ pressed }) => [{ marginLeft: 'auto', marginRight: -10, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: Math.max(0, 1 - 2 * progress) }, pressed && s.pressed, !rename.can('renameGroup', { name }) && s.dim]}
             >
               <PencilIcon size={18} color={colors.ink} />
             </Pressable> : null}
