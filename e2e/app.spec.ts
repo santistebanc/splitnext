@@ -1262,7 +1262,9 @@ test('opens views at the top and restores context on returning or browsing histo
   // A fresh opening starts at the top even if this person was scrolled before.
   await person(page, 'Gus').click();
   await atTop();
-  await scroller.evaluate((node) => { node.scrollTop = 120; });
+  // Fully collapse the header before testing restoration; 120px can leave
+  // it partly expanded depending on the header's measured height.
+  await scroller.evaluate((node) => { node.scrollTop = 160; });
   await expect(heading(page, 'Gus')).toHaveCSS('font-size', '18px');
   const personPosition = await position();
 
@@ -2081,43 +2083,134 @@ test('morphs between screens and leaves nothing behind', async ({ page }) => {
 });
 
 test('keeps a scrolled group still beneath the opening expense sheet', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 700 });
+  await page.setViewportSize({ width: 390, height: 650 });
   await createGroup(page, 'Still underneath', 'Ana');
 
   for (let index = 0; index < 10; index++) await addExpense(page, `Item ${index}`, '20');
 
   const scroller = page.locator('#splitnext-page');
 
-  await scroller.evaluate((node) => { node.scrollTop = 400; });
+  await scroller.evaluate((node) => { node.scrollTop = node.scrollHeight; });
   await expect(heading(page, 'Still underneath')).toHaveCSS('font-size', '18px');
-  const before = await scroller.evaluate((node) => ({ top: node.getBoundingClientRect().top, scroll: node.scrollTop }));
-
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 
-  const watching = page.evaluate(() => new Promise<{ top: number; scroll: number; title: string; amount: string }[]>((resolve) => {
-    const start = performance.now();
-    const samples: { top: number; scroll: number; title: string; amount: string }[] = [];
+  for (const delta of [0, -60]) {
+    await scroller.evaluate((node, movement) => { node.scrollTop += movement; }, delta);
+    const before = await scroller.evaluate((node) => ({ top: node.getBoundingClientRect().top, scroll: node.scrollTop }));
 
-    (function frame() {
-      const copied = document.querySelector('[data-copied-page]');
-      const title = document.querySelector('[aria-hidden] [data-morph^="gname-"]');
-      const amount = document.querySelector('#splitnext-page')?.parentElement?.parentElement?.querySelector('input[aria-label="Amount"]');
+    const watching = page.evaluate(() => new Promise<{ samples: { top: number; scroll: number; title: string; amount: string }[]; screenScrolls: number[] }>((resolve) => {
+      const start = performance.now();
+      const samples: { top: number; scroll: number; title: string; amount: string }[] = [];
+      const screenScrolls: number[] = [];
 
-      if (copied && title && amount) samples.push({ top: copied.getBoundingClientRect().top, scroll: copied.scrollTop, title: getComputedStyle(title).fontSize, amount: getComputedStyle(amount).fontSize });
+      const onScroll = (event: Event) => {
+        const node = event.target;
+        const page = document.getElementById('splitnext-page');
 
-      if (performance.now() - start < 700) requestAnimationFrame(frame);
-      else resolve(samples);
-    })();
-  }));
+        // Observe before ScreenMorph resets its scroll: a frame sample misses
+        // the brief pan caused by revealing a focused field still sliding in.
+        if (node instanceof HTMLElement && page && node !== page && node.contains(page) && node.scrollTop > 0) screenScrolls.push(node.scrollTop);
+      };
+
+      document.addEventListener('scroll', onScroll, true);
+
+      (function frame() {
+        const copied = document.querySelector('[data-copied-page]');
+        const title = document.querySelector('[aria-hidden] [data-morph^="gname-"]');
+        const amount = document.querySelector('#splitnext-page')?.parentElement?.parentElement?.querySelector('input[aria-label="Amount"]');
+
+        if (copied && title && amount) samples.push({ top: copied.getBoundingClientRect().top, scroll: copied.scrollTop, title: getComputedStyle(title).fontSize, amount: getComputedStyle(amount).fontSize });
+
+        if (performance.now() - start < 700) requestAnimationFrame(frame);
+        else {
+          document.removeEventListener('scroll', onScroll, true);
+          resolve({ samples, screenScrolls });
+        }
+      })();
+    }));
+
+    await button(page, 'Add expense').click();
+    const { samples, screenScrolls } = await watching;
+
+    expect(samples.length).toBeGreaterThan(5);
+    expect(screenScrolls).toEqual([]);
+    expect(samples.filter((sample) => Math.abs(sample.top - before.top) > 1 || Math.abs(sample.scroll - before.scroll) > 1 || sample.title !== '18px' || sample.amount !== '56px')).toEqual([]);
+    await button(page, 'Cancel').click();
+    await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBe(before.scroll);
+    await expect(page.locator('[data-copied-page]')).toHaveCount(0);
+  }
+});
+
+test('keeps a focused split amount visible when the keyboard reduces the page', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 650 });
+  await createGroup(page, 'Visible split', 'Ana');
+
+  for (const name of ['Ben', 'Cy', 'Dana', 'Eli', 'Fran', 'Gus']) await addMember(page, name);
 
   await button(page, 'Add expense').click();
-  const samples = await watching;
+  await field(page, 'Amount').fill('70');
+  await button(page, /^Amount for Gus:/).click();
+  const amount = field(page, 'Amount for Gus');
 
-  expect(samples.length).toBeGreaterThan(5);
-  expect(samples.filter((sample) => Math.abs(sample.top - before.top) > 1 || Math.abs(sample.scroll - before.scroll) > 1 || sample.title !== '18px' || sample.amount !== '56px')).toEqual([]);
-  await button(page, 'Cancel').click();
-  await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBe(before.scroll);
-  await expect(page.locator('[data-copied-page]')).toHaveCount(0);
+  await expect(amount).toBeFocused();
+  await page.setViewportSize({ width: 390, height: 400 });
+  await expect.poll(async () => {
+    const input = (await amount.boundingBox())!;
+    const area = (await page.locator('#splitnext-page').boundingBox())!;
+
+    return input.y >= area.y - 1 && input.y + input.height <= area.y + area.height + 1;
+  }).toBe(true);
+  await expect(amount).toBeFocused();
+  await expect(button(page, 'Save')).toBeInViewport({ ratio: 1 });
+
+  // A phone keyboard can resize/pan only visualViewport, leaving the layout
+  // viewport unchanged. Exercise the hook's actual keyboard event path too.
+  await page.setViewportSize({ width: 390, height: 650 });
+  await page.evaluate(() => {
+    const viewport = window.visualViewport!;
+
+    Object.defineProperty(viewport, 'height', { configurable: true, value: 320 });
+    Object.defineProperty(viewport, 'offsetTop', { configurable: true, value: 80 });
+    viewport.dispatchEvent(new Event('resize'));
+  });
+  await expect.poll(async () => {
+    const input = (await amount.boundingBox())!;
+    const area = (await page.locator('#splitnext-page').boundingBox())!;
+
+    return input.y >= Math.max(area.y, 80) - 1 && input.y + input.height <= Math.min(area.y + area.height, 400) + 1;
+  }).toBe(true);
+  await expect(amount).toBeFocused();
+});
+
+test('does not pan the screen when switching expense and payment editors', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 650 });
+  await createGroup(page, 'Still editors', 'Ana');
+  await addMember(page, 'Ben');
+  await button(page, 'Add expense').click();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+  for (const type of ['Payment', 'Expense']) {
+    const watching = page.evaluate(() => new Promise<{ x: number; y: number }[]>((resolve) => {
+      const pans: { x: number; y: number }[] = [];
+
+      const record = (event: Event) => {
+        const node = event.target;
+        const page = document.getElementById('splitnext-page');
+
+        if (node instanceof HTMLElement && page && node !== page && node.contains(page) && (node.scrollTop || node.scrollLeft)) pans.push({ x: node.scrollLeft, y: node.scrollTop });
+      };
+
+      document.addEventListener('scroll', record, true);
+      setTimeout(() => {
+        document.removeEventListener('scroll', record, true);
+        resolve(pans);
+      }, 800);
+    }));
+
+    await page.getByRole('radiogroup', { name: 'Entry type' }).getByRole('radio', { name: type, exact: true }).click();
+    expect(await watching, type).toEqual([]);
+    await expect(field(page, 'Amount')).toBeInViewport({ ratio: 1 });
+  }
 });
 
 test('never cuts off the tops or tails of letters in titles and names', async ({ page }) => {

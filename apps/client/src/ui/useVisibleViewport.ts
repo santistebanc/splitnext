@@ -51,9 +51,20 @@ export function useVisibleViewportHeight(enabled: boolean): number | null {
         !input.matches('input:not([readonly]):not([disabled]), textarea:not([readonly]):not([disabled])') ||
         viewport.scale !== 1) return;
 
+      // Header/footer fields are already pinned above the keyboard. Revealing
+      // one while its sheet slides in would pan the whole screen, including
+      // its frozen underlay. Only the page's own content should scroll.
+      const page = input.closest<HTMLElement>('#splitnext-page');
+
+      if (!page) return;
+
       frame = requestAnimationFrame(() => {
-        if (document.activeElement === input)
-          input.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        if (document.activeElement !== input) return;
+        const field = input.getBoundingClientRect();
+        const area = page.getBoundingClientRect();
+
+        if (field.top < area.top) page.scrollTop += field.top - area.top;
+        else if (field.bottom > area.bottom) page.scrollTop += field.bottom - area.bottom;
       });
     };
 
