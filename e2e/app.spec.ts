@@ -210,8 +210,13 @@ test('uses one large title on every screen and opens the join field in place', a
   await person(page, 'Ben').click();
   await expect(heading(page, 'Ben')).toHaveCSS('font-size', '32px');
   await button(page, 'Settle up, 1 payment').click();
-  await expect(heading(page, 'Settle up')).toHaveCSS('font-size', '32px');
-  await button(page, 'Back to Ben').click();
+  await expect(page.getByRole('dialog', { name: 'Settle up' })).toBeVisible();
+  await expect(heading(page, 'Ben')).toHaveCSS('font-size', '32px');
+  await page.getByRole('dialog', { name: 'Settle up' }).getByRole('button', { name: 'Close', exact: true }).click();
+  await button(page, 'Settle up, 1 payment').click();
+  await page.mouse.click(195, 40);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(heading(page, 'Ben')).toBeVisible();
   await button(page, 'Back to Headers').click();
   await bell(page).click();
   await expect(heading(page, 'Activity')).toHaveCSS('font-size', '32px');
@@ -743,6 +748,7 @@ test('explains a balance and settles it with the fewest payments', async ({ page
   await button(page, 'Settle up, 1 payment').click();
   await expect(heading(page, 'Settle up')).toBeVisible();
   await expect(button(page, 'Ben pays you 10.00. Record this payment')).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath('settle-up-drawer.png') });
 
   // A different payment opens the form with what is owed; a partial one leaves the rest in the plan.
   await button(page, 'Record a different payment').click();
@@ -754,7 +760,7 @@ test('explains a balance and settles it with the fewest payments', async ({ page
   // Record records a planned payment at once.
   await button(page, 'Ben pays you 6.00. Record this payment').click();
   await expect(page.getByText('✓ Settled', { exact: true })).toBeVisible();
-  await button(page, 'Back to Ben').click();
+  await page.getByRole('dialog', { name: 'Settle up' }).getByRole('button', { name: 'Close', exact: true }).click();
   await expect(button(page, /^Settle up/)).toHaveCount(0);
   await button(page, 'Back to Settle').click();
   await expect(button(page, 'Change repayment: Ben paid you back 4.00')).toBeVisible();
@@ -1248,7 +1254,7 @@ test('uses expense-style amount, member rows, and footer in the repayment editor
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: testInfo.outputPath('repayment-dropdowns-390.png') });
   await button(page, 'Cancel').click();
-  await button(page, 'Back to Benjamin Alexander').click();
+  await page.getByRole('dialog', { name: 'Settle up' }).getByRole('button', { name: 'Close', exact: true }).click();
   await button(page, 'Back to Dropdown payments').click();
   await button(page, 'Change repayment: Cy paid Benjamin Alexander back 7.50').click();
   await expect(button(page, 'Paid by Cy. Change payer')).toBeVisible();
@@ -1271,7 +1277,7 @@ test('edits and removes a repayment offline', async ({ page, context }, testInfo
   await button(page, 'Settle up, 1 payment').click();
   await button(page, 'Ben pays you 12.00. Record this payment').click();
   await expect(page.getByText('✓ Settled', { exact: true })).toBeVisible();
-  await button(page, 'Back to Ben').click();
+  await page.getByRole('dialog', { name: 'Settle up' }).getByRole('button', { name: 'Close', exact: true }).click();
   await button(page, 'Back to Repayment changes').click();
 
   await goOffline(page, context);
@@ -1383,7 +1389,7 @@ test('undoes a money change and then reverses that undo through Activity', async
   await button(page, 'Settle up, 1 payment').click();
   await button(page, 'Ben pays you 12.00. Record this payment').click();
   await expect(page.getByText('✓ Settled', { exact: true })).toBeVisible();
-  await button(page, 'Back to Ben').click();
+  await page.getByRole('dialog', { name: 'Settle up' }).getByRole('button', { name: 'Close', exact: true }).click();
   await button(page, 'Back to Money undo').click();
   await bell(page).click();
   await button(page, 'Undo: You recorded a repayment').click();

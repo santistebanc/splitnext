@@ -1,41 +1,24 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { formatAmount, memberSettlements, preferredMember, repaymentMembers, settlementSuggestions } from '@splitnext/client';
-import { balanceRows, memberName, moneyLabel, noCurrency } from '../model/expenses';
-import { BackButton, ErrorMessage, ScreenHeader, colors, s } from './components';
+import { memberName, moneyLabel, noCurrency } from '../model/expenses';
+import { ErrorMessage, colors, s } from './components';
+import { Drawer } from './Drawer';
 import { useRepaymentForm } from './ExpenseList';
 import type { MemberListApp } from './MemberList';
-import { between, useCompactProgress } from './pageScroll';
-import { BalanceFigure } from './PersonView';
 import { fontFamily, monoFamily } from './theme';
 import { useActionCall, useUiState } from './useActionCall';
 
-/** The settle-up header: back, Settle up, and whose balance it settles, over its bar. */
-export function SettleUpHeader(props: { app: MemberListApp }) {
-  const person = useUiState().person;
-  const progress = useCompactProgress();
+/** Settle up as a drawer over the person, or the group for the whole plan. */
+export function SettleUpDrawer(props: { app: MemberListApp }) {
   const back = useActionCall();
-  const snapshot = props.app.snapshot().group?.projected_snapshot;
-  const group = snapshot?.group.name ?? '';
-  const name = person ? memberName(snapshot, person) : group;
-  const rows = balanceRows(snapshot);
-  const amount = person ? rows.flatMap((entry) => entry.rows.filter((row) => row.member.id === person).map((row) => ({ currency: entry.currency, amount: row.amount })))[0] : undefined;
-  const max = Math.max(0, ...rows.flatMap((entry) => entry.rows.map((row) => Math.abs(row.amount))));
 
   return (
-    <>
-      <ScreenHeader
-        start={<BackButton label={`Back to ${name}`} text={name} disabled={!back.can('closePanel')} onPress={() => { void back.call('closePanel', {}); }} />}
-        title="Settle up"
-        morph={person ? `settle-${person}` : undefined}
-        below={person ? (
-          <View style={{ gap: 16, paddingTop: between(32, 12, progress) }}>
-            <Text style={{ fontFamily, fontSize: 20, lineHeight: 25, fontWeight: '600', color: colors.ink }}>{name}</Text>
-            <BalanceFigure amount={amount?.amount ?? 0} currency={amount?.currency ?? noCurrency} max={max} label="" size={18} bar={8} />
-          </View>
-        ) : undefined}
-      />
+    <Drawer title="Settle up" onClose={() => { if (back.can('closePanel')) void back.call('closePanel', {}); }}>
+      <ScrollView style={{ flexShrink: 1 }}>
+        <SettleUp app={props.app} />
+      </ScrollView>
       <ErrorMessage message={back.error} />
-    </>
+    </Drawer>
   );
 }
 
@@ -44,7 +27,7 @@ export function SettleUpHeader(props: { app: MemberListApp }) {
  * one person. Record records a payment as planned; a different or partial
  * payment opens the repayment form.
  */
-export function SettleUp(props: { app: MemberListApp }) {
+function SettleUp(props: { app: MemberListApp }) {
   const person = useUiState().person;
   const replica = props.app.snapshot().group;
   const snapshot = replica?.projected_snapshot;
@@ -60,7 +43,7 @@ export function SettleUp(props: { app: MemberListApp }) {
   const other = you && you !== from ? you : repaymentMembers(snapshot).find((member) => member.id !== from)?.id ?? '';
 
   return (
-    <View style={{ paddingTop: 16, paddingBottom: 34 }}>
+    <View>
       <View role="list" aria-label="Payments">
         {payments.map((entry) => {
           const payer = label(entry.from_member_id);
