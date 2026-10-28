@@ -446,9 +446,8 @@ operations remain available without opening an editor, including offline.
 - A group can be renamed. It is never closed or deleted.
 - Groups have no currency or currency setting, and amounts never show one: the
   app deals in plain numbers with two decimals (ADR 0025). Wherever an amount
-  is shown or typed, its whole digits are grouped in threes by a space that
-  never breaks a figure across lines, such as 1 234 567.89; pasted figures
-  may include those spaces. Stored and sent amounts stay plain.
+  is shown or typed, its whole digits are grouped in threes by commas, such as
+  1,234,567.89. Pasted figures may include grouping commas or spaces. Stored and sent amounts stay plain.
 - Leaving a group clears the identity's preferred member, hides the group from
   that identity, and stops its synchronization and realtime notifications.
   It does not revoke access or alter any ledger member. A preferred-member
@@ -750,3 +749,6 @@ The expense description uses the shared Standard floating-label field, while
 keeping its two-line read display, full-text editing, and Enter-to-save behavior.
 
 Right-align the expense editor amount; left-align its Created or Last updated timestamp.
+
+Split rows share an amount column exactly as wide as their widest formatted
+amount, with share controls directly beside it and the remaining room for names.
