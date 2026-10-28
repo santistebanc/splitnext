@@ -454,6 +454,9 @@ test('aligns split controls in columns for weighted, fixed, and excluded people'
     const amount = await button(page, /^Amount for Ana:/).boundingBox();
     const end = await button(page, 'Decrease share for Ana').boundingBox();
 
+    expect(amount!.width).toBeLessThan(70);
+    expect(amount!.x).toBe(up!.x + up!.width);
+    expect(end!.x).toBe(amount!.x + amount!.width);
     expect((await button(page, 'Increase share for Cy').boundingBox())!.x).toBe(up!.x);
     expect((await button(page, /^Amount for Cy:/).boundingBox())!.x).toBe(amount!.x);
     expect((await button(page, /^Amount for Cy:/).boundingBox())!.width).toBe(amount!.width);
