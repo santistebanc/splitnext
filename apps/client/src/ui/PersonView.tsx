@@ -72,6 +72,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
   const participants = replica && memberId ? participantMarkers(replica, memberId, props.app.client.presence(replica.group_id), state.online && state.reachable) : [];
 
   const nameField = useRef<TextInput>(null);
+  const [youWidth, setYouWidth] = useState(0);
   const actions = useActions();
 
   function finishRename(): void {
@@ -95,12 +96,14 @@ export function PersonHeader(props: { app: MemberListApp }) {
                 onChangeText={(value) => { void actions.dispatch('changeDraft', { field: 'member.name', value }, { origin: 'ui' }); }}
                 maxLength={100}
                 onBlur={finishRename}
+                // What follows the name: you and a gap, then a gap and the pencil, 44 wide with 12 past the edge.
+                inset={(isYou ? youWidth + 10 : 0) + 10 + 32}
                 style={{ ...titleStyle(progress), paddingBottom: 4, borderBottomWidth: 1.5, borderColor: colors.ink }}
               />
             ) : (
               <>
                 <Text ref={morph(replica && memberId ? `pname-${replica.group_id}-${memberId}` : null)} accessibilityRole="header" numberOfLines={2} style={[titleStyle(progress), { flexShrink: 1 }]}>{name}</Text>
-                {isYou ? <Text style={{ fontFamily, fontSize: 15, fontWeight: '500', color: colors.muted }}>you</Text> : null}
+                {isYou ? <Text onLayout={(event) => setYouWidth(event.nativeEvent.layout.width)} style={{ fontFamily, fontSize: 15, fontWeight: '500', color: colors.muted }}>you</Text> : null}
                 {active && memberId ? (
                   <Pressable
                     accessibilityRole="button"

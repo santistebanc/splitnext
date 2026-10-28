@@ -98,6 +98,8 @@ function GroupName(props: { name: string; groupId: string }) {
             maxLength={100}
             onBlur={save}
             onEscape={() => setDraft(null)}
+            // The pencil's share of the row: 44 wide, 10 of it past the edge.
+            inset={34}
             style={{ ...titleStyle(progress), paddingBottom: 4, borderBottomWidth: 1.5, borderColor: colors.ink }}
           />
         )}

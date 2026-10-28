@@ -359,6 +359,70 @@ test('wraps long names onto more lines while renaming, and Enter still saves', a
   }
 });
 
+test('opens a rename where the name already is: full width, the same lines in the same places', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const groupName = 'A very long group name that keeps going on';
+  const you = 'Anastasia Konstantinopoulou-Smith';
+  const other = 'Bartholomew Maximilian Fitzgerald';
+
+  await createGroup(page, groupName, you);
+  await addMember(page, other);
+
+  /** Where each line of text sits and ends, rounded to the pixel, so a moved line break shows. */
+  const lines = (node: Element) => {
+    const range = document.createRange();
+
+    range.selectNodeContents(node);
+
+    const ends = new Map<number, number>();
+
+      for (const rect of Array.from(range.getClientRects())) ends.set(Math.round(rect.y), Math.max(ends.get(Math.round(rect.y)) ?? 0, Math.round(rect.right)));
+
+      return [...ends].map(([y, right]) => `${y}–${right}`);
+  };
+
+  const renames = [
+    { open: 'Rename group', field: 'Group name', title: groupName, go: async () => {} },
+    { open: `Rename ${other}`, field: 'Name', title: other, go: () => person(page, other).click() },
+    { open: `Rename ${you}`, field: 'Name', title: you, go: async () => { await button(page, `Back to ${groupName}`).click(); await person(page, you).click(); } },
+  ];
+
+  for (const rename of renames) {
+    await rename.go();
+    const title = heading(page, rename.title);
+    const before = await title.evaluate(lines);
+    const left = (await title.boundingBox())!.x;
+
+    // Long enough to wrap; the title shows two lines of it.
+    expect(before.length).toBeGreaterThanOrEqual(2);
+    await button(page, rename.open).click();
+    const input = field(page, rename.field);
+    const box = (await input.boundingBox())!;
+
+    // The field's lines are laid out by the unseen copy of its text beside it.
+    const after = await input.evaluate((node) => {
+      const copy = node.previousElementSibling!;
+      const range = document.createRange();
+
+      range.selectNodeContents(copy);
+
+      const ends = new Map<number, number>();
+
+      for (const rect of Array.from(range.getClientRects())) ends.set(Math.round(rect.y), Math.max(ends.get(Math.round(rect.y)) ?? 0, Math.round(rect.right)));
+
+      return [...ends].map(([y, right]) => `${y}–${right}`);
+    });
+
+    expect(box.x).toBeCloseTo(left, 0);
+    expect(box.x + box.width).toBeCloseTo(390 - 24, 0);
+    // The first line breaks where the title's did; the title ends its second line with an ellipsis.
+    expect(after[0]).toBe(before[0]);
+    expect(after[1]?.split('–')[0]).toBe(before[1]?.split('–')[0]);
+    await input.press('Escape');
+    await expect(input).toHaveCount(0);
+  }
+});
+
 test('keeps the fixed theme and group-list branding when offline', async ({ page, context }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
