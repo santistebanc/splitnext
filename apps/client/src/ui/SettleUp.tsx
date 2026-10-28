@@ -87,12 +87,13 @@ function SettleUpPayments(props: { app: MemberListApp }) {
           const amount = moneyLabel(entry.amount, entry.currency);
 
           return (
-            // Who pays, who is paid, and the amount take a line each, names truncating; Record never gives way.
+            // Who pays, who is paid, and the amount share a line while they fit and wrap
+            // between them when not, a name too long for a line truncating; Record never gives way.
             <View key={`${entry.currency}:${entry.from_member_id}:${entry.to_member_id}`} style={[{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 }, s.ruled]}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text numberOfLines={1} style={nameStyle}>{payer}</Text>
-                <Text numberOfLines={1} style={nameStyle}>→ {payee === 'You' ? 'you' : payee}</Text>
-                <Text numberOfLines={1} style={{ paddingTop: 2, fontFamily: monoFamily, fontSize: 17, lineHeight: 22, fontWeight: '500', color: colors.ink }}>{amount}</Text>
+              <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 6 }}>
+                <Text numberOfLines={1} style={[nameStyle, { maxWidth: '100%' }]}>{payer}</Text>
+                <Text numberOfLines={1} style={[nameStyle, { maxWidth: '100%' }]}>→ {payee === 'You' ? 'you' : payee}</Text>
+                <Text numberOfLines={1} style={{ maxWidth: '100%', fontFamily: monoFamily, fontSize: 17, lineHeight: 22, fontWeight: '500', color: colors.ink }}>{amount}</Text>
               </View>
               <Pressable
                 accessibilityRole="button"
