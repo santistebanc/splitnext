@@ -1621,7 +1621,7 @@ test('keeps a cut-off name cut off while it flies to its title', async ({ page }
         const style = getComputedStyle(node);
 
         if (node.childElementCount || !node.textContent?.startsWith('Maximiliano') || Number(style.opacity) < 0.05) continue;
-        frames.push({ ellipsis: style.textOverflow === 'ellipsis' && style.overflow === 'hidden', width: node.getBoundingClientRect().width });
+        frames.push({ ellipsis: (style.textOverflow === 'ellipsis' || (style.webkitLineClamp !== '' && style.webkitLineClamp !== 'none')) && ['hidden', 'clip'].includes(style.overflow), width: node.getBoundingClientRect().width });
       }
 
       if (performance.now() - start < 700) requestAnimationFrame(frame);
@@ -1837,9 +1837,9 @@ test('keeps member amounts on one line throughout the details transition', async
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const amountText = await page.locator('[data-morph^="pamt-"]').first().textContent();
 
-  const samples = page.evaluate((value) => new Promise<{ lines: number; nowrap: boolean }[]>((resolve) => {
+  const samples = page.evaluate((value) => new Promise<{ lines: number; nowrap: boolean; ellipsis: boolean }[]>((resolve) => {
     const start = performance.now();
-    const result: { lines: number; nowrap: boolean }[] = [];
+    const result: { lines: number; nowrap: boolean; ellipsis: boolean }[] = [];
 
     (function frame() {
       document.querySelectorAll<HTMLElement>('div').forEach((node) => {
@@ -1847,7 +1847,7 @@ test('keeps member amounts on one line throughout the details transition', async
         const range = document.createRange();
 
         range.selectNodeContents(node);
-        result.push({ lines: new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size, nowrap: ['nowrap', 'pre'].includes(getComputedStyle(node).whiteSpace) });
+        result.push({ lines: new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size, nowrap: ['nowrap', 'pre'].includes(getComputedStyle(node).whiteSpace), ellipsis: Boolean(node.closest('[aria-hidden]')) && getComputedStyle(node).textOverflow === 'ellipsis' && node.scrollWidth > node.clientWidth + 1 });
       });
 
       if (performance.now() - start < 700) requestAnimationFrame(frame);
@@ -1860,7 +1860,7 @@ test('keeps member amounts on one line throughout the details transition', async
   const measured = await samples;
 
   expect(measured.length).toBeGreaterThan(5);
-  expect(measured.filter((sample) => !sample.nowrap || sample.lines !== 1)).toEqual([]);
+  expect(measured.filter((sample) => !sample.nowrap || sample.lines !== 1 || sample.ellipsis)).toEqual([]);
 });
 
 

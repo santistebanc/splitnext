@@ -241,7 +241,7 @@ export function ExpenseControls() {
   return (
     <View style={{ paddingBottom: between(14, 6, progress) }}>
       <View style={{ marginTop: between(12, 0, progress), paddingBottom: between(10, 6, progress), borderBottomWidth: 1.5, borderColor: colors.ink, flexDirection: 'row' }}>
-        <View ref={morph(draft.expenseId ? `eamt-${draft.expenseId}` : null)} style={{ flex: 1, minWidth: 0, flexDirection: 'row' }}>
+        <View ref={morph(draft.expenseId ? `eamt-${draft.expenseId}` : null, { unclipped: true })} style={{ flex: 1, minWidth: 0, flexDirection: 'row' }}>
         <AmountInput
           inputRef={amount}
           align="right"

@@ -251,10 +251,12 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
       // Text cut short keeps its ellipsis on the way: it still clips, and its
       // own width runs from the old box's to the new one's, allowing for its
       // scale, so the cut moves as the room for it changes.
-      const cut = (clips: boolean) => (clips ? { overflow: 'hidden', textOverflow: 'ellipsis' } : {});
+      const unclipped = element.dataset.morphUnclipped !== undefined;
+
+      const cut = (clips: boolean) => (unclipped ? { overflow: 'visible', textOverflow: 'clip' } : clips ? { overflow: 'hidden', textOverflow: 'ellipsis' } : {});
       const leaving = from.clone;
 
-      Object.assign(leaving.style, base, cut(from.clips), { whiteSpace: from.whiteSpace, left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px`, color: from.color, font: from.font });
+      Object.assign(leaving.style, base, cut(from.clips), { whiteSpace: unclipped ? 'nowrap' : from.whiteSpace, left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px`, color: from.color, font: from.font });
       overlay.appendChild(leaving);
       animations.push(leaving.animate(stretch
         // Fades only once the arriving copy is mostly in, so the bar never
@@ -266,7 +268,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
 
       arriving.dataset.morphArriving = '';
 
-      Object.assign(arriving.style, base, cut(clipped(style)), { whiteSpace: style.whiteSpace, left: `${to.x}px`, top: `${to.y}px`, width: `${to.w}px`, height: `${to.h}px`, color: style.color, font: style.font });
+      Object.assign(arriving.style, base, cut(clipped(style)), { whiteSpace: unclipped ? 'nowrap' : style.whiteSpace, left: `${to.x}px`, top: `${to.y}px`, width: `${to.w}px`, height: `${to.h}px`, color: style.color, font: style.font });
       overlay.appendChild(arriving);
       animations.push(arriving.animate(stretch
         ? [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / sx},${1 / scale})`, opacity: 0 }, { opacity: 1, offset: 0.6 }, { transform: 'none', opacity: 1 }]
@@ -293,9 +295,10 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
 /**
  * Marks a part that appears on two screens, so changing between them flies it
  * across; with `stretch`, such as for a bar, it takes its new shape rather
- * than keeping its proportions.
+ * than keeping its proportions. `unclipped` keeps amounts complete while their
+ * boxes change size.
  */
-export function morph(key: string | null | undefined, options?: { stretch?: boolean }) {
+export function morph(key: string | null | undefined, options?: { stretch?: boolean; unclipped?: boolean }) {
   return (node: MorphTarget) => {
     if (!(node instanceof HTMLElement)) return;
 
@@ -304,5 +307,8 @@ export function morph(key: string | null | undefined, options?: { stretch?: bool
 
     if (key && options?.stretch) node.dataset.morphStretch = '';
     else delete node.dataset.morphStretch;
+
+    if (key && options?.unclipped) node.dataset.morphUnclipped = '';
+    else delete node.dataset.morphUnclipped;
   };
 }

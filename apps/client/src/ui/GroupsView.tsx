@@ -201,7 +201,7 @@ function GroupBalance(props: { group: ClientGroupSummary }) {
   return (
     <View style={{ alignItems: 'flex-end', gap: 6 }}>
       {balances.map(({ currency, amount }) => (
-        <Text key={currency} ref={morph(`gamt-${props.group.group_id}-${currency}`)} style={[s.amount, { color: balanceColor(amount) }]}>{signedFigure(amount, currency)}</Text>
+        <Text key={currency} ref={morph(`gamt-${props.group.group_id}-${currency}`, { unclipped: true })} style={[s.amount, { color: balanceColor(amount) }]}>{signedFigure(amount, currency)}</Text>
       ))}
     </View>
   );

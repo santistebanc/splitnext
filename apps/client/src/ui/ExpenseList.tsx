@@ -71,7 +71,7 @@ function Row(props: { first: boolean; label: string; title: string; meta?: strin
           </View>
           {props.meta ? <Text numberOfLines={1} style={s.rowCaption}>{props.meta}</Text> : null}
         </View>
-        <Text ref={morph(props.morph && `eamt-${props.morph}`)} style={[s.amount, props.quiet && { color: colors.muted }]}>{props.amount}</Text>
+        <Text ref={morph(props.morph && `eamt-${props.morph}`, { unclipped: true })} style={[s.amount, props.quiet && { color: colors.muted }]}>{props.amount}</Text>
       </ListRow>
       <ErrorMessage message={props.error} />
     </View>

@@ -236,7 +236,7 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
         </View>
         <View style={{ width: props.figureWidth, alignItems: 'flex-end', gap: 6 }}>
           {props.balances.length ? props.balances.map((entry) => (
-            <Text key={entry.currency} ref={morph(props.you ? `gamt-${props.replica.group_id}-${entry.currency}` : `pamt-${props.replica.group_id}-${props.memberId}-${entry.currency}`)} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} style={[s.amount, { color: balanceColor(entry.amount) }]}>
+            <Text key={entry.currency} ref={morph(props.you ? `gamt-${props.replica.group_id}-${entry.currency}` : `pamt-${props.replica.group_id}-${props.memberId}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} style={[s.amount, { color: balanceColor(entry.amount) }]}>
               {signedFigure(entry.amount, entry.currency)}
             </Text>
           )) : null}

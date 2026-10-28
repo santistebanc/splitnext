@@ -33,7 +33,7 @@ export function BalanceFigure(props: { amount: number; currency: string; max: nu
     <View style={{ gap: 10 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
         <Text style={[s.caption, { fontSize: 15 }]}>{props.label}</Text>
-        <Text ref={morph(props.morph)} numberOfLines={1} style={{ fontFamily: monoFamily, fontSize: props.size, lineHeight: props.size, fontWeight: '500', letterSpacing: -0.03 * props.size, color: balanceColor(props.amount) }}>
+        <Text ref={morph(props.morph, { unclipped: true })} numberOfLines={1} style={{ fontFamily: monoFamily, fontSize: props.size, lineHeight: props.size, fontWeight: '500', letterSpacing: -0.03 * props.size, color: balanceColor(props.amount) }}>
           {signedFigure(props.amount, props.currency)}
         </Text>
       </View>
@@ -233,7 +233,7 @@ export function PersonDetails(props: { app: MemberListApp }) {
                   <Text ref={morph(row.kind === 'expense' ? `etitle-${row.id}` : null)} numberOfLines={2} style={[s.name, { maxWidth: '100%', lineHeight: 20 }]}>{title}</Text>
                   <Text numberOfLines={1} style={[s.rowCaption, { maxWidth: '100%' }]}>{row.detail}</Text>
                 </View>
-                <Text ref={morph(row.kind === 'expense' ? `eamt-${row.id}` : null)} numberOfLines={1} style={[s.amount, { color: balanceColor(row.amount) }]}>{signedFigure(row.amount, group.currency)}</Text>
+                <Text ref={morph(row.kind === 'expense' ? `eamt-${row.id}` : null, { unclipped: true })} numberOfLines={1} style={[s.amount, { color: balanceColor(row.amount) }]}>{signedFigure(row.amount, group.currency)}</Text>
               </ListRow>
             );
           })}
