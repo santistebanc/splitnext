@@ -33,8 +33,10 @@ The local [device lab](./agents/device-lab.md) owns isolated Worker persistence
 and real persistent browser installations. Its frontend and CLI share one
 supervisor operations API; the screen bridge exposes the same dispatcher that
 renders each app. `model/runtime.ts` assembles storage, transport, preferences
-and replica notifications independently of browser globals. Browser lifecycle
-and action capabilities live in adapters. See [ADR 0027](./adr/0027-own-real-browser-installations-in-a-local-device-lab.md).
+and replica notifications independently of browser globals. `AppScreen` accepts
+an `AppSubstrate` for runtime creation, navigation, lifecycle, seen markers and
+clipboard/share capabilities; the default browser assembly keeps existing web
+behavior. See [ADR 0027](./adr/0027-own-real-browser-installations-in-a-local-device-lab.md).
 
 The Worker serves a public homepage, invite entry pages, and the Expo web app
 at `/app`.
