@@ -59,6 +59,7 @@ export function Frame(props: FrameProps) {
     };
   }, [control]);
   const positions = useRef(new Map<string, number>());
+  const headers = useRef(new Map<string, { full: number; current: number }>());
   const scrollKey = props.scrollKey ?? 'page';
   const depth = props.navigationDepth ?? 0;
   const previousDepth = useRef(depth);
@@ -76,13 +77,19 @@ export function Frame(props: FrameProps) {
   useLayoutEffect(() => {
     const returning = props.restoreScroll || depth < previousDepth.current;
     const restored = returning ? positions.current.get(scrollKey) ?? 0 : 0;
+    const header = returning ? headers.current.get(scrollKey) : undefined;
 
     previousDepth.current = depth;
     positions.current.set(scrollKey, restored);
     restoring.current = true;
     scrolled.current = restored;
+
+    // Content travel includes the space released by this screen's header.
+    // Restoring just scrollTop expands a previously compact header on return.
+    if (header) headerSize.current = { key: scrollKey, ...header };
+    else headers.current.delete(scrollKey);
     scroll.current?.scrollTo({ y: restored, animated: false });
-    props.onScroll?.(restored, 0, true);
+    props.onScroll?.(restored, restored > 0 && header ? header.full - header.current : 0, true);
 
     const frame = requestAnimationFrame(() => {
       restoring.current = false;
@@ -111,7 +118,10 @@ export function Frame(props: FrameProps) {
               const node: unknown = Platform.OS === 'web' ? scroll.current?.getScrollableNode() : null;
               const y = Platform.OS === 'web' && node instanceof HTMLElement ? node.scrollTop : scrolled.current;
 
-              headerSize.current = { key: scrollKey, full: previous.key === scrollKey && y > 0 ? Math.max(previous.full, height) : height, current: height };
+              const full = previous.key === scrollKey ? previous.full : headers.current.get(scrollKey)?.full ?? height;
+
+              headerSize.current = { key: scrollKey, full: y > 0 ? Math.max(full, height) : height, current: height };
+              headers.current.set(scrollKey, { full: headerSize.current.full, current: height });
 
               if (restoring.current) return;
 

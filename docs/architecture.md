@@ -81,8 +81,10 @@ endpoint layout width so names retain their line breaks and right-aligned
 amounts scale about their right edge and follow a straight path. Depth from
 `AppScreen` picks the direction. With `sheet`, a new expense instead rises over a still copy of
 the group screen kept under a shade in an underlay, and falls away over the
-returning screen, without flying parts. The screen container never scrolls,
-so focusing a field that is still sliding in cannot jump it into view. Keys pair a group's name in the list with its title, your
+returning screen, without flying parts. The screen container never scrolls.
+Keyboard visibility adjustments scroll only fields inside the page's scroll
+area; pinned header and footer fields cannot pan the screen while sliding in.
+Keys pair a group's name in the list with its title, your
 balance with your row, a person's row with their page, an expense row's title (in the list or a person's breakdown)
 and amount with the editor's, Settle
 up, New group, and Activity with their titles. `Reveal` opens content in place,
@@ -108,7 +110,9 @@ height released by the header. At the bottom, shrinking the header can force
 the scroll offset down by the same amount; this leaves content travel unchanged
 instead of reversing the collapse and making the header oscillate. The collapse
 distance exceeds the header's height change so expanding back to the top also
-converges. Each screen measures its own full header height.
+converges. Each screen measures its own full header height. Returning restores
+that screen's saved header collapse along with its scroll offset, so compact
+headers stay compact instead of growing on return.
 The group screen's content is `GroupView`: everyone's balance as ruled rows
 with a `BalanceBar` scaled to the largest balance, ending with `AddPersonRow`,
 then `ExpenseList` with expenses and repayments newest first. Tapping a person
