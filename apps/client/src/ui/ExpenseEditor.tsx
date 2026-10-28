@@ -116,8 +116,8 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
   const stepping = dividing && (fixed || shares > 1);
   const canIncrease = dividing && (fixed || props.sharing > 1);
 
-  // Fixing the amount shows the field before editing starts, so autoFocus
-  // would come too late; focus it once editing begins.
+  // Opening the field does not fix the amount; only changing its value does.
+  // Focus after it has mounted, selecting the share amount for replacement.
   useEffect(() => {
     if (editing) input.current?.focus();
   }, [editing]);
@@ -150,12 +150,15 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
                 inline
                 inputRef={input}
                 label={`Amount for ${props.name}`}
-                value={fixed ? value : ''}
+                value={value}
                 currency={props.currency}
                 height={40}
                 fontSize={15}
                 editable={edit.can('setExpenseFixedAmount', { memberId: props.memberId, amount: '' })}
-                onChangeText={(amount) => { void edit.call('setExpenseFixedAmount', { memberId: props.memberId, amount }); }}
+                onChangeText={(amount) => {
+                  if (!fixed && (!amount.trim() || parseAmount(amount, props.currency) === props.owed)) return;
+                  void edit.call('setExpenseFixedAmount', { memberId: props.memberId, amount });
+                }}
                 onFocus={() => setEditing(true)}
                 onBlur={() => setEditing(false)}
                 onSubmitEditing={() => setEditing(false)}
@@ -167,7 +170,7 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
               accessibilityLabel={`Amount for ${props.name}: ${shown}. Change amount`}
               accessibilityState={{ disabled: !canFix }}
               disabled={!canFix}
-              onPress={() => { void edit.call('setExpenseFixedAmount', fixing, () => setEditing(true)); }}
+              onPress={() => setEditing(true)}
               style={({ pressed }) => [{ height: 44, justifyContent: 'center' }, pressed && s.pressed]}
             >
               <Text numberOfLines={1} style={{ textAlign: 'right', fontFamily: monoFamily, fontSize: 15, fontWeight: '500', color: colors.ink }}>
