@@ -1243,6 +1243,41 @@ test('leaves from the groups list after confirming and rejoins as an existing me
   await expect(field(page, 'Add a person')).toBeVisible();
 });
 
+test('keeps Settle up rows whole with very long names and amounts', async ({ page }, testInfo) => {
+  const long = 'Wolfgang Amadeus Schwarzenegger-Müller';
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await createGroup(page, 'Long settle', 'Ana');
+  await addMember(page, long);
+  await addMember(page, 'Jaqy Gypsy');
+  await addExpense(page, 'Castle', '299999.97', long);
+  await person(page, long).click();
+  await button(page, 'Settle up, 2 payments').click();
+  const drawer = page.getByRole('region', { name: 'Settle up' });
+  const records = drawer.getByRole('button', { name: /Record this payment$/ });
+
+  await expect(records).toHaveCount(2);
+
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    const area = (await drawer.boundingBox())!;
+
+    for (const record of await records.all()) {
+      const box = (await record.boundingBox())!;
+
+      // Record is whole and inside the drawer, and each name stays on one line.
+      expect(box.x + box.width).toBeLessThanOrEqual(area.x + area.width + 0.5);
+      expect(await record.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    }
+
+    for (const name of await drawer.getByText(new RegExp(`^(→ )?${long}$`)).all()) {
+      expect((await name.boundingBox())!.height).toBeLessThan(30);
+    }
+
+    await page.screenshot({ path: testInfo.outputPath(`settle-up-long-${width}.png`) });
+  }
+});
+
 test('records planned and other repayments offline', async ({ page, context }) => {
   await createGroup(page, 'Repayments', 'Ana');
   await addMember(page, 'Benjamin Alexander');
