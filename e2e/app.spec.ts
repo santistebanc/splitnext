@@ -198,7 +198,13 @@ test('removes someone no expense names with the X on their row', async ({ page }
   await addMember(page, 'Ben');
   await addMember(page, 'Cy');
 
-  // Before any expense, everyone has the X; afterwards only Cy, whom it leaves out.
+  // Before any expense, everyone else has the X; afterwards only Cy, whom it leaves out.
+  // You never have one, in your row or your details.
+  await expect(button(page, 'Remove Ana')).toHaveCount(0);
+  await person(page, 'Ana').click();
+  await expect(heading(page, 'Ana')).toBeVisible();
+  await expect(button(page, 'Remove Ana')).toHaveCount(0);
+  await button(page, 'Back to Rows').click();
   await expect(button(page, 'Remove Ben')).toBeVisible();
   await button(page, 'Add expense').click();
   await field(page, 'Amount').fill('20');

@@ -175,7 +175,7 @@ export function PersonDetails(props: { app: MemberListApp }) {
   const name = memberName(snapshot, member.id);
   const others = participantsForMember(snapshot, member.id).filter((grant) => grant.identity_id !== identity).length;
   const breakdown = memberBreakdown(snapshot, member.id, (id) => (id === you ? 'You' : memberName(snapshot, id)));
-  // Only someone no expense or repayment has named, removed ones included, can be removed here.
+  // Only someone else no expense or repayment has named, removed ones included, can be removed here.
   const hasRecords = memberHasRecords(snapshot, member.id);
 
   return (
@@ -188,7 +188,7 @@ export function PersonDetails(props: { app: MemberListApp }) {
         />
       ) : null}
       {active ? (
-        hasRecords ? null : (
+        hasRecords || isYou ? null : (
           <Button secondary label={`Remove ${name}`} disabled={!remove.can('removeMember', { memberId: member.id })} onPress={() => { void remove.call('removeMember', { memberId: member.id }); }}>
             Remove
           </Button>
