@@ -222,8 +222,8 @@ repayment. Below those actions, two member dropdowns form the large sentence
 The dropdowns have accessible Paid by and Paid to labels and retain the amount
 when either member changes. Long names truncate within the dropdowns on narrow
 screens. Below the sentence: a large plain-number amount, a caption saying
-whether it is the full amount owed, and earlier repayments, each opening in the
-form. The sentence shrinks as the content scrolls, and the header actions stay
+whether it is the full amount owed. Earlier repayments stay in the group ledger
+and are not repeated in the repayment form. The sentence shrinks as the content scrolls, and the header actions stay
 available. Selecting the same member on both sides prevents recording or saving.
 Cancel and Record return to where the form was opened, such as Settle up.
 
