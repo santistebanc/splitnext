@@ -13,6 +13,7 @@ import { AddPersonRow, MemberIcon, type MemberListApp, type Replica } from './Me
 import { between, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
 import { EditCover } from './EditCover';
+import { TitleField } from './TitleField';
 import { morph } from './ScreenMorph';
 import { fontFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
@@ -70,7 +71,8 @@ function GroupName(props: { name: string; groupId: string }) {
 
   return (
     <View style={{ flex: 1, minWidth: 0 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, height: fullTitleHeight ? between(Math.max(44, fullTitleHeight), 44, progress) : undefined }}>
+      {/* While editing, the field sets the height, growing as the name wraps. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, height: fullTitleHeight && draft === null ? between(Math.max(44, fullTitleHeight), 44, progress) : undefined }}>
         {/* Measure the expanded title independently of wrapping during collapse.
             Its second line releases space continuously rather than all at once. */}
         <Text aria-hidden pointerEvents="none" numberOfLines={2} onLayout={(event) => setFullTitleHeight(event.nativeEvent.layout.height)} style={[titleStyle(0), { position: 'absolute', left: 0, right: 34, top: 0, opacity: 0 }]}>{props.name}</Text>
@@ -88,21 +90,15 @@ function GroupName(props: { name: string; groupId: string }) {
             </Pressable> : null}
           </>
         ) : (
-          <TextInput
-            ref={input}
-            autoFocus
+          <TitleField
+            inputRef={input}
             accessibilityLabel="Group name"
             value={draft}
             onChangeText={setDraft}
             maxLength={100}
-            returnKeyType="done"
-            submitBehavior="blurAndSubmit"
             onBlur={save}
-            onSubmitEditing={() => input.current?.blur()}
-            onKeyPress={(event) => {
-              if (event.nativeEvent.key === 'Escape') setDraft(null);
-            }}
-            style={[titleStyle(progress), { flex: 1, minWidth: 0, paddingBottom: 4, borderBottomWidth: 1.5, borderColor: colors.ink }]}
+            onEscape={() => setDraft(null)}
+            style={{ ...titleStyle(progress), paddingBottom: 4, borderBottomWidth: 1.5, borderColor: colors.ink }}
           />
         )}
       </View>
