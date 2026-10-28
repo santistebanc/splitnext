@@ -1574,7 +1574,21 @@ test('switches a new entry between expense and payment, keeping what each has', 
   const tabs = page.getByRole('radiogroup', { name: 'Entry type' });
   const tab = (name: string) => tabs.getByRole('radio', { name, exact: true });
 
+  /** How far the sticky header reaches past the underline of a field in it: none. */
+  const pastUnderline = (name: string) => field(page, name).evaluate((node) => {
+    const content = document.getElementById('splitnext-page');
+    let underline: Element | null = node;
+
+    while (underline && getComputedStyle(underline).borderBottomWidth === '0px') underline = underline.parentElement;
+    let header: Element | null = node;
+
+    while (header && content && !header.parentElement?.contains(content)) header = header.parentElement;
+
+    return underline && header ? Math.round(header.getBoundingClientRect().bottom - underline.getBoundingClientRect().bottom) : null;
+  });
+
   await expect(tab('Expense')).toBeChecked();
+  expect(await pastUnderline('Description')).toBe(0);
   await amount.fill('12.50');
   await field(page, 'Description').fill('Snacks');
   await button(page, /^Paid by .*Change payer$/).click();
@@ -1610,6 +1624,7 @@ test('switches a new entry between expense and payment, keeping what each has', 
   await expect(amount).toHaveValue('12.50');
   await expect(button(page, 'Paid by Ben. Change payer')).toBeVisible();
   await expect(button(page, 'Paid to Ana (you). Change recipient')).toBeVisible();
+  expect(await pastUnderline('Amount')).toBe(0);
   await button(page, /^Paid to .*Change recipient$/).click();
   await page.getByRole('radio', { name: 'Cy', exact: true }).click();
   await amount.fill('20.25');
