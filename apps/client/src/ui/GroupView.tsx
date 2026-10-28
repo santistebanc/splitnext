@@ -57,16 +57,28 @@ function GroupName(props: { name: string; groupId: string }) {
   const progress = useCompactProgress();
   const rename = useActionCall();
   const [draft, setDraft] = useState<string | null>(null);
+  // A saved name shows until the group's own catches up, so the old one never flashes back.
+  const [saved, setSaved] = useState<{ from: string; to: string } | null>(null);
   const [fullTitleHeight, setFullTitleHeight] = useState(0);
   const input = useRef<TextInput>(null);
 
+  if (saved && saved.from !== props.name) setSaved(null);
+
+  const name = saved?.to ?? props.name;
+
   function save(): void {
-    const name = draft?.trim() ?? '';
+    const next = draft?.trim() ?? '';
 
     setDraft(null);
 
-    if (name && name !== props.name && groupNameSchema.safeParse(name).success)
-      void rename.call('renameGroup', { name, expectedName: props.name });
+    if (next && next !== props.name && groupNameSchema.safeParse(next).success) {
+      let done = false;
+
+      setSaved({ from: props.name, to: next });
+      void rename
+        .call('renameGroup', { name: next, expectedName: props.name }, () => { done = true; })
+        .finally(() => { if (!done) setSaved(null); });
+    }
   }
 
   return (
@@ -75,16 +87,16 @@ function GroupName(props: { name: string; groupId: string }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, height: fullTitleHeight && draft === null ? between(Math.max(44, fullTitleHeight), 44, progress) : undefined }}>
         {/* Measure the expanded title independently of wrapping during collapse.
             Its second line releases space continuously rather than all at once. */}
-        <Text aria-hidden pointerEvents="none" numberOfLines={2} onLayout={(event) => setFullTitleHeight(event.nativeEvent.layout.height)} style={[titleStyle(0), { position: 'absolute', left: 0, right: 34, top: 0, opacity: 0 }]}>{props.name}</Text>
+        <Text aria-hidden pointerEvents="none" numberOfLines={2} onLayout={(event) => setFullTitleHeight(event.nativeEvent.layout.height)} style={[titleStyle(0), { position: 'absolute', left: 0, right: 34, top: 0, opacity: 0 }]}>{name}</Text>
         {draft === null ? (
           <>
-            <Text ref={morph(`gname-${props.groupId}`)} accessibilityRole="header" numberOfLines={2} style={[titleStyle(progress), { flexShrink: 1, alignSelf: 'flex-start' }]}>{props.name}</Text>
+            <Text ref={morph(`gname-${props.groupId}`)} accessibilityRole="header" numberOfLines={2} style={[titleStyle(progress), { flexShrink: 1, alignSelf: 'flex-start' }]}>{name}</Text>
             {progress <= 0.5 ? <Pressable
               accessibilityRole="button"
               accessibilityLabel="Rename group"
-              disabled={!rename.can('renameGroup', { name: props.name })}
-              onPress={() => setDraft(props.name)}
-              style={({ pressed }) => [{ marginLeft: 'auto', marginRight: -10, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !rename.can('renameGroup', { name: props.name }) && s.dim]}
+              disabled={!rename.can('renameGroup', { name })}
+              onPress={() => setDraft(name)}
+              style={({ pressed }) => [{ marginLeft: 'auto', marginRight: -10, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !rename.can('renameGroup', { name }) && s.dim]}
             >
               <PencilIcon size={18} color={colors.ink} />
             </Pressable> : null}
