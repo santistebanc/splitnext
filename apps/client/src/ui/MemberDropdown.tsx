@@ -26,9 +26,9 @@ export function MemberDropdown(props: MemberDropdownProps) {
         accessibilityValue={{ text: selected?.label ?? 'Choose' }}
         disabled={props.disabled}
         onPress={() => setOpen(!open)}
-        style={({ pressed }) => [{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, backgroundColor: colors.pale }, pressed && s.pressed]}
+        style={({ pressed }) => [{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, backgroundColor: colors.background }, pressed && s.pressed]}
       >
-        <Text numberOfLines={1} style={{ flex: 1, fontFamily, fontSize: props.fontSize, fontWeight: '700', color: colors.ink }}>{selected?.label ?? 'Choose'}</Text>
+        <Text numberOfLines={1} style={{ flex: 1, fontFamily, fontSize: props.fontSize, fontWeight: '500', color: colors.ink }}>{selected?.label ?? 'Choose'}</Text>
         <Text style={{ fontFamily, fontSize: 14, color: colors.ink }}>▾</Text>
       </Pressable>
       {open && !props.disabled ? (

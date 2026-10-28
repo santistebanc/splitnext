@@ -11,7 +11,7 @@ export function MemberDropdown(props: MemberDropdownProps) {
         value={props.value}
         disabled={props.disabled}
         onChange={(event) => props.onChange(event.currentTarget.value)}
-        style={{ appearance: 'none', width: '100%', minWidth: 0, minHeight: 44, padding: '8px 24px 8px 8px', border: 0, borderRadius: 0, outlineOffset: 3, background: colors.pale, color: colors.ink, fontFamily, fontSize: props.fontSize, fontWeight: 700, lineHeight: 1.2, textOverflow: 'ellipsis', cursor: 'pointer' }}
+        style={{ appearance: 'none', width: '100%', minWidth: 0, minHeight: 44, padding: '8px 24px 8px 8px', border: 0, borderRadius: 0, outlineOffset: 3, background: colors.background, color: colors.ink, fontFamily, fontSize: props.fontSize, fontWeight: 500, lineHeight: 1.2, textOverflow: 'ellipsis', cursor: 'pointer' }}
       >
         {!props.value ? <option value="" disabled>Choose</option> : null}
         {props.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
