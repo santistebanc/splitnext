@@ -17,7 +17,14 @@ const slide = 28;
 type Box = { x: number; y: number; w: number; h: number };
 
 /** `clips`: text cut short with an ellipsis, which must stay cut while it flies. */
-type Part = { box: Box; clone: HTMLElement; background: string; radius: string; border: string; borderWidth: string; color: string; font: string; clips: boolean; whiteSpace: string };
+type Part = { box: Box; clone: HTMLElement; background: string; radius: string; border: string; borderWidth: string; color: string; font: string; clips: boolean; whiteSpace: string; textSize: number | null };
+
+/** The font size of an element's own text, or null for one that only holds others. */
+function textSize(element: HTMLElement, style: CSSStyleDeclaration): number | null {
+  const text = Array.from(element.childNodes).some((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+
+  return text ? parseFloat(style.fontSize) || null : null;
+}
 
 /** Text cut short, at the end of one line or of its last allowed line. */
 function clipped(style: CSSStyleDeclaration): boolean {
@@ -110,7 +117,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
       if (!key || !this.visible(element, box)) return;
       const style = getComputedStyle(element);
 
-      parts.set(key, { box, clone: copy(element), background: style.backgroundColor, radius: style.borderRadius, border: style.borderTopColor, borderWidth: style.borderTopWidth, color: style.color, font: style.font, clips: clipped(style), whiteSpace: style.whiteSpace });
+      parts.set(key, { box, clone: copy(element), background: style.backgroundColor, radius: style.borderRadius, border: style.borderTopColor, borderWidth: style.borderTopWidth, color: style.color, font: style.font, clips: clipped(style), whiteSpace: style.whiteSpace, textSize: textSize(element, style) });
     });
 
     return { parts, screen: copy(root), scrolled: root.querySelector(`#${pageId}`)?.scrollTop ?? 0 };
@@ -232,9 +239,13 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
 
     for (const { element, from, to, style } of pairs) {
       const a = from.box;
-      const scale = to.h / a.h;
       // A bar stretches to its new shape; text keeps its proportions and crossfades.
       const stretch = element.dataset.morphStretch !== undefined;
+      // Text grows or shrinks by its font size, not its box: a name on two lines
+      // that lands on one would otherwise shrink far past its size and jump back.
+      const fromText = from.textSize;
+      const toText = textSize(element, style);
+      const scale = !stretch && fromText && toText ? toText / fromText : to.h / a.h;
       const sx = to.w / a.w;
       const base = { position: 'absolute', margin: '0', background: 'transparent', borderColor: 'transparent', transformOrigin: '0 0', boxSizing: 'border-box', visibility: 'visible', transition: 'none', overflow: 'visible' };
       const box = document.createElement('div');
