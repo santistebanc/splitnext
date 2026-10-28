@@ -1,46 +1,95 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { formatAmount, memberSettlements, preferredMember, repaymentMembers, settlementSuggestions } from '@splitnext/client';
 import { memberName, moneyLabel, noCurrency } from '../model/expenses';
-import { ErrorMessage, colors, s } from './components';
-import { Drawer } from './Drawer';
+import { ErrorMessage, FooterButton, colors, s } from './components';
 import { useRepaymentForm } from './ExpenseList';
+import { FooterDrawer } from './FooterDrawer';
 import type { MemberListApp } from './MemberList';
 import { fontFamily, monoFamily } from './theme';
 import { useActionCall, useUiState } from './useActionCall';
 
-/** Settle up as a drawer over the person, or the group for the whole plan. */
-export function SettleUpDrawer(props: { app: MemberListApp }) {
-  const back = useActionCall();
-
-  return (
-    <Drawer title="Settle up" onClose={() => { if (back.can('closePanel')) void back.call('closePanel', {}); }}>
-      <ScrollView style={{ flexShrink: 1 }}>
-        <SettleUp app={props.app} />
-      </ScrollView>
-      <ErrorMessage message={back.error} />
-    </Drawer>
-  );
-}
-
-/**
- * The payments in the group's settle-up plan: all of them, or those involving
- * one person. Record records a payment as planned; a different or partial
- * payment opens the repayment form.
- */
-function SettleUp(props: { app: MemberListApp }) {
-  const person = useUiState().person;
-  const replica = props.app.snapshot().group;
+/** The payments to settle: one person's, or the whole group's plan. */
+function plannedPayments(app: MemberListApp, person: string | null) {
+  const replica = app.snapshot().group;
   const snapshot = replica?.projected_snapshot;
-  const repayment = useRepaymentForm();
-  const record = useActionCall();
 
   if (!snapshot || !replica) return null;
   const you = preferredMember(snapshot, replica.session?.identity.id)?.id;
-  const label = (memberId: string) => (memberId === you ? 'You' : memberName(snapshot, memberId));
-  const payments = person ? memberSettlements(snapshot, person) : settlementSuggestions(snapshot);
+
+  return { snapshot, you, payments: person ? memberSettlements(snapshot, person) : settlementSuggestions(snapshot) };
+}
+
+/**
+ * Settle up, pinned at the person's foot while they are in a payment of the
+ * group's plan. It opens the plan's payments as a drawer above it, like New
+ * group, and then records a different payment.
+ */
+export function SettleUpFooter(props: { app: MemberListApp }) {
+  const ui = useUiState();
+  const person = ui.person;
+  const open = ui.view === 'settle';
+  const settle = useActionCall();
+  const back = useActionCall();
+  const repayment = useRepaymentForm();
+  const { height } = useWindowDimensions();
+  const plan = plannedPayments(props.app, person);
+
+  // Settled people have nothing to open, unless it is already open and showing ✓ Settled.
+  if (!plan || (!plan.payments.length && !open)) return null;
+  const { snapshot, you, payments } = plan;
+  const count = payments.length;
   // A different payment starts from the person, or from you for the whole group.
   const from = person ?? you ?? repaymentMembers(snapshot)[0]?.id ?? '';
   const other = you && you !== from ? you : repaymentMembers(snapshot).find((member) => member.id !== from)?.id ?? '';
+
+  function recordDifferent(): void {
+    const owes = payments.find((entry) => entry.from_member_id === from || entry.to_member_id === from);
+
+    repayment.open({ from, to: owes ? (owes.from_member_id === from ? owes.to_member_id : owes.from_member_id) : other, amount: owes ? formatAmount(owes.amount, owes.currency) : '', currency: owes?.currency ?? noCurrency, manual: true });
+  }
+
+  return (
+    <FooterDrawer
+      open={open}
+      title="Settle up"
+      closeLabel={person ? `Back to ${memberName(snapshot, person)}` : 'Back to group'}
+      closeText="Close"
+      onClose={() => { void back.call('closePanel', {}); }}
+      footer={(
+        <>
+          <ErrorMessage message={settle.error ?? back.error ?? repayment.action.error} />
+          {open ? (
+            <FooterButton label="Record a different payment" disabled={repayment.action.busy || !from || !other} onPress={recordDifferent}>
+              Record a different payment
+            </FooterButton>
+          ) : (
+            <FooterButton
+              label={`Settle up, ${count === 1 ? '1 payment' : `${count} payments`}`}
+              disabled={!settle.can('showSettleUp', person ? { memberId: person } : {})}
+              onPress={() => { void settle.call('showSettleUp', person ? { memberId: person } : {}); }}
+            >
+              Settle up
+            </FooterButton>
+          )}
+        </>
+      )}
+    >
+      <ScrollView style={{ maxHeight: height * 0.5 }}>
+        <SettleUpPayments app={props.app} />
+      </ScrollView>
+    </FooterDrawer>
+  );
+}
+
+/** The plan's payments, each recorded as planned with Record. */
+function SettleUpPayments(props: { app: MemberListApp }) {
+  const person = useUiState().person;
+  const record = useActionCall();
+  const plan = plannedPayments(props.app, person);
+
+  if (!plan) return null;
+  const { snapshot, you, payments } = plan;
+  const label = (memberId: string) => (memberId === you ? 'You' : memberName(snapshot, memberId));
 
   return (
     <View>
@@ -71,25 +120,8 @@ function SettleUp(props: { app: MemberListApp }) {
             <Text style={{ fontFamily, fontSize: 18, fontWeight: '600', color: colors.settledInk }}>✓ {person ? 'Settled' : 'Everyone is settled up'}</Text>
           </View>
         ) : null}
-        <View style={s.ruled} />
       </View>
       <ErrorMessage message={record.error} />
-
-      <View style={{ alignItems: 'flex-start', paddingTop: 12 }}>
-        <Pressable
-          accessibilityRole="button"
-          disabled={repayment.action.busy || !from || !other}
-          onPress={() => {
-            const owes = payments.find((entry) => entry.from_member_id === from || entry.to_member_id === from);
-
-            repayment.open({ from, to: owes ? (owes.from_member_id === from ? owes.to_member_id : owes.from_member_id) : other, amount: owes ? formatAmount(owes.amount, owes.currency) : '', currency: owes?.currency ?? noCurrency, manual: true });
-          }}
-          style={({ pressed }) => [{ height: 44, justifyContent: 'center' }, pressed && s.pressed, (!from || !other) && s.dim]}
-        >
-          <Text style={[s.headerActionText, s.link]}>Record a different payment</Text>
-        </Pressable>
-      </View>
-      <ErrorMessage message={repayment.action.error} />
     </View>
   );
 }

@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { memberHasRecords, memberSettlements, participantsForMember, preferredMember } from '@splitnext/client';
+import { memberHasRecords, participantsForMember, preferredMember } from '@splitnext/client';
 import { memberBreakdown } from '../model/breakdown';
 import { balanceRows, memberName } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
-import { BackButton, BalanceBar, Button, ErrorMessage, FooterButton, ListRow, Notice, ScreenHeader, balanceColor, colors, s, signedFigure, titleStyle } from './components';
+import { BackButton, BalanceBar, Button, ErrorMessage, ListRow, Notice, ScreenHeader, balanceColor, colors, s, signedFigure, titleStyle } from './components';
 import { repaymentTitle } from './ExpenseList';
 import { PencilIcon } from './icons';
 import { MemberIcon, MemberNameInput, presenceText, type MemberListApp } from './MemberList';
@@ -134,31 +134,6 @@ export function PersonHeader(props: { app: MemberListApp }) {
         )}
       />
       <ErrorMessage message={back.error ?? save.error ?? edit.error ?? claim.error} />
-    </>
-  );
-}
-
-/** Settle up, pinned at the foot while the person is in a payment of the group's plan. */
-export function PersonFooter(props: { app: MemberListApp }) {
-  const settle = useActionCall();
-  const memberId = useUiState().person;
-  const snapshot = props.app.snapshot().group?.projected_snapshot;
-
-  if (!memberId || !snapshot) return null;
-  const payments = memberSettlements(snapshot, memberId).length;
-
-  if (!payments) return null;
-
-  return (
-    <>
-      <ErrorMessage message={settle.error} />
-      <FooterButton
-        label={`Settle up, ${payments === 1 ? '1 payment' : `${payments} payments`}`}
-        disabled={!settle.can('showSettleUp', { memberId })}
-        onPress={() => { void settle.call('showSettleUp', { memberId }); }}
-      >
-        Settle up
-      </FooterButton>
     </>
   );
 }

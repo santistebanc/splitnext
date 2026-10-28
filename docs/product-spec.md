@@ -211,9 +211,10 @@ before the first expense and after the last one is removed. An unassigned
 installation is asked to tap its name in the balances.
 
 Tapping a person opens their details (see above), and their Settle up opens a
-drawer over those details with the payments in the group's plan that involve
+drawer upward from the button, like New group, while the details dim. It has
+Settle up with Close, then the payments in the group's plan that involve
 them, each From → To with its amount and Record, which records it as
-planned, then Record a different payment, which opens the repayment form with
+planned. The button becomes Record a different payment, which opens the repayment form with
 the first planned amount for a partial or other payment. When nothing is owed
 it shows ✓ Settled. The repayment form is a page with Cancel in the header, with Delete beside it
 for a recorded repayment, and Save at the foot. Match the expense editor: Cancel and Delete in the header, the same
@@ -280,7 +281,7 @@ did what, with its detail in the monospaced face, an orange mark when it is
 new, and Undo or, for removals, Restore where safe.
 
 Details, forms and Activity are pages with Back to where they were opened.
-Settle up is a drawer over the details; closing it, tapping outside it, or
+Settle up is a drawer from the details' button; Close, tapping above it, or
 browser Back returns to them. Every screen, and the invite link opened in place, is in browser
 Back/Forward history, and repayment drafts survive screen changes.
 Opening a view afresh starts at the top with its header expanded, including
