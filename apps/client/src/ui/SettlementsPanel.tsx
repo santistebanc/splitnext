@@ -1,8 +1,7 @@
 import { Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { parseAmount, preferredMember, repaymentMembers, settlementSuggestions, type ClientReplicaState } from '@splitnext/client';
 import { memberName, moneyLabel } from '../model/expenses';
-import { ErrorMessage, HeaderAction, ScreenHeader, SectionHeading, colors, s } from './components';
-import { RepaymentRow } from './ExpenseList';
+import { ErrorMessage, HeaderAction, ScreenHeader, colors, s } from './components';
 import { MemberDropdown } from './MemberDropdown';
 import { between, useCompactProgress } from './pageScroll';
 import { fontFamily } from './theme';
@@ -131,28 +130,6 @@ export function SettlementsPanel(props: { replica: ClientReplicaState }) {
               : `${personName(snapshot, owed.from_member_id, you, true)} ${owed.from_member_id === you ? 'owe' : 'owes'} ${moneyLabel(owed.amount, owed.currency)}. Paid outside splitnext.`
             : 'Paid outside splitnext.'}
         </Text>
-      </View>
-
-      <RepaymentHistory replica={props.replica} />
-    </View>
-  );
-}
-
-/** Recorded repayments, newest first; each opens in the repayment form. */
-function RepaymentHistory(props: { replica: ClientReplicaState }) {
-  const snapshot = props.replica.projected_snapshot;
-  const draft = useUiState().repayment;
-
-  if (!snapshot) return null;
-  const recorded = snapshot.settlements.filter((entry) => entry.status === 'active' && entry.id !== draft.settlementId).toReversed();
-
-  if (!recorded.length) return null;
-
-  return (
-    <View>
-      <SectionHeading title="Earlier repayments" />
-      <View style={s.listCard}>
-        {recorded.map((entry, index) => <RepaymentRow key={entry.id} replica={props.replica} settlement={entry} first={index === 0} />)}
       </View>
     </View>
   );

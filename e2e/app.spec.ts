@@ -1152,7 +1152,8 @@ test('records planned and other repayments offline', async ({ page, context }) =
   expect(await page.locator('#splitnext-page').evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 
   await button(page, 'Record a different payment').click();
-  await expect(button(page, 'Change repayment: Benjamin Alexander paid you back 10.00')).toBeVisible();
+  await expect(heading(page, 'Earlier repayments')).toHaveCount(0);
+  await expect(button(page, /^Change repayment:/)).toHaveCount(0);
   await field(page, 'Amount').fill('5');
   await button(page, 'Record repayment').click();
   await expect(button(page, 'Benjamin Alexander pays you 15.00. Record this payment')).toBeVisible();
