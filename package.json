@@ -30,9 +30,13 @@
     "test:e2e": "playwright test",
     "showcase": "npm run frontend:build && node showcase/build.mjs clean && playwright test -c showcase/playwright.config.ts && node showcase/build.mjs",
     "showcase:page": "node showcase/build.mjs",
-    "check:fast": "node scripts/check-text.mjs && npm run types:check && npm run lint && npm run typecheck && npm run app:typecheck && wrangler deploy --dry-run --outdir .wrangler/dry-run && npm test",
+    "check:fast": "node scripts/check-text.mjs && npm run types:check && npm run lint && npm run typecheck && npm run app:typecheck && wrangler deploy --dry-run --outdir .wrangler/dry-run && npm run lab:test && npm test",
     "check": "npm run frontend:check && npm run check:fast && npm run test:e2e",
-    "prepare": "node scripts/install-hooks.mjs"
+    "prepare": "node scripts/install-hooks.mjs",
+    "lab": "node lab/server.mjs",
+    "lab:cli": "node lab/cli.mjs",
+    "lab:test": "node --test lab/test.mjs",
+    "lab:acceptance": "node lab/acceptance.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.1.9",

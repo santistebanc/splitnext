@@ -32,6 +32,8 @@ If a decision changes, update the relevant document in the same slice.
 
 ## Agent skills
 
+For multi-device experiments or sync bugs, use the isolated [device lab](docs/agents/device-lab.md).
+
 ### Issue tracker
 
 Tickets live in GitHub Issues for `santistebanc/splitnext`. See `docs/agents/issue-tracker.md`.
