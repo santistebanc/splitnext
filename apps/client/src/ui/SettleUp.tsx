@@ -66,6 +66,8 @@ export function SettleUpFooter(props: { app: MemberListApp }) {
   );
 }
 
+const nameStyle = { fontFamily, fontSize: 17, lineHeight: 22, fontWeight: '600', color: colors.ink } as const;
+
 /** The plan's payments, each recorded as planned with Record. */
 function SettleUpPayments(props: { app: MemberListApp }) {
   const person = useUiState().person;
@@ -85,15 +87,19 @@ function SettleUpPayments(props: { app: MemberListApp }) {
           const amount = moneyLabel(entry.amount, entry.currency);
 
           return (
-            <View key={`${entry.currency}:${entry.from_member_id}:${entry.to_member_id}`} style={[{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16 }, s.ruled]}>
-              <Text style={{ flex: 1, fontFamily, fontSize: 18, lineHeight: 22, fontWeight: '600', color: colors.ink }}>{payer} → {payee === 'You' ? 'you' : payee}</Text>
-              <Text style={{ fontFamily: monoFamily, fontSize: 18, fontWeight: '500', color: colors.ink }}>{amount}</Text>
+            // Who pays, who is paid, and the amount take a line each, names truncating; Record never gives way.
+            <View key={`${entry.currency}:${entry.from_member_id}:${entry.to_member_id}`} style={[{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 }, s.ruled]}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text numberOfLines={1} style={nameStyle}>{payer}</Text>
+                <Text numberOfLines={1} style={nameStyle}>→ {payee === 'You' ? 'you' : payee}</Text>
+                <Text numberOfLines={1} style={{ paddingTop: 2, fontFamily: monoFamily, fontSize: 17, lineHeight: 22, fontWeight: '500', color: colors.ink }}>{amount}</Text>
+              </View>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`${payer} ${payer === 'You' ? 'pay' : 'pays'} ${payee === 'You' ? 'you' : payee} ${moneyLabel(entry.amount, entry.currency)}. Record this payment`}
                 disabled={record.busy || !record.can('recordSettlement', { from: entry.from_member_id, to: entry.to_member_id, amount, currency: entry.currency })}
                 onPress={() => { void record.call('recordSettlement', { from: entry.from_member_id, to: entry.to_member_id, amount, currency: entry.currency }); }}
-                style={({ pressed }) => [{ height: 44, paddingHorizontal: 18, justifyContent: 'center', backgroundColor: colors.action }, pressed && s.pressed]}
+                style={({ pressed }) => [{ flexShrink: 0, height: 44, paddingHorizontal: 18, justifyContent: 'center', backgroundColor: colors.action }, pressed && s.pressed]}
               >
                 <Text style={{ fontFamily, fontSize: 15, fontWeight: '600', color: colors.actionInk }}>Record</Text>
               </Pressable>
