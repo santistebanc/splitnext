@@ -332,6 +332,33 @@ test('dims the rest while a name or the join link is edited, and a tap there onl
   await expect(cover).toHaveCount(0);
 });
 
+test('wraps long names onto more lines while renaming, and Enter still saves', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await createGroup(page, 'Wrap', 'Ana');
+  await addMember(page, 'Ben');
+
+  const renames = [
+    { open: 'Rename group', field: 'Group name', name: 'A very long group name that keeps going well past one line' },
+    { open: 'Rename Ben', field: 'Name', name: 'Bartholomew Maximilian Fitzgerald-Worthington the Third' },
+  ];
+
+  for (const rename of renames) {
+    if (rename.open === 'Rename Ben') await person(page, 'Ben').click();
+    await button(page, rename.open).click();
+    const input = field(page, rename.field);
+    const oneLine = (await input.boundingBox())!.height;
+
+    // The field grows a line at a time instead of scrolling sideways.
+    await input.fill(rename.name);
+    await expect.poll(async () => (await input.boundingBox())!.height).toBeGreaterThan(oneLine * 1.5);
+    expect(await input.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`wrap-${rename.field.toLowerCase().replace(' ', '-')}.png`) });
+    await input.press('Enter');
+    await expect(input).toHaveCount(0);
+    await expect(heading(page, rename.name)).toBeVisible();
+  }
+});
+
 test('keeps the fixed theme and group-list branding when offline', async ({ page, context }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });

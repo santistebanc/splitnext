@@ -6,13 +6,14 @@ import { balanceRows, memberName } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
 import { BackButton, BalanceBar, Button, ErrorMessage, ListRow, Notice, ScreenHeader, balanceColor, colors, s, signedFigure, titleStyle } from './components';
 import { EditCover } from './EditCover';
+import { TitleField } from './TitleField';
 import { repaymentTitle } from './ExpenseList';
 import { PencilIcon } from './icons';
-import { MemberIcon, MemberNameInput, presenceText, type MemberListApp } from './MemberList';
+import { MemberIcon, presenceText, type MemberListApp } from './MemberList';
 import { between, useCompactProgress } from './pageScroll';
 import { fontFamily, monoFamily } from './theme';
 import { morph } from './ScreenMorph';
-import { useActionCall, useUiState } from './useActionCall';
+import { useActionCall, useActions, useUiState } from './useActionCall';
 
 /** A person's balance in each recorded currency, settled zeros included. */
 function personBalances(snapshot: Parameters<typeof balanceRows>[0] | undefined, memberId: string) {
@@ -71,6 +72,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
   const participants = replica && memberId ? participantMarkers(replica, memberId, props.app.client.presence(replica.group_id), state.online && state.reachable) : [];
 
   const nameField = useRef<TextInput>(null);
+  const actions = useActions();
 
   function finishRename(): void {
     if (save.can('saveMemberEdit')) void save.call('saveMemberEdit', {});
@@ -85,13 +87,15 @@ export function PersonHeader(props: { app: MemberListApp }) {
         heading={(
           <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             {renaming ? (
-              <MemberNameInput
+              <TitleField
                 inputRef={nameField}
-                name={ui.memberEdit?.name ?? ''}
+                accessibilityLabel="Name"
                 placeholder="Name"
-                autoFocus
-                onSave={finishRename}
-                style={[titleStyle(progress), { flex: 1, minWidth: 0, paddingBottom: 4, borderBottomWidth: 1.5, borderColor: colors.ink }]}
+                value={ui.memberEdit?.name ?? ''}
+                onChangeText={(value) => { void actions.dispatch('changeDraft', { field: 'member.name', value }, { origin: 'ui' }); }}
+                maxLength={100}
+                onBlur={finishRename}
+                style={{ ...titleStyle(progress), paddingBottom: 4, borderBottomWidth: 1.5, borderColor: colors.ink }}
               />
             ) : (
               <>
