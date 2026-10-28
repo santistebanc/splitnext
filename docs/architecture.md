@@ -697,3 +697,10 @@ Undo sends the ordinary opposite command, which `inverseIntent` (`src/domain/rev
 Group renames compare their affected state and the latest audit event for that target, including intervening changes that returned to an earlier value. Member additions, renames, removals, restorations, and their reversals compare the member's current state and latest audit event the same way; undoing an addition is refused with `undo_member_referenced` once expenses or repayments name the member. Group creation, access changes and invite replacement have no reversal.
 
 The Activity count refreshes canonical Activity for the open group on each new revision while connected (`useActivityFeed`). It counts visible events from other identities after the installation's seen sequence for that group, plus the replica's conflict notices. `AppUiState.activitySeen` keeps seen sequences per group in localStorage through a `SeenStorage` adapter; the first Activity read for a group sets the baseline, so existing history never counts as new. Opening `ActivityPanel` dispatches `markActivitySeen` to advance it, and again as entries arrive while it is open; new tags come from the seen sequence on arrival. Conflict notices are reviewed in Activity's Needs your review block, and affected expenses and repayments show a dot; nothing else shows review status. Sync errors and outbox indicators stay independent.
+
+Activity entries offer a compact accessible record action for expenses, repayments,
+and members only when the existing navigation action is available. Back or Cancel
+returns to Activity. Referenced names and expense descriptions are emphasized using
+structured text segments, preserving literal punctuation and flat text labels.
+Unavailable Undo actions have no passive explanation; safe reversal checks, failed
+action errors, and actionable conflict review remain.

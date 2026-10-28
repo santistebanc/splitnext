@@ -2747,3 +2747,42 @@ test('collapses a two-line group title without a sudden header jump', async ({ p
   await button(page, 'Scroll to top').click();
   await expect(title).toHaveCSS('font-size', '32px');
 });
+
+
+test('opens canonical Activity records and returns, keeping unavailable actions hidden', async ({ page }) => {
+  await createGroup(page, 'Activity links', 'Ana');
+  await addMember(page, 'Ben');
+  await addExpense(page, 'Dinner', '24');
+  await person(page, 'Ben').click();
+  await button(page, 'Settle up, 1 payment').click();
+  await button(page, 'Ben pays you 12.00. Record this payment').click();
+  await button(page, 'Back to Ben').click();
+  await button(page, 'Back to Activity links').click();
+  await addMember(page, 'Cy');
+  await bell(page).click();
+  await button(page, 'Undo: You added Cy').click();
+  await expect(button(page, 'Open member: You added Cy')).toHaveCount(0);
+  await expect(button(page, 'Open member: You removed Cy')).toHaveCount(0);
+  await expect(button(page, 'Restore member')).toBeVisible();
+  await expect(button(page, 'Undo: You added Ben')).toHaveCount(0);
+  await expect(page.getByText(/cannot be removed by undoing/)).toHaveCount(0);
+  await button(page, 'Open member: You added Ben').click();
+  await expect(heading(page, 'Ben')).toBeVisible();
+  await button(page, 'Back to Activity').click();
+  await button(page, 'Open repayment: You recorded a repayment').click();
+  await button(page, 'Cancel').click();
+  await expect(heading(page, 'Activity')).toBeVisible();
+  await button(page, 'Open expense: You added Dinner').click();
+  await button(page, 'Cancel').click();
+  await expect(heading(page, 'Activity')).toBeVisible();
+  const title = page.getByText('Dinner', { exact: true });
+  await expect(title).toHaveCSS('font-weight', '600');
+  await button(page, 'Undo: You added Dinner').click();
+  await expect(button(page, 'Open expense: You added Dinner')).toHaveCount(0);
+  await expect(button(page, 'Open expense: You removed Dinner')).toHaveCount(0);
+  await expect(button(page, 'Restore expense')).toBeVisible();
+  await button(page, 'Undo: You recorded a repayment').click();
+  await expect(button(page, 'Open repayment: You recorded a repayment')).toHaveCount(0);
+  await expect(button(page, 'Open repayment: You removed a repayment')).toHaveCount(0);
+  await expect(button(page, 'Restore repayment')).toBeVisible();
+});
