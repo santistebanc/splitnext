@@ -1666,13 +1666,15 @@ test('undoes a money change and then reverses that undo through Activity', async
   await button(page, 'Back to Ben').click();
   await button(page, 'Back to Money undo').click();
   await bell(page).click();
+  // Undo is the ordinary opposite action, entered in Activity as itself.
   await button(page, 'Undo: You recorded a repayment').click();
-  await expect(page.getByText('You undid a change', { exact: true })).toBeVisible();
+  await expect(page.getByText('You removed a repayment', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Undo: You recorded a repayment', disabled: false })).toHaveCount(0);
-  await button(page, 'Undo: You undid a change').click();
+  await expect(page.getByText(/undid/)).toHaveCount(0);
 
-  // Two undo entries, the newer one naming the undo it reverses in its detail.
-  await expect(page.getByText('You undid a change', { exact: true })).toHaveCount(3);
+  // Reversing that is restoring the repayment.
+  await button(page, 'Restore repayment').click();
+  await expect(page.getByText('You restored a repayment', { exact: true })).toBeVisible();
   await button(page, 'Back to Money undo').click();
   await expect(button(page, 'Change repayment: Ben paid you back 12.00')).toBeVisible();
 });
@@ -1697,7 +1699,10 @@ test('undoes member changes in Activity as well as a group rename', async ({ pag
   await button(page, 'Undo: You renamed the group').click();
   await button(page, 'Undo: You renamed Cy').click();
   await button(page, 'Undo: You added Ben').click();
-  await expect(page.getByText('You undid a change', { exact: true })).toHaveCount(3);
+  await expect(page.getByText('You renamed the group', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('You renamed Cynthia', { exact: true })).toBeVisible();
+  await expect(page.getByText('You removed Ben', { exact: true })).toBeVisible();
+  await expect(page.getByText(/undid/)).toHaveCount(0);
   await expect(button(page, 'Undo: You created the group')).toHaveCount(0);
   await button(page, 'Back to Original name').click();
   await expect(heading(page, 'Original name')).toBeVisible();

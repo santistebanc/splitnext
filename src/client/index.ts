@@ -503,4 +503,4 @@ export { memberSettlements, repaymentMembers, settlementSuggestions, settlementE
 
 export { type AuditEvent } from '../domain/audit';
 
-export { reversibleEffect, undoProblem, undoExplanation } from '../domain/reversals';
+export { reversibleEffect, undoProblem, undoExplanation, inverseIntent } from '../domain/reversals';
