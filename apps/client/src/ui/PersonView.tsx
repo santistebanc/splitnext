@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Pressable, Text, View, type TextInput } from 'react-native';
 import { memberHasRecords, participantsForMember, preferredMember } from '@splitnext/client';
 import { memberBreakdown } from '../model/breakdown';
 import { balanceRows, memberName } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
 import { BackButton, BalanceBar, Button, ErrorMessage, ListRow, Notice, ScreenHeader, balanceColor, colors, s, signedFigure, titleStyle } from './components';
+import { EditCover } from './EditCover';
 import { repaymentTitle } from './ExpenseList';
 import { PencilIcon } from './icons';
 import { MemberIcon, MemberNameInput, presenceText, type MemberListApp } from './MemberList';
@@ -69,6 +70,8 @@ export function PersonHeader(props: { app: MemberListApp }) {
   const recorded = memberId && snapshot ? memberBreakdown(snapshot, memberId).length > 0 : false;
   const participants = replica && memberId ? participantMarkers(replica, memberId, props.app.client.presence(replica.group_id), state.online && state.reachable) : [];
 
+  const nameField = useRef<TextInput>(null);
+
   function finishRename(): void {
     if (save.can('saveMemberEdit')) void save.call('saveMemberEdit', {});
   }
@@ -83,6 +86,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
           <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             {renaming ? (
               <MemberNameInput
+                inputRef={nameField}
                 name={ui.memberEdit?.name ?? ''}
                 placeholder="Name"
                 autoFocus
@@ -133,6 +137,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
           </View>
         )}
       />
+      <EditCover open={renaming} target={nameField} onPress={() => nameField.current?.blur()} />
       <ErrorMessage message={back.error ?? save.error ?? edit.error ?? claim.error} />
     </>
   );

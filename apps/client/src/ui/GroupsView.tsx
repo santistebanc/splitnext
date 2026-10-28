@@ -4,6 +4,7 @@ import { parseInviteLink, type ClientGroupSummary } from '@splitnext/client';
 import type { AppController } from '../model/controller';
 import { BrandMark } from './BrandMark';
 import { CreateGroup, useSubmitCreate } from './CreateGroup';
+import { EditCover } from './EditCover';
 import { FooterDrawer } from './FooterDrawer';
 import { between, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
@@ -80,6 +81,12 @@ export function GroupsHeader() {
   const [invalid, setInvalid] = useState(false);
   const field = useRef<TextInput>(null);
   const joinToggle = useRef<View>(null);
+  const joinPanel = useRef<View>(null);
+
+  function close(): void {
+    setOpen(false);
+    setInvalid(false);
+  }
 
   function submit(): void {
     if (!parseInviteLink(link.trim())) {
@@ -111,9 +118,9 @@ export function GroupsHeader() {
           </Pressable>
         )}
         underRow={(
-          <Reveal toggle={joinToggle} onOutsidePress={() => { setOpen(false); setInvalid(false); }}>
+          <Reveal toggle={joinToggle} onOutsidePress={close}>
             {open ? (
-              <View style={{ gap: 8, paddingTop: 4 }}>
+              <View ref={joinPanel} style={{ gap: 8, paddingTop: 4 }}>
                 <View style={[s.fieldRow, invalid && { borderColor: colors.owes }]}>
                   <TextInput
                     ref={field}
@@ -156,6 +163,7 @@ export function GroupsHeader() {
           </View>
         )}
       />
+      <EditCover open={open} target={joinPanel} onPress={close} />
       <ErrorMessage message={join.error} />
     </>
   );

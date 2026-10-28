@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type RefObject } from 'react';
 import { Platform, TextInput, View, type StyleProp, type TextStyle } from 'react-native';
 import type { ClientReplicaState } from '@splitnext/client';
 import { memberStatus, type ParticipantMarker } from '../model/memberPresentation';
@@ -60,9 +60,12 @@ export function MemberNameInput(props: {
   onChangeText?: ((value: string) => void) | undefined;
   autoFocus?: boolean;
   style?: StyleProp<TextStyle>;
+  /** The field itself, for whatever has to find it, such as the cover around it. */
+  inputRef?: RefObject<TextInput | null>;
 }) {
   const actions = useActions();
-  const input = useRef<TextInput>(null);
+  const own = useRef<TextInput>(null);
+  const input = props.inputRef ?? own;
 
   return (
     <TextInput
