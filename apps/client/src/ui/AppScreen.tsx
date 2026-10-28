@@ -6,6 +6,7 @@ import { clientErrorKind, parseInviteLink } from '@splitnext/client';
 import { AppController } from '../model/controller';
 import { createDispatcher } from '../model/actions';
 import { browserActionPlatform } from './browserPlatform';
+import { attachLabBridge } from '../lab/bridge';
 import { createBrowserApp } from '../model/browser';
 import { ViewTransition } from './ViewTransition';
 import { SyncStatus } from './ConnectionStatus';
@@ -212,6 +213,7 @@ function ReadyApp(props: AppProps) {
     actions.executions.snapshot,
   );
 
+  useEffect(() => attachLabBridge(app, actions), [app, actions]);
   useActivityFeed(app, state);
   // Settle up is a drawer rising from the person's footer.
   const settling = ui.view === 'settle';
