@@ -718,3 +718,6 @@ Expenses and settlements are accepted behavior.
 
 Expense split rows share an amount column sized to their widest displayed amount.
 Share controls sit directly beside that column, leaving the remaining width for names.
+
+Tapping a compact screen title scrolls its current view all the way to the top.
+Expanded titles retain their existing actions.
