@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { reversibleEffect, undoProblem, undoExplanation, type ClientReplicaState } from '@splitnext/client';
-import { describeActivity, newActivity, visibleActivity } from '../model/activity';
+import { reversibleEffect, undoProblem, type ClientReplicaState } from '@splitnext/client';
+import { activityTarget, describeActivity, newActivity, visibleActivity } from '../model/activity';
 import { reviewDetail, reviewTitle } from '../model/notices';
 import { BackHeader } from './BackHeader';
-import { EmptyState, ErrorMessage, Notice, SectionHeading, Tag, colors, s } from './components';
-import { InfoIcon } from './icons';
+import { EmptyState, ErrorMessage, SectionHeading, Tag, colors, s } from './components';
+import { ArrowRightIcon } from './icons';
 import type { MemberListApp } from './MemberList';
 import { StickyTop } from './StickyTop';
 import { fontFamily, monoFamily } from './theme';
@@ -163,6 +163,7 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
             {day.events.map((event) => {
               const entry = describeActivity(event, props.replica);
               const isNew = fresh.has(event.id);
+              const target = activityTarget(event);
               const label = `${entry.who} ${entry.what}`;
               const change = event.change.action;
               const removal = change === 'expense.removed' || change === 'settlement.removed' || change === 'member.removed';
@@ -182,13 +183,18 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
                   <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
                     <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
                       <Text style={{ fontFamily, fontSize: 16, lineHeight: 21, color: colors.ink }}>
-                        <Text style={{ fontWeight: '700' }}>{entry.who}</Text> {entry.what}
+                        <Text style={{ fontWeight: '700' }}>{entry.who}</Text> {entry.whatSegments.map((part, index) => <Text key={index} style={part.reference ? { fontWeight: '600' } : undefined}>{part.text}</Text>)}
                       </Text>
-                      {entry.detail ? <Text style={{ fontFamily: monoFamily, fontSize: 13, fontWeight: '500', color: colors.muted }}>{entry.detail}</Text> : null}
+                      {entry.detail ? <Text style={{ fontFamily: monoFamily, fontSize: 13, fontWeight: '500', color: colors.muted }}>{entry.detailSegments.map((part, index) => <Text key={index} style={part.reference ? { fontFamily, fontWeight: '600', color: colors.ink } : undefined}>{part.text}</Text>)}</Text> : null}
                     </View>
                     {/* The time, then whether it is new, then Undo or Restore, in one column at the end. */}
                     <View style={{ alignItems: 'flex-end', gap: 8, paddingTop: 2 }}>
                       <Text style={{ fontFamily, fontSize: 12, color: colors.muted }}>{timeLabel(new Date(event.occurred_at))}</Text>
+                      {target && action.can(target.name, target.input) ? (
+                        <Pressable accessibilityRole="button" accessibilityLabel={target.label + ': ' + label} hitSlop={6} onPress={() => { void action.call(target.name, target.input); }} style={({ pressed }) => [{ minWidth: 32, minHeight: 32, borderWidth: 1, borderColor: colors.ink, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed]}>
+                          <ArrowRightIcon size={16} />
+                        </Pressable>
+                      ) : null}
                       {isNew ? <Tag tone="warning">new</Tag> : null}
                       {reversible && !problem ? (
                         <EntryAction icon text="Undo" label={`Undo: ${label}`} disabled={!action.can('undoChange', { eventId: event.id })} onPress={() => { void action.call('undoChange', { eventId: event.id }); }} />
@@ -198,8 +204,6 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
                       {restorable && change === 'member.removed' ? <EntryAction icon text="Restore" label="Restore member" disabled={!action.can('restoreMember', { memberId: event.target.id })} onPress={() => { void action.call('restoreMember', { memberId: event.target.id }); }} /> : null}
                     </View>
                   </View>
-                  {/* A later change simply leaves no Undo; only other reasons are explained. */}
-                  {problem && problem !== 'undo_changed' ? <Notice tone="info" icon={<InfoIcon color={colors.soft} />} message={undoExplanation(problem)} /> : null}
                   </View>
                 </View>
               );

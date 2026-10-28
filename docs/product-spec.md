@@ -339,6 +339,13 @@ renames, group creation and renames, participants joining or leaving, and invite
 replacement. Presence and preferred-member selections do not appear in the
 feed. Existing append-only audit attribution remains authoritative.
 
+Activity entries offer a compact accessible record action for expenses, repayments,
+and members only when the existing navigation action is available. Back or Cancel
+returns to Activity. Referenced names and expense descriptions are emphasized using
+structured text segments, preserving literal punctuation and flat text labels.
+Unavailable Undo actions have no passive explanation; safe reversal checks, failed
+action errors, and actionable conflict review remain.
+
 Any participant may undo another participant's reversible action, without a
 time limit, while it remains safe. Undo is the ordinary opposite action, such
 as removing an added expense or renaming back, and Activity shows it as that

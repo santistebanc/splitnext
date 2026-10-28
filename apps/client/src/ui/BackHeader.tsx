@@ -1,16 +1,17 @@
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { BackButton, ErrorMessage, ScreenHeader } from './components';
-import { useActionCall } from './useActionCall';
+import { useActionCall, useUiState } from './useActionCall';
 
 /** A details screen's header: back to where it was opened from, named in the first row, then the title. */
 export function BackHeader(props: { title: string; heading?: ReactNode; context: string; end?: ReactNode; error?: string | null; morph?: string; scrollRule?: boolean }) {
   const back = useActionCall();
+  const context = useUiState().trail.at(-1) === 'activity' ? 'Activity' : props.context;
 
   return (
     <View>
       <ScreenHeader
-        start={<BackButton label={`Back to ${props.context}`} text={props.context} disabled={!back.can('closePanel')} onPress={() => { void back.call('closePanel', {}); }} />}
+        start={<BackButton label={`Back to ${context}`} text={context} disabled={!back.can('closePanel')} onPress={() => { void back.call('closePanel', {}); }} />}
         title={props.title}
         heading={props.heading}
         end={props.end}

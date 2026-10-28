@@ -60,6 +60,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
   const replica = state.group;
   const snapshot = replica?.projected_snapshot;
   const group = snapshot?.group.name ?? '';
+  const backTo = ui.trail.at(-1) === 'activity' ? 'Activity' : group;
   const memberId = ui.person;
   const member = snapshot?.members.find((entry) => entry.id === memberId);
   const name = memberId ? memberName(snapshot, memberId) : '';
@@ -85,7 +86,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
   return (
     <>
       <ScreenHeader
-        start={<BackButton label={`Back to ${group}`} text={group} disabled={!back.can('closePanel')} onPress={() => { void back.call('closePanel', {}); }} />}
+        start={<BackButton label={`Back to ${backTo}`} text={backTo} disabled={!back.can('closePanel')} onPress={() => { void back.call('closePanel', {}); }} />}
         end={<ActivityLink app={props.app} />}
         heading={(
           <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 }}>

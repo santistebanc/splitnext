@@ -7,7 +7,34 @@ type Snapshot = ClientReplicaState['projected_snapshot'];
 export type ActivityKind = 'expense' | 'repayment' | 'people' | 'group';
 
 /** An Activity entry as people read it: who did what, and one line of detail. */
-export type ActivityEntry = { kind: ActivityKind; who: string; what: string; detail: string | null };
+export type ActivitySegment = { text: string; reference: boolean };
+
+type Prose = string | ActivitySegment[];
+
+const reference = (text: string): ActivitySegment => ({ text, reference: true });
+
+// These unions are internal formatting values, never unvalidated input.
+// oxlint-disable-next-line anti-slop/no-runtime-typeof
+const prose = (...parts: (string | ActivitySegment)[]): ActivitySegment[] => parts.map((part) => typeof part === 'string' ? { text: part, reference: false } : part);
+
+// oxlint-disable-next-line anti-slop/no-runtime-typeof
+const segments = (value: Prose): ActivitySegment[] => typeof value === 'string' ? prose(value) : value;
+
+const flat = (value: Prose): string => segments(value).map((part) => part.text).join('');
+
+export type ActivityEntry = { kind: ActivityKind; who: string; what: string; detail: string | null; whatSegments: ActivitySegment[]; detailSegments: ActivitySegment[] };
+
+/** The catalog retains all availability and navigation guards. */
+export function activityTarget(event: AuditEvent) {
+  const id = event.target.id;
+
+  switch (event.target.kind) {
+    case 'expense': return { name: 'showExpense', input: { expenseId: id }, label: 'Open expense' } as const;
+    case 'settlement': return { name: 'showSettlement', input: { settlementId: id }, label: 'Open repayment' } as const;
+    case 'member': return { name: 'showPerson', input: { memberId: id }, label: 'Open member' } as const;
+    default: return null;
+  }
+}
 
 /** Activity people see: every change except which member a device calls "you". */
 export function visibleActivity(activity: readonly AuditEvent[]): AuditEvent[] {
@@ -82,15 +109,15 @@ function split(expense: Expense): string {
   return `${moneyLabel(expense.total, expense.currency)} · split between ${expense.parts.length}`;
 }
 
-function payment(snapshot: Snapshot, entry: Settlement, amount = moneyLabel(entry.amount, entry.currency)): string {
-  return `${memberName(snapshot, entry.from_member_id)} paid ${memberName(snapshot, entry.to_member_id)} ${amount}`;
+function payment(snapshot: Snapshot, entry: Settlement, amount = moneyLabel(entry.amount, entry.currency)): Prose {
+  return prose(reference(memberName(snapshot, entry.from_member_id)), ' paid ', reference(memberName(snapshot, entry.to_member_id)), ` ${amount}`);
 }
 
-function edited(before: Expense, after: Expense): string {
+function edited(before: Expense, after: Expense): Prose {
   if (before.total !== after.total || before.currency !== after.currency)
     return `Amount ${moneyLabel(before.total, before.currency)} → ${moneyLabel(after.total, after.currency)}`;
 
-  if (before.description !== after.description) return `Was ${before.description}`;
+  if (before.description !== after.description) return prose('Was ', reference(before.description));
 
   return 'Who paid or how it’s split changed';
 }
@@ -100,7 +127,7 @@ export function describeActivity(event: AuditEvent, replica: ClientReplicaState)
   const snapshot = replica.projected_snapshot;
   const who = actorLabel(event, replica);
   const change = event.change;
-  const entry = (kind: ActivityKind, what: string, detail: string | null = null): ActivityEntry => ({ kind, who, what, detail });
+  const entry = (kind: ActivityKind, what: Prose, detail: Prose | null = null): ActivityEntry => ({ kind, who, what: flat(what), detail: detail === null ? null : flat(detail), whatSegments: segments(what), detailSegments: detail === null ? [] : segments(detail) });
 
   switch (change.action) {
     case 'change.undone': {
@@ -108,28 +135,28 @@ export function describeActivity(event: AuditEvent, replica: ClientReplicaState)
       const kind = change.after.kind === 'expense' ? 'expense' : change.after.kind === 'settlement' ? 'repayment' : change.after.kind === 'member' ? 'people' : 'group';
       const reversed = original ? describeActivity(original, replica) : null;
 
-      return entry(kind, 'undid a change', reversed ? `${reversed.who} ${reversed.what}` : null);
+      return entry(kind, 'undid a change', reversed ? prose(reference(reversed.who), ' ', ...reversed.whatSegments) : null);
     }
 
-    case 'group.created': return entry('group', 'created the group', change.after.group.name);
-    case 'group.renamed': return entry('group', 'renamed the group', `${change.before.name} → ${change.after.name}`);
-    case 'group.joined': return entry('people', 'joined', change.after.created_member ? `Added ${change.after.created_member.display_name}` : null);
-    case 'group.rejoined': return entry('people', 'rejoined', change.after.created_member ? `Added ${change.after.created_member.display_name}` : null);
+    case 'group.created': return entry('group', 'created the group', prose(reference(change.after.group.name)));
+    case 'group.renamed': return entry('group', 'renamed the group', prose(reference(change.before.name), ' → ', reference(change.after.name)));
+    case 'group.joined': return entry('people', 'joined', change.after.created_member ? prose('Added ', reference(change.after.created_member.display_name)) : null);
+    case 'group.rejoined': return entry('people', 'rejoined', change.after.created_member ? prose('Added ', reference(change.after.created_member.display_name)) : null);
     case 'group.left': return entry('people', 'left the group');
     case 'invite.created': return entry('group', 'replaced the invite link', 'The old link stopped working');
-    case 'member.created': return entry('people', `added ${change.after.display_name}`);
-    case 'member.renamed': return entry('people', `renamed ${change.before.display_name}`, `${change.before.display_name} → ${change.after.display_name}`);
+    case 'member.created': return entry('people', prose('added ', reference(change.after.display_name)));
+    case 'member.renamed': return entry('people', prose('renamed ', reference(change.before.display_name)), prose(reference(change.before.display_name), ' → ', reference(change.after.display_name)));
     case 'member.removed': {
       const member = snapshot?.members.find((item) => item.id === change.after.member.id);
 
-      return entry('people', `removed ${change.after.member.display_name}`, member?.status === 'hidden' ? `${change.after.member.display_name} still has open balances` : null);
+      return entry('people', prose('removed ', reference(change.after.member.display_name)), member?.status === 'hidden' ? prose(reference(change.after.member.display_name), ' still has open balances') : null);
     }
 
-    case 'member.restored': return entry('people', `restored ${change.after.display_name}`);
-    case 'expense.recorded': return entry('expense', `added ${change.after.expense.description}`, split(change.after.expense));
-    case 'expense.edited': return entry('expense', `changed ${change.after.expense.description}`, edited(change.before, change.after.expense));
-    case 'expense.removed': return entry('expense', `removed ${change.after.description}`, split(change.after));
-    case 'expense.restored': return entry('expense', `restored ${change.after.expense.description}`, split(change.after.expense));
+    case 'member.restored': return entry('people', prose('restored ', reference(change.after.display_name)));
+    case 'expense.recorded': return entry('expense', prose('added ', reference(change.after.expense.description)), split(change.after.expense));
+    case 'expense.edited': return entry('expense', prose('changed ', reference(change.after.expense.description)), edited(change.before, change.after.expense));
+    case 'expense.removed': return entry('expense', prose('removed ', reference(change.after.description)), split(change.after));
+    case 'expense.restored': return entry('expense', prose('restored ', reference(change.after.expense.description)), split(change.after.expense));
     case 'settlement.recorded': return entry('repayment', 'recorded a repayment', payment(snapshot, change.after.settlement));
     case 'settlement.edited': return entry('repayment', 'changed a repayment', payment(snapshot, change.after.settlement, `${moneyLabel(change.before.amount, change.before.currency)} → ${moneyLabel(change.after.settlement.amount, change.after.settlement.currency)}`));
     case 'settlement.removed': return entry('repayment', 'removed a repayment', payment(snapshot, change.after));
