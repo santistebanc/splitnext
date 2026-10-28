@@ -925,6 +925,12 @@ test('explains a balance and settles it with the fewest payments', async ({ page
   await button(page, 'Settle up, 1 payment').click();
   await expect(heading(page, 'Settle up')).toBeVisible();
   await expect(button(page, 'Ben pays you 10.00. Record this payment')).toBeVisible();
+
+  // Short names and the amount fit, so they share one line.
+  const drawer = page.getByRole('region', { name: 'Settle up' });
+  const tops = await Promise.all(['Ben', '→ you', '10.00'].map(async (text) => (await drawer.getByText(text, { exact: true }).boundingBox())!.y));
+
+  expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(4);
   await page.screenshot({ path: test.info().outputPath('settle-up-drawer.png') });
 
   // A partial payment, recorded as a Payment from the group, leaves the rest in the plan.
