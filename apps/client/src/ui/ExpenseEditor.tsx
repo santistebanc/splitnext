@@ -37,7 +37,7 @@ export function ExpenseEditorHeader(props: ExpenseEditorProps) {
         scrollRule={false}
       />
       {expense ? (
-        <Text testID="expense-timestamp" style={[s.caption, { textAlign: 'right' }]}>
+        <Text testID="expense-timestamp" style={[s.caption, { textAlign: 'left' }]}>
           {expense.updated_at === expense.created_at ? 'Created' : 'Last updated'} {whenLabel(new Date(expense.updated_at))}
         </Text>
       ) : null}
@@ -244,6 +244,7 @@ export function ExpenseControls() {
         <View ref={morph(draft.expenseId ? `eamt-${draft.expenseId}` : null)} style={{ flex: 1, minWidth: 0, flexDirection: 'row' }}>
         <AmountInput
           inputRef={amount}
+          align="right"
           value={draft.amount}
           currency={draft.currency}
           onChangeText={(value) => change('expense.amount', value)}

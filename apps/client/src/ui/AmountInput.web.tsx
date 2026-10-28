@@ -87,7 +87,7 @@ export function AmountInput(props: AmountInputProps) {
         flex: 1, minWidth: 0, width: '100%', height: props.height, padding: 0, border: 0,
         boxSizing: 'border-box', background: 'transparent', outline: 'none',
         color: colors.ink, fontFamily: monoFamily, fontSize: props.fontSize,
-        fontWeight: 500, letterSpacing: -0.05 * props.fontSize,
+        fontWeight: 500, letterSpacing: -0.05 * props.fontSize, textAlign: props.align ?? 'left',
         ...(props.inline && { textAlign: 'right', borderBottom: `1.5px solid ${colors.ink}`, letterSpacing: 0 }),
       }}
     />

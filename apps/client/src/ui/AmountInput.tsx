@@ -11,6 +11,7 @@ export type AmountInputProps = {
   currency: string;
   height: number;
   fontSize: number;
+  align?: 'left' | 'right';
   onChangeText: (value: string) => void;
   onSubmitEditing: () => void;
   /** What the field is called; the expense's own amount by default. */
@@ -47,7 +48,7 @@ export function AmountInput(props: AmountInputProps) {
       onSubmitEditing={props.onSubmitEditing}
       style={[
         s.amountInput,
-        { marginLeft: 0, paddingHorizontal: 15, height: props.height, fontSize: props.fontSize },
+        { marginLeft: 0, paddingHorizontal: 15, height: props.height, fontSize: props.fontSize, textAlign: props.align ?? 'left' },
         props.inline && { paddingHorizontal: 0, textAlign: 'right', borderWidth: 0, borderBottomWidth: 1.5, borderColor: colors.ink },
       ]}
     />
