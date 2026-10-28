@@ -2080,6 +2080,46 @@ test('morphs between screens and leaves nothing behind', async ({ page }) => {
   await expect(heading(page, 'Morphing')).toBeVisible();
 });
 
+test('keeps a scrolled group still beneath the opening expense sheet', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await createGroup(page, 'Still underneath', 'Ana');
+
+  for (let index = 0; index < 10; index++) await addExpense(page, `Item ${index}`, '20');
+
+  const scroller = page.locator('#splitnext-page');
+
+  await scroller.evaluate((node) => { node.scrollTop = 400; });
+  await expect(heading(page, 'Still underneath')).toHaveCSS('font-size', '18px');
+  const before = await scroller.evaluate((node) => ({ top: node.getBoundingClientRect().top, scroll: node.scrollTop }));
+
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+  const watching = page.evaluate(() => new Promise<{ top: number; scroll: number; title: string; amount: string }[]>((resolve) => {
+    const start = performance.now();
+    const samples: { top: number; scroll: number; title: string; amount: string }[] = [];
+
+    (function frame() {
+      const copied = document.querySelector('[data-copied-page]');
+      const title = document.querySelector('[aria-hidden] [data-morph^="gname-"]');
+      const amount = document.querySelector('#splitnext-page')?.parentElement?.parentElement?.querySelector('input[aria-label="Amount"]');
+
+      if (copied && title && amount) samples.push({ top: copied.getBoundingClientRect().top, scroll: copied.scrollTop, title: getComputedStyle(title).fontSize, amount: getComputedStyle(amount).fontSize });
+
+      if (performance.now() - start < 700) requestAnimationFrame(frame);
+      else resolve(samples);
+    })();
+  }));
+
+  await button(page, 'Add expense').click();
+  const samples = await watching;
+
+  expect(samples.length).toBeGreaterThan(5);
+  expect(samples.filter((sample) => Math.abs(sample.top - before.top) > 1 || Math.abs(sample.scroll - before.scroll) > 1 || sample.title !== '18px' || sample.amount !== '56px')).toEqual([]);
+  await button(page, 'Cancel').click();
+  await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBe(before.scroll);
+  await expect(page.locator('[data-copied-page]')).toHaveCount(0);
+});
+
 test('never cuts off the tops or tails of letters in titles and names', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Magalyjoqh trip', 'Pippy');
@@ -2326,6 +2366,97 @@ test('floats standard field labels without moving the textboxes', async ({ page 
   await expect(heading(page, 'Lisbon trip')).toBeVisible();
 });
 
+
+test('keeps member name line breaks stable while returning from details', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 760 });
+  const name = 'Benjamin Alex';
+
+  await createGroup(page, 'Stable names', 'Ana');
+  await addMember(page, name);
+
+  const measure = (node: Element) => {
+    const range = document.createRange();
+
+    range.selectNodeContents(node);
+
+    return { font: getComputedStyle(node).fontSize, lines: new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size };
+  };
+
+  const row = await page.locator('[data-morph^="pname-"]').filter({ hasText: name }).evaluate(measure);
+
+  await person(page, name).click();
+  const title = await heading(page, name).evaluate(measure);
+
+  expect(row.lines).toBeGreaterThan(0);
+  expect(title.lines).toBeGreaterThan(0);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+  const watching = page.evaluate((value) => new Promise<{ font: string; lines: number; arriving: boolean }[]>((resolve) => {
+    const start = performance.now();
+    const samples: { font: string; lines: number; arriving: boolean }[] = [];
+
+    (function frame() {
+      for (const node of document.querySelectorAll<HTMLElement>('[aria-hidden] *')) {
+        const style = getComputedStyle(node);
+
+        if (node.childElementCount || node.textContent !== value || style.visibility === 'hidden' || Number(style.opacity) < 0.05) continue;
+        const range = document.createRange();
+
+        range.selectNodeContents(node);
+        samples.push({ font: style.fontSize, lines: new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size, arriving: node.hasAttribute('data-morph-arriving') });
+      }
+
+      if (performance.now() - start < 800) requestAnimationFrame(frame);
+      else resolve(samples);
+    })();
+  }), name);
+
+  await button(page, 'Back to Stable names').click();
+  const samples = await watching;
+
+  expect(samples.filter((sample) => sample.arriving).length).toBeGreaterThan(5);
+  expect(samples.filter((sample) => sample.font === title.font).length).toBeGreaterThan(0);
+  expect(samples.filter((sample) => sample.lines !== (sample.font === title.font ? title.lines : row.lines))).toEqual([]);
+  await expect(person(page, name)).toBeVisible();
+});
+
+test('moves the expense amount straight from its row to the editor', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 760 });
+  await createGroup(page, 'Straight amounts', 'Ana');
+  await addExpense(page, 'Dinner', '1234.56');
+  const source = (await page.locator('[data-morph^="eamt-"]').boundingBox())!;
+
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+  const watching = page.evaluate(() => new Promise<{ x: number; y: number }[]>((resolve) => {
+    const start = performance.now();
+    const samples: { x: number; y: number }[] = [];
+
+    (function frame() {
+      for (const input of document.querySelectorAll<HTMLElement>('[data-morph-arriving] input')) {
+        if (Number(getComputedStyle(input.parentElement!).opacity) < 0.05) continue;
+        const box = input.getBoundingClientRect();
+
+        samples.push({ x: box.right, y: box.top + box.height / 2 });
+      }
+
+      if (performance.now() - start < 800) requestAnimationFrame(frame);
+      else resolve(samples);
+    })();
+  }));
+
+  await button(page, /^Change Dinner/).click();
+  const samples = await watching;
+  const target = (await field(page, 'Amount').boundingBox())!;
+  const from = { x: source.x + source.width, y: source.y + source.height / 2 };
+  const dx = target.x + target.width - from.x;
+  const dy = target.y + target.height / 2 - from.y;
+
+  expect(samples.length).toBeGreaterThan(5);
+  const deviations = samples.map((point) => Math.abs(dx * (point.y - from.y) - dy * (point.x - from.x)) / Math.hypot(dx, dy));
+
+  expect(Math.max(...deviations)).toBeLessThanOrEqual(1);
+});
 
 test('keeps member amounts on one line throughout the details transition', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 760 });
