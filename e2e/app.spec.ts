@@ -190,6 +190,50 @@ test('creates a group, adds people inline, and manages a person from their detai
   await expect(page.getByTestId('toast')).toHaveCount(0);
 });
 
+test('keeps balances close to the invite controls, open or closed', async ({ page }) => {
+  await createGroup(page, 'Invite spacing', 'Ana');
+
+  for (const width of [320, 1100]) {
+    await page.setViewportSize({ width, height: 650 });
+    const balances = page.getByRole('region', { name: 'Balances' });
+    const invite = button(page, 'Invite people');
+    const toggle = (await invite.boundingBox())!;
+    const closed = (await balances.boundingBox())!;
+
+    expect(closed.y - toggle.y - toggle.height).toBeLessThanOrEqual(12);
+    await invite.click();
+    const panel = page.getByRole('region', { name: 'Invite people' });
+    const line = (await panel.getByRole('button', { name: 'Copy link' }).locator('..').boundingBox())!;
+    const expanded = (await balances.boundingBox())!;
+
+    expect(expanded.y - line.y - line.height).toBeLessThanOrEqual(12);
+    await invite.click();
+  }
+});
+
+test('collapses the invite dropdown when scrolling down', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 650 });
+  await createGroup(page, 'Scrolling invite', 'Ana');
+
+  for (let index = 0; index < 8; index++) await addExpense(page, `Item ${index}`, '20');
+
+  await button(page, 'Invite people').click();
+  const panel = page.getByRole('region', { name: 'Invite people' });
+
+  await expect(panel).toBeVisible();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const scroller = page.locator('#splitnext-page');
+  const box = (await scroller.boundingBox())!;
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 40);
+  await expect(panel).toHaveCount(0);
+  await expect(heading(page, 'Scrolling invite')).toBeVisible();
+  await scroller.evaluate((node) => { node.scrollTop = 0; });
+  await button(page, 'Invite people').click();
+  await expect(panel).toBeVisible();
+});
+
 test('removes someone no expense names with the X on their row', async ({ page }) => {
   await createGroup(page, 'Rows', 'Ana');
   await addMember(page, 'Ben');
@@ -385,10 +429,12 @@ test('keeps rename fields steady from their first frame', async ({ page }) => {
     }
 
     const label = member ? 'Name' : 'Group name';
+
     const watching = page.evaluate((label) => new Promise<{ heights: number[]; pans: number[] }>((resolve) => {
       const heights: number[] = [];
       const pans: number[] = [];
       const start = performance.now();
+
       const record = (event: Event) => {
         const node = event.target;
         const page = document.getElementById('splitnext-page');

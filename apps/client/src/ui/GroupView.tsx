@@ -331,7 +331,7 @@ export function GroupView(props: GroupViewProps) {
     );
 
   return (
-    <View style={{ gap: 28, paddingTop: 16 }}>
+    <View style={{ gap: 28 }}>
       <People app={props.app} replica={replica} />
       <ExpenseList replica={replica} />
     </View>

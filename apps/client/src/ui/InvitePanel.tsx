@@ -67,7 +67,7 @@ export function InvitePanel(props: { app: InvitePanelApp }) {
   const linkSize = room && shown ? Math.min(15, room / (shown.length * 0.6)) : 15;
 
   return (
-    <View role="region" aria-label="Invite people" style={{ gap: 8, paddingTop: 4, paddingBottom: 8 }}>
+    <View role="region" aria-label="Invite people" style={{ gap: 8, paddingTop: 4 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 56, borderTopWidth: 1.5, borderBottomWidth: 1, borderTopColor: colors.ink, borderBottomColor: colors.rule }}>
         {link && canShare ? (
           <View style={{ marginLeft: -12 }}>

@@ -61,8 +61,10 @@ rises over the group screen, which stays put and dims; Cancel or Save drops
 it back down. Panels that open in place, such as the invite link, the join field,
 and who paid, grow down into place and shrink away when closed. A tap outside
 an open dropdown (who paid, the invite link, or a leave confirmation) closes
-it, and still reaches whatever was tapped; its own button still toggles it, and
-starting to scroll leaves it open. Renaming the group or a member, adding a person,
+it, and still reaches whatever was tapped; its own button still toggles it.
+Scrolling downward closes the invite-link dropdown; other dropdowns stay open
+while scrolling. Balances follow the invite controls with a compact gap in
+both the open and closed states. Renaming the group or a member, adding a person,
 and the join field instead dim everything else as behind a drawer: a tap on the dimmed part
 ends the edit (saving a name) and reaches nothing under it. Balance bars
 ease to their new width. Reduced motion shows every change at once.
