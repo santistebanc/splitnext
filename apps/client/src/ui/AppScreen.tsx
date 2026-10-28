@@ -20,7 +20,7 @@ import { GroupSettings, GroupSettingsFooter } from './GroupSettings';
 import { GroupsFooter, GroupsHeader, GroupsView } from './GroupsView';
 import { Toast } from './Toast';
 import { useActivityFeed } from './useActivityFeed';
-import { SettlementsHeader, SettlementsPanel } from './SettlementsPanel';
+import { SettlementsFooter, SettlementsHeader, SettlementsPanel } from './SettlementsPanel';
 import { GroupHeader, GroupView } from './GroupView';
 import { CompactProgressContext, createCompactProgress } from './pageScroll';
 import { JoinGroup, JoinGroupFooter, type JoinCalls } from './JoinGroup';
@@ -353,7 +353,7 @@ function ReadyApp(props: AppProps) {
           footer: <ExpenseEditorFooter />,
         };
       case 'settlements':
-        return { header: <SettlementsHeader replica={group} />, body: <SettlementsPanel replica={group} /> };
+        return { header: <SettlementsHeader />, body: <SettlementsPanel replica={group} />, footer: <SettlementsFooter /> };
       case 'person':
         return { header: <PersonHeader app={app} />, body: <PersonDetails app={app} />, footer: <PersonFooter app={app} /> };
       case 'settle':

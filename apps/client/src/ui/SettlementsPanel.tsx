@@ -1,7 +1,9 @@
-import { Text, TextInput, useWindowDimensions, View } from 'react-native';
-import { parseAmount, preferredMember, repaymentMembers, settlementSuggestions, type ClientReplicaState } from '@splitnext/client';
+import { useEffect, useRef } from 'react';
+import { Text, View } from 'react-native';
+import { minorDigits, parseAmount, preferredMember, repaymentMembers, settlementSuggestions, type ClientReplicaState } from '@splitnext/client';
 import { memberName, moneyLabel } from '../model/expenses';
-import { ErrorMessage, HeaderAction, ScreenHeader, colors, s } from './components';
+import { ErrorMessage, FooterButton, HeaderAction, ScreenHeader, colors, s } from './components';
+import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { MemberDropdown } from './MemberDropdown';
 import { between, useCompactProgress } from './pageScroll';
 import { fontFamily } from './theme';
@@ -14,14 +16,43 @@ function personName(snapshot: Snapshot, memberId: string, you: string | undefine
   return memberId === you ? (capital ? 'You' : 'you') : memberName(snapshot, memberId);
 }
 
-/** The repayment's actions and its sentence: who paid whom. */
-export function SettlementsHeader(props: { replica: ClientReplicaState }) {
+function useSaveRepayment() {
+  const draft = useUiState().repayment;
+  const save = useActionCall();
+  const close = useActionCall();
+  const editing = Boolean(draft.settlementId);
+  const ready = editing ? save.can('saveRepayment') : save.can('recordSettlement', draft);
+
+  function submit(): void {
+    if (!ready) return;
+    const done = () => { void close.call('closePanel', {}); };
+
+    if (editing) void save.call('saveRepayment', {}, done);
+    else void save.call('recordSettlement', draft, done);
+  }
+
+  return { save, editing, ready, submit };
+}
+
+/** Like expenses: Cancel and Delete above the amount; the main action is below. */
+export function SettlementsHeader() {
   const draft = useUiState().repayment;
   const back = useActionCall();
   const remove = useActionCall();
-  const save = useActionCall();
-  const editing = Boolean(draft.settlementId);
-  const ready = editing ? save.can('saveRepayment') : save.can('recordSettlement', draft);
+  const actions = useActions();
+  const { submit } = useSaveRepayment();
+  const progress = useCompactProgress();
+  const amount = useRef<AmountInputHandle>(null);
+  const whole = Math.max(1, (draft.amount.split('.')[0] ?? '').length);
+  const shownLength = whole + Math.floor((whole - 1) / 3) + 1 + minorDigits(draft.currency);
+  const amountFit = Math.min(1, 10 / shownLength);
+
+  useEffect(() => {
+    if (draft.settlementId) return;
+    const frame = requestAnimationFrame(() => amount.current?.focus({ preventScroll: true }));
+
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   function done(): void {
     void back.call('closePanel', {});
@@ -31,106 +62,76 @@ export function SettlementsHeader(props: { replica: ClientReplicaState }) {
     <>
       <ScreenHeader
         start={<HeaderAction quiet text="Cancel" label="Cancel" disabled={!back.can('closePanel')} onPress={done} />}
-        end={(
-          <>
-            {draft.settlementId ? (
-              <HeaderAction
-                danger
-                text="Delete"
-                label="Delete"
-                disabled={!remove.can('removeSettlement', { settlementId: draft.settlementId })}
-                onPress={() => {
-                  if (draft.settlementId) void remove.call('removeSettlement', { settlementId: draft.settlementId }, done);
-                }}
-              />
-            ) : null}
-            <HeaderAction
-              primary
-              text={save.busy ? 'Saving…' : editing ? 'Save' : 'Record'}
-              label={editing ? 'Save repayment' : 'Record repayment'}
-              disabled={!ready}
-              onPress={() => {
-                if (editing) void save.call('saveRepayment', {}, done);
-                else void save.call('recordSettlement', draft, done);
-              }}
-            />
-          </>
-        )}
-        heading={<RepaymentPeople replica={props.replica} />}
+        end={draft.settlementId ? (
+          <HeaderAction danger text="Delete" label="Delete" disabled={!remove.can('removeSettlement', { settlementId: draft.settlementId })} onPress={() => {
+            if (draft.settlementId) void remove.call('removeSettlement', { settlementId: draft.settlementId }, done);
+          }} />
+        ) : null}
+        scrollRule={false}
       />
-      <ErrorMessage message={back.error ?? remove.error ?? save.error} />
+      <ErrorMessage message={back.error ?? remove.error} />
+      <View style={{ paddingBottom: between(14, 6, progress) }}>
+        <View style={{ marginTop: between(12, 0, progress), paddingBottom: between(10, 6, progress), borderBottomWidth: 1.5, borderColor: colors.ink, flexDirection: 'row' }}>
+          <AmountInput inputRef={amount} value={draft.amount} currency={draft.currency} onChangeText={(value) => {
+            void actions.dispatch('changeDraft', { field: 'repayment.amount', value }, { origin: 'ui' });
+          }} onSubmitEditing={submit} height={between(60, 36, progress)} fontSize={between(56, 32, progress) * amountFit} />
+        </View>
+        <View style={{ paddingTop: between(16, 8, progress), paddingBottom: between(14, 8, progress), borderBottomWidth: 1, borderColor: colors.rule }}>
+          <Text accessibilityRole="header" style={{ fontFamily, fontSize: between(24, 18, progress), fontWeight: '600', color: colors.ink }}>Repayment</Text>
+        </View>
+      </View>
     </>
   );
 }
 
-/** Two member dropdowns read as a sentence, using the preferred member as you. */
-function RepaymentPeople(props: { replica: ClientReplicaState }) {
+/** The same pinned primary action as the expense editor. */
+export function SettlementsFooter() {
+  const { save, editing, ready, submit } = useSaveRepayment();
+
+  return (
+    <>
+      <ErrorMessage message={save.error} />
+      <FooterButton label={editing ? 'Save repayment' : 'Record repayment'} busy={save.busy} disabled={!ready} onPress={submit}>
+        {save.busy ? 'Saving…' : editing ? 'Save' : 'Record repayment'}
+      </FooterButton>
+    </>
+  );
+}
+
+/** Member choices follow the amount, with the same row scale as the expense editor. */
+export function SettlementsPanel(props: { replica: ClientReplicaState }) {
   const snapshot = props.replica.projected_snapshot;
   const draft = useUiState().repayment;
   const action = useActionCall();
-  const progress = useCompactProgress();
-  const { width } = useWindowDimensions();
 
   if (!snapshot) return null;
   const you = preferredMember(snapshot, props.replica.session?.identity.id)?.id;
   const eligible = new Set(repaymentMembers(snapshot).map((member) => member.id));
   const members = snapshot.members.filter((member) => eligible.has(member.id) || (draft.settlementId && [draft.from, draft.to].includes(member.id)));
-  const fontSize = between(width < 360 ? 28 : 32, 22, progress);
   const input = { from: draft.from, to: draft.to, amount: draft.amount, currency: draft.currency, keepEditing: Boolean(draft.settlementId), manual: true };
-
-  function prepare(side: 'from' | 'to', value: string): void {
-    void action.call('prepareRepayment', { ...input, [side]: value });
-  }
-
-  return (
-    <View style={{ flex: 1, minWidth: 0 }}>
-      <View accessibilityRole="header" accessibilityLabel={`${personName(snapshot, draft.from, you, true)} paid ${personName(snapshot, draft.to, you)}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <MemberDropdown label="Paid by" value={draft.from} options={members.map((member) => ({ value: member.id, label: personName(snapshot, member.id, you, true) }))} fontSize={fontSize} disabled={!action.can('prepareRepayment', input)} onChange={(value) => prepare('from', value)} />
-        <Text style={{ fontFamily, fontSize, fontWeight: '700', color: colors.ink }}>paid</Text>
-        <MemberDropdown label="Paid to" value={draft.to} options={members.map((member) => ({ value: member.id, label: personName(snapshot, member.id, you) }))} fontSize={fontSize} disabled={!action.can('prepareRepayment', input)} onChange={(value) => prepare('to', value)} />
-      </View>
-      <ErrorMessage message={action.error} />
-    </View>
-  );
-}
-
-/** Recording money already paid outside the app, or changing a recorded repayment. */
-export function SettlementsPanel(props: { replica: ClientReplicaState }) {
-  const snapshot = props.replica.projected_snapshot;
-  const actions = useActions();
-  const draft = useUiState().repayment;
-
-  if (!snapshot) return null;
-  const you = preferredMember(snapshot, props.replica.session?.identity.id)?.id;
   const owed = settlementSuggestions(snapshot).find((entry) => entry.from_member_id === draft.from && entry.to_member_id === draft.to && entry.currency === draft.currency);
   const full = owed && parseAmount(draft.amount, draft.currency) === owed.amount;
 
-  const change = (field: 'repayment.amount', value: string) => {
-    void actions.dispatch('changeDraft', { field, value }, { origin: 'ui' });
-  };
-
   return (
-    <View style={{ gap: 34, paddingTop: 20, paddingBottom: 24 }}>
-      <View style={{ gap: 10 }}>
-        <View style={{ paddingBottom: 10, borderBottomWidth: 1.5, borderColor: colors.ink }}>
-          <TextInput
-            accessibilityLabel="Amount"
-            placeholder="0.00"
-            placeholderTextColor={colors.placeholder}
-            inputMode="decimal"
-            value={draft.amount}
-            onChangeText={(value) => change('repayment.amount', value)}
-            style={s.amountInput}
-          />
-        </View>
-        <Text style={s.caption}>
-          {owed
-            ? full
-              ? `Full amount ${personName(snapshot, owed.from_member_id, you)} ${owed.from_member_id === you ? 'owe' : 'owes'}. Paid outside splitnext.`
-              : `${personName(snapshot, owed.from_member_id, you, true)} ${owed.from_member_id === you ? 'owe' : 'owes'} ${moneyLabel(owed.amount, owed.currency)}. Paid outside splitnext.`
-            : 'Paid outside splitnext.'}
-        </Text>
+    <View style={{ gap: 16, paddingBottom: 24 }}>
+      <View>
+        {(['from', 'to'] as const).map((side) => (
+          <View key={side} style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderColor: colors.rule }}>
+            <Text style={[s.caption, { width: 64 }]}>{side === 'from' ? 'Paid by' : 'Paid to'}</Text>
+            <MemberDropdown label={side === 'from' ? 'Paid by' : 'Paid to'} value={draft[side]} options={members.map((member) => ({ value: member.id, label: personName(snapshot, member.id, you, side === 'from') }))} fontSize={17} disabled={!action.can('prepareRepayment', input)} onChange={(value) => {
+              void action.call('prepareRepayment', { ...input, [side]: value });
+            }} />
+          </View>
+        ))}
       </View>
+      <Text style={s.caption}>
+        {owed
+          ? full
+            ? `Full amount ${personName(snapshot, owed.from_member_id, you)} ${owed.from_member_id === you ? 'owe' : 'owes'}. Paid outside splitnext.`
+            : `${personName(snapshot, owed.from_member_id, you, true)} ${owed.from_member_id === you ? 'owe' : 'owes'} ${moneyLabel(owed.amount, owed.currency)}. Paid outside splitnext.`
+          : 'Paid outside splitnext.'}
+      </Text>
+      <ErrorMessage message={action.error} />
     </View>
   );
 }

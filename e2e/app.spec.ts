@@ -1164,7 +1164,7 @@ test('records planned and other repayments offline', async ({ page, context }) =
   await expect(page.getByText(/saved here/)).toHaveCount(0);
 });
 
-test('chooses repayment members with dropdowns in the payment heading', async ({ page }, testInfo) => {
+test('uses expense-style amount, member rows, and footer in the repayment editor', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 320, height: 760 });
   await createGroup(page, 'Dropdown payments', 'Ana');
   await addMember(page, 'Benjamin Alexander');
@@ -1207,14 +1207,19 @@ test('chooses repayment members with dropdowns in the payment heading', async ({
   const amountBox = (await amount.boundingBox())!;
   const recordBox = (await record.boundingBox())!;
 
-  expect(Math.abs(fromBox.y - toBox.y)).toBeLessThanOrEqual(1);
-  expect(recordBox.y + recordBox.height).toBeLessThanOrEqual(fromBox.y);
-  expect(fromBox.y + fromBox.height).toBeLessThan(amountBox.y);
+  expect(amountBox.y + amountBox.height).toBeLessThan(fromBox.y);
+  expect(fromBox.y + fromBox.height).toBeLessThanOrEqual(toBox.y);
+  expect(fromBox.x).toBe(toBox.x);
+  expect(toBox.y + toBox.height).toBeLessThan(recordBox.y);
+  await expect(amount).toHaveCSS('font-size', '56px');
+  await amount.fill('1234,5');
+  await expect(amount).toHaveValue('1\u00a0234.50');
+  await amount.fill('7.50');
   expect(await page.locator('#splitnext-page').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
   await record.click();
   await expect(heading(page, 'Settle up')).toBeVisible();
   await button(page, 'Record a different payment').click();
-  await expect(button(page, 'Change repayment: Cy paid Benjamin Alexander back 7.50')).toBeVisible();
+  await expect(button(page, /^Change repayment:/)).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('repayment-dropdowns-320.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: testInfo.outputPath('repayment-dropdowns-390.png') });
@@ -1261,9 +1266,9 @@ test('edits and removes a repayment offline', async ({ page, context }, testInfo
 
   await expect(remove).toHaveText('Delete');
   await expect(button(page, /^Remove repayment/)).toHaveCount(0);
-  // Delete and Save sit in the header, above the payment sentence and amount.
+  // Delete stays above the amount; Save uses the same footer as expenses.
   expect(removeBox.y + removeBox.height).toBeLessThan((await field(page, 'Amount').boundingBox())!.y);
-  expect(saveBox.y + saveBox.height).toBeLessThan((await field(page, 'Amount').boundingBox())!.y);
+  expect(saveBox.y).toBeGreaterThan((await field(page, 'Amount').boundingBox())!.y);
   await page.screenshot({ path: testInfo.outputPath('repayment-header.png') });
   await remove.click();
   await expect(heading(page, 'Repayment changes')).toBeVisible();
