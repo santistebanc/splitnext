@@ -84,14 +84,16 @@ type FieldProps = TextInputProps & {
   hint?: string;
   error?: string;
   trailing?: ReactNode;
-  inputRef?: Ref<TextInput>;
+  /** Optional read layer, such as a two-line title with an ellipsis. */
+  displayValue?: ReactNode;
+  inputRef?: Ref<TextInput> | undefined;
   /** A large monospaced figure, for the amount a form is about. */
   figure?: boolean;
 };
 
 /** Standard underlined field: the label floats on focus or whenever it has text. */
 export function Field(props: FieldProps) {
-  const { label, hideLabel, hint, error, trailing, inputRef, figure, ...input } = props;
+  const { label, hideLabel, hint, error, trailing, displayValue, inputRef, figure, ...input } = props;
   const field = useRef<TextInput>(null);
   useImperativeHandle(inputRef, () => field.current!, []);
   const [focused, setFocused] = useState(false);
@@ -127,6 +129,7 @@ export function Field(props: FieldProps) {
             style={[s.input, { height: 44, fontSize: 17, fontWeight: '400' }, figure && s.figureInput, input.style]}
           />
           {trailing}
+          {displayValue ? <View aria-hidden pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 10 }}>{displayValue}</View> : null}
         </View>
         <View pointerEvents="none" style={withTransition({ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: activeColor, transform: [{ scaleX: focused && !disabled ? 1 : 0 }] }, 'transform', 150)} />
       </View>
