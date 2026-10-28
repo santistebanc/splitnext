@@ -245,6 +245,11 @@ replicas before refreshing in the background, so a stalled server does not
 block opening a saved group. Other tabs on the same origin share the
 installation and reread replicas through a BroadcastChannel.
 
+Refresh keeps device connectivity distinct from server reachability. A request
+that discovers an outage can disable SDK delivery while another refresh is
+between listing groups and synchronizing one; that SDK offline result remains
+transient and schedules another retry while the device itself stays online.
+
 ### Component workbench
 
 `/components` (or `:8081/components` under Expo) opens the component
