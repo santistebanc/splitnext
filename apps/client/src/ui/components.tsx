@@ -589,13 +589,14 @@ export const s = StyleSheet.create({
   screenHeaderTitle: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },
   /** Kept for screens that still lay out their own title. */
   screenHeaderInset: {},
-  screenHeaderEnd: { flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: -12 },
+  screenHeaderEnd: { flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: -12, flexShrink: 0 },
   screenHeaderTitleContent: { alignSelf: 'flex-start', maxWidth: '100%' },
   screenContext: { color: colors.muted, fontFamily, fontSize: 13, lineHeight: 18 },
   screenTitle: { color: colors.ink, fontFamily: displayFamily, fontSize: 32, lineHeight: 38, fontWeight: '700', letterSpacing: -0.96 },
   pageTitle: viewTitle,
   /** The text back action: 44 high, its padding reaching the screen edge. */
-  navIcon: { height: 44, justifyContent: 'center', paddingLeft: 24, paddingRight: 20 },
+  // Shrinks with a long name, which then ends in an ellipsis instead of running under the row's end.
+  navIcon: { height: 44, justifyContent: 'center', paddingLeft: 24, paddingRight: 20, flexShrink: 1, minWidth: 0 },
   headerAction: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 },
   headerActionText: { color: colors.ink, fontFamily, fontSize: 15, fontWeight: '600' },
   headerPrimary: { backgroundColor: colors.action, paddingHorizontal: 22, marginRight: 12 },
