@@ -1,4 +1,53 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { spawn, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { once } from 'node:events';
+
+test('device lab runs the real two-device offline and recovery acceptance scenario', async () => {
+  test.setTimeout(240_000);
+  const result = await promisify(execFile)(process.execPath, ['lab/acceptance.mjs'], { timeout: 220_000 });
+
+  expect(result.stdout).toContain('Lab acceptance passed');
+});
+
+test('device lab frontend controls its actual installations and shows inspector state', async ({ page, request }) => {
+  test.setTimeout(120_000);
+  const base = 'http://127.0.0.1:8826';
+  const child = spawn(process.execPath, ['lab/server.mjs', `--env=browser-${Date.now()}`, '--port=8826', '--workerPort=8827'], { windowsHide: true, stdio: 'ignore' });
+  const call = (operation: string, input = {}) => request.post(`${base}/api`, { data: { operation, input } });
+
+  try {
+    await expect.poll(async () => {
+      try { return (await (await call('status')).json()).initialized === true; } catch { return false; }
+    }, { timeout: 60_000 }).toBe(true);
+    await page.goto(base);
+    await expect(page.getByRole('heading', { name: 'Splitnext / Device lab' })).toBeVisible();
+    await page.getByRole('button', { name: 'Add device', exact: true }).click();
+    await expect(page.locator('.device')).toHaveCount(1);
+    await expect.poll(() => page.locator('.screen').evaluate((image) => image instanceof HTMLImageElement && image.naturalWidth === 390)).toBe(true);
+    await page.locator('.screen').click({ position: { x: 160, y: 620 } });
+    await expect(page.locator('.device pre')).toContainText('"view": "create"');
+    await page.locator('.screen').press('L');
+    await expect(page.locator('.device pre')).toContainText('"name": "L"');
+    await page.getByRole('button', { name: 'Offline', exact: true }).click();
+    await expect(page.locator('.device pre')).toContainText('"online": false');
+    await page.getByRole('button', { name: 'Reload', exact: true }).click();
+    await expect(page.getByRole('alert')).toBeEmpty();
+    await page.getByRole('button', { name: 'Online', exact: true }).click();
+    await expect(page.locator('.device pre')).toContainText('"online": true');
+    await page.getByRole('button', { name: 'Make unavailable', exact: true }).click();
+    await expect(page.locator('#status')).toContainText('Unavailable');
+    await expect(page.locator('.device pre')).toContainText('"online": true');
+    await page.getByRole('button', { name: 'Make available', exact: true }).click();
+    await expect(page.locator('#status')).toContainText('Available');
+    await expect(page.locator('#schema')).toContainText('properties');
+    await page.screenshot({ path: '.wrangler/lab-ui.png', fullPage: true });
+  } finally {
+    await call('shutdown').catch(() => undefined);
+
+    if (child.exitCode === null) await once(child, 'exit');
+  }
+});
 
 /**
  * The real app in a browser against a local Worker: flows the action and
@@ -1897,7 +1946,8 @@ test('puts the Activity scroll divider under the pinned day heading', async ({ p
   await expect(today).toBeVisible();
   await expect(yesterday).toBeAttached();
   await expect(today).toHaveCSS('box-shadow', 'none');
-  await scroller.evaluate((node) => { node.scrollTop = 150; });
+  // Travel beyond full header collapse even after its released height adjusts scrollTop.
+  await scroller.evaluate((node) => { node.scrollTop = 220; });
   await expect(title).toHaveCSS('font-size', '18px');
   await expect(today).not.toHaveCSS('box-shadow', 'none');
   await expect(header).toHaveCSS('box-shadow', 'none');
@@ -1997,6 +2047,11 @@ test('undoes member changes in Activity as well as a group rename', async ({ pag
 test('counts changes from others on the bell without pop-ups and marks them seen', async ({ page, browser }) => {
   await createGroup(page, 'Shared', 'Ana');
   await addMember(page, 'Ben');
+  // Establish the seen baseline before another installation can join. The empty
+  // bell alone also describes the period before the first Activity read finishes.
+  await bell(page).click();
+  await expect(page.getByText('You created the group', { exact: true })).toBeVisible();
+  await button(page, 'Back to Shared').click();
   const link = await inviteLink(page);
   await expect(bell(page)).toHaveAccessibleName('Activity, no new updates');
 

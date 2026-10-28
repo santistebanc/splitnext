@@ -25,7 +25,7 @@ export default defineConfig({
   },
   webServer: {
     command: [
-      `rm -rf ${state}`,
+      'node scripts/reset-e2e-state.mjs',
       `wrangler d1 migrations apply INDEX --local --persist-to ${state}`,
       `wrangler dev --port ${port} --persist-to ${state} --var ENABLE_DEBUG_INSPECTION:true`,
     ].join(' && '),
