@@ -259,31 +259,35 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
         { transform: `translate(${to.x}px,${to.y}px)`, width: `${to.w}px`, height: `${to.h}px`, backgroundColor: style.backgroundColor, borderRadius: style.borderRadius, borderColor: style.borderTopColor },
       ], { duration, easing: easeOut, fill: 'forwards' }));
 
-      // Text cut short keeps its ellipsis on the way: it still clips, and its
-      // own width runs from the old box's to the new one's, allowing for its
-      // scale, so the cut moves as the room for it changes.
+      // Each copy keeps its endpoint layout while it scales and crossfades.
+      // Resizing it as well rewraps names and bends the path of right-aligned
+      // amounts (their changing width is multiplied by the changing scale).
       const unclipped = element.dataset.morphUnclipped !== undefined;
+      // Amounts align to their right edge, including an editor's full-width
+      // input. Its left edge is not where the visible figure starts.
+      const travelX = to.x - a.x + (unclipped ? to.w - a.w : 0);
+      const origin = unclipped ? '100% 0' : '0 0';
 
       const cut = (clips: boolean) => (unclipped ? { overflow: 'visible', textOverflow: 'clip' } : clips ? { overflow: 'hidden', textOverflow: 'ellipsis' } : {});
       const leaving = from.clone;
 
-      Object.assign(leaving.style, base, cut(from.clips), { whiteSpace: unclipped ? 'nowrap' : from.whiteSpace, left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px`, color: from.color, font: from.font });
+      Object.assign(leaving.style, base, cut(from.clips), { transformOrigin: origin, whiteSpace: unclipped ? 'nowrap' : from.whiteSpace, left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px`, color: from.color, font: from.font });
       overlay.appendChild(leaving);
       animations.push(leaving.animate(stretch
         // Fades only once the arriving copy is mostly in, so the bar never
         // thins out midway, and gone by the end, so nothing of it pops away.
         ? [{ transform: 'none', opacity: 1 }, { opacity: 1, offset: 0.4 }, { transform: `translate(${to.x - a.x}px,${to.y - a.y}px) scale(${sx},${scale})`, opacity: 0 }]
-        : [{ transform: 'none', width: `${a.w}px`, opacity: 1 }, { opacity: 0, offset: 0.45 }, { transform: `translate(${to.x - a.x}px,${to.y - a.y}px) scale(${scale})`, width: `${to.w / scale}px`, opacity: 0 }], { duration, easing: easeOut, fill: 'forwards' }));
+        : [{ transform: 'none', opacity: 1 }, { opacity: 0, offset: 0.45 }, { transform: `translate(${travelX}px,${to.y - a.y}px) scale(${scale})`, opacity: 0 }], { duration, easing: easeOut, fill: 'forwards' }));
 
       const arriving = copy(element);
 
       arriving.dataset.morphArriving = '';
 
-      Object.assign(arriving.style, base, cut(clipped(style)), { whiteSpace: unclipped ? 'nowrap' : style.whiteSpace, left: `${to.x}px`, top: `${to.y}px`, width: `${to.w}px`, height: `${to.h}px`, color: style.color, font: style.font });
+      Object.assign(arriving.style, base, cut(clipped(style)), { transformOrigin: origin, whiteSpace: unclipped ? 'nowrap' : style.whiteSpace, left: `${to.x}px`, top: `${to.y}px`, width: `${to.w}px`, height: `${to.h}px`, color: style.color, font: style.font });
       overlay.appendChild(arriving);
       animations.push(arriving.animate(stretch
         ? [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / sx},${1 / scale})`, opacity: 0 }, { opacity: 1, offset: 0.6 }, { transform: 'none', opacity: 1 }]
-        : [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / scale})`, width: `${a.w * scale}px`, opacity: 0 }, { opacity: 0, offset: 0.3 }, { transform: 'none', width: `${to.w}px`, opacity: 1 }], { duration, easing: easeOut, fill: 'forwards' }));
+        : [{ transform: `translate(${-travelX}px,${a.y - to.y}px) scale(${1 / scale})`, opacity: 0 }, { opacity: 0, offset: 0.3 }, { transform: 'none', opacity: 1 }], { duration, easing: easeOut, fill: 'forwards' }));
     }
   }
 
