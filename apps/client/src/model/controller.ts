@@ -226,6 +226,14 @@ export class AppController {
 
         await this.receive(synced);
       } catch (error) {
+        // A concurrent request can discover an outage after listGroups finishes
+        // and disable the SDK before this group's sync starts. Keep that loss
+        // transient so the coordinator can retry while the device stays online.
+        if (error instanceof ClientOfflineError) {
+          if (this.state.online) this.setReachable(false);
+          break;
+        }
+
         if (!(error instanceof SplitnextNetworkError)) {
           this.reportSyncError(error);
           throw error;

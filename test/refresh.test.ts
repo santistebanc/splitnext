@@ -10,6 +10,30 @@ const options: FakeAppOptions = {
 afterEach(() => vi.useRealTimers());
 
 describe('refresh coordination', () => {
+  it('retries a reachability loss between listing groups and synchronizing them', async () => {
+    const app = await createWorkbenchApp(options);
+    vi.useFakeTimers();
+    const listGroups = app.client.listGroups.bind(app.client);
+    let calls = 0;
+
+    app.client.listGroups = async () => {
+      const groups = await listGroups();
+
+      if (++calls === 1) app.setReachable(false);
+
+      return groups;
+    };
+
+    try {
+      await expect(app.refresh()).resolves.toBeUndefined();
+      expect(app.snapshot().online).toBe(true);
+      expect(app.snapshot().syncError).toBeNull();
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(calls).toBe(2);
+      expect(app.snapshot().syncError).toBeNull();
+    } finally { app.dispose(); }
+  });
+
   it('coalesces refreshes and applies an offline event immediately during a stalled request', async () => {
     const app = await createWorkbenchApp(options);
     let release: () => void = () => undefined;
