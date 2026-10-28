@@ -1587,6 +1587,9 @@ test('counts changes from others on the bell without pop-ups and marks them seen
   await expect(button(page, 'Change Fresh dinner · 20.00')).toBeVisible();
   await expect(bell(page)).toHaveAccessibleName('Activity: 2 new updates');
   await expect(page.getByTestId('activity-count')).toHaveText('2');
+  const bellBox = (await bell(page).boundingBox())!;
+
+  await page.screenshot({ path: test.info().outputPath('activity-bell.png'), clip: { x: bellBox.x + bellBox.width - 390, y: 0, width: 390, height: 140 } });
   await expect(page.getByTestId('toast')).toHaveCount(0);
   await expect(bell(visitor)).toHaveAccessibleName('Activity, no new updates');
 

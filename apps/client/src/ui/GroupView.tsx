@@ -7,7 +7,7 @@ import { balanceRows, memberName, moneyLabel } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
 import { BackButton, BalanceBar, Button, ErrorMessage, ScreenHeader, balanceColor, colors, s, signedFigure, titleStyle } from './components';
 import { ExpenseList } from './ExpenseList';
-import { CloseIcon, PencilIcon } from './icons';
+import { BellIcon, CloseIcon, PencilIcon } from './icons';
 import { InvitePanel } from './InvitePanel';
 import { AddPersonRow, MemberIcon, type MemberListApp, type Replica } from './MemberList';
 import { between, useCompactProgress } from './pageScroll';
@@ -38,12 +38,13 @@ function ActivityLink(props: { app: MemberListApp }) {
       accessibilityLabel={label}
       disabled={!open.can('showActivity')}
       onPress={() => { void open.call('showActivity', {}); }}
-      style={({ pressed }) => [{ height: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 }, pressed && s.pressed, !open.can('showActivity') && s.dim]}
+      style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !open.can('showActivity') && s.dim]}
     >
-      <Text ref={morph('activity')} style={s.headerActionText}>Activity</Text>
+      <BellIcon size={22} />
+      {/* The count sits on the bell's shoulder. */}
       {count ? (
-        <View aria-hidden style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, backgroundColor: colors.alert }}>
-          <Text testID="activity-count" style={{ fontFamily, fontSize: 11, fontWeight: '600', color: '#ffffff' }}>{count}</Text>
+        <View aria-hidden style={{ position: 'absolute', top: 4, left: 23, minWidth: 18, height: 18, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', borderRadius: 999, borderWidth: 2, borderColor: colors.background, backgroundColor: colors.alert }}>
+          <Text testID="activity-count" style={{ fontFamily, fontSize: 10, lineHeight: 12, fontWeight: '700', color: '#ffffff' }}>{count}</Text>
         </View>
       ) : null}
     </Pressable>
