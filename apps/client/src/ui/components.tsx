@@ -267,14 +267,16 @@ export function PageTitle(props: { children: ReactNode }) {
  * the title and styles its text with `titleStyle(progress)`. `underRow`
  * opens directly under the row, such as a field for one of its actions;
  * `below` follows the title. Set `scrollRule` false when a pinned section
- * heading draws the divider beneath the header instead.
+ * heading draws the divider beneath the header instead, and `flush` when
+ * what is below ends with its own edge, such as a bar, for the header to end
+ * right there.
  */
-export function ScreenHeader(props: { title?: string | undefined; heading?: ReactNode; context?: string | undefined; start?: ReactNode; end?: ReactNode; underRow?: ReactNode; below?: ReactNode; morph?: string | undefined; scrollRule?: boolean | undefined }) {
+export function ScreenHeader(props: { title?: string | undefined; heading?: ReactNode; context?: string | undefined; start?: ReactNode; end?: ReactNode; underRow?: ReactNode; below?: ReactNode; morph?: string | undefined; scrollRule?: boolean | undefined; flush?: boolean }) {
   const progress = useCompactProgress();
   const scrollToTop = useContext(ScrollToTopContext);
 
   return (
-    <View style={[s.screenHeader, { paddingTop: between(4, 0, progress), paddingBottom: between(12, 4, progress), boxShadow: props.scrollRule === false ? 'none' : `0 1px 0 rgba(20, 20, 19, ${(0.14 * progress).toFixed(3)})` }]}>
+    <View style={[s.screenHeader, { paddingTop: between(4, 0, progress), paddingBottom: props.flush ? 0 : between(12, 4, progress), boxShadow: props.scrollRule === false ? 'none' : `0 1px 0 rgba(20, 20, 19, ${(0.14 * progress).toFixed(3)})` }]}>
       <View style={s.screenHeaderRow}>
         <View style={s.screenHeaderStart}>{props.start}</View>
         {props.end ? <View style={s.screenHeaderEnd}>{props.end}</View> : null}

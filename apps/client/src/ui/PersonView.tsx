@@ -119,6 +119,8 @@ export function PersonHeader(props: { app: MemberListApp }) {
             )}
           </View>
         )}
+        // The header ends at the balance bar's edge.
+        flush
         below={(
           <View style={{ gap: 6 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: between(8, 2, progress) }}>
