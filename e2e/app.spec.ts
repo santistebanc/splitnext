@@ -816,6 +816,7 @@ test('renames the group in place, copies the invite link, and replaces it after 
     expect(await text.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
   }
 
+  await expect(panel.getByText('Tap the link to copy it', { exact: true })).toHaveCount(0);
   // Tapping the link itself highlights and copies it.
   await panel.getByTestId('invite-link').click();
   await expect(panel.getByRole('button', { name: 'Link copied', exact: true })).toBeVisible();
@@ -1817,4 +1818,39 @@ test('floats standard field labels without moving the textboxes', async ({ page 
   await yourName.fill('Ana');
   await button(page, 'Create group').click();
   await expect(heading(page, 'Lisbon trip')).toBeVisible();
+});
+
+
+test('keeps member amounts on one line throughout the details transition', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 760 });
+  await createGroup(page, 'Unbroken amounts', 'Ana');
+  await addMember(page, 'Benjamin Alexander');
+  await addExpense(page, 'Dinner', '123456.78');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const amountText = await page.locator('[data-morph^="pamt-"]').first().textContent();
+
+  const samples = page.evaluate((value) => new Promise<{ lines: number; nowrap: boolean }[]>((resolve) => {
+    const start = performance.now();
+    const result: { lines: number; nowrap: boolean }[] = [];
+
+    (function frame() {
+      document.querySelectorAll<HTMLElement>('div').forEach((node) => {
+        if (node.children.length || node.textContent !== value || getComputedStyle(node).visibility === 'hidden') return;
+        const range = document.createRange();
+
+        range.selectNodeContents(node);
+        result.push({ lines: new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size, nowrap: ['nowrap', 'pre'].includes(getComputedStyle(node).whiteSpace) });
+      });
+
+      if (performance.now() - start < 700) requestAnimationFrame(frame);
+      else resolve(result);
+    })();
+  }), amountText);
+
+  await person(page, 'Benjamin Alexander').click();
+  await expect(heading(page, 'Benjamin Alexander')).toBeVisible();
+  const measured = await samples;
+
+  expect(measured.length).toBeGreaterThan(5);
+  expect(measured.filter((sample) => !sample.nowrap || sample.lines !== 1)).toEqual([]);
 });

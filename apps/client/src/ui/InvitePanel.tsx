@@ -101,7 +101,7 @@ export function InvitePanel(props: { app: InvitePanelApp }) {
           </LinkAction>
         </View>
       </View>
-      {link && !confirming ? <Text style={[s.caption, copied && { color: colors.ink }]}>{copied ? '✓ Copied' : 'Tap the link to copy it'}</Text> : null}
+      {link && copied && !confirming ? <Text accessibilityLiveRegion="polite" style={[s.caption, { color: colors.ink }]}>✓ Copied</Text> : null}
       {confirming ? (
         <View style={{ gap: 10, paddingTop: 4 }}>
           <Text style={[s.body, { fontWeight: '500' }]}>{confirming.message}</Text>
