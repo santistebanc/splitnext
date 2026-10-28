@@ -347,25 +347,6 @@ export const ledgerActions = {
     unavailable: ({ state }, input) => requireExpense(state, input?.expenseId, 'removed'),
     run: (host, input) => host.submit({ type: 'expense.restore', payload: { expense_id: input.expenseId } }),
   }),
-  setPreferredMember: defineAction({
-    holds: ({ state }) => [`preference:${state.group?.group_id}`],
-    // Choosing a member that is being removed would only produce a rejection.
-    waitsFor: ({ state }, input) => memberResource(state, input?.memberId),
-    group: 'Ledger changes',
-    description:
-      'Choose which member is you on this installation, even when the name ' +
-      'is already taken on another device.',
-    input: z.object({
-      memberId: choice(
-        'preferredMember',
-        'The member to select as you on this installation.',
-      ),
-    }),
-    example: { memberId: 'member-1' },
-    requires: ['openGroup'],
-    unavailable: ({ state }, input) => requireMember(state, input?.memberId),
-    run: (host, input) => host.submit({ type: 'preference.set', payload: { member_id: input.memberId } }),
-  }),
   retryNotice: defineAction({
     waitsFor: ({ state }, input) => state.group?.notices.some((entry) => entry.command.command_id === input?.commandId && entry.command.type === 'group.leave') ? [editorLock] : [],
     holds: ({ state }, input) => noticeResources(state, input?.commandId),

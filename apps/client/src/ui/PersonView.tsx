@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react';
 import { Pressable, Text, View, type TextInput } from 'react-native';
-import { memberHasRecords, participantsForMember, preferredMember } from '@splitnext/client';
+import { memberHasRecords, preferredMember } from '@splitnext/client';
 import { memberBreakdown } from '../model/breakdown';
 import { balanceRows, memberName } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
-import { BackButton, BalanceBar, Button, ErrorMessage, ListRow, Notice, ScreenHeader, balanceColor, colors, s, signedFigure, titleStyle } from './components';
+import { BackButton, BalanceBar, Button, ErrorMessage, ListRow, ScreenHeader, balanceColor, colors, s, signedFigure, titleStyle } from './components';
 import { EditCover } from './EditCover';
 import { ActivityLink } from './GroupView';
 import { TitleField } from './TitleField';
@@ -47,7 +47,8 @@ export function BalanceFigure(props: { amount: number; currency: string; max: nu
 
 /**
  * The person's fixed top: back to the group, their name, which the pencil
- * edits in place, This is me, and their balance as a figure over its bar.
+ * edits in place, whether it is taken, and their balance as a figure over its
+ * bar. Who is you changes only by leaving the group and rejoining as them.
  */
 export function PersonHeader(props: { app: MemberListApp }) {
   const ui = useUiState();
@@ -55,7 +56,6 @@ export function PersonHeader(props: { app: MemberListApp }) {
   const back = useActionCall();
   const save = useActionCall();
   const edit = useActionCall();
-  const claim = useActionCall();
   const state = props.app.snapshot();
   const replica = state.group;
   const snapshot = replica?.projected_snapshot;
@@ -128,19 +128,6 @@ export function PersonHeader(props: { app: MemberListApp }) {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: between(8, 2, progress) }}>
               <MemberIcon participants={participants} size={6} />
               <Text style={[s.caption, { flexShrink: 1 }]}>{active ? presenceText(participants) : 'Removed · still in balances until settled'}</Text>
-              {/* Taking the name sits beside whether anyone has taken it. */}
-              {active && memberId && !isYou ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`I’m ${name}`}
-                  disabled={!claim.can('setPreferredMember', { memberId })}
-                  onPress={() => { void claim.call('setPreferredMember', { memberId }); }}
-                  hitSlop={{ top: 8, bottom: 8 }}
-                  style={({ pressed }) => [{ marginLeft: 'auto', height: 28, justifyContent: 'center', paddingLeft: 12 }, pressed && s.pressed]}
-                >
-                  <Text style={[s.headerActionText, s.link, { fontSize: 14 }]}>This is me</Text>
-                </Pressable>
-              ) : null}
             </View>
             <View style={{ paddingTop: between(18, 8, progress) }}>
               <BalanceFigure amount={first?.amount ?? 0} currency={first?.currency ?? 'XXX'} max={largestBalance(snapshot)} label={label} size={between(30, 20, progress)} bar={between(12, 8, progress)} morph={replica && memberId && first ? (isYou ? `gamt-${replica.group_id}-${first.currency}` : `pamt-${replica.group_id}-${memberId}-${first.currency}`) : null} barMorph={replica && memberId && first ? (isYou ? `gbar-${replica.group_id}-${first.currency}` : `pbar-${replica.group_id}-${memberId}-${first.currency}`) : null} />
@@ -149,7 +136,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
         )}
       />
       <EditCover open={renaming} target={nameField} onPress={() => nameField.current?.blur()} />
-      <ErrorMessage message={back.error ?? save.error ?? edit.error ?? claim.error} />
+      <ErrorMessage message={back.error ?? save.error ?? edit.error} />
     </>
   );
 }
@@ -169,7 +156,6 @@ export function PersonDetails(props: { app: MemberListApp }) {
   const remove = useActionCall();
   const restore = useActionCall();
   const open = useActionCall();
-  const [claimedBefore] = useState(() => (member ? preferredMember(snapshot, replica?.session?.identity.id)?.id === member.id : false));
 
   if (!replica || !snapshot || !member || !memberId) return null;
   const identity = replica.session?.identity.id;
@@ -177,20 +163,12 @@ export function PersonDetails(props: { app: MemberListApp }) {
   const isYou = member.id === you;
   const active = member.status === 'active';
   const name = memberName(snapshot, member.id);
-  const others = participantsForMember(snapshot, member.id).filter((grant) => grant.identity_id !== identity).length;
   const breakdown = memberBreakdown(snapshot, member.id, (id) => (id === you ? 'You' : memberName(snapshot, id)));
   // Only someone else no expense or repayment has named, removed ones included, can be removed here.
   const hasRecords = memberHasRecords(snapshot, member.id);
 
   return (
     <View style={{ gap: 22, paddingTop: 12, paddingBottom: 12 }}>
-      {isYou && !claimedBefore && others ? (
-        <Notice
-          tone="warning"
-          role="status"
-          message={`${name} is already taken on ${others === 1 ? 'another device' : `${others} other devices`}. It’s now taken on this device too.`}
-        />
-      ) : null}
       {active ? (
         hasRecords || isYou ? null : (
           <Button secondary label={`Remove ${name}`} disabled={!remove.can('removeMember', { memberId: member.id })} onPress={() => { void remove.call('removeMember', { memberId: member.id }); }}>

@@ -163,9 +163,10 @@ key.
   controls. They show a numeric zero when a person with current records is
   settled; people without current records keep a blank amount and bar.
   Person details show the balance large over its bar with Owes, Gets back,
-  Settled, or No expenses yet. They rename inline, choose the member as you
-  without a confirmation (warning afterward when the name is already taken on
-  another device), and remove the member immediately, including your own.
+  Settled, or No expenses yet. They rename inline and remove someone else
+  immediately. Which member is you changes only by leaving the group and
+  rejoining as them; the client has no action for `preference.set`, which the
+  server still accepts from older queued commands.
   `memberBreakdown` in `model/breakdown.ts` lists the expenses and repayments
   behind a balance, adding up exactly to it. Presence markers show online,
   offline, or unused; multiple tabs count once.

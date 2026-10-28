@@ -169,19 +169,11 @@ test('creates a group, adds people inline, and manages a person from their detai
   await field(page, 'Name').press('Enter');
   await expect(heading(page, 'Benjamin')).toBeVisible();
 
-  // This is me sits at the end of the line saying whether the name is taken.
-  const claim = (await button(page, 'I’m Benjamin').boundingBox())!;
-  const presence = (await page.getByText('Not taken on any device', { exact: true }).boundingBox())!;
-
-  expect(Math.abs(claim.y + claim.height / 2 - (presence.y + presence.height / 2))).toBeLessThanOrEqual(2);
-  expect(claim.x).toBeGreaterThan(presence.x + presence.width);
-
-  // Choosing someone as you needs no confirmation.
-  await button(page, 'I’m Benjamin').click();
-  await expect(button(page, 'I’m Benjamin')).toHaveCount(0);
-  await expect(page.getByText('you', { exact: true })).toBeVisible();
+  // Someone else's details offer no way to become them; that is leaving and rejoining as them.
+  await expect(button(page, /^I’m /)).toHaveCount(0);
+  await expect(page.getByText('This is me')).toHaveCount(0);
   await button(page, 'Back to Trip').click();
-  await expect(button(page, 'Benjamin (you), no expenses yet. Show details')).toBeVisible();
+  await expect(button(page, 'Ana (you), no expenses yet. Show details')).toBeVisible();
 
   // Removing is immediate; restoring a member is a separate manual action.
   await addMember(page, 'Cy');
@@ -1320,9 +1312,17 @@ test('joins from a second device and shows changes on both through realtime', as
   await visitor.goto(link);
   await expect(heading(visitor, 'Trip')).toBeVisible();
   await expect(visitor).toHaveURL(/\/app$/);
+
+  // Becoming someone else, even a name taken elsewhere, is leaving and rejoining as them.
+  await button(visitor, 'Back to groups').click();
+  await button(visitor, 'Leave Trip').click();
+  await button(visitor, 'Leave').click();
+  await button(visitor, 'Show 1 group you left').click();
+  await button(visitor, 'Rejoin Trip').click();
+  await visitor.getByRole('radio', { name: /^Ana/ }).click();
+  await button(visitor, 'Rejoin as Ana').click();
+  await expect(button(visitor, /^Ana \(you\), /)).toBeVisible();
   await person(visitor, 'Ana').click();
-  await button(visitor, 'I’m Ana').click();
-  await expect(visitor.getByRole('status').filter({ hasText: 'Ana is already taken on another device. It’s now taken on this device too.' })).toBeVisible();
   await expect(visitor.getByText('Online · taken on 2 devices', { exact: true })).toBeVisible();
 });
 
@@ -1441,6 +1441,7 @@ test('puts server connection failures and retry in the header details', async ({
 
 test('leaves from the groups list after confirming and rejoins as an existing member', async ({ page }) => {
   await createGroup(page, 'Lisbon', 'Ana');
+  await addMember(page, 'Ben');
   await button(page, 'Back to groups').click();
   await button(page, 'Leave Lisbon').click();
   await expect(page.getByText('Leave Lisbon on this device? You can rejoin it later.', { exact: true })).toBeVisible();
@@ -1450,9 +1451,13 @@ test('leaves from the groups list after confirming and rejoins as an existing me
   await button(page, 'Leave').click();
   await button(page, 'Show 1 group you left').click();
   await button(page, 'Rejoin Lisbon').click();
-  await page.getByRole('radio', { name: /^Ana/ }).click();
-  await button(page, 'Rejoin as Ana').click();
+
+  // Rejoining is how to change who you are: here, as Ben instead of Ana.
+  await page.getByRole('radio', { name: /^Ben/ }).click();
+  await button(page, 'Rejoin as Ben').click();
   await expect(field(page, 'Add a person')).toBeVisible();
+  await expect(button(page, /^Ben \(you\), /)).toBeVisible();
+  await expect(button(page, /^Ana, /)).toBeVisible();
 });
 
 test('keeps Settle up rows whole with very long names and amounts', async ({ page }, testInfo) => {
