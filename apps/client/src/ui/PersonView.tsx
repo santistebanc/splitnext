@@ -104,7 +104,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
               <>
                 <Text ref={morph(replica && memberId ? `pname-${replica.group_id}-${memberId}` : null)} accessibilityRole="header" numberOfLines={2} style={[titleStyle(progress), { flexShrink: 1 }]}>{name}</Text>
                 {isYou ? <Text onLayout={(event) => setYouWidth(event.nativeEvent.layout.width)} style={{ fontFamily, fontSize: 15, fontWeight: '500', color: colors.muted }}>you</Text> : null}
-                {active && memberId ? (
+                {active && memberId && progress <= 0.5 ? (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Rename ${name}`}
