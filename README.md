@@ -158,6 +158,12 @@ output is not committed.
 
 ## How it is tested
 
+The [device lab](./docs/agents/device-lab.md) runs real independent installations
+against a dedicated local Worker. Start it with `npm run lab -- --env=NAME` after
+building the frontend; `npm run lab:cli -- discover` publishes the common operation
+schemas used by its frontend and AI callers. It retains isolated profiles, steps
+and diagnostics under `.wrangler/lab/`. See the guide before controlling stores.
+
 | What | Where | What it guarantees |
 | --- | --- | --- |
 | Command rules | `test/groupCommandRules.test.ts` | The outcome of every rule of every command, as a table. |

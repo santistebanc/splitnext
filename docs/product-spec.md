@@ -8,6 +8,13 @@ were made.
 
 ## Status and scope
 
+The local device testing lab provides persistent isolated environments, real app
+installations, shared frontend/API/CLI controls, independent device and server
+network/process conditions, authoritative and local inspectors, structured D1/DO
+edits, coordinated checkpoints, saved steps and bounded waits. It is a developer
+tool with local test data; native packaging and deterministic simulation remain
+deferred. Its usage and operational limits are in [the lab guide](./agents/device-lab.md).
+
 The current MVP establishes identities, groups, ledger members, offline
 synchronization, realtime revision announcements, invite links, and
 expenses, repayments, Activity, safe undo and an Activity count.
