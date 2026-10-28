@@ -1,8 +1,7 @@
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
-import { formatAmount, memberSettlements, preferredMember, repaymentMembers, settlementSuggestions } from '@splitnext/client';
-import { memberName, moneyLabel, noCurrency } from '../model/expenses';
+import { memberSettlements, preferredMember, settlementSuggestions } from '@splitnext/client';
+import { memberName, moneyLabel } from '../model/expenses';
 import { ErrorMessage, FooterButton, colors, s } from './components';
-import { useRepaymentForm } from './ExpenseList';
 import { FooterDrawer } from './FooterDrawer';
 import type { MemberListApp } from './MemberList';
 import { fontFamily, monoFamily } from './theme';
@@ -22,7 +21,7 @@ function plannedPayments(app: MemberListApp, person: string | null) {
 /**
  * Settle up, pinned at the person's foot while they are in a payment of the
  * group's plan. It opens the plan's payments as a drawer above it, like New
- * group, and then records a different payment.
+ * group, and gives way to it while it is open.
  */
 export function SettleUpFooter(props: { app: MemberListApp }) {
   const ui = useUiState();
@@ -30,23 +29,13 @@ export function SettleUpFooter(props: { app: MemberListApp }) {
   const open = ui.view === 'settle';
   const settle = useActionCall();
   const back = useActionCall();
-  const repayment = useRepaymentForm();
   const { height } = useWindowDimensions();
   const plan = plannedPayments(props.app, person);
 
   // Settled people have nothing to open, unless it is already open and showing ✓ Settled.
   if (!plan || (!plan.payments.length && !open)) return null;
-  const { snapshot, you, payments } = plan;
+  const { snapshot, payments } = plan;
   const count = payments.length;
-  // A different payment starts from the person, or from you for the whole group.
-  const from = person ?? you ?? repaymentMembers(snapshot)[0]?.id ?? '';
-  const other = you && you !== from ? you : repaymentMembers(snapshot).find((member) => member.id !== from)?.id ?? '';
-
-  function recordDifferent(): void {
-    const owes = payments.find((entry) => entry.from_member_id === from || entry.to_member_id === from);
-
-    repayment.open({ from, to: owes ? (owes.from_member_id === from ? owes.to_member_id : owes.from_member_id) : other, amount: owes ? formatAmount(owes.amount, owes.currency) : '', currency: owes?.currency ?? noCurrency, manual: true });
-  }
 
   return (
     <FooterDrawer
@@ -57,12 +46,8 @@ export function SettleUpFooter(props: { app: MemberListApp }) {
       onClose={() => { void back.call('closePanel', {}); }}
       footer={(
         <>
-          <ErrorMessage message={settle.error ?? back.error ?? repayment.action.error} />
-          {open ? (
-            <FooterButton label="Record a different payment" disabled={repayment.action.busy || !from || !other} onPress={recordDifferent}>
-              Record a different payment
-            </FooterButton>
-          ) : (
+          <ErrorMessage message={settle.error ?? back.error} />
+          {open ? null : (
             <FooterButton
               label={`Settle up, ${count === 1 ? '1 payment' : `${count} payments`}`}
               disabled={!settle.can('showSettleUp', person ? { memberId: person } : {})}

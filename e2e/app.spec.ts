@@ -104,6 +104,25 @@ async function addExpense(page: Page, description: string, amount: string, payer
   await expect(button(page, new RegExp(`^Change ${escaped(description)} · `))).toBeVisible();
 }
 
+/** Opens a new payment from the group screen: Add expense, then its Payment tab. */
+async function openPayment(page: Page): Promise<void> {
+  await button(page, 'Add expense').click();
+  await page.getByRole('radiogroup', { name: 'Entry type' }).getByRole('radio', { name: 'Payment', exact: true }).click();
+  await expect(button(page, /^Paid to .*Change recipient$/)).toBeVisible();
+}
+
+/** Records a payment from the group screen, choosing who paid and who was paid by name. */
+async function addPayment(page: Page, from: string, to: string, amount: string): Promise<void> {
+  await openPayment(page);
+  await field(page, 'Amount').fill(amount);
+  await button(page, /^Paid by .*Change payer$/).click();
+  await page.getByRole('radio', { name: new RegExp(`^${escaped(from)}( \\(you\\))?$`) }).click();
+  await button(page, /^Paid to .*Change recipient$/).click();
+  await page.getByRole('radio', { name: new RegExp(`^${escaped(to)}( \\(you\\))?$`) }).click();
+  await button(page, 'Save').click();
+  await expect(button(page, 'Add expense')).toBeVisible();
+}
+
 /** Reads the invite link, opened in place under the group's name, and closes it. */
 async function inviteLink(page: Page): Promise<string> {
   await button(page, 'Invite people').click();
@@ -750,11 +769,12 @@ test('explains a balance and settles it with the fewest payments', async ({ page
   await expect(button(page, 'Ben pays you 10.00. Record this payment')).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('settle-up-drawer.png') });
 
-  // A different payment opens the form with what is owed; a partial one leaves the rest in the plan.
-  await button(page, 'Record a different payment').click();
-  await expect(field(page, 'Amount')).toHaveValue('10.00');
-  await field(page, 'Amount').fill('4');
-  await button(page, 'Save').click();
+  // A partial payment, recorded as a Payment from the group, leaves the rest in the plan.
+  await button(page, 'Back to Ben').click();
+  await button(page, 'Back to Settle').click();
+  await addPayment(page, 'Ben', 'Ana', '4');
+  await person(page, 'Ben').click();
+  await button(page, 'Settle up, 1 payment').click();
   await expect(button(page, 'Ben pays you 6.00. Record this payment')).toBeVisible();
 
   // Record records a planned payment at once.
@@ -1172,22 +1192,22 @@ test('records planned and other repayments offline', async ({ page, context }) =
   await addMember(page, 'Benjamin Alexander');
   await addExpense(page, 'Dinner', '60');
   await page.setViewportSize({ width: 390, height: 844 });
-  await person(page, 'Benjamin Alexander').click();
   await goOffline(page, context);
+  await addPayment(page, 'Benjamin Alexander', 'Ana', '10');
+  await person(page, 'Benjamin Alexander').click();
   await button(page, 'Settle up, 1 payment').click();
-  await expect(button(page, 'Benjamin Alexander pays you 30.00. Record this payment')).toBeVisible();
-  await button(page, 'Record a different payment').click();
-  await expect(field(page, 'Amount')).toHaveValue('30.00');
-  await field(page, 'Amount').fill('10');
-  await button(page, 'Save').click();
   await expect(button(page, 'Benjamin Alexander pays you 20.00. Record this payment')).toBeVisible();
   expect(await page.locator('#splitnext-page').evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await button(page, 'Back to Benjamin Alexander').click();
+  await button(page, 'Back to Repayments').click();
 
-  await button(page, 'Record a different payment').click();
+  await openPayment(page);
   await expect(heading(page, 'Earlier repayments')).toHaveCount(0);
   await expect(button(page, /^Change repayment:/)).toHaveCount(0);
-  await field(page, 'Amount').fill('5');
-  await button(page, 'Save').click();
+  await button(page, 'Cancel').click();
+  await addPayment(page, 'Benjamin Alexander', 'Ana', '5');
+  await person(page, 'Benjamin Alexander').click();
+  await button(page, 'Settle up, 1 payment').click();
   await expect(button(page, 'Benjamin Alexander pays you 15.00. Record this payment')).toBeVisible();
   await page.reload();
   await expect(button(page, 'Change repayment: Benjamin Alexander paid you back 10.00')).toBeVisible();
@@ -1202,9 +1222,7 @@ test('uses expense-style amount, member rows, and footer in the repayment editor
   await addMember(page, 'Benjamin Alexander');
   await addMember(page, 'Cy');
   await addExpense(page, 'Dinner', '60');
-  await person(page, 'Benjamin Alexander').click();
-  await button(page, 'Settle up, 1 payment').click();
-  await button(page, 'Record a different payment').click();
+  await openPayment(page);
   const from = button(page, /^Paid by .*Change payer$/);
   const to = button(page, /^Paid to .*Change recipient$/);
 
@@ -1218,6 +1236,8 @@ test('uses expense-style amount, member rows, and footer in the repayment editor
 
   await expect(from).toBeVisible();
   await expect(to).toBeVisible();
+  await choose(from, 'Benjamin Alexander');
+  await choose(to, 'Ana (you)');
   await expect(button(page, 'Paid by Benjamin Alexander. Change payer')).toBeVisible();
   await expect(button(page, 'Paid to Ana (you). Change recipient')).toBeVisible();
   await from.click();
@@ -1247,15 +1267,12 @@ test('uses expense-style amount, member rows, and footer in the repayment editor
   await amount.fill('7.50');
   expect(await page.locator('#splitnext-page').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
   await record.click();
-  await expect(heading(page, 'Settle up')).toBeVisible();
-  await button(page, 'Record a different payment').click();
+  await openPayment(page);
   await expect(button(page, /^Change repayment:/)).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('repayment-dropdowns-320.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: testInfo.outputPath('repayment-dropdowns-390.png') });
   await button(page, 'Cancel').click();
-  await button(page, 'Back to Benjamin Alexander').click();
-  await button(page, 'Back to Dropdown payments').click();
   await button(page, 'Change repayment: Cy paid Benjamin Alexander back 7.50').click();
   await expect(button(page, 'Paid by Cy. Change payer')).toBeVisible();
   await expect(button(page, 'Paid to Benjamin Alexander. Change recipient')).toBeVisible();
