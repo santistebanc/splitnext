@@ -2044,7 +2044,7 @@ test('undoes member changes in Activity as well as a group rename', async ({ pag
   await expect(person(page, 'Cy')).toBeVisible();
 });
 
-test('counts changes from others on the bell without pop-ups and marks them seen', async ({ page, browser }) => {
+test('counts balance changes from others on the bell and tags every new Activity entry', async ({ page, browser }) => {
   await createGroup(page, 'Shared', 'Ana');
   await addMember(page, 'Ben');
   // Establish the seen baseline before another installation can join. The empty
@@ -2065,8 +2065,9 @@ test('counts changes from others on the bell without pop-ups and marks them seen
   await addExpense(visitor, 'Fresh dinner', '20');
 
   await expect(button(page, 'Change Fresh dinner · 20.00')).toBeVisible();
-  await expect(bell(page)).toHaveAccessibleName('Activity: 2 new updates');
-  await expect(page.getByTestId('activity-count')).toHaveText('2');
+  // Joining is new Activity, but only the expense moves balances and counts on the bell.
+  await expect(bell(page)).toHaveAccessibleName('Activity: 1 new update');
+  await expect(page.getByTestId('activity-count')).toHaveText('1');
   const bellBox = (await bell(page).boundingBox())!;
 
   await page.screenshot({ path: test.info().outputPath('activity-bell.png'), clip: { x: bellBox.x + bellBox.width - 390, y: 0, width: 390, height: 140 } });
