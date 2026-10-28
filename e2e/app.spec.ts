@@ -455,7 +455,7 @@ test('opens a rename where the name already is: full width, the same lines in th
   await expect(heading(page, 'Ana')).toBeVisible();
 });
 
-test('hides the rename pencil as the header compacts, on the group and a person', async ({ page }) => {
+test('hides the rename pencil as the header compacts, and ends a person’s header at their bar', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 520 });
   await createGroup(page, 'Pencils', 'Ana');
   await addMember(page, 'Ben');
@@ -471,6 +471,22 @@ test('hides the rename pencil as the header compacts, on the group and a person'
     await scroller.evaluate((node) => { node.scrollTop = 0; });
     await expect(button(page, pencil)).toBeVisible();
   }
+
+  // A person's header ends right at the bottom of their balance bar, at rest and compact.
+  const gap = () => page.evaluate(() => {
+    const bar = document.querySelector('[data-morph^="pbar-"]');
+    const content = document.getElementById('splitnext-page');
+    let header = bar;
+
+    while (header && content && !header.parentElement?.contains(content)) header = header.parentElement;
+
+    return header && bar ? Math.round(header.getBoundingClientRect().bottom - bar.getBoundingClientRect().bottom) : null;
+  });
+
+  expect(await gap()).toBe(0);
+  await scroller.evaluate((node) => { node.scrollTop = 300; });
+  await expect(button(page, 'Rename Ben')).toHaveCount(0);
+  await expect.poll(gap).toBe(0);
 });
 
 test('keeps the fixed theme and group-list branding when offline', async ({ page, context }) => {
