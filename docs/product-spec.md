@@ -98,8 +98,8 @@ from a central ink line (orange to the left for what they owe, green to the
 right for what they get back, scaled to the largest balance), and the signed
 figure. Show a settled zero, such as 0.00, when the person has current
 records; leave the bar and figure blank only when no current expense or
-repayment names them. Someone no expense or repayment has ever named, removed
-ones included, has an X at the end of their row that removes them at once,
+repayment names them. Someone other than you whom no expense or repayment has
+ever named, removed ones included, has an X at the end of their row that removes them at once,
 like Remove in their details, without opening them.
 A presence marker beside each name shows a filled green dot when at least one
 identity selecting the name is connected, a ring when they are known to be
@@ -121,8 +121,8 @@ No expenses yet when no current expense or repayment names them. Settle up is
 pinned at the foot while they are in a payment of the group's plan. The
 outlined Remove appears only while no expense or repayment has named them,
 removed ones included; otherwise the details offer no way to take them out
-and say nothing about it. Remove is immediate, without a confirmation,
-including the current you member. A toast names the person, without Undo, and
+and say nothing about it. Your own member never offers Remove, in their
+details or their row. Remove is immediate, without a confirmation. A toast names the person, without Undo, and
 Activity can restore them later. A hidden member who has a
 balance again, such as from an offline change, stays in the balances marked
 removed, with Restore in their details. Below, the details list every current

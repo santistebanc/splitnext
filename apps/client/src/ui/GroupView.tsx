@@ -218,7 +218,8 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
   const remove = useActionCall();
   // As in their details: only someone no expense or repayment has named, removed ones included.
   const snapshot = props.replica.projected_snapshot;
-  const removable = !props.removed && snapshot !== null && !memberHasRecords(snapshot, props.memberId);
+  // You never take yourself out from your own row.
+  const removable = !props.you && !props.removed && snapshot !== null && !memberHasRecords(snapshot, props.memberId);
   const name = memberName(props.replica.projected_snapshot, props.memberId);
   const state = props.app.snapshot();
   const participants = participantMarkers(props.replica, props.memberId, props.app.client.presence(props.replica.group_id), state.online && state.reachable);
