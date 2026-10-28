@@ -455,6 +455,24 @@ test('opens a rename where the name already is: full width, the same lines in th
   await expect(heading(page, 'Ana')).toBeVisible();
 });
 
+test('hides the rename pencil as the header compacts, on the group and a person', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 520 });
+  await createGroup(page, 'Pencils', 'Ana');
+  await addMember(page, 'Ben');
+
+  for (const amount of ['10', '20', '30', '40', '50', '60', '70', '80']) await addExpense(page, `Meal ${amount}`, amount);
+  const scroller = page.locator('#splitnext-page');
+
+  for (const pencil of ['Rename group', 'Rename Ben']) {
+    if (pencil === 'Rename Ben') await person(page, 'Ben').click();
+    await expect(button(page, pencil)).toBeVisible();
+    await scroller.evaluate((node) => { node.scrollTop = 300; });
+    await expect(button(page, pencil)).toHaveCount(0);
+    await scroller.evaluate((node) => { node.scrollTop = 0; });
+    await expect(button(page, pencil)).toBeVisible();
+  }
+});
+
 test('keeps the fixed theme and group-list branding when offline', async ({ page, context }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
