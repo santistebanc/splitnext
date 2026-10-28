@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  />
+  <title>Splitnext device lab</title>
+  <style>
+    @font-face {
+      font-family: Instrument;
+      src: url("/font.woff2");
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: #f7f5ef;
+      color: #191917;
+      font:
+        16px Instrument,
+        system-ui,
+        sans-serif;
+    }
+    header {
+      padding: 24px;
+      border-bottom: 1px solid #aaa;
+      display: flex;
+      gap: 24px;
+      align-items: baseline;
+      flex-wrap: wrap;
+    }
+    h1 {
+      font-size: 24px;
+      margin: 0;
+    }
+    h2 {
+      font-size: 20px;
+    }
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+      border: 1px solid #999;
+      background: transparent;
+      color: inherit;
+      padding: 8px;
+      border-radius: 0;
+    }
+    button {
+      cursor: pointer;
+    }
+    button:hover {
+      background: #e8e5dc;
+    }
+    button:focus-visible,
+    input:focus-visible {
+      outline: 2px solid #191917;
+    }
+    main {
+      padding: 24px;
+      display: grid;
+      grid-template-columns: minmax(300px, 1fr) 2fr;
+      gap: 32px;
+    }
+    pre {
+      font: 12px/1.5 monospace;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      max-height: 440px;
+      overflow: auto;
+    }
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      font: 13px monospace;
+    }
+    .devices {
+      display: flex;
+      gap: 24px;
+      overflow: auto;
+      align-items: flex-start;
+    }
+    .device {
+      min-width: 390px;
+      max-width: 440px;
+    }
+    .screen {
+      width: 390px;
+      height: 780px;
+      border: 1px solid #999;
+      display: block;
+      cursor: crosshair;
+    }
+    details {
+      border-top: 1px solid #aaa;
+      padding: 12px 0;
+    }
+    summary {
+      cursor: pointer;
+    }
+    #error {
+      color: #ae330c;
+      white-space: pre-wrap;
+    }
+    .tools {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 12px 0;
+    }
+    label {
+      display: block;
+      margin: 12px 0 4px;
+    }
+    #timeline {
+      max-height: 220px;
+    }
+    @media (max-width: 850px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+      .devices {
+        max-width: 100%;
+      }
+    }
+  </style>
+  <header>
+    <h1>Splitnext / Device lab</h1>
+    <span id="status">Opening isolated environment…</span
+    ><button id="add">Add device</button
+    ><button id="refresh">Refresh inspectors</button>
+  </header>
+  <main>
+    <section>
+      <h2>Server & experiment</h2>
+      <p>
+        Local Worker and isolated stores. Click a device screen, then type. Tab,
+        Enter, Backspace and scrolling reach that same app.
+      </p>
+      <div class="tools">
+        <button data-op="serverNetwork" data-input='{"available":false}'>
+          Make unavailable</button
+        ><button data-op="serverNetwork" data-input='{"available":true}'>
+          Make available</button
+        ><button data-op="serverProcess" data-input='{"running":false}'>
+          Stop process</button
+        ><button data-op="serverProcess" data-input='{"running":true}'>
+          Start process
+        </button>
+      </div>
+      <label for="operation">Lab operation</label
+      ><select id="operation"></select>
+      <pre id="schema"></pre>
+      <label for="input">Input JSON</label><textarea id="input">{}</textarea>
+      <div class="tools">
+        <button id="run">Run operation</button
+        ><button id="export">Download diagnostics & steps</button>
+      </div>
+      <p id="error" role="alert"></p>
+      <pre id="result"></pre>
+      <details open>
+        <summary>Authoritative server state</summary>
+        <pre id="server"></pre>
+      </details>
+      <details open>
+        <summary>Ordered timeline</summary>
+        <pre id="timeline"></pre>
+      </details>
+    </section>
+    <section>
+      <h2>Independent installations</h2>
+      <div class="devices" id="devices"></div>
+    </section>
+  </main>
+  <script type="module">
+    const $ = (id) => document.getElementById(id);
+    let schemas = {},
+      focused = null;
+    async function api(operation, input = {}) {
+      const response = await fetch("/api", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ operation, input }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw Error(JSON.stringify(data));
+      return data;
+    }
+    function showError(e) {
+      $("error").textContent = String(e);
+    }
+    async function run(operation, input) {
+      $("error").textContent = "";
+      try {
+        const result = await api(operation, input);
+        $("result").textContent = JSON.stringify(result, null, 2);
+        await refresh();
+        return result;
+      } catch (e) {
+        showError(e);
+      }
+    }
+    function devicePanel(id) {
+      const panel = document.createElement("article");
+      panel.className = "device";
+      const title = document.createElement("h2");
+      title.textContent = id;
+      panel.append(title);
+      const tools = document.createElement("div");
+      tools.className = "tools";
+      for (const [label, operation, input] of [
+        ["Offline", "deviceNetwork", { device: id, online: false }],
+        ["Online", "deviceNetwork", { device: id, online: true }],
+        ["Reload", "reloadDevice", { device: id }],
+      ]) {
+        const b = document.createElement("button");
+        b.textContent = label;
+        b.onclick = () => run(operation, input);
+        tools.append(b);
+      }
+      panel.append(tools);
+      const image = document.createElement("img");
+      image.className = "screen";
+      image.alt = `Actual app screen for ${id}`;
+      image.tabIndex = 0;
+      image.onclick = (e) => {
+        focused = id;
+        image.focus();
+        const r = image.getBoundingClientRect();
+        void run("input", {
+          device: id,
+          kind: "click",
+          x: ((e.clientX - r.left) * 390) / r.width,
+          y: ((e.clientY - r.top) * 780) / r.height,
+        });
+      };
+      image.onkeydown = (e) => {
+        e.preventDefault();
+        focused = id;
+        void run("input", {
+          device: id,
+          kind: e.key.length === 1 ? "type" : "key",
+          text: e.key === " " ? " " : e.key,
+        });
+      };
+      image.onwheel = (e) => {
+        e.preventDefault();
+        void run("input", {
+          device: id,
+          kind: "wheel",
+          x: e.deltaX,
+          y: e.deltaY,
+        });
+      };
+      panel.append(image);
+      const details = document.createElement("details");
+      details.open = true;
+      const summary = document.createElement("summary");
+      summary.textContent = "State, drafts, outbox & action schemas";
+      const pre = document.createElement("pre");
+      details.append(summary, pre);
+      panel.append(details);
+      panel.dataset.device = id;
+      panel.image = image;
+      panel.state = pre;
+      const actionSelect = document.createElement('select');
+      actionSelect.setAttribute('aria-label', 'App action for '+id);
+      const actionInput = document.createElement('textarea');
+      actionInput.setAttribute('aria-label', 'App action input for '+id);
+      const actionReason = document.createElement('p');
+      const invoke = document.createElement('button');
+      invoke.textContent = 'Invoke app action';
+      const choose = () => { const action = panel.actions.find(a=>a.name===actionSelect.value); if(action){actionInput.value=JSON.stringify(action.example ?? {},null,2);actionReason.textContent=action.availability.available?action.description:action.availability.reason;} };
+      actionSelect.onchange = choose;
+      invoke.onclick = () => {try{void run('action',{device:id,name:actionSelect.value,input:JSON.parse(actionInput.value)})}catch(e){showError(e)}};
+      panel.updateActions = actions => { panel.actions=actions;if(!actionSelect.options.length){for(const a of actions){const option=document.createElement('option');option.value=a.name;option.textContent=a.name;actionSelect.append(option)}choose()}const action=actions.find(a=>a.name===actionSelect.value);actionReason.textContent=action?.availability.available?action.description:action?.availability.reason; };
+      panel.append(actionSelect,actionReason,actionInput,invoke);
+      return panel;
+    }
+    async function refresh() {
+      const status = await api("status");
+      $("status").textContent =
+        `${status.running ? "Running" : "Stopped"} · ${status.available ? "Available" : "Unavailable"} · ${status.devices.length} devices`;
+      for (const panel of [...$("devices").children])
+        if (!status.devices.includes(panel.dataset.device)) panel.remove();
+      for (const id of status.devices) {
+        let p = [...$("devices").children].find((p) => p.dataset.device === id);
+        if (!p) {
+          p = devicePanel(id);
+          $("devices").append(p);
+        }
+        p.image.src = `/screen?device=${encodeURIComponent(id)}&t=${Date.now()}`;
+        const state = await api("inspectDevice", { device: id });
+        p.state.textContent = JSON.stringify(state, null, 2);
+        p.updateActions(state.actions);
+      }
+      $("timeline").textContent = JSON.stringify((await api("timeline")).slice(-20).map(e=>({sequence:e.sequence,at:e.at,kind:e.kind,operation:e.detail.operation,device:e.detail.device})),null,2);
+      $("server").textContent = JSON.stringify(
+        await api("inspectServer"),
+        null,
+        2,
+      );
+    }
+    $("add").onclick = () =>
+      run("addDevice", { device: `device-${Date.now()}` });
+    $("refresh").onclick = () => refresh().catch(showError);
+    document
+      .querySelectorAll("[data-op]")
+      .forEach(
+        (b) =>
+          (b.onclick = () => run(b.dataset.op, JSON.parse(b.dataset.input))),
+      );
+    $("operation").onchange = () => {
+      $("schema").textContent = JSON.stringify(
+        schemas[$("operation").value],
+        null,
+        2,
+      );
+    };
+    $("run").onclick = () => {
+      try {
+        void run($("operation").value, JSON.parse($("input").value));
+      } catch (e) {
+        showError(e);
+      }
+    };
+    $("export").onclick = async () => {
+      try {
+        const data = await api("export");
+        $("timeline").textContent = JSON.stringify(
+          data.timeline.slice(-40),
+          null,
+          2,
+        );
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(
+          new Blob([JSON.stringify(data, null, 2)], {
+            type: "application/json",
+          }),
+        );
+        a.download = "splitnext-experiment.json";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } catch (e) {
+        showError(e);
+      }
+    };
+    try {
+      schemas = (await api("discover")).operations;
+      for (const name of Object.keys(schemas)) {
+        const option = document.createElement("option");
+        option.textContent = name;
+        $("operation").append(option);
+      }
+      $("operation").onchange();
+      await refresh();
+    } catch (e) {
+      showError(e);
+    }
+    setInterval(() => {void refresh().catch(showError)}, 4000);
+    // Screen mirroring observes the same pages; it never creates another app instance.
+    setInterval(() => {
+      for (const p of $("devices").children)
+        p.image.src = `/screen?device=${encodeURIComponent(p.dataset.device)}&t=${Date.now()}`;
+    }, 1500);
+  </script>
+</html>

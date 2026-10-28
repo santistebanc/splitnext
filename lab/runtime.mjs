@@ -22,6 +22,9 @@ export class Lab {
   available = true;
   epoch = 0;
   sequence = 0;
+  initialized = false;
+  maintaining = false;
+  requests = new Set();
   tail = Promise.resolve();
   eventTail = Promise.resolve();
   constructor(root, port) {
@@ -33,6 +36,7 @@ export class Lab {
   async init() {
     await mkdir(this.data, { recursive: true });
     const manifest = await this.manifest();
+    this.available = manifest.available ?? true;
 
     if (manifest.port && manifest.port !== this.port)
       throw new Error("environment_port_changed");
@@ -47,6 +51,7 @@ export class Lab {
 
     for (const item of manifest.devices ?? []) await this.addDevice(item);
     await this.save();
+    this.initialized = true;
   }
   manifest() {
     return readFile(path.join(this.data, "manifest.json"), "utf8")
@@ -60,6 +65,7 @@ export class Lab {
       JSON.stringify(
         {
           port: this.port,
+          available: this.available,
           devices: [...this.devices.values()].map(
             ({ id, online, latencyMs }) => ({ id, online, latencyMs }),
           ),
@@ -184,14 +190,14 @@ export class Lab {
     await this.event("server.stopped", {});
   }
   blocked(device) {
-    return !device.online || !this.available || !this.worker;
+    return !device.online || !this.available || !this.worker || this.maintaining;
   }
   async closeSockets(device) {
     for (const d of device ? [device] : this.devices.values()) {
       d.epoch++;
 
       for (const socket of d.sockets)
-        socket.close({ code: 1011, reason: "lab_network_changed" });
+        await socket.close({ code: 1011, reason: "lab_network_changed" });
       d.sockets.clear();
     }
   }
@@ -226,7 +232,7 @@ export class Lab {
     await context.route("**/*", async (route) => {
       const url = new URL(route.request().url());
 
-      if (!/^\/(identities|groups|invites)(\/|$)/.test(url.pathname))
+      if (!/^\/(identities|identity|groups|invites)(\/|$)/.test(url.pathname))
         return route.continue();
       const epoch = d.epoch;
       const serverEpoch = this.epoch;
@@ -244,7 +250,16 @@ export class Lab {
 
         if (this.blocked(d) || epoch !== d.epoch || serverEpoch !== this.epoch)
           return await route.abort("internetdisconnected");
-        const response = await route.fetch({ timeout: 10000 });
+        const fetching = route.fetch({ timeout: 10000 });
+        this.requests.add(fetching);
+        let response;
+
+        try { response = await fetching; }
+        finally { this.requests.delete(fetching); }
+
+        await this.event('response.received', request);
+
+        if (d.latencyMs) await delay(d.latencyMs);
 
         if (
           this.blocked(d) ||
@@ -268,7 +283,7 @@ export class Lab {
     });
     await context.routeWebSocket("**/*", (socket) => {
       if (this.blocked(d)) {
-        socket.close({ code: 1011, reason: "lab_unavailable" });
+        void socket.close({ code: 1011, reason: "lab_unavailable" });
 
         return;
       }
@@ -290,11 +305,11 @@ export class Lab {
       });
       socket.onClose(() => {
         d.sockets.delete(socket);
-        upstream.close();
+        void upstream.close();
       });
       upstream.onClose(() => {
         d.sockets.delete(socket);
-        socket.close();
+        void socket.close();
       });
     });
     d.page = context.pages()[0] ?? (await context.newPage());
@@ -305,6 +320,7 @@ export class Lab {
     await d.page.waitForFunction(() => window.splitnextLab);
 
     if (!online) await d.page.evaluate(() => window.splitnextLab.online(false));
+    await d.context.setOffline(!online);
     await this.save();
     await this.event("device.added", { device: id });
 
@@ -353,18 +369,26 @@ export class Lab {
   }
   async maintenance(run) {
     const running = Boolean(this.worker);
+    this.maintaining = true;
+    await Promise.allSettled(this.requests);
     await this.stop();
 
     try {
       return await run();
     } finally {
+      this.maintaining = false;
+
       if (running) await this.start();
     }
   }
   async closeDevices() {
     await this.save();
 
-    for (const d of this.devices.values()) await d.context.close();
+    for (const d of this.devices.values()) {
+      await d.page.goto('about:blank');
+      await d.context.close();
+    }
+
     this.devices.clear();
   }
   async reopenDevices() {
@@ -373,6 +397,7 @@ export class Lab {
   }
   async checkpoint(name, restore = false) {
     const snapshot = path.join(this.root, "checkpoints", name);
+    const running = Boolean(this.worker);
 
     if (restore) await readFile(path.join(snapshot, "manifest.json"));
 
@@ -383,6 +408,7 @@ export class Lab {
         if (restore) {
           await rm(this.data, { recursive: true, force: true });
           await cp(snapshot, this.data, { recursive: true });
+          this.available = (await this.manifest()).available ?? true;
         } else {
           await mkdir(path.dirname(snapshot), { recursive: true });
 
@@ -392,8 +418,11 @@ export class Lab {
         }
       } finally {
         // The Worker must be started before app screens reopen.
+        this.maintaining = false;
         await this.start();
         await this.reopenDevices();
+
+        if (!running) await this.stop();
       }
 
       return { name };
@@ -516,6 +545,7 @@ export class Lab {
         };
       case "status":
         return {
+          initialized: this.initialized,
           root: this.root,
           workerPort: this.port,
           running: Boolean(this.worker),
@@ -559,6 +589,7 @@ export class Lab {
 
       case "serverNetwork":
         this.available = input.available;
+        await this.save();
         this.epoch++;
         await this.closeSockets();
 
