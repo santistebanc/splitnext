@@ -732,3 +732,8 @@ Expenses and settlements are accepted behavior.
   invite link.
 - There is deliberately no participant-level access revocation or moderation
   role. The history-based group recovery path is the escape hatch for abuse.
+
+Compact headers hide the group-name pencil alongside the invite controls.
+Tapping any compact screen title returns its view to the top; the expanded group title offers rename again.
+
+In the New group drawer, keep each label close to its textbox with a 2px gap.

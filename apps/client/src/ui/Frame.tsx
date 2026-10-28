@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Platform, ScrollView, Text, View } from 'react-native';
 import { usePathname } from 'expo-router';
 import { s } from './components';
+import { ScrollToTopContext } from './pageScroll';
 import {
   useCompactLayout,
   useTouchInput,
@@ -95,76 +96,78 @@ export function Frame(props: FrameProps) {
   );
 
   return (
-    <View style={[s.page, visibleHeight !== null && { maxHeight: visibleHeight }]}>
-      {props.status ? <View onLayout={(event) => props.onStatusLayout?.(event.nativeEvent.layout.height)}>{props.status}</View> : null}
-      {props.header ? (
-        <View
-          style={s.screenHeaderBar}
-          onLayout={(event) => {
-            const height = event.nativeEvent.layout.height;
-            const previous = headerSize.current;
-            // Resizing the header can clamp scrollTop before its scroll event.
-            // Read the current position so that forced movement is cancelled by
-            // the equal change in header height, rather than reversing collapse.
-            const node: unknown = Platform.OS === 'web' ? scroll.current?.getScrollableNode() : null;
-            const y = Platform.OS === 'web' && node instanceof HTMLElement ? node.scrollTop : scrolled.current;
-
-            headerSize.current = { key: scrollKey, full: previous.key === scrollKey && y > 0 ? Math.max(previous.full, height) : height, current: height };
-
-            if (restoring.current) return;
-
-            scrolled.current = y;
-            props.onScroll?.(y, headerSize.current.full - height);
-          }}
-        >
-          <View style={s.screenColumn}>{props.header}</View>
-        </View>
-      ) : null}
-      <View style={s.page}>
-        <ScrollView
-          ref={scroll}
-          onScroll={(event) => {
-            if (restoring.current) return;
-            const y = event.nativeEvent.contentOffset.y;
-            const header = headerSize.current;
-
-            scrolled.current = y;
-            positions.current.set(scrollKey, y);
-            props.onScroll?.(y, y > 0 && header.key === scrollKey ? header.full - header.current : 0);
-          }}
-          scrollEventThrottle={16}
-          nativeID="splitnext-page"
-          style={scrollStyle}
-          contentContainerStyle={{ flexGrow: 1 }}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={[s.wrap, !homepage && s.appWrap, homepage && mobile && s.mobileWrap, floating && { paddingBottom: 104 }]}>
-            {homepage ? (
-              <View style={[s.header, mobile && s.mobileHeader]}>
-                <View style={s.brand}>
-                  <Text style={s.brandText}>splitnext</Text>
-                  <Text style={s.beta}>BETA</Text>
-                </View>
-              </View>
-            ) : null}
-            {props.children}
-          </View>
-        </ScrollView>
-      </View>
-      {props.footer ? (
-        floating ? (
+    <ScrollToTopContext.Provider value={() => scroll.current?.scrollTo({ y: 0, animated: true })}>
+      <View style={[s.page, visibleHeight !== null && { maxHeight: visibleHeight }]}>
+        {props.status ? <View onLayout={(event) => props.onStatusLayout?.(event.nativeEvent.layout.height)}>{props.status}</View> : null}
+        {props.header ? (
           <View
-            pointerEvents="box-none"
-            style={{ position: 'absolute', left: 0, right: 0, bottom: 28 }}
+            style={s.screenHeaderBar}
+            onLayout={(event) => {
+              const height = event.nativeEvent.layout.height;
+              const previous = headerSize.current;
+              // Resizing the header can clamp scrollTop before its scroll event.
+              // Read the current position so that forced movement is cancelled by
+              // the equal change in header height, rather than reversing collapse.
+              const node: unknown = Platform.OS === 'web' ? scroll.current?.getScrollableNode() : null;
+              const y = Platform.OS === 'web' && node instanceof HTMLElement ? node.scrollTop : scrolled.current;
+
+              headerSize.current = { key: scrollKey, full: previous.key === scrollKey && y > 0 ? Math.max(previous.full, height) : height, current: height };
+
+              if (restoring.current) return;
+
+              scrolled.current = y;
+              props.onScroll?.(y, headerSize.current.full - height);
+            }}
           >
-            <View pointerEvents="box-none" style={[s.screenColumn, s.footerInner]}>{props.footer}</View>
+            <View style={s.screenColumn}>{props.header}</View>
           </View>
-        ) : (
-          <View style={[s.footerBar, props.ruledFooter && s.footerBarRuled]}>
-            <View style={[s.screenColumn, s.footerInner]}>{props.footer}</View>
-          </View>
-        )
-      ) : null}
-    </View>
+        ) : null}
+        <View style={s.page}>
+          <ScrollView
+            ref={scroll}
+            onScroll={(event) => {
+              if (restoring.current) return;
+              const y = event.nativeEvent.contentOffset.y;
+              const header = headerSize.current;
+
+              scrolled.current = y;
+              positions.current.set(scrollKey, y);
+              props.onScroll?.(y, y > 0 && header.key === scrollKey ? header.full - header.current : 0);
+            }}
+            scrollEventThrottle={16}
+            nativeID="splitnext-page"
+            style={scrollStyle}
+            contentContainerStyle={{ flexGrow: 1 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={[s.wrap, !homepage && s.appWrap, homepage && mobile && s.mobileWrap, floating && { paddingBottom: 104 }]}>
+              {homepage ? (
+                <View style={[s.header, mobile && s.mobileHeader]}>
+                  <View style={s.brand}>
+                    <Text style={s.brandText}>splitnext</Text>
+                    <Text style={s.beta}>BETA</Text>
+                  </View>
+                </View>
+              ) : null}
+              {props.children}
+            </View>
+          </ScrollView>
+        </View>
+        {props.footer ? (
+          floating ? (
+            <View
+              pointerEvents="box-none"
+              style={{ position: 'absolute', left: 0, right: 0, bottom: 28 }}
+            >
+              <View pointerEvents="box-none" style={[s.screenColumn, s.footerInner]}>{props.footer}</View>
+            </View>
+          ) : (
+            <View style={[s.footerBar, props.ruledFooter && s.footerBarRuled]}>
+              <View style={[s.screenColumn, s.footerInner]}>{props.footer}</View>
+            </View>
+          )
+        ) : null}
+      </View>
+    </ScrollToTopContext.Provider>
   );
 }

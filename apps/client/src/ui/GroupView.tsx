@@ -67,11 +67,11 @@ function GroupName(props: { name: string; groupId: string }) {
 
   return (
     <View style={{ flex: 1, minWidth: 0 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44 }}>
         {draft === null ? (
           <>
             <Text ref={morph(`gname-${props.groupId}`)} accessibilityRole="header" numberOfLines={2} style={[titleStyle(progress), { flexShrink: 1 }]}>{props.name}</Text>
-            <Pressable
+            {progress <= 0.5 ? <Pressable
               accessibilityRole="button"
               accessibilityLabel="Rename group"
               disabled={!rename.can('renameGroup', { name: props.name })}
@@ -79,7 +79,7 @@ function GroupName(props: { name: string; groupId: string }) {
               style={({ pressed }) => [{ marginLeft: 'auto', marginRight: -10, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !rename.can('renameGroup', { name: props.name }) && s.dim]}
             >
               <PencilIcon size={18} color={colors.ink} />
-            </Pressable>
+            </Pressable> : null}
           </>
         ) : (
           <TextInput
