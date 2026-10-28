@@ -4,6 +4,7 @@ import { minorDigits, parseAmount, preferredMember, repaymentMembers, settlement
 import { memberName, moneyLabel } from '../model/expenses';
 import { ErrorMessage, FooterButton, HeaderAction, ScreenHeader, colors, s } from './components';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
+import { EntrySwitch } from './EntrySwitch';
 import { MemberChoice } from './MemberChoice';
 import type { MemberListApp } from './MemberList';
 import { between, useCompactProgress } from './pageScroll';
@@ -67,13 +68,13 @@ export function SettlementsHeader() {
           <HeaderAction danger text="Delete" label="Delete" disabled={!remove.can('removeSettlement', { settlementId: draft.settlementId })} onPress={() => {
             if (draft.settlementId) void remove.call('removeSettlement', { settlementId: draft.settlementId }, done);
           }} />
-        ) : null}
+        ) : <EntrySwitch kind="repayment" />}
         scrollRule={false}
       />
       <ErrorMessage message={back.error ?? remove.error} />
       <View style={{ paddingBottom: between(14, 6, progress) }}>
         <View style={{ marginTop: between(12, 0, progress), paddingBottom: between(10, 6, progress), borderBottomWidth: 1.5, borderColor: colors.ink, flexDirection: 'row' }}>
-          <AmountInput inputRef={amount} value={draft.amount} currency={draft.currency} onChangeText={(value) => {
+          <AmountInput inputRef={amount} align="right" value={draft.amount} currency={draft.currency} onChangeText={(value) => {
             void actions.dispatch('changeDraft', { field: 'repayment.amount', value }, { origin: 'ui' });
           }} onSubmitEditing={submit} height={between(60, 36, progress)} fontSize={between(56, 32, progress) * amountFit} />
         </View>

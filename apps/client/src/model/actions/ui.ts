@@ -85,6 +85,13 @@ export const uiActions = {
     example: { from: 'member-1', to: 'member-2', amount: '10.00' }, requires: ['openGroup'],
     run: async (host, input, ui) => ui.changeRepayment({ ...input, currency: input.currency ?? noCurrency, manual: input.manual ?? false, settlementId: input.keepEditing ? ui.snapshot().repayment.settlementId : null, expectedVersion: input.keepEditing ? ui.snapshot().repayment.expectedVersion : null }),
   }),
+  switchEntryKind: defineAction({
+    workflow: 'navigate', group: 'UI', description: 'Switch a new entry between an expense and a repayment, carrying over the amount and who paid.',
+    input: z.object({ kind: z.enum(['expense', 'repayment']) }), example: { kind: 'repayment' }, requires: ['openGroup'],
+    unavailable: ({ ui }) => (ui.view === 'expense' && !ui.expense.expenseId) || (ui.view === 'settlements' && !ui.repayment.settlementId)
+      ? null : unavailable('entry_not_new', 'Only a new expense or repayment can switch.'),
+    run: async (host, input, ui) => ui.switchEntry(input.kind),
+  }),
   showCreateGroup: defineAction({
     workflow: 'navigate',
     group: 'UI',

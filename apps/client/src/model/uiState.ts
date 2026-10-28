@@ -1,4 +1,4 @@
-import { repaymentMembers, type InvitePreview } from '@splitnext/client';
+import { preferredMember, repaymentMembers, type InvitePreview } from '@splitnext/client';
 import { draftForExpense, noCurrency, type ExpenseDraft } from './expenses';
 import type { AppState } from './controller';
 import {
@@ -65,6 +65,11 @@ type UiContext = {
   settings: { name: string; expectedName: string };
   expense: ExpenseDraft;
   repayment: { from: string; to: string; amount: string; currency: string; settlementId: string | null; expectedVersion: number | null; manual: boolean };
+  /**
+   * The kind a new entry started as once it has switched between expense and
+   * repayment, when both drafts belong to it; null otherwise.
+   */
+  entryStart: 'expense' | 'repayment' | null;
   join: {
     link: string;
     name: string;
@@ -139,6 +144,7 @@ export class AppUiState {
       settings: { name, expectedName: name },
       expense: draftForExpense(null, null, noCurrency),
       repayment: { from: '', to: '', amount: '', currency: noCurrency, settlementId: null, expectedVersion: null, manual: false },
+      entryStart: null,
       join: {
         link: initialLink,
         name: readName() ?? '',
@@ -223,13 +229,15 @@ export class AppUiState {
     return current === 'invite' ? this.state.trail : [...this.state.trail, current];
   }
 
-  show(view: ViewName, mode: UiState['navigation']['mode'] = 'push', options: { person?: string | null; trail?: GroupView[] } = {}): void {
+  show(view: ViewName, mode: UiState['navigation']['mode'] = 'push', options: { person?: string | null; trail?: GroupView[]; with?: Partial<UiContext> } = {}): void {
     const patch: Partial<UiContext> = {
       navigation: { revision: this.state.navigation.revision + 1, mode },
       confirmation: null,
       memberEdit: null,
       trail: options.trail ?? this.trailTo(view),
       person: options.person !== undefined ? options.person : view === 'home' ? null : this.state.person,
+      entryStart: null,
+      ...options.with,
     };
 
     if (view === 'create')
@@ -270,9 +278,37 @@ export class AppUiState {
         memberEdit: null,
         trail: this.trailTo('expense'),
         expense: draftForExpense(snapshot, expense, noCurrency, this.readApp().group?.session?.identity.id),
+        entryStart: null,
       },
     );
     this.confirmRun = null;
+  }
+
+  /**
+   * Swaps a new expense for a new repayment or back, in place. The amount and
+   * who paid carry over; the description and split, and who was paid, stay
+   * as they were left when switching back.
+   */
+  switchEntry(kind: 'expense' | 'repayment'): void {
+    const group = this.readApp().group;
+    const snapshot = group?.projected_snapshot ?? null;
+    const { expense, repayment, trail } = this.state;
+    const entryLinked = this.state.entryStart !== null;
+    const entryStart = this.state.entryStart ?? (kind === 'repayment' ? 'expense' : 'repayment');
+
+    if (kind === 'repayment') {
+      const from = expense.paidBy ?? (entryLinked ? repayment.from : '');
+      const you = preferredMember(snapshot, group?.session?.identity.id)?.id;
+      const members = repaymentMembers(snapshot);
+      const kept = entryLinked && repayment.to !== from && members.some((member) => member.id === repayment.to) ? repayment.to : '';
+      const to = kept || (you && you !== from ? you : members.find((member) => member.id !== from)?.id ?? '');
+
+      this.show('settlements', 'replace', { trail, with: { entryStart, repayment: { from, to, amount: expense.amount, currency: expense.currency, settlementId: null, expectedVersion: null, manual: true } } });
+    } else {
+      const base = entryLinked ? expense : draftForExpense(snapshot, null, noCurrency, group?.session?.identity.id);
+
+      this.show('expense', 'replace', { trail, with: { entryStart, expense: { ...base, amount: repayment.amount, currency: repayment.currency, paidBy: repayment.from || base.paidBy } } });
+    }
   }
 
   /** Changes how the open expense is paid or split, without saving it. */
