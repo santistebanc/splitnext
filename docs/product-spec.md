@@ -338,11 +338,12 @@ replacement. Presence and preferred-member selections do not appear in the
 feed. Existing append-only audit attribution remains authoritative.
 
 Any participant may undo another participant's reversible action, without a
-time limit, while it remains safe. Member additions, renames, removals,
-restorations, and earlier member reversals have no Undo, in either Activity
-or the member-removal toast. These simple changes can be corrected manually.
-Group creation, joining, leaving, and invite replacement also have no Undo.
-Expenses, repayments, and group renames retain safe Undo.
+time limit, while it remains safe. Expenses, repayments, group renames, and
+member additions, renames, removals, and restorations have safe Undo in
+Activity; a removed member, like a removed expense, shows Restore there.
+Undoing a member's addition is blocked once expenses or repayments name them.
+The member-removal toast has no Undo. Group creation, joining, leaving, and
+invite replacement have no Undo.
 
 An undo cannot overwrite a later change to the affected information; such an
 action simply shows no Undo, without an explanation. Unrelated changes elsewhere in the

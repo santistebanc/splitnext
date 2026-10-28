@@ -1677,22 +1677,32 @@ test('undoes a money change and then reverses that undo through Activity', async
   await expect(button(page, 'Change repayment: Ben paid you back 12.00')).toBeVisible();
 });
 
-test('keeps member actions out of Undo while group rename remains reversible', async ({ page }) => {
+test('undoes member changes in Activity as well as a group rename', async ({ page }) => {
   await createGroup(page, 'Original name', 'Ana');
   await addMember(page, 'Ben');
+  await addMember(page, 'Cy');
   await button(page, 'Rename group').click();
   await field(page, 'Group name').fill('New name');
   await field(page, 'Group name').press('Enter');
   await expect(heading(page, 'New name')).toBeVisible();
+  await person(page, 'Cy').click();
+  await button(page, 'Rename Cy').click();
+  await field(page, 'Name').fill('Cynthia');
+  await field(page, 'Name').press('Enter');
+  await expect(heading(page, 'Cynthia')).toBeVisible();
+  await button(page, 'Back to New name').click();
+
+  // Renaming the group, renaming a member, and adding one each undo from their entry.
   await bell(page).click();
   await button(page, 'Undo: You renamed the group').click();
-  await expect(page.getByText('You undid a change', { exact: true })).toBeVisible();
-  await expect(button(page, 'Undo: You added Ben')).toHaveCount(0);
-  await expect(page.getByText('You undid a change', { exact: true })).toHaveCount(1);
+  await button(page, 'Undo: You renamed Cy').click();
+  await button(page, 'Undo: You added Ben').click();
+  await expect(page.getByText('You undid a change', { exact: true })).toHaveCount(3);
   await expect(button(page, 'Undo: You created the group')).toHaveCount(0);
   await button(page, 'Back to Original name').click();
   await expect(heading(page, 'Original name')).toBeVisible();
-  await expect(person(page, 'Ben')).toBeVisible();
+  await expect(person(page, 'Ben')).toHaveCount(0);
+  await expect(person(page, 'Cy')).toBeVisible();
 });
 
 test('counts changes from others on the bell without pop-ups and marks them seen', async ({ page, browser }) => {
