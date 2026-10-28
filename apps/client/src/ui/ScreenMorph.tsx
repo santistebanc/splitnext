@@ -7,6 +7,6 @@ export function ScreenMorph(props: { screen: string; depth: number; sheet?: bool
 }
 
 /** Marks a part that appears on two screens; native has nothing to fly. */
-export function morph(_key: string | null | undefined, _options?: { stretch?: boolean }) {
+export function morph(_key: string | null | undefined, _options?: { stretch?: boolean; unclipped?: boolean }) {
   return undefined;
 }

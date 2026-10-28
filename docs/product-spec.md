@@ -755,3 +755,6 @@ amount, with share controls directly beside it and the remaining room for names.
 
 A two-line group title releases its extra height continuously as it compacts,
 so fitting onto one line never causes a sudden header or scroll jump.
+
+Amount text stays complete during screen transitions: no wrapping or ellipsis
+while its animated box changes size. Long names retain their ellipsis.
