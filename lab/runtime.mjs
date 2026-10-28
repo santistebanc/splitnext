@@ -339,9 +339,9 @@ export class Lab {
       void this.event("page.error", { device: id, error: String(error) });
     });
     await d.page.goto(`${this.base}/app`);
-    await d.page.waitForFunction(() => window.splitnextLab);
+    await this.waitForScreen(d.page);
 
-    if (!online) await d.page.evaluate(() => window.splitnextLab.online(false));
+    if (!online) await d.page.evaluate(() => window.splitnextLab?.online(false));
     await d.context.setOffline(!online);
 
     if (this.initialized) await this.save();
@@ -356,9 +356,17 @@ export class Lab {
 
     return d;
   }
+  async waitForScreen(page) {
+    await page.waitForFunction(() => window.splitnextLab || [...document.querySelectorAll('button,[role="button"]')].some((button) => button.textContent.trim() === 'Try again'));
+  }
   async inspectDevice(id) {
     const d = this.device(id);
-    const app = await d.page.evaluate(() => window.splitnextLab.inspect());
+
+    const app = await d.page.evaluate(() => window.splitnextLab?.inspect() ?? {
+      state: null, actions: [], inputOptions: {}, diagnostics: null,
+      startup: { reason: 'app_not_ready', screen: document.body.innerText },
+    });
+
     const storage = await d.context.storageState({ indexedDB: true });
 
     return {
@@ -468,7 +476,7 @@ export class Lab {
         if (cancel.signal.aborted) return;
 
         const empty = last.every((d) =>
-          d.state.groups.every((g) => g.pending_commands === 0),
+          d.state?.ready && d.state.groups.every((g) => g.pending_commands === 0),
         );
 
         if (input.until === "outbox" && empty) return { matched: true };
@@ -628,9 +636,9 @@ export class Lab {
         const d = this.device(input.device);
         await d.context.setOffline(false);
         await d.page.reload();
-        await d.page.waitForFunction(() => window.splitnextLab);
+        await this.waitForScreen(d.page);
         await d.page.evaluate(
-          (online) => window.splitnextLab.online(online),
+          (online) => window.splitnextLab?.online(online),
           d.online,
         );
 
@@ -646,7 +654,7 @@ export class Lab {
         await this.closeSockets(d);
         await d.context.setOffline(!d.online);
         await d.page.evaluate(
-          (online) => window.splitnextLab.online(online),
+          (online) => window.splitnextLab?.online(online),
           d.online,
         );
         await this.save();
@@ -669,7 +677,7 @@ export class Lab {
       case "action":
         return this.device(input.device).page.evaluate(
           ({ name, input, confirmed }) =>
-            window.splitnextLab.dispatch(name, input, confirmed),
+            window.splitnextLab?.dispatch(name, input, confirmed) ?? { status: 'failed', error: 'app_not_ready', issues: ['This installation needs to finish startup before app actions are available.'] },
           input,
         );
       case "input": {
