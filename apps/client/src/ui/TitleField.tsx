@@ -23,8 +23,9 @@ export type TitleFieldProps = {
 
 /**
  * A large name edited in place that wraps onto more lines as it grows, rather
- * than scrolling sideways. Names are one line of text, so Enter leaves the
- * field and line breaks never get in.
+ * than scrolling sideways. It opens with the name selected, so typing replaces
+ * it. Names are one line of text, so Enter leaves the field and line breaks
+ * never get in.
  */
 export function TitleField(props: TitleFieldProps) {
   const [height, setHeight] = useState(0);
@@ -56,6 +57,8 @@ export function TitleField(props: TitleFieldProps) {
         ref={props.inputRef}
         autoFocus
         multiline
+        // The whole name is selected, so typing replaces it.
+        selectTextOnFocus
         accessibilityLabel={props.accessibilityLabel}
         placeholder={props.placeholder}
         placeholderTextColor={colors.muted}
