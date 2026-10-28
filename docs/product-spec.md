@@ -36,10 +36,10 @@ bottom sheet, so adding names and inviting can happen in either order. The
 groups list shows each locally stored group's people count and the member this
 installation uses. The invite sheet shows the link in the monospaced face;
 tapping it selects and copies it. Below sit native Share where supported and
-Replace link, side by side. Replace link first
-asks for confirmation in the same sheet, stating that the old link will stop
+Regenerate, side by side. Regenerate first
+asks for confirmation titled “Regenerate invite link?” in the same sheet, explaining that it creates a new link and the old link will stop
 working while everyone already in the group keeps their access, with Cancel and
-Replace link actions.
+Regenerate actions.
 Show link actions directly without a Manage link disclosure. Under the link,
 Tap the link to copy it changes to Copied with a checkmark after copying.
 Creating a link does not imply anyone has joined.
