@@ -1141,7 +1141,7 @@ test('renames the group in place, copies the invite link, and replaces it after 
 
   // One row: the link, with Replace as an icon at its right; there is no Copy link button.
   const linkBox = (await panel.getByTestId('invite-link').boundingBox())!;
-  const replaceBox = (await panel.getByRole('button', { name: 'Replace link', exact: true }).boundingBox())!;
+  const replaceBox = (await panel.getByRole('button', { name: 'Regenerate link', exact: true }).boundingBox())!;
 
   expect(replaceBox.x).toBeGreaterThan(linkBox.x + linkBox.width);
   expect(Math.abs(replaceBox.y + replaceBox.height / 2 - (linkBox.y + linkBox.height / 2))).toBeLessThanOrEqual(2);
@@ -1168,10 +1168,10 @@ test('renames the group in place, copies the invite link, and replaces it after 
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`http://${before}`);
   expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(before);
 
-  // Replacing asks first, in the same place.
-  await panel.getByRole('button', { name: 'Replace link', exact: true }).click();
-  await expect(panel.getByText('The old link will stop working. Everyone already in the group keeps their access.', { exact: true })).toBeVisible();
-  await panel.getByRole('button', { name: 'Replace', exact: true }).click();
+  // Regenerating asks first, in the same place.
+  await panel.getByRole('button', { name: 'Regenerate link', exact: true }).click();
+  await expect(panel.getByText('Regenerate the invite link to create a new one. The old link will stop working. Everyone already in the group keeps their access.', { exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: 'Regenerate', exact: true }).click();
   await expect(panel.getByTestId('invite-link')).not.toHaveText(before);
   await button(page, 'Invite people').click();
   await expect(panel).toHaveCount(0);

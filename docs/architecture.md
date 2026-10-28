@@ -143,7 +143,7 @@ key.
   invite entry route remains available for future native app handoff. A link
   that no longer works shows why and a field to try a different one.
 - The invite link shows between two rules with Copy link, native sharing when
-  supported, and Replace link side by side, which regenerates the invitation
+  supported, and Regenerate side by side, which regenerates the invitation
   after confirming, in the same place, that the old link will stop working.
 - The groups list shows each group as a ruled row with your balance and bar,
   the people count and who you are, and a bin that asks in place before
