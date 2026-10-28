@@ -30,6 +30,8 @@ export const operations = {
     kind: z.enum(["click", "type", "key", "wheel"]),
     x: z.number().optional(),
     y: z.number().optional(),
+    pointerX: z.number().optional(),
+    pointerY: z.number().optional(),
     text: z.string().optional(),
   }),
   serverNetwork: z.object({ available: z.boolean() }),

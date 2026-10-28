@@ -684,8 +684,10 @@ export class Lab {
         if (input.kind === "key")
           await page.keyboard.press(input.text ?? "Enter");
 
-        if (input.kind === "wheel")
+        if (input.kind === "wheel") {
+          await page.mouse.move(input.pointerX ?? 195, input.pointerY ?? 390);
           await page.mouse.wheel(input.x ?? 0, input.y ?? 0);
+        }
 
         return { sent: true };
       }

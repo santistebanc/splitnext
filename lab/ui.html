@@ -294,11 +294,14 @@
       };
       image.onwheel = (e) => {
         e.preventDefault();
+        const r = image.getBoundingClientRect();
         void run("input", {
           device: id,
           kind: "wheel",
           x: e.deltaX,
           y: e.deltaY,
+          pointerX: (e.clientX - r.left) * 390 / r.width,
+          pointerY: (e.clientY - r.top) * 780 / r.height,
         });
       };
       panel.append(image);
