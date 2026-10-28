@@ -68,9 +68,16 @@ const server = createServer(async (req, res) => {
 
     const url = new URL(req.url, origin);
 
-    if (req.method === 'GET' && url.pathname === '/font.woff2') {
-      res.setHeader('content-type', 'font/woff2');
-      res.end(await readFile(new URL('../apps/client/public/assets/instrument-sans.woff2', import.meta.url)));
+    if (req.method === "GET" && url.pathname === "/font.woff2") {
+      res.setHeader("content-type", "font/woff2");
+      res.end(
+        await readFile(
+          new URL(
+            "../apps/client/public/assets/instrument-sans.woff2",
+            import.meta.url,
+          ),
+        ),
+      );
 
       return;
     }
@@ -106,7 +113,11 @@ const server = createServer(async (req, res) => {
 
       const { operation, input } = JSON.parse(body);
 
-      if (!lab.initialized && !['status', 'discover', 'shutdown'].includes(operation)) throw new Error('lab_starting');
+      if (
+        !lab.initialized &&
+        !["status", "discover", "shutdown"].includes(operation)
+      )
+        throw new Error("lab_starting");
       const result = await lab.execute(operation, input);
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify(result));

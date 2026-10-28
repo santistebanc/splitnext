@@ -10,6 +10,7 @@ import {
   cp,
   rm,
   readdir,
+  rename,
 } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -27,6 +28,7 @@ export class Lab {
   requests = new Set();
   tail = Promise.resolve();
   eventTail = Promise.resolve();
+  saveTail = Promise.resolve();
   constructor(root, port) {
     this.root = root;
     this.port = port;
@@ -34,6 +36,7 @@ export class Lab {
     this.data = path.join(root, "current");
   }
   async init() {
+    this.initialized = false;
     await mkdir(this.data, { recursive: true });
     const manifest = await this.manifest();
     this.available = manifest.available ?? true;
@@ -59,21 +62,27 @@ export class Lab {
       .catch(() => ({}));
   }
   async save() {
-    await mkdir(this.data, { recursive: true });
-    await writeFile(
-      path.join(this.data, "manifest.json"),
-      JSON.stringify(
-        {
-          port: this.port,
-          available: this.available,
-          devices: [...this.devices.values()].map(
-            ({ id, online, latencyMs }) => ({ id, online, latencyMs }),
-          ),
-        },
-        null,
-        2,
-      ),
+    const serialized = JSON.stringify(
+      {
+        port: this.port,
+        available: this.available,
+        devices: [...this.devices.values()].map(
+          ({ id, online, latencyMs }) => ({ id, online, latencyMs }),
+        ),
+      },
+      null,
+      2,
     );
+
+    const write = this.saveTail.then(async () => {
+      await mkdir(this.data, { recursive: true });
+      const temporary = path.join(this.data, "manifest.tmp");
+      await writeFile(temporary, serialized);
+      await rename(temporary, path.join(this.data, "manifest.json"));
+    });
+
+    this.saveTail = write.catch(() => {});
+    await write;
   }
   async event(kind, detail) {
     // Reserve the sequence before awaiting I/O; append calls retain invocation order.
@@ -84,7 +93,13 @@ export class Lab {
       detail,
     };
 
-    const write = this.eventTail.then(() => appendFile(path.join(this.root, "timeline.jsonl"), JSON.stringify(entry) + "\n"));
+    const write = this.eventTail.then(() =>
+      appendFile(
+        path.join(this.root, "timeline.jsonl"),
+        JSON.stringify(entry) + "\n",
+      ),
+    );
+
     this.eventTail = write.catch(() => {});
     await write;
 
@@ -190,7 +205,9 @@ export class Lab {
     await this.event("server.stopped", {});
   }
   blocked(device) {
-    return !device.online || !this.available || !this.worker || this.maintaining;
+    return (
+      !device.online || !this.available || !this.worker || this.maintaining
+    );
   }
   async closeSockets(device) {
     for (const d of device ? [device] : this.devices.values()) {
@@ -225,7 +242,9 @@ export class Lab {
     };
 
     this.devices.set(id, d);
-    await context.exposeFunction("splitnextLabEvent", (event) => this.event("app", { device: id, ...JSON.parse(event) }));
+    await context.exposeFunction("splitnextLabEvent", (event) =>
+      this.event("app", { device: id, ...JSON.parse(event) }),
+    );
     await context.addInitScript(() => {
       window.splitnextLabEnabled = true;
     });
@@ -254,10 +273,13 @@ export class Lab {
         this.requests.add(fetching);
         let response;
 
-        try { response = await fetching; }
-        finally { this.requests.delete(fetching); }
+        try {
+          response = await fetching;
+        } finally {
+          this.requests.delete(fetching);
+        }
 
-        await this.event('response.received', request);
+        await this.event("response.received", request);
 
         if (d.latencyMs) await delay(d.latencyMs);
 
@@ -321,7 +343,8 @@ export class Lab {
 
     if (!online) await d.page.evaluate(() => window.splitnextLab.online(false));
     await d.context.setOffline(!online);
-    await this.save();
+
+    if (this.initialized) await this.save();
     await this.event("device.added", { device: id });
 
     return { device: id };
@@ -350,11 +373,13 @@ export class Lab {
     if (!this.worker) return { running: false };
 
     const get = (endpoint) =>
-      fetch(this.base + endpoint).then((r) => {
-        if (!r.ok) throw new Error(`inspection_http_${r.status}`);
+      fetch(this.base + endpoint, { signal: AbortSignal.timeout(5000) }).then(
+        (r) => {
+          if (!r.ok) throw new Error(`inspection_http_${r.status}`);
 
-        return r.json();
-      });
+          return r.json();
+        },
+      );
 
     const list = await get("/debug/groups");
 
@@ -382,10 +407,10 @@ export class Lab {
     }
   }
   async closeDevices() {
-    await this.save();
+    if (this.initialized) await this.save();
 
     for (const d of this.devices.values()) {
-      await d.page.goto('about:blank');
+      await d.page.goto("about:blank");
       await d.context.close();
     }
 
@@ -430,70 +455,110 @@ export class Lab {
   }
   async wait(input) {
     const end = Date.now() + input.timeoutMs;
-    let last;
+    const cancel = new AbortController();
+    let last = [];
+    let server = null;
 
-    do {
-      last = await Promise.all(
-        input.devices.map((id) => this.inspectDevice(id)),
-      );
-
-      const empty = last.every((d) =>
-        d.state.groups.every((g) => g.pending_commands === 0),
-      );
-
-      if (input.until === "outbox" && empty) return { matched: true };
-
-      if (
-        input.until === "recovery" &&
-        empty &&
-        last.every(
-          (d) => d.state.online && d.state.reachable && !d.state.syncError,
-        )
-      )
-        return { matched: true };
-
-      if (
-        input.until === "convergence" &&
-        empty &&
-        last.every((d) => d.state.group?.confirmed_snapshot)
-      ) {
-        const server = await this.inspectServer();
-        const group = last[0].state.group;
-
-        const authority = server.groups?.find(
-          (g) => g.snapshot.group.id === group.group_id,
+    const poll = async () => {
+      while (!cancel.signal.aborted && Date.now() < end) {
+        last = await Promise.all(
+          input.devices.map((id) => this.inspectDevice(id)),
         );
 
+        if (cancel.signal.aborted) return;
+
+        const empty = last.every((d) =>
+          d.state.groups.every((g) => g.pending_commands === 0),
+        );
+
+        if (input.until === "outbox" && empty) return { matched: true };
+
         if (
-          authority &&
+          input.until === "recovery" &&
+          empty &&
           last.every(
-            (d) =>
-              d.state.group.group_id === group.group_id &&
-              d.state.group.revision === authority.revision &&
-              JSON.stringify(d.state.group.confirmed_snapshot) ===
-                JSON.stringify(authority.snapshot),
+            (d) => d.state.online && d.state.reachable && !d.state.syncError,
           )
         )
-          return { matched: true, revision: authority.revision };
+          return { matched: true };
+
+        if (
+          input.until === "convergence" &&
+          empty &&
+          last.every((d) => d.state.group?.confirmed_snapshot)
+        ) {
+          server = await this.inspectServer();
+          const group = last[0].state.group;
+
+          const authority = server.groups?.find(
+            (g) => g.snapshot.group.id === group.group_id,
+          );
+
+          if (
+            authority &&
+            last.every(
+              (d) =>
+                d.state.group.group_id === group.group_id &&
+                d.state.group.revision === authority.revision &&
+                JSON.stringify(d.state.group.confirmed_snapshot) ===
+                  JSON.stringify(authority.snapshot),
+            )
+          )
+            return { matched: true, revision: authority.revision };
+        }
+
+        await delay(Math.min(100, Math.max(1, end - Date.now())), undefined, {
+          signal: cancel.signal,
+        });
       }
 
-      await delay(100);
-    } while (Date.now() < end);
-
-    const diagnostics = {
-      error: "wait_timeout",
-      input,
-      devices: last,
-      server: await this.inspectServer(),
+      throw new Error("wait_timeout");
     };
 
-    await this.event("wait.timeout", diagnostics);
-    throw Object.assign(new Error("wait_timeout"), { diagnostics });
+    try {
+      return await Promise.race([
+        poll(),
+        delay(input.timeoutMs, undefined, { signal: cancel.signal }).then(
+          () => {
+            throw new Error("wait_timeout");
+          },
+        ),
+      ]);
+    } catch (error) {
+      if (error.message !== "wait_timeout") throw error;
+
+      const diagnostics = {
+        error: "wait_timeout",
+        input,
+        devices: last,
+        server,
+        status: await this.perform("status", {}),
+      };
+
+      await this.event("wait.timeout", diagnostics);
+      throw Object.assign(new Error("wait_timeout"), { diagnostics });
+    } finally {
+      cancel.abort();
+    }
   }
   execute(operation, raw = {}) {
-    const concurrent = ["deviceNetwork", "serverNetwork", "status", "discover", "inspectDevice", "inspectServer", "timeline", "wait"].includes(operation);
+    const concurrent = [
+      "deviceNetwork",
+      "serverNetwork",
+      "status",
+      "discover",
+      "inspectDevice",
+      "inspectServer",
+      "timeline",
+      "wait",
+    ].includes(operation);
 
     const task = (concurrent ? Promise.resolve() : this.tail).then(async () => {
+      if (
+        this.maintaining &&
+        ["deviceNetwork", "serverNetwork"].includes(operation)
+      )
+        throw new Error("maintenance_in_progress");
       const schema = operations[operation];
 
       if (!schema) throw new Error("unknown_operation");
@@ -534,8 +599,10 @@ export class Lab {
   }
   async perform(operation, input) {
     switch (operation) {
-      case "shutdown": return { closing: true };
-      case "timeline": return this.lines("timeline");
+      case "shutdown":
+        return { closing: true };
+      case "timeline":
+        return this.lines("timeline");
       case "discover":
         return {
           operations: discovery(),
