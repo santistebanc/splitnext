@@ -214,9 +214,9 @@ Tapping a person opens their details (see above), and their Settle up opens a
 drawer upward from the button, like New group, while the details dim. It has
 Settle up with Close, then the payments in the group's plan that involve
 them, each From → To with its amount and Record, which records it as
-planned. The button becomes Record a different payment, which opens the repayment form with
-the first planned amount for a partial or other payment. When nothing is owed
-it shows ✓ Settled. The repayment form is a page with Cancel in the header, with Delete beside it
+planned. The button gives way to the drawer while it is open. When nothing is
+owed it shows ✓ Settled. Partial and other payments are recorded from Add
+expense's Payment tab. The repayment form is a page with Cancel in the header, with Delete beside it
 for a recorded repayment, and Save at the foot. Match the expense editor: Cancel and Delete in the header, the same
 large right-aligned formatted amount field and underline, with no title below
 it. A new expense or repayment has an Expense | Payment switch in the
@@ -311,9 +311,8 @@ people in the middle: if Ana owes Ben 20 and Ben owes Cara 20, Ana pays Cara
 plan above that. A person's Settle up shows only the plan's payments involving
 them. The payments themselves are not listed on the group screen.
 
-Record records a planned payment as planned. Record a different payment opens
-the repayment form with the first planned payment filled in and the amount
-editable for a partial payment, or for any other repayment. A repayment may
+Record records a planned payment as planned. Any other repayment, such as a
+partial one, is a new entry on the Payment tab of Add expense. A repayment may
 be any positive amount between two distinct ledger members, including partial
 repayments and overpayments. An overpayment reverses the remaining balance
 normally. A removed member with an outstanding balance remains available for

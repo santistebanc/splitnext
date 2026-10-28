@@ -113,8 +113,8 @@ then `ExpenseList` with expenses and repayments newest first. Tapping a person
 opens `person` (`PersonDetails`), whose Settle up opens `settle`, shown as a `FooterDrawer` rising
 from `SettleUpFooter` over `PersonDetails`, so the view keeps its history
 entry. `FooterDrawer` is the same drawer New group opens from its button. Record there records a planned payment through
-`recordSettlement` at once; Record a different payment opens the repayment
-form (`settlements`) filled in with the first planned payment.
+`recordSettlement` at once. Other payments are new entries on the Payment
+tab of Add expense, the repayment form (`settlements`).
 `AppUiState.trail` records the views a page was opened from, so Back, Cancel,
 and saving return there, and history restores the trail with the view and the
 person. Leaving a group is asked in place on its row in the groups list, then

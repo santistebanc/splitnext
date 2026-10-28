@@ -4,7 +4,7 @@ import { currentExpenses, expenseLabel, memberName, moneyLabel } from '../model/
 import { needsReview } from '../model/notices';
 import { ErrorMessage, FooterButton, ListRow, colors, s } from './components';
 import { morph } from './ScreenMorph';
-import { useActionCall, useActions } from './useActionCall';
+import { useActionCall } from './useActionCall';
 
 type Replica = ClientReplicaState;
 
@@ -133,19 +133,5 @@ export function AddExpenseButton() {
       </FooterButton>
     </>
   );
-}
-
-/** Opens the repayment form for one payment, from the settle-up plan or by hand. */
-export function useRepaymentForm() {
-  const actions = useActions();
-  const action = useActionCall();
-
-  function open(input: { from: string; to: string; amount: string; currency: string; manual: boolean }): void {
-    void action.call('prepareRepayment', { ...input, keepEditing: false }, () => {
-      void actions.dispatch('showSettlements', {}, { origin: 'ui' });
-    });
-  }
-
-  return { open, action };
 }
 
