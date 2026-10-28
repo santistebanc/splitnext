@@ -651,6 +651,23 @@ test('mixes fixed amounts and weighted shares, preserves them offline, and clear
   await expect(button(page, 'Amount for Ben: 33.33. Change amount')).toBeVisible();
   await expect(button(page, 'Amount for Cy: 16.67. Change amount')).toBeVisible();
 
+  // Opening an amount and keeping its value must preserve the original weight.
+  for (const finish of ['blur', 'Enter']) {
+    await button(page, /^Amount for Ana:/).click();
+    await expect(field(page, 'Amount for Ana')).toBeFocused();
+    await expect(field(page, 'Amount for Ana')).toHaveValue('50.00');
+
+    if (finish === 'Enter') {
+      await field(page, 'Amount for Ana').fill('50');
+      await field(page, 'Amount for Ana').press('Enter');
+    } else await field(page, 'Description').click();
+
+    await expect(button(page, 'Amount for Ana: 50.00. Change amount')).toBeVisible();
+    await field(page, 'Amount').fill('120');
+    await expect(button(page, 'Amount for Ana: 60.00. Change amount')).toBeVisible();
+    await field(page, 'Amount').fill('100');
+  }
+
   // Fix one person while the others retain their 3:2 weights.
   await button(page, /^Amount for Cy:/).click();
   await expect(field(page, 'Amount for Cy')).toBeFocused();

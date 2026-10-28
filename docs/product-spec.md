@@ -758,3 +758,7 @@ so fitting onto one line never causes a sudden header or scroll jump.
 
 Amount text stays complete during screen transitions: no wrapping or ellipsis
 while its animated box changes size. Long names retain their ellipsis.
+
+Opening a split share amount without changing its value leaves its original
+shares intact, whether the field ends with blur or Enter. Re-entering the same
+amount also preserves shares; changing the amount makes it fixed.
