@@ -489,6 +489,30 @@ test('hides the rename pencil as the header compacts, and ends a person’s head
   await expect.poll(gap).toBe(0);
 });
 
+test('keeps the Activity bell on a person’s page, beside a long Back', async ({ page }, testInfo) => {
+  const group = 'A very long group name that keeps going on';
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await createGroup(page, group, 'Ana');
+  await addMember(page, 'Ben');
+  await person(page, 'Ben').click();
+  await expect(heading(page, 'Ben')).toBeVisible();
+
+  // The bell sits whole at the end of the top row, clear of Back.
+  const bellBox = (await bell(page).boundingBox())!;
+  const backBox = (await button(page, `Back to ${group}`).boundingBox())!;
+
+  expect(bellBox.x + bellBox.width).toBeLessThanOrEqual(390);
+  expect(backBox.x + backBox.width).toBeLessThanOrEqual(bellBox.x);
+  await page.screenshot({ path: testInfo.outputPath('person-bell.png'), clip: { x: 0, y: 0, width: 390, height: 160 } });
+
+  // It opens Activity, and Back returns to the person.
+  await bell(page).click();
+  await expect(heading(page, 'Activity')).toBeVisible();
+  await button(page, new RegExp('^Back to ')).click();
+  await expect(heading(page, 'Ben')).toBeVisible();
+});
+
 test('keeps the fixed theme and group-list branding when offline', async ({ page, context }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });

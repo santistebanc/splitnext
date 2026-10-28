@@ -6,6 +6,7 @@ import { balanceRows, memberName } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
 import { BackButton, BalanceBar, Button, ErrorMessage, ListRow, Notice, ScreenHeader, balanceColor, colors, s, signedFigure, titleStyle } from './components';
 import { EditCover } from './EditCover';
+import { ActivityLink } from './GroupView';
 import { TitleField } from './TitleField';
 import { repaymentTitle } from './ExpenseList';
 import { PencilIcon } from './icons';
@@ -85,6 +86,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
     <>
       <ScreenHeader
         start={<BackButton label={`Back to ${group}`} text={group} disabled={!back.can('closePanel')} onPress={() => { void back.call('closePanel', {}); }} />}
+        end={<ActivityLink app={props.app} />}
         heading={(
           <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             {renaming ? (

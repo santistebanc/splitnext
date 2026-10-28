@@ -359,7 +359,7 @@ or hide the original audit event as the implementation of undo.
 
 ### Activity count
 
-Changes from other people never pop up. A bell in the group header opens
+Changes from other people never pop up. A bell in the header of the group and of each person opens
 Activity and shows, on its shoulder, a count of new Activity entries from other access identities plus this device's
 changes waiting for review. Compare identities, not preferred-member names, when
 leaving out this installation's own actions. The first time a group's Activity

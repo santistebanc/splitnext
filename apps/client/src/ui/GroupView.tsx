@@ -21,8 +21,8 @@ import { YouBadge } from './YouBadge';
 
 type GroupViewProps = { app: MemberListApp };
 
-/** Activity, with a count of new changes from others and changes to review. */
-function ActivityLink(props: { app: MemberListApp }) {
+/** Activity, with a count of new changes from others and changes to review; on the group and a person's page. */
+export function ActivityLink(props: { app: MemberListApp }) {
   const open = useActionCall();
   const ui = useUiState();
   const replica = props.app.snapshot().group;
