@@ -38,8 +38,8 @@ installation uses. The invite link shows in the monospaced face, without
 https://, on one line that never wraps, smaller where it would not fit, in one
 row between an ink rule and a hairline: a Share icon on its
 left where the device can share, and a Replace icon on its right. Tapping the
-link highlights it and copies it, with https://, and the caption below changes
-from Tap the link to copy it to Copied; Share also sends it with https://, and
+link highlights it and copies it, with https://, then shows Copied below.
+Do not show a copy instruction before tapping. Share also sends it with https://, and
 the join field accepts it either way. There is no separate Copy link button.
 Replace first asks for
 confirmation in the same place, stating that the old link will stop working
@@ -743,3 +743,5 @@ unfocused fields show the label in the input; focus or a value lifts it above.
 Focus strengthens the underline without shifting layout. Keep helper and error
 text below, accessible labels intact, and disabled fields visibly quiet.
 Large amount editors retain their specialized formatting.
+
+Member balance amounts stay on one line in the list, details, and screen transitions.
