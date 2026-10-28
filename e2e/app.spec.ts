@@ -276,6 +276,62 @@ test('uses one large title on every screen and opens the join field in place', a
   await expect(page.getByText('That isn’t a splitnext invite link.', { exact: true })).toBeVisible();
 });
 
+test('dims the rest while a name or the join link is edited, and a tap there only ends it', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await createGroup(page, 'Covers', 'Ana');
+  await addMember(page, 'Ben');
+  const cover = page.getByTestId('edit-cover');
+
+  /** Taps the middle of what a locator shows, wherever it is, as a finger would. */
+  const tapOver = async (target: Locator) => {
+    const box = (await target.boundingBox())!;
+
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  };
+
+  /** Whether the field itself, not the cover, is what a tap on it reaches. */
+  const uncovered = (target: Locator) => target.evaluate((node) => {
+    const box = node.getBoundingClientRect();
+
+    return node.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2));
+  });
+
+  // The group's name: a tap on Ben's row saves the name instead of opening Ben.
+  await expect(cover).toHaveCount(0);
+  await button(page, 'Rename group').click();
+  await field(page, 'Group name').fill('Covered');
+  await expect(cover).toBeVisible();
+  expect(await uncovered(field(page, 'Group name'))).toBe(true);
+  await page.screenshot({ path: test.info().outputPath('cover-group-name.png') });
+  await tapOver(person(page, 'Ben'));
+  await expect(heading(page, 'Covered')).toBeVisible();
+  await expect(heading(page, 'Ben')).toHaveCount(0);
+  await expect(cover).toHaveCount(0);
+
+  // A member's name: a tap on Back saves the name and stays.
+  await person(page, 'Ben').click();
+  await button(page, 'Rename Ben').click();
+  await field(page, 'Name').fill('Benny');
+  await expect(cover).toBeVisible();
+  expect(await uncovered(field(page, 'Name'))).toBe(true);
+  await page.screenshot({ path: test.info().outputPath('cover-member-name.png') });
+  await tapOver(button(page, 'Back to Covered'));
+  await expect(heading(page, 'Benny')).toBeVisible();
+  await expect(cover).toHaveCount(0);
+  await button(page, 'Back to Covered').click();
+  await button(page, 'Back to groups').click();
+
+  // Join with a link: a tap on New group closes the field without opening New group.
+  await button(page, 'Join with an invite link').click();
+  await expect(cover).toBeVisible();
+  expect(await uncovered(field(page, 'Invite link'))).toBe(true);
+  await page.screenshot({ path: test.info().outputPath('cover-join-link.png') });
+  await tapOver(button(page, 'New group'));
+  await expect(field(page, 'Invite link')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'New group' })).toHaveCount(0);
+  await expect(cover).toHaveCount(0);
+});
+
 test('keeps the fixed theme and group-list branding when offline', async ({ page, context }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });

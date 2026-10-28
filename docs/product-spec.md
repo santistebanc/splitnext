@@ -60,9 +60,11 @@ returning. Add expense opens the new expense as a full-screen sheet that
 rises over the group screen, which stays put and dims; Cancel or Save drops
 it back down. Panels that open in place, such as the invite link, the join field,
 and who paid, grow down into place and shrink away when closed. A tap outside
-an open dropdown (who paid, the join field, the invite link, or a leave
-confirmation) closes it, and still reaches whatever was tapped; its own button
-still toggles it, and starting to scroll leaves it open. Balance bars
+an open dropdown (who paid, the invite link, or a leave confirmation) closes
+it, and still reaches whatever was tapped; its own button still toggles it, and
+starting to scroll leaves it open. Renaming the group or a member, and the join
+field, instead dim everything else as behind a drawer: a tap on the dimmed part
+ends the edit (saving a name) and reaches nothing under it. Balance bars
 ease to their new width. Reduced motion shows every change at once.
 Long group names, a group's title, names in the balances and a person's
 title, and expense names in the list, a breakdown, and the expense editor take

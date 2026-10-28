@@ -12,6 +12,7 @@ import { InvitePanel } from './InvitePanel';
 import { AddPersonRow, MemberIcon, type MemberListApp, type Replica } from './MemberList';
 import { between, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
+import { EditCover } from './EditCover';
 import { morph } from './ScreenMorph';
 import { fontFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
@@ -104,6 +105,7 @@ function GroupName(props: { name: string; groupId: string }) {
           />
         )}
       </View>
+      <EditCover open={draft !== null} target={input} onPress={() => input.current?.blur()} />
       <ErrorMessage message={rename.error} />
     </View>
   );
