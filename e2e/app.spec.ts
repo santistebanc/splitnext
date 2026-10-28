@@ -505,6 +505,46 @@ test('keeps the Activity bell on a person’s page, beside a long Back', async (
   await expect(heading(page, 'Ben')).toBeVisible();
 });
 
+test('flies a group’s name to the list at its font size, even when it unwraps', async ({ page }) => {
+  // Two lines as the group's title, one line in the list.
+  const name = 'A long group name that wraps';
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await createGroup(page, name, 'Ana');
+  await expect(heading(page, name)).toBeVisible();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+  // Every scale the flying name is drawn at, from its animations' keyframes.
+  const scales = page.evaluate((text) => new Promise<number[]>((resolve) => {
+    const seen = new Set<number>();
+    const start = performance.now();
+
+    const frame = () => {
+      for (const animation of document.getAnimations()) {
+        const effect = animation.effect;
+
+        if (!(effect instanceof KeyframeEffect) || effect.target?.textContent !== text) continue;
+
+        for (const keyframe of effect.getKeyframes()) {
+          const scale = /scale\(([\d.]+)\)/.exec(String(keyframe.transform ?? ''));
+
+          if (scale) seen.add(Math.round(Number(scale[1]) * 1000) / 1000);
+        }
+      }
+
+      if (performance.now() - start < 600) requestAnimationFrame(frame);
+      else resolve([...seen].sort((a, b) => a - b));
+    };
+
+    frame();
+  }), name);
+
+  await button(page, 'Back to groups').click();
+  // 32px as the title, 20px in the list: it leaves at 20/32 and arrives from 32/20.
+  expect(await scales).toEqual([0.625, 1.6]);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+});
+
 test('keeps the fixed theme and group-list branding when offline', async ({ page, context }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
