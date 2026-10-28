@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode, type Ref } from 'react';
+import { useContext, useRef, useState, type ReactNode, type Ref } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 
 import { formatAmount } from '@splitnext/client';
-import { between, useCompactProgress } from './pageScroll';
+import { between, ScrollToTopContext, useCompactProgress } from './pageScroll';
 import { AlertIcon, BackIcon, WarningIcon } from './icons';
 import { colors, displayFamily, fontFamily, monoFamily, radius, shadows } from './theme';
 
@@ -216,6 +216,7 @@ export function PageTitle(props: { children: ReactNode }) {
  */
 export function ScreenHeader(props: { title?: string; heading?: ReactNode; context?: string | undefined; start?: ReactNode; end?: ReactNode }) {
   const progress = useCompactProgress();
+  const scrollToTop = useContext(ScrollToTopContext);
 
   return (
     <View style={[s.screenHeader, { minHeight: between(66, 52, progress), paddingTop: between(10, 4, progress) }]}>
@@ -231,6 +232,9 @@ export function ScreenHeader(props: { title?: string; heading?: ReactNode; conte
             </Text>
           ) : null)}
         </View>
+        {progress > 0 && scrollToTop ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={props.title ? `${props.title}. Scroll to top` : 'Scroll to top'} onPress={scrollToTop} style={s.backdrop} />
+        ) : null}
       </View>
       {props.end ? <View style={s.screenHeaderEnd}>{props.end}</View> : null}
     </View>

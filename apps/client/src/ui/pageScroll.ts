@@ -103,3 +103,6 @@ export function useCompactProgress(): number {
 
   return useSyncExternalStore(progress.subscribe, progress.get, progress.get);
 }
+
+/** The current frame owns scrolling; titles can return it to its start. */
+export const ScrollToTopContext = createContext<(() => void) | null>(null);

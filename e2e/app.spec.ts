@@ -1380,3 +1380,25 @@ test('shows as many balances as leave room for two expenses, shrinks them to you
     await expect.poll(expensesGap).toBeLessThanOrEqual(24);
   }
 });
+
+
+test('tapping compact screen titles returns their view to the top', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 500 });
+  await createGroup(page, 'Title scrolling', 'Ana');
+
+  for (const name of ['Ben', 'Cy', 'Dee', 'Eli', 'Fran']) await addMember(page, name);
+  await addExpense(page, 'Lunch', '60');
+  await addExpense(page, 'Dinner', '90');
+  const scroller = page.locator('#splitnext-page');
+
+  for (const view of ['group', 'activity']) {
+    if (view === 'activity') await bell(page).click();
+    await scroller.evaluate((node) => { node.scrollTop = node.scrollHeight; });
+    await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+    const title = button(page, view === 'group' ? 'Scroll to top' : 'Activity. Scroll to top');
+
+    await title.click();
+    await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBe(0);
+    await expect(heading(page, view === 'group' ? 'Title scrolling' : 'Activity')).toBeVisible();
+  }
+});
