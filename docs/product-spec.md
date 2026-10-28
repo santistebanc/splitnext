@@ -714,3 +714,6 @@ Expenses and settlements are accepted behavior.
   invite link.
 - There is deliberately no participant-level access revocation or moderation
   role. The history-based group recovery path is the escape hatch for abuse.
+
+Expense split rows share an amount column sized to their widest displayed amount.
+Share controls sit directly beside that column, leaving the remaining width for names.

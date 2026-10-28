@@ -86,7 +86,7 @@ function ShareArrow(props: { up: boolean; label: string; disabled: boolean; onPr
 }
 
 /** A person's amount is tappable to fix it; shares keep dividing the remainder. */
-function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; part: ExpenseDraftPart | undefined; owed: number | undefined; currency: string; first: boolean; hasAmount: boolean }) {
+function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; part: ExpenseDraftPart | undefined; owed: number | undefined; currency: string; first: boolean; hasAmount: boolean; amountWidth: number }) {
   const edit = useActionCall();
   const [editing, setEditing] = useState(false);
   const fixed = props.part?.kind === 'exact';
@@ -105,13 +105,13 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
           <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily, fontSize: 16, lineHeight: 24, color: included ? colors.ink : colors.faint }}>{props.name}</Text>
           {props.you ? <YouBadge /> : null}
         </View>
-        <View style={{ width: props.hasAmount ? 176 : 44, flexShrink: 0, flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ width: props.hasAmount ? props.amountWidth + 88 : 44, flexShrink: 0, flexDirection: 'row', alignItems: 'center' }}>
           {props.hasAmount ? (
             <>
               {included ? (
                 <ShareArrow up label={`Increase share for ${props.name}`} disabled={!edit.can('increaseExpenseShare', member)} onPress={() => { void edit.call('increaseExpenseShare', member); }} />
               ) : <View style={{ width: 44 }} />}
-              <View style={{ width: 88, flexShrink: 0, minHeight: 44, justifyContent: 'center' }}>
+              <View style={{ width: props.amountWidth, flexShrink: 0, minHeight: 44, justifyContent: 'center' }}>
                 {included && editing ? (
                   <TextInput
                     accessibilityLabel={`Amount for ${props.name}`}
@@ -292,12 +292,22 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
   const entry = entryFromDraft(draft);
   const hasAmount = (parseAmount(draft.amount, draft.currency) ?? 0) > 0;
   const described = Boolean(draft.description.trim());
+  const [amountWidth, setAmountWidth] = useState(0);
+
+  // Plex Mono has equal-width glyphs, so the longest formatted value sizes every row.
+  const widestAmount = draft.parts.map((part) => {
+    const value = part.kind === 'exact' ? part.amount : formatAmount(preview.get(part.member_id) ?? 0, draft.currency);
+    const parsed = parseAmount(value, draft.currency);
+
+    return `${currencySymbol(draft.currency)} ${parsed === null ? value : formatAmount(parsed, draft.currency)}`;
+  }).reduce((longest, value) => value.length > longest.length ? value : longest, '');
 
   return (
     <View style={{ gap: 12, paddingHorizontal: 4, paddingBottom: 24 }}>
+      <Text aria-hidden pointerEvents="none" onLayout={(event) => setAmountWidth(Math.ceil(event.nativeEvent.layout.width))} style={{ position: 'absolute', opacity: 0, alignSelf: 'flex-start', fontFamily: monoFamily, fontSize: 14, fontWeight: '600', lineHeight: 20 }}>{widestAmount}</Text>
       <View style={{ borderRadius: radius.card, backgroundColor: colors.surface, overflow: 'hidden' }}>
         {members.map((member, index) => (
-          <ExpenseSplitRow key={member.id} memberId={member.id} name={memberName(snapshot, member.id)} you={member.id === you} part={draft.parts.find((part) => part.member_id === member.id)} owed={preview.get(member.id)} currency={draft.currency} first={index === 0} hasAmount={hasAmount} />
+          <ExpenseSplitRow key={member.id} memberId={member.id} name={memberName(snapshot, member.id)} you={member.id === you} part={draft.parts.find((part) => part.member_id === member.id)} owed={preview.get(member.id)} currency={draft.currency} first={index === 0} hasAmount={hasAmount} amountWidth={amountWidth} />
         ))}
       </View>
 
