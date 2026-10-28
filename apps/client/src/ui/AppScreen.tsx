@@ -1,14 +1,9 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Keyboard, Text, View } from 'react-native';
-import { router } from 'expo-router';
-import { z } from 'zod';
 import { clientErrorKind, parseInviteLink } from '@splitnext/client';
 import { AppController } from '../model/controller';
 import { createDispatcher } from '../model/actions';
-import { browserLifecycle } from './browserLifecycle';
-import { browserActionPlatform } from './browserPlatform';
-import { attachLabBridge } from '../lab/bridge';
-import { createBrowserApp } from '../model/browser';
+import { browserSubstrate } from './browserPlatform';
 import { ViewTransition } from './ViewTransition';
 import { SyncStatus } from './ConnectionStatus';
 import { Frame } from './Frame';
@@ -26,22 +21,24 @@ import { SettlementsFooter, SettlementsHeader, SettlementsPanel } from './Settle
 import { GroupHeader, GroupView } from './GroupView';
 import { CompactProgressContext, createCompactProgress } from './pageScroll';
 import { JoinGroup, JoinGroupFooter, type JoinCalls } from './JoinGroup';
-import { navigationSchema } from './navigation';
+import { type NavigationEntry } from './navigation';
 import { Devtools } from '../devtools/Devtools';
 import { ActionsProvider, useActionCall, useActions, useUiState } from './useActionCall';
 import { useCompactLayout } from './useVisibleViewport';
 import { BackButton, Button, ErrorMessage, ScreenHeader, errorMessage, s, useAction } from './components';
+import type { AppSubstrate } from './substrate';
 import type { UiState } from '../model/uiState';
 
 /** An invite link opened the app: a long link names its group, a short one only its code. */
-type ScreenProps = { incomingGroupId?: string; invite?: boolean };
+type ScreenProps = { incomingGroupId?: string; invite?: boolean; substrate?: AppSubstrate };
 
-type AppProps = { controller: AppController; invite?: boolean };
+type AppProps = { controller: AppController; invite?: boolean; substrate: AppSubstrate };
 
 /** What a screen shows: a fixed header, its content, and at most one main action. */
 type Screen = { header?: ReactNode; body: ReactNode; footer?: ReactNode; ruledFooter?: boolean };
 
 export function AppScreen(props: ScreenProps) {
+  const substrate = props.substrate ?? browserSubstrate;
   const [controller, setController] = useState<AppController | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -52,7 +49,7 @@ export function AppScreen(props: ScreenProps) {
 
     const initialize = async () => {
       try {
-        current = await createBrowserApp();
+        current = await substrate.createApp();
 
         if (cancelled) {
           current.dispose();
@@ -60,13 +57,13 @@ export function AppScreen(props: ScreenProps) {
           return;
         }
 
-        await current.start(browserLifecycle.online());
+        await current.start(substrate.lifecycle.online());
 
-        const code = props.invite ? parseInviteLink(window.location.href)?.token : undefined;
+        const code = props.invite ? parseInviteLink(substrate.navigation.url())?.token : undefined;
         const joined = props.incomingGroupId ?? (code ? await current.groupWithInvite(code) : null);
 
         if (!cancelled && joined && (await current.openJoinedGroup(joined))) {
-          enterApp();
+          substrate.navigation.enterApp();
 
           return;
         }
@@ -89,7 +86,7 @@ export function AppScreen(props: ScreenProps) {
       cancelled = true;
       current?.dispose();
     };
-  }, [attempt, props.incomingGroupId, props.invite]);
+  }, [attempt, props.incomingGroupId, props.invite, substrate]);
 
   if (!controller) {
     return (
@@ -114,7 +111,7 @@ export function AppScreen(props: ScreenProps) {
     );
   }
 
-  return <ReadyApp controller={controller} {...props} />;
+  return <ReadyApp controller={controller} {...props} substrate={substrate} />;
 }
 
 /** A placeholder shaped like the groups list while local storage opens. */
@@ -149,19 +146,10 @@ function WithJoinCalls(props: { children: (calls: JoinCalls) => ReactNode }) {
   return <>{props.children({ previewing, joining })}</>;
 }
 
-function enterApp(): void {
-  // Expo can preserve a fragment across route replacement. Remove it before
-  // leaving the invite entry route, including links for existing participants.
-  window.history.replaceState(
-    window.history.state,
-    '',
-    window.location.pathname + window.location.search,
-  );
-  router.replace('/app');
-}
+
 
 /** Where the browser history entry for a screen leads back to. */
-function historyEntry(ui: UiState, groupId: string | null) {
+function historyEntry(ui: UiState, groupId: string | null): NavigationEntry {
   return { splitnext: true, view: ui.view, trail: ui.trail, person: ui.person, groupId };
 }
 
@@ -186,6 +174,7 @@ function RemovalToast() {
 }
 
 function ReadyApp(props: AppProps) {
+  const substrate = props.substrate;
   const mobile = useCompactLayout();
   const app = props.controller;
   const state = useSyncExternalStore(app.subscribe, app.snapshot, app.snapshot);
@@ -193,9 +182,9 @@ function ReadyApp(props: AppProps) {
   const actions = useMemo(
     () =>
       createDispatcher(app, {
-        ...browserActionPlatform(),
-        initialLink: props.invite ? window.location.href : '',
-        seenStorage: browserSeenStorage,
+        ...substrate.actions(),
+        initialLink: props.invite ? substrate.navigation.url() : '',
+        seenStorage: substrate.seenStorage,
       }),
     [app],
   );
@@ -214,7 +203,7 @@ function ReadyApp(props: AppProps) {
     actions.executions.snapshot,
   );
 
-  useEffect(() => attachLabBridge(app, actions), [app, actions]);
+  useEffect(() => substrate.observe?.(app, actions), [app, actions, substrate]);
   useActivityFeed(app, state);
   // Settle up is a drawer rising from the person's footer.
   const settling = ui.view === 'settle';
@@ -226,28 +215,24 @@ function ReadyApp(props: AppProps) {
 
   useEffect(() => {
     const online = () => {
-      void app.setOnline(browserLifecycle.online()).catch((error) => app.reportSyncError(error));
+      void app.setOnline(substrate.lifecycle.online()).catch((error) => app.reportSyncError(error));
     };
 
     const foreground = () => {
-      if (browserLifecycle.online())
+      if (substrate.lifecycle.online())
         void app.refresh().catch((error) => app.reportSyncError(error));
     };
 
-    return browserLifecycle.subscribe(online, foreground);
+    return substrate.lifecycle.subscribe(online, foreground);
   }, [app]);
 
   useEffect(() => {
-    window.history.replaceState(historyEntry(ui, app.snapshot().group?.group_id ?? null), '');
+    substrate.navigation.write(historyEntry(ui, app.snapshot().group?.group_id ?? null), 'replace');
 
-    const back = (event: PopStateEvent) => {
-      const parsed = navigationSchema.safeParse(event.state);
-
-      if (!parsed.success) return;
-
+    const back = (next: NavigationEntry) => {
       Keyboard.dismiss();
 
-      const next = parsed.data;
+
 
       void action.run(async () => {
         const outcome = await actions.dispatch(
@@ -260,9 +245,7 @@ function ReadyApp(props: AppProps) {
       });
     };
 
-    window.addEventListener('popstate', back);
-
-    return () => window.removeEventListener('popstate', back);
+    return substrate.navigation.subscribe(back);
   }, [app]);
 
   useEffect(() => {
@@ -270,12 +253,10 @@ function ReadyApp(props: AppProps) {
 
     const entry = historyEntry(ui, app.snapshot().group?.group_id ?? null);
 
-    if (ui.navigation.mode === 'push')
-      window.history.pushState(entry, '', window.location.href);
-    else window.history.replaceState(entry, '', window.location.href);
+    substrate.navigation.write(entry, ui.navigation.mode === 'push' ? 'push' : 'replace');
 
     // Leaving the join page for a group or the groups list drops the invite URL.
-    if (props.invite && ui.view === 'home') enterApp();
+    if (props.invite && ui.view === 'home') substrate.navigation.enterApp();
   }, [ui.navigation.revision]);
 
   const compact = useMemo(createCompactProgress, []);
@@ -418,26 +399,3 @@ function ReadyApp(props: AppProps) {
   );
 }
 
-/** How far this installation has seen each group's Activity, kept in localStorage. */
-const browserSeenStorage = {
-  read(): Record<string, number> {
-    try {
-      const parsed = seenSchema.safeParse(JSON.parse(localStorage.getItem(activitySeenKey) ?? '{}'));
-
-      return parsed.success ? parsed.data : {};
-    } catch {
-      return {};
-    }
-  },
-  write(seen: Record<string, number>): void {
-    try {
-      localStorage.setItem(activitySeenKey, JSON.stringify(seen));
-    } catch {
-      // Seen markers are a convenience; a full store only shows items as new again.
-    }
-  },
-};
-
-const activitySeenKey = 'splitnext.activity-seen.v1';
-
-const seenSchema = z.record(z.string(), z.number().int());
