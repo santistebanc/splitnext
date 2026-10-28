@@ -375,6 +375,8 @@ function ReadyApp(props: AppProps) {
     }
   }
 
+  // A new expense rises as a sheet, and stays one when switched to a payment and back.
+  const sheet = view === 'expense' ? !ui.expense.expenseId && ui.entryStart !== 'repayment' : view === 'settlements' && ui.entryStart === 'expense';
   // New group opens on the groups list itself, so it is the same screen.
   const screenView = view === 'create' ? 'home' : view;
   const pageKey = onGroupScreen ? `group:${group?.group_id}` : `${screenView}:${group?.group_id ?? ''}:${ui.person ?? ''}`;
@@ -390,7 +392,7 @@ function ReadyApp(props: AppProps) {
 
             return (
               <View style={s.page}>
-                <ScreenMorph screen={pageKey} depth={depth} sheet={view === 'expense' && !ui.expense.expenseId}>
+                <ScreenMorph screen={pageKey} depth={depth} sheet={sheet}>
                 <Frame
                   status={<SyncStatus online={state.online} reachable={state.reachable} pending={pending} busy={connection.busy} onRetry={retry} retryError={connection.error} />}
                   header={screen.header}

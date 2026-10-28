@@ -1268,6 +1268,81 @@ test('uses expense-style amount, member rows, and footer in the repayment editor
   await expect(button(page, 'Change repayment: You paid Benjamin Alexander back 7.50')).toBeVisible();
 });
 
+test('switches a new entry between expense and payment, keeping what each has', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await createGroup(page, 'Tabs', 'Ana');
+  await addMember(page, 'Ben');
+  await addMember(page, 'Cy');
+  await button(page, 'Add expense').click();
+  const amount = field(page, 'Amount');
+  const tabs = page.getByRole('radiogroup', { name: 'Entry type' });
+  const tab = (name: string) => tabs.getByRole('radio', { name, exact: true });
+
+  await expect(tab('Expense')).toBeChecked();
+  await amount.fill('12.50');
+  await field(page, 'Description').fill('Snacks');
+  await button(page, /^Paid by .*Change payer$/).click();
+  await page.getByRole('radio', { name: 'Ben', exact: true }).click();
+  await page.screenshot({ path: testInfo.outputPath('entry-switch-expense.png') });
+
+  // A payment takes the amount and who paid; who was paid starts as you.
+  // Switching cross-fades in place rather than dropping the sheet and raising a page.
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.evaluate(() => {
+    const seen = document.documentElement.dataset;
+    const until = performance.now() + 1000;
+
+    const watch = () => {
+      for (const animation of document.getAnimations()) {
+        if (animation.effect instanceof KeyframeEffect) seen.keyframes = `${seen.keyframes ?? ''}${JSON.stringify(animation.effect.getKeyframes())}`;
+      }
+
+      if (performance.now() < until) requestAnimationFrame(watch);
+    };
+
+    seen.keyframes = '';
+    watch();
+  });
+  await tab('Payment').click();
+  await page.waitForTimeout(1000);
+  const keyframes = await page.evaluate(() => document.documentElement.dataset.keyframes ?? '');
+
+  expect(keyframes).toContain('opacity');
+  expect(keyframes).not.toContain('translateY');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(tab('Payment')).toBeChecked();
+  await expect(amount).toHaveValue('12.50');
+  await expect(button(page, 'Paid by Ben. Change payer')).toBeVisible();
+  await expect(button(page, 'Paid to Ana (you). Change recipient')).toBeVisible();
+  await button(page, /^Paid to .*Change recipient$/).click();
+  await page.getByRole('radio', { name: 'Cy', exact: true }).click();
+  await amount.fill('20.25');
+  await page.screenshot({ path: testInfo.outputPath('entry-switch-payment.png') });
+
+  // Back on the expense, its description stays and the new amount carries over.
+  await tab('Expense').click();
+  await expect(field(page, 'Description')).toHaveValue('Snacks');
+  await expect(amount).toHaveValue('20.25');
+  await expect(button(page, 'Paid by Ben. Change payer')).toBeVisible();
+
+  // The payment remembers who was paid.
+  await tab('Payment').click();
+  await expect(button(page, 'Paid to Cy. Change recipient')).toBeVisible();
+  await button(page, 'Record repayment').click();
+  await button(page, 'Change repayment: Ben paid Cy back 20.25').click();
+  await expect(tabs).toHaveCount(0);
+  await button(page, 'Cancel').click();
+
+  // A new expense starts afresh, and so does the payment it switches to.
+  await button(page, 'Add expense').click();
+  await expect(field(page, 'Description')).toHaveValue('');
+  await tab('Payment').click();
+  await expect(button(page, 'Paid by Ana (you). Change payer')).toBeVisible();
+  await expect(button(page, 'Paid to Ben. Change recipient')).toBeVisible();
+  await button(page, 'Cancel').click();
+  await expect(button(page, 'Add expense')).toBeVisible();
+});
+
 test('edits and removes a repayment offline', async ({ page, context }, testInfo) => {
   await page.setViewportSize({ width: 320, height: 760 });
   await createGroup(page, 'Repayment changes', 'Ana');
@@ -1733,14 +1808,14 @@ test('closes each dropdown on a tap outside it, and still lets that tap act', as
   await button(page, 'Add expense').click();
   await field(page, 'Amount').fill('10');
   await page.getByRole('button', { name: /^Paid by / }).click();
-  await expect(page.getByRole('radio')).toHaveCount(2);
+  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(2);
   await field(page, 'Description').click();
-  await expect(page.getByRole('radio')).toHaveCount(0);
+  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(0);
   await expect(field(page, 'Description')).toBeFocused();
   await page.getByRole('button', { name: /^Paid by / }).click();
-  await expect(page.getByRole('radio')).toHaveCount(2);
+  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(2);
   await page.getByRole('button', { name: /^Paid by / }).click();
-  await expect(page.getByRole('radio')).toHaveCount(0);
+  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(0);
   await button(page, 'Cancel').click();
 
   // The invite link: a tap away closes it; a tap on Activity opens Activity, and Back returns to the group.
@@ -1777,12 +1852,12 @@ test('closes panels in place without the content returning at the end', async ({
   const payer = page.getByRole('button', { name: /^Paid by / });
 
   await payer.click();
-  await expect(page.getByRole('radio')).toHaveCount(2);
+  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(2);
   await page.waitForTimeout(500);
 
   // Every frame of closing, until well after the movement ends.
   const watching = page.evaluate(() => new Promise<{ height: number; content: number }[]>((resolve) => {
-    let panel = document.querySelector<HTMLElement>('[role="radiogroup"]');
+    let panel = document.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Paid by"]');
 
     while (panel && getComputedStyle(panel).overflow !== 'hidden') panel = panel.parentElement;
     const samples: { height: number; content: number }[] = [];
@@ -1810,7 +1885,7 @@ test('closes panels in place without the content returning at the end', async ({
   await page.waitForTimeout(80);
   await payer.click();
   await page.waitForTimeout(600);
-  await expect(page.getByRole('radio')).toHaveCount(2);
+  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(2);
   await expect(page.getByRole('radio', { name: /^Ben/ })).toBeVisible();
 });
 

@@ -5,6 +5,7 @@ import { entryFromDraft, expenseLabel, memberName, moneyLabel, previewAllocation
 import { ErrorMessage, Field, FooterButton, HeaderAction, ScreenHeader, colors, s } from './components';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { between, useCompactProgress } from './pageScroll';
+import { EntrySwitch } from './EntrySwitch';
 import { MemberChoice } from './MemberChoice';
 import { morph } from './ScreenMorph';
 import { whenLabel } from './relativeTime';
@@ -31,7 +32,7 @@ export function ExpenseEditorHeader(props: ExpenseEditorProps) {
         start={<HeaderAction quiet text="Cancel" label="Cancel" disabled={!back.can('closePanel')} onPress={() => { void back.call('closePanel', {}); }} />}
         end={expense ? (
           <HeaderAction danger text="Delete" label={`Delete ${expenseLabel(expense)}`} disabled={!remove.can('removeExpense', { expenseId: expense.id })} onPress={() => { void remove.call('removeExpense', { expenseId: expense.id }, () => { void back.call('closePanel', {}); }); }} />
-        ) : null}
+        ) : <EntrySwitch kind="expense" />}
         // The timestamp sits under this row; the rule under the description ends the header.
         scrollRule={false}
       />

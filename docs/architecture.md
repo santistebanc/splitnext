@@ -178,6 +178,10 @@ key.
   and Paid to rows use the expense editor's member choice, with Cancel, Record
   or Save, and Delete for an existing repayment in the header. Member changes
   dispatch the same prepareRepayment action as other callers.
+  A new entry's `EntrySwitch` dispatches `switchEntryKind`, which replaces
+  `expense` with `settlements` or back without a history entry. Both drafts
+  stay in UI state; `entryStart` marks them as one entry and keeps the sheet
+  presentation the entry opened with.
   The expense editor has Cancel and Delete in the header and Save in the
   shared pinned footer, a large amount and description that shrink as the
   split scrolls, Paid by opening the names in
