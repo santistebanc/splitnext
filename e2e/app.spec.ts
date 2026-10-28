@@ -1892,3 +1892,35 @@ test('uses a floating label for the expense description and saves with Enter', a
   await expect(description).toHaveValue(title);
   await expect(label).toHaveCSS('font-size', '12px');
 });
+
+
+test('collapses a two-line group title without a sudden header jump', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await createGroup(page, 'A long summer holiday', 'Ana');
+
+  for (const title of ['Train', 'Lunch', 'Dinner', 'Boat', 'Hotel', 'Taxi']) await addExpense(page, title, '20');
+  const scroller = page.locator('#splitnext-page');
+  const title = heading(page, 'A long summer holiday');
+
+  await scroller.evaluate((node) => { node.scrollTop = 0; });
+  await expect(title).toHaveCSS('font-size', '32px');
+  expect((await title.boundingBox())!.height).toBeGreaterThan(60);
+
+  const heights = await scroller.evaluate(async (node) => {
+    const values: number[] = [];
+
+    for (let top = 0; top <= 200; top += 2) {
+      node.scrollTop = top;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      values.push(node.getBoundingClientRect().top);
+    }
+
+    return values;
+  });
+
+  expect(Math.max(...heights.slice(1).map((height, index) => Math.abs(height - heights[index]!)))).toBeLessThan(8);
+  await expect(title).toHaveCSS('font-size', '18px');
+  expect((await title.boundingBox())!.height).toBeLessThan(30);
+  await button(page, 'Scroll to top').click();
+  await expect(title).toHaveCSS('font-size', '32px');
+});

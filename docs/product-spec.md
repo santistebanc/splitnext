@@ -752,3 +752,6 @@ Right-align the expense editor amount; left-align its Created or Last updated ti
 
 Split rows share an amount column exactly as wide as their widest formatted
 amount, with share controls directly beside it and the remaining room for names.
+
+A two-line group title releases its extra height continuously as it compacts,
+so fitting onto one line never causes a sudden header or scroll jump.

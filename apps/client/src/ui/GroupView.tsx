@@ -54,6 +54,7 @@ function GroupName(props: { name: string; groupId: string }) {
   const progress = useCompactProgress();
   const rename = useActionCall();
   const [draft, setDraft] = useState<string | null>(null);
+  const [fullTitleHeight, setFullTitleHeight] = useState(0);
   const input = useRef<TextInput>(null);
 
   function save(): void {
@@ -67,10 +68,13 @@ function GroupName(props: { name: string; groupId: string }) {
 
   return (
     <View style={{ flex: 1, minWidth: 0 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, height: fullTitleHeight ? between(Math.max(44, fullTitleHeight), 44, progress) : undefined }}>
+        {/* Measure the expanded title independently of wrapping during collapse.
+            Its second line releases space continuously rather than all at once. */}
+        <Text aria-hidden pointerEvents="none" numberOfLines={2} onLayout={(event) => setFullTitleHeight(event.nativeEvent.layout.height)} style={[titleStyle(0), { position: 'absolute', left: 0, right: 34, top: 0, opacity: 0 }]}>{props.name}</Text>
         {draft === null ? (
           <>
-            <Text ref={morph(`gname-${props.groupId}`)} accessibilityRole="header" numberOfLines={2} style={[titleStyle(progress), { flexShrink: 1 }]}>{props.name}</Text>
+            <Text ref={morph(`gname-${props.groupId}`)} accessibilityRole="header" numberOfLines={2} style={[titleStyle(progress), { flexShrink: 1, alignSelf: 'flex-start' }]}>{props.name}</Text>
             {progress <= 0.5 ? <Pressable
               accessibilityRole="button"
               accessibilityLabel="Rename group"
