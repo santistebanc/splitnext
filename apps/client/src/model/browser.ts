@@ -2,10 +2,9 @@ import {
   createDeviceSecret,
   deviceSecretSchema,
   IndexedDbClientStorage,
-  SplitnextClient,
-  SplitnextSyncClient,
 } from '@splitnext/client';
-import { AppController } from './controller';
+import { createAppRuntime } from './runtime';
+import type { AppController } from './controller';
 
 const installationKey = 'splitnext.installation.v1';
 
@@ -39,36 +38,11 @@ export async function createBrowserApp(): Promise<AppController> {
 
   const channel = new BroadcastChannel('splitnext-replicas');
 
-  let controller: AppController | null = null;
-
-  const api = new SplitnextClient({
-    baseUrl: apiBaseUrl(),
-    fetch: (input, init) =>
-      fetch(input, { ...init, signal: AbortSignal.timeout(5000) }),
-    observer: (event) => {
-      if (event.kind === 'network_error') controller?.setReachable(false);
-
-      if (event.kind === 'response') controller?.setReachable(true);
-    },
-  });
-
-  const client = new SplitnextSyncClient({
-    api,
-    device_secret: secret,
-    storage: new IndexedDbClientStorage({
-      database_name: 'splitnext-app',
-      document_key: secret,
-    }),
-    on_background_sync: (state) => {
-      void controller?.receive(state).catch((error) => controller?.reportSyncError(error));
-    },
-    on_background_error: (error) => controller?.reportSyncError(error),
-    on_presence_change: (groupId) => controller?.presenceChanged(groupId),
-  });
-
-  controller = new AppController(
-    client,
-    {
+  const controller = createAppRuntime({
+    secret,
+    storage: new IndexedDbClientStorage({ database_name: 'splitnext-app', document_key: secret }),
+    transport: { baseUrl: apiBaseUrl(), fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(5000) }) },
+    preferences: {
       lastGroup: () => localStorage.getItem(lastGroupKey),
       rememberGroup: (groupId) => {
         if (groupId) localStorage.setItem(lastGroupKey, groupId);
@@ -77,11 +51,8 @@ export async function createBrowserApp(): Promise<AppController> {
       lastYouName: () => localStorage.getItem(lastYouNameKey),
       rememberYouName: (name) => localStorage.setItem(lastYouNameKey, name),
     },
-    {
-      changed: () => channel.postMessage('replica-changed'),
-      dispose: () => channel.close(),
-    },
-  );
+    notifications: { changed: () => channel.postMessage('replica-changed'), dispose: () => channel.close() },
+  });
 
   channel.onmessage = () => {
     void controller?.readStorage().catch((error) => controller?.reportSyncError(error));

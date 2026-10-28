@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { clientErrorKind, parseInviteLink } from '@splitnext/client';
 import { AppController } from '../model/controller';
 import { createDispatcher } from '../model/actions';
+import { browserLifecycle } from './browserLifecycle';
 import { browserActionPlatform } from './browserPlatform';
 import { attachLabBridge } from '../lab/bridge';
 import { createBrowserApp } from '../model/browser';
@@ -59,7 +60,7 @@ export function AppScreen(props: ScreenProps) {
           return;
         }
 
-        await current.start(navigator.onLine);
+        await current.start(browserLifecycle.online());
 
         const code = props.invite ? parseInviteLink(window.location.href)?.token : undefined;
         const joined = props.incomingGroupId ?? (code ? await current.groupWithInvite(code) : null);
@@ -225,23 +226,15 @@ function ReadyApp(props: AppProps) {
 
   useEffect(() => {
     const online = () => {
-      void app.setOnline(navigator.onLine).catch((error) => app.reportSyncError(error));
+      void app.setOnline(browserLifecycle.online()).catch((error) => app.reportSyncError(error));
     };
 
     const foreground = () => {
-      if (document.visibilityState === 'visible' && navigator.onLine)
+      if (browserLifecycle.online())
         void app.refresh().catch((error) => app.reportSyncError(error));
     };
 
-    window.addEventListener('online', online);
-    window.addEventListener('offline', online);
-    document.addEventListener('visibilitychange', foreground);
-
-    return () => {
-      window.removeEventListener('online', online);
-      window.removeEventListener('offline', online);
-      document.removeEventListener('visibilitychange', foreground);
-    };
+    return browserLifecycle.subscribe(online, foreground);
   }, [app]);
 
   useEffect(() => {
