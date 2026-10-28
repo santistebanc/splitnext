@@ -554,10 +554,15 @@ test('hides the rename pencil as the header compacts, and ends a person’s head
   for (const pencil of ['Rename group', 'Rename Ben']) {
     if (pencil === 'Rename Ben') await person(page, 'Ben').click();
     await expect(button(page, pencil)).toBeVisible();
+    await expect(button(page, pencil)).toHaveCSS('opacity', '1');
+    await scroller.evaluate((node) => { node.scrollTop = 20; });
+    await expect.poll(() => button(page, pencil).evaluate((node) => Number(getComputedStyle(node).opacity))).toBeLessThan(1);
+    expect(await button(page, pencil).evaluate((node) => Number(getComputedStyle(node).opacity))).toBeGreaterThan(0);
     await scroller.evaluate((node) => { node.scrollTop = 300; });
     await expect(button(page, pencil)).toHaveCount(0);
     await scroller.evaluate((node) => { node.scrollTop = 0; });
     await expect(button(page, pencil)).toBeVisible();
+    await expect(button(page, pencil)).toHaveCSS('opacity', '1');
   }
 
   // A person's header ends right at the bottom of their balance bar, at rest and compact.

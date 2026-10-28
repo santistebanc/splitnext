@@ -118,7 +118,9 @@ instead of reversing the collapse and making the header oscillate. The collapse
 distance exceeds the header's height change so expanding back to the top also
 converges. Each screen measures its own full header height. Returning restores
 that screen's saved header collapse along with its scroll offset, so compact
-headers stay compact instead of growing on return.
+headers stay compact instead of growing on return. Group and member rename
+pencils fade with compact progress, reaching zero opacity before they leave
+the header at halfway collapse, and fade back in as it expands.
 The group screen's content is `GroupView`: everyone's balance as ruled rows
 with a `BalanceBar` scaled to the largest balance, ending with `AddPersonRow`,
 then `ExpenseList` with expenses and repayments newest first. Tapping a person
