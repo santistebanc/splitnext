@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type RefObject } from 'react';
 import { Platform, TextInput, View, type StyleProp, type TextStyle } from 'react-native';
 import type { ClientReplicaState } from '@splitnext/client';
 import { memberStatus, type ParticipantMarker } from '../model/memberPresentation';
 import type { AppController } from '../model/controller';
 import { ErrorMessage, colors, errorMessage, s } from './components';
+import { EditCover } from './EditCover';
 import { fontFamily } from './theme';
 import { useActions } from './useActionCall';
 
@@ -60,9 +61,12 @@ export function MemberNameInput(props: {
   onChangeText?: ((value: string) => void) | undefined;
   autoFocus?: boolean;
   style?: StyleProp<TextStyle>;
+  /** The field itself, for whatever has to reach it, such as the cover around it. */
+  inputRef?: RefObject<TextInput | null>;
 }) {
   const actions = useActions();
-  const input = useRef<TextInput>(null);
+  const own = useRef<TextInput>(null);
+  const input = props.inputRef ?? own;
 
   return (
     <TextInput
@@ -115,6 +119,10 @@ export function AddPersonRow() {
   const queue = useRef<string[]>([]);
   const draining = useRef(false);
   const focused = useRef(false);
+  // Shown while typing, so the rest dims behind the field as it does for a rename.
+  const [adding, setAdding] = useState(false);
+  const row = useRef<View>(null);
+  const input = useRef<TextInput>(null);
 
   /** Queues the typed name, if any, and clears the field. */
   function take(): boolean {
@@ -175,8 +183,9 @@ export function AddPersonRow() {
 
   return (
     <View>
-      <View style={[s.ruled, { flexDirection: 'row', alignItems: 'center', minHeight: 52 }]}>
+      <View ref={row} style={[s.ruled, { flexDirection: 'row', alignItems: 'center', minHeight: 52 }]}>
         <MemberNameInput
+          inputRef={input}
           name={text}
           placeholder="+ Add a person"
           label="Add a person"
@@ -186,12 +195,14 @@ export function AddPersonRow() {
           }}
           onFocus={() => {
             focused.current = true;
+            setAdding(true);
 
             if (!draining.current) begin();
           }}
           onSubmit={take}
           onSave={() => {
             focused.current = false;
+            setAdding(false);
 
             if (!take() && !draining.current && actions.ui.snapshot().memberEdit?.memberId === null) {
               void actions.dispatch('cancelMemberEdit', {}, { origin: 'ui' });
@@ -200,6 +211,7 @@ export function AddPersonRow() {
           style={{ flex: 1, minWidth: 0, height: 52, paddingHorizontal: 0, borderWidth: 0, backgroundColor: 'transparent', fontFamily, fontSize: 15, fontWeight: '500', color: colors.ink }}
         />
       </View>
+      <EditCover open={adding} target={row} onPress={() => input.current?.blur()} />
       <ErrorMessage message={error} />
     </View>
   );

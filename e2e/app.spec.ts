@@ -81,11 +81,16 @@ async function createGroup(page: Page, name: string, you: string): Promise<void>
   await expect(page.getByRole('region', { name: 'Balances' })).toBeVisible();
 }
 
-/** Adds a person in the last row of the balances; ending the typing saves it. */
+/**
+ * Adds a person in the last row of the balances, then finishes with Enter on
+ * the emptied field, so the rest of the screen is no longer dimmed behind it.
+ */
 async function addMember(page: Page, name: string): Promise<void> {
   await field(page, 'Add a person').fill(name);
   await field(page, 'Add a person').press('Enter');
   await expect(page.getByRole('button', { name: new RegExp(`^${escaped(name)}, .*\\. Show details$`), includeHidden: true })).toBeAttached();
+  await field(page, 'Add a person').press('Enter');
+  await expect(page.getByTestId('edit-cover')).toHaveCount(0);
 }
 
 /** Adds an expense from the group screen and returns to it. */
@@ -301,6 +306,16 @@ test('dims the rest while a name or the join link is edited, and a tap there onl
 
     return node.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2));
   });
+
+  // Adding a person: a tap on Ben's row adds the typed name instead of opening Ben.
+  await field(page, 'Add a person').click();
+  await page.keyboard.type('Dee');
+  await expect(cover).toBeVisible();
+  expect(await uncovered(field(page, 'Add a person'))).toBe(true);
+  await tapOver(person(page, 'Ben'));
+  await expect(person(page, 'Dee')).toBeVisible();
+  await expect(heading(page, 'Ben')).toHaveCount(0);
+  await expect(cover).toHaveCount(0);
 
   // The group's name: a tap on Ben's row saves the name instead of opening Ben.
   await expect(cover).toHaveCount(0);
@@ -1091,9 +1106,16 @@ test('adds each name typed while earlier ones are still saving', async ({ page }
   for (const name of ['Ben', 'Cy', 'Dana']) await expect(person(page, name)).toBeVisible();
   await expect(page.getByRole('button', { name: /Show details$/ })).toHaveCount(4);
 
-  // Enter on the empty field finishes.
+  // The rest is dimmed while adding; Enter on the empty field finishes.
+  await expect(page.getByTestId('edit-cover')).toBeVisible();
+  expect(await add.evaluate((node) => {
+    const box = node.getBoundingClientRect();
+
+    return node.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2));
+  })).toBe(true);
   await page.keyboard.press('Enter');
   await expect(add).not.toBeFocused();
+  await expect(page.getByTestId('edit-cover')).toHaveCount(0);
   await expect(button(page, 'Add expense')).toBeEnabled();
 });
 
@@ -1104,6 +1126,7 @@ test('opens details as pages with Back, browser history, and keyboard focus', as
   await field(page, 'Add a person').fill('Ben');
   await field(page, 'Add a person').press('Enter');
   await expect(person(page, 'Ben')).toBeVisible();
+  await field(page, 'Add a person').press('Enter');
 
   await person(page, 'Ben').click();
   await expect(heading(page, 'Ben')).toBeVisible();
