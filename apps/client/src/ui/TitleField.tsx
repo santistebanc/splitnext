@@ -1,4 +1,4 @@
-import { useState, type RefObject } from 'react';
+import type { RefObject } from 'react';
 import { Platform, Text, TextInput, View, type TextInputKeyPressEvent, type TextStyle } from 'react-native';
 import { colors } from './theme';
 
@@ -28,7 +28,6 @@ export type TitleFieldProps = {
  * never get in.
  */
 export function TitleField(props: TitleFieldProps) {
-  const [height, setHeight] = useState(0);
   const style = [props.style, { paddingRight: props.inset ?? 0 }];
 
   function onKeyPress(event: TextInputKeyPressEvent): void {
@@ -49,8 +48,9 @@ export function TitleField(props: TitleFieldProps) {
   return (
     // Top-aligned like the title, so its first line stays where the title's was.
     <View style={{ flex: 1, minWidth: 0, alignSelf: 'flex-start' }}>
-      {/* The same text, laid out alike but unseen, gives the field its height. */}
-      <Text aria-hidden pointerEvents="none" onLayout={(event) => setHeight(event.nativeEvent.layout.height)} style={[style, { position: 'absolute', left: 0, right: 0, top: 0, opacity: 0 }]}>
+      {/* In-flow text gives the field its height on the first layout, before
+          autofocus or the cover can see a textarea's default row count. */}
+      <Text aria-hidden pointerEvents="none" style={[style, { opacity: 0 }]}>
         {props.value || props.placeholder || ' '}
       </Text>
       <TextInput
@@ -71,7 +71,7 @@ export function TitleField(props: TitleFieldProps) {
         onSubmitEditing={() => props.inputRef.current?.blur()}
         onKeyPress={onKeyPress}
         scrollEnabled={false}
-        style={[style, { height: height || undefined, overflow: 'hidden' }]}
+        style={[style, { position: 'absolute', left: 0, right: 0, top: 0, height: '100%', overflow: 'hidden' }]}
       />
     </View>
   );

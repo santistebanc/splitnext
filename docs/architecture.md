@@ -93,7 +93,9 @@ skip motion when reduced motion is preferred, and native shows changes at once.
 
 A group has one screen (`home`) without tabs. `GroupHeader` holds ‹ Groups,
 Activity with its count, the group's name with a pencil that renames it in
-place through `renameGroup`, and Invite people, which shows `InvitePanel` in a
+place through `renameGroup`. `TitleField` sizes itself from an invisible,
+in-flow copy of the name, with the editable field laid over it, so opening
+and typing never wait for a second layout to set the height. Invite people shows `InvitePanel` in a
 `Reveal` under the name while the view is `invite`, so Back closes it. `Frame`
 holds a thin `SyncStatus` strip above the header across all views while
 offline or unreachable. Tapping it opens a `Drawer` with the connection state,

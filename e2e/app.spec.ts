@@ -372,6 +372,56 @@ test('wraps long names onto more lines while renaming, and Enter still saves', a
   }
 });
 
+test('keeps rename fields steady from their first frame', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 650 });
+  await createGroup(page, 'Rename flash', 'Ana');
+  await addMember(page, 'Benjamin Alexander');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+  for (const member of [false, true]) {
+    if (member) {
+      await person(page, 'Benjamin Alexander').click();
+      await expect(page.locator('[data-copied-page]')).toHaveCount(0);
+    }
+
+    const label = member ? 'Name' : 'Group name';
+    const watching = page.evaluate((label) => new Promise<{ heights: number[]; pans: number[] }>((resolve) => {
+      const heights: number[] = [];
+      const pans: number[] = [];
+      const start = performance.now();
+      const record = (event: Event) => {
+        const node = event.target;
+        const page = document.getElementById('splitnext-page');
+
+        if (node instanceof HTMLElement && page && node !== page && node.contains(page) && node.scrollTop) pans.push(node.scrollTop);
+      };
+
+      document.addEventListener('scroll', record, true);
+
+      (function frame() {
+        const input = document.querySelector(`textarea[aria-label="${label}"]`);
+
+        if (input) heights.push(input.getBoundingClientRect().height);
+
+        if (performance.now() - start < 700) requestAnimationFrame(frame);
+        else {
+          document.removeEventListener('scroll', record, true);
+          resolve({ heights, pans });
+        }
+      })();
+    }), label);
+
+    await button(page, member ? 'Rename Benjamin Alexander' : 'Rename group').click();
+    const { heights, pans } = await watching;
+
+    expect(heights.length).toBeGreaterThan(5);
+    expect(Math.max(...heights) - Math.min(...heights), label).toBeLessThanOrEqual(1);
+    expect(pans, label).toEqual([]);
+    await field(page, label).press('Escape');
+    await expect(field(page, label)).toHaveCount(0);
+  }
+});
+
 test('opens a rename where the name already is: full width, the same lines in the same places', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const groupName = 'A very long group name that keeps going on';
