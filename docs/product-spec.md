@@ -738,4 +738,8 @@ Expenses and settlements are accepted behavior.
 Compact headers hide the group-name pencil alongside the invite controls.
 Tapping any compact screen title returns its view to the top; the expanded group title offers rename again.
 
-In the New group drawer, keep each label close to its textbox with a 2px gap.
+Labeled form fields use a Standard-style floating label and underline. Empty,
+unfocused fields show the label in the input; focus or a value lifts it above.
+Focus strengthens the underline without shifting layout. Keep helper and error
+text below, accessible labels intact, and disabled fields visibly quiet.
+Large amount editors retain their specialized formatting.

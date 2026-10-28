@@ -1,4 +1,4 @@
-import { useContext, useRef, useState, type ReactNode, type Ref } from 'react';
+import { useContext, useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -81,32 +81,56 @@ export function Button(props: ButtonProps) {
 type FieldProps = TextInputProps & {
   label: string;
   hideLabel?: boolean;
-  labelGap?: number;
   hint?: string;
+  error?: string;
   trailing?: ReactNode;
   inputRef?: Ref<TextInput>;
   /** A large monospaced figure, for the amount a form is about. */
   figure?: boolean;
 };
 
-/** A bare field over an ink underline, as the prototype's forms use. */
+/** Standard underlined field: the label floats on focus or whenever it has text. */
 export function Field(props: FieldProps) {
-  const { label, hideLabel, labelGap, hint, trailing, inputRef, figure, ...input } = props;
+  const { label, hideLabel, hint, error, trailing, inputRef, figure, ...input } = props;
+  const field = useRef<TextInput>(null);
+  useImperativeHandle(inputRef, () => field.current!, []);
+  const [focused, setFocused] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [text, setText] = useState(input.defaultValue ?? '');
+  const hintId = useId();
+  const filled = Boolean(input.value ?? text);
+  const raised = focused || filled;
+  const disabled = input.editable === false;
+  const invalid = Boolean(error);
+  const activeColor = invalid ? colors.dangerInk : colors.ink;
 
   return (
-    <View style={[s.field, labelGap !== undefined && { gap: labelGap }]}>
-      {!hideLabel ? <Text style={s.label}>{label}</Text> : null}
-      <View style={s.fieldRow}>
-        <TextInput
-          {...input}
-          ref={inputRef}
-          accessibilityLabel={label}
-          placeholderTextColor={colors.placeholder}
-          style={[s.input, figure && s.figureInput, input.style]}
-        />
-        {trailing}
+    <View style={{ gap: 4, opacity: disabled ? 0.5 : 1 }}>
+      <View onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)} style={{ paddingTop: hideLabel ? 0 : 16 }}>
+        {!hideLabel ? (
+          <Pressable accessible={false} focusable={false} disabled={disabled} onPress={() => field.current?.focus()} style={withTransition({ position: 'absolute', zIndex: 1, left: 0, top: raised ? 0 : 26 }, 'top', 150)}>
+            <Text aria-hidden style={withTransition({ fontFamily, fontSize: raised ? 12 : 17, lineHeight: raised ? 16 : 20, color: focused || invalid ? activeColor : colors.muted }, 'font-size, line-height, color', 150)}>{label}</Text>
+          </Pressable>
+        ) : null}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderColor: invalid ? colors.dangerInk : hovered && !disabled ? colors.ink : colors.control }}>
+          <TextInput
+            {...input}
+            ref={field}
+            accessibilityLabel={label}
+            aria-invalid={invalid}
+            aria-describedby={error || hint ? hintId : undefined}
+            placeholder={hideLabel || raised ? input.placeholder : undefined}
+            placeholderTextColor={colors.placeholder}
+            onFocus={(event) => { setFocused(true); input.onFocus?.(event); }}
+            onBlur={(event) => { setFocused(false); input.onBlur?.(event); }}
+            onChangeText={(value) => { setText(value); input.onChangeText?.(value); }}
+            style={[s.input, { height: 44, fontSize: 17, fontWeight: '400' }, figure && s.figureInput, input.style]}
+          />
+          {trailing}
+        </View>
+        <View pointerEvents="none" style={withTransition({ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: activeColor, transform: [{ scaleX: focused && !disabled ? 1 : 0 }] }, 'transform', 150)} />
       </View>
-      {hint ? <Text style={s.caption}>{hint}</Text> : null}
+      {error || hint ? <Text nativeID={hintId} style={[s.caption, invalid && { color: colors.dangerInk }]}>{error || hint}</Text> : null}
     </View>
   );
 }
@@ -725,7 +749,6 @@ export const s = StyleSheet.create({
   radioDot: { width: 20, height: 20, borderRadius: 999, borderWidth: 1.5, borderColor: colors.control },
   radioDotSelected: { borderWidth: 6, borderColor: colors.ink },
   radioLabel: { flex: 1, color: colors.ink, fontFamily, fontSize: 17, fontWeight: '500' },
-  field: { gap: 8 },
   fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1.5, borderColor: colors.ink },
   label: {
     color: colors.muted,
