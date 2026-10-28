@@ -161,6 +161,15 @@ try {
   await op("freshStart");
   assert.deepEqual((await op("status")).devices, []);
   assert.deepEqual((await op("inspectServer")).groups, []);
+  await op('serverNetwork', { available: false });
+  await op('addDevice', { device: 'new-during-outage' });
+  const starting = await op('inspectDevice', { device: 'new-during-outage' });
+  assert.equal(starting.state, null);
+  assert.equal(starting.startup.reason, 'app_not_ready');
+  assert.equal((await op('action', { device: 'new-during-outage', name: 'createGroup', input: {} })).error, 'app_not_ready');
+  await op('serverNetwork', { available: true });
+  await op('reloadDevice', { device: 'new-during-outage' });
+  assert.equal((await op('inspectDevice', { device: 'new-during-outage' })).state.ready, true);
   console.log(`Lab acceptance passed: ${root}`);
 } finally {
   await lab.close();

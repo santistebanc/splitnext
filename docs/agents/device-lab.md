@@ -34,6 +34,11 @@ text, keys and wheel events to that same page. The frontend displays its screens
 and forwards input; these are real app screens, with a 1.5-second mirror refresh.
 The mirror is not a native browser accessibility tree or a touch/IME emulator.
 
+A new installation needs the server to establish its identity. If it starts
+during an outage, inspection reports the actual startup error screen and
+`app_not_ready`, with no controller/actions yet. Once the server returns, use
+`reloadDevice` or the screen's Try again button to complete ordinary app startup.
+
 `deviceNetwork` informs the app of offline/online status and gates traffic.
 `serverNetwork` gates traffic while devices remain online. `serverProcess`
 actually stops/restarts the owned Worker. All three close existing realtime
