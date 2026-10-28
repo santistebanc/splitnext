@@ -14,6 +14,11 @@ export type TitleFieldProps = {
   inputRef: RefObject<TextInput | null>;
   /** The title's own text style, with the underline that marks it as a field. */
   style: TextStyle;
+  /**
+   * Room the title it replaces leaves at its end, as for the pencil: the field
+   * spans the whole width, but its text breaks into lines where the title's did.
+   */
+  inset?: number;
 };
 
 /**
@@ -23,6 +28,7 @@ export type TitleFieldProps = {
  */
 export function TitleField(props: TitleFieldProps) {
   const [height, setHeight] = useState(0);
+  const style = [props.style, { paddingRight: props.inset ?? 0 }];
 
   function onKeyPress(event: TextInputKeyPressEvent): void {
     const key = event.nativeEvent.key;
@@ -40,9 +46,10 @@ export function TitleField(props: TitleFieldProps) {
   }
 
   return (
-    <View style={{ flex: 1, minWidth: 0 }}>
+    // Top-aligned like the title, so its first line stays where the title's was.
+    <View style={{ flex: 1, minWidth: 0, alignSelf: 'flex-start' }}>
       {/* The same text, laid out alike but unseen, gives the field its height. */}
-      <Text aria-hidden pointerEvents="none" onLayout={(event) => setHeight(event.nativeEvent.layout.height)} style={[props.style, { position: 'absolute', left: 0, right: 0, top: 0, opacity: 0 }]}>
+      <Text aria-hidden pointerEvents="none" onLayout={(event) => setHeight(event.nativeEvent.layout.height)} style={[style, { position: 'absolute', left: 0, right: 0, top: 0, opacity: 0 }]}>
         {props.value || props.placeholder || ' '}
       </Text>
       <TextInput
@@ -61,7 +68,7 @@ export function TitleField(props: TitleFieldProps) {
         onSubmitEditing={() => props.inputRef.current?.blur()}
         onKeyPress={onKeyPress}
         scrollEnabled={false}
-        style={[props.style, { height: height || undefined, overflow: 'hidden' }]}
+        style={[style, { height: height || undefined, overflow: 'hidden' }]}
       />
     </View>
   );
