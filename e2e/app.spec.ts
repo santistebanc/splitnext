@@ -56,8 +56,10 @@ function clippedText(page: Page): Promise<string[]> {
       const line = style.lineHeight === 'normal' ? content : parseFloat(style.lineHeight);
       const box = element.getBoundingClientRect();
       const edge = clipper.getBoundingClientRect();
-      const baseline = box.top + (line - content) / 2 + metrics.fontBoundingBoxAscent;
-      const lastBaseline = baseline + (Math.max(1, Math.round(box.height / line)) - 1) * line;
+      const insetTop = parseFloat(style.paddingTop) + parseFloat(style.borderTopWidth);
+      const insetBottom = parseFloat(style.paddingBottom) + parseFloat(style.borderBottomWidth);
+      const baseline = box.top + insetTop + (line - content) / 2 + metrics.fontBoundingBoxAscent;
+      const lastBaseline = baseline + (Math.max(1, Math.round((box.height - insetTop - insetBottom) / line)) - 1) * line;
       const cut = Math.max(edge.top - (baseline - metrics.actualBoundingBoxAscent), lastBaseline + metrics.actualBoundingBoxDescent - edge.bottom);
 
       if (cut > 0.5) found.push(`${text} (${style.fontSize} on ${line}px) loses ${cut.toFixed(1)}px`);
@@ -1853,4 +1855,34 @@ test('keeps member amounts on one line throughout the details transition', async
 
   expect(measured.length).toBeGreaterThan(5);
   expect(measured.filter((sample) => !sample.nowrap || sample.lines !== 1)).toEqual([]);
+});
+
+
+test('uses a floating label for the expense description and saves with Enter', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 760 });
+  await createGroup(page, 'Standard descriptions', 'Ana');
+  await button(page, 'Add expense').click();
+  await field(page, 'Amount').fill('20');
+  const description = field(page, 'Description');
+  const label = page.getByText('Description', { exact: true });
+
+  await expect(label).toHaveCSS('font-size', '17px');
+  const before = (await description.boundingBox())!;
+
+  await description.click();
+  await expect(label).toHaveCSS('font-size', '12px');
+  expect((await description.boundingBox())!.y).toBe(before.y);
+  const title = 'Dinner and groceries for the whole weekend with everyone staying in the mountain cabin';
+
+  await description.fill(title);
+  await field(page, 'Amount').click();
+  await expect(label).toHaveCSS('font-size', '12px');
+  await expect(description).toHaveValue(title);
+  await page.screenshot({ path: testInfo.outputPath('standard-description.png') });
+  await description.click();
+  await description.press('Enter');
+  await expect(button(page, new RegExp('^Change Dinner and groceries'))).toBeVisible();
+  await button(page, new RegExp('^Change Dinner and groceries')).click();
+  await expect(description).toHaveValue(title);
+  await expect(label).toHaveCSS('font-size', '12px');
 });

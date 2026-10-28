@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { activeMembers, formatAmount, minorDigits, parseAmount, preferredMember } from '@splitnext/client';
 import { entryFromDraft, expenseLabel, memberName, moneyLabel, previewAllocation, type ExpenseDraft, type ExpenseDraftPart } from '../model/expenses';
-import { ErrorMessage, FooterButton, HeaderAction, ScreenHeader, colors, s } from './components';
+import { ErrorMessage, Field, FooterButton, HeaderAction, ScreenHeader, colors, s } from './components';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { between, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
@@ -226,8 +226,7 @@ export function ExpenseControls() {
     if (save.can('saveExpense')) void save.call('saveExpense', {});
   }
 
-  const titleSize = between(24, 18, progress);
-  const descriptionStyle = { fontFamily, fontSize: titleSize, lineHeight: titleSize * 1.2, fontWeight: '600', letterSpacing: -0.02 * titleSize, color: colors.ink } as const;
+  const descriptionStyle = { fontFamily, fontSize: 17, lineHeight: 24, fontWeight: '400', color: colors.ink } as const;
   const [descriptionHeight, setDescriptionHeight] = useState(0);
   const [editingDescription, setEditingDescription] = useState(false);
   // Read rather than edited: the cut text shows instead of the field's own.
@@ -254,41 +253,35 @@ export function ExpenseControls() {
         />
         </View>
       </View>
-      <View style={{ position: 'relative', paddingTop: between(16, 8, progress), paddingBottom: between(14, 8, progress), borderBottomWidth: 1, borderColor: colors.rule }}>
-        {/* The description as read: cut at two lines with an ellipsis. It also
-            measures the field's height, and shows over the field until the
-            field is being edited, when the field shows all of it. */}
-        <Text
-          ref={morph(shown ? descriptionKey : null)}
-          aria-hidden
-          numberOfLines={2}
-          onLayout={(event) => setDescriptionHeight(event.nativeEvent.layout.height)}
-          style={[descriptionStyle, { position: 'absolute', left: 0, right: 0, opacity: shown ? 1 : 0, pointerEvents: 'none', zIndex: 1 }]}
-        >
-          {draft.description || ' '}
-        </Text>
-        <TextInput
-          ref={morph(shown ? null : descriptionKey)}
+      <View style={{ paddingTop: 8 }}>
+        <Field
+          label="Description"
+          inputRef={morph(shown ? null : descriptionKey)}
           onFocus={() => setEditingDescription(true)}
           onBlur={() => setEditingDescription(false)}
-          accessibilityLabel="Description"
-          placeholder="New expense"
-          placeholderTextColor={colors.placeholder}
           value={draft.description}
-          // Enter saves rather than starting a line; the text wraps to a second line by itself.
           onChangeText={(value) => change('expense.description', value.replace(/\n/g, ''))}
           maxLength={100}
           multiline
           submitBehavior="submit"
           returnKeyType="done"
           onSubmitEditing={submit}
-          // The web's text area would start a new line on Enter; it saves instead.
           onKeyPress={(event) => {
             if (event.nativeEvent.key !== 'Enter') return;
             event.preventDefault();
             submit();
           }}
-          style={[descriptionStyle, { height: Math.max(titleSize * 1.2, descriptionHeight), padding: 0, overflow: 'hidden' }, shown && { color: 'transparent' }]}
+          displayValue={(
+            <Text
+              ref={morph(shown ? descriptionKey : null)}
+              numberOfLines={2}
+              onLayout={(event) => setDescriptionHeight(event.nativeEvent.layout.height)}
+              style={[descriptionStyle, { opacity: shown ? 1 : 0 }]}
+            >
+              {draft.description || ' '}
+            </Text>
+          )}
+          style={[descriptionStyle, { height: Math.max(44, descriptionHeight + 20), paddingHorizontal: 0, paddingVertical: 10, overflow: 'hidden' }, shown && { color: 'transparent' }]}
         />
       </View>
     </View>

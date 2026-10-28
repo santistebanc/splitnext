@@ -745,3 +745,6 @@ text below, accessible labels intact, and disabled fields visibly quiet.
 Large amount editors retain their specialized formatting.
 
 Member balance amounts stay on one line in the list, details, and screen transitions.
+
+The expense description uses the shared Standard floating-label field, while
+keeping its two-line read display, full-text editing, and Enter-to-save behavior.
