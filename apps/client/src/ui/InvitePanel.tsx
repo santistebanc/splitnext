@@ -39,10 +39,10 @@ function LinkAction(props: { label: string; disabled: boolean; onPress: () => vo
 
 /**
  * The invite link, opened in place under the group's name, between two rules:
- * Share on its left where the device can share, Replace on its right, and the
- * link itself, shown without `https://`, which tapping highlights and copies
- * with it. Replacing asks first in the same place, because the old link stops
- * working.
+ * Share on its left where the device can share, Regenerate on its right, and
+ * the link itself, shown without `https://`, which tapping highlights and
+ * copies with it. Regenerating asks first in the same place, because the old
+ * link stops working.
  */
 export function InvitePanel(props: { app: InvitePanelApp }) {
   const replica = props.app.snapshot().group;
@@ -96,7 +96,7 @@ export function InvitePanel(props: { app: InvitePanelApp }) {
           <Text style={[s.lead, { flex: 1, paddingVertical: 14 }]}>No invite link yet</Text>
         )}
         <View style={{ marginRight: -12 }}>
-          <LinkAction label="Replace link" disabled={Boolean(confirming) || !replace.can('regenerateInvite')} onPress={() => { void replace.call('regenerateInvite', {}); }}>
+          <LinkAction label="Regenerate link" disabled={Boolean(confirming) || !replace.can('regenerateInvite')} onPress={() => { void replace.call('regenerateInvite', {}); }}>
             <RefreshIcon size={18} />
           </LinkAction>
         </View>
@@ -107,11 +107,11 @@ export function InvitePanel(props: { app: InvitePanelApp }) {
           <Text style={[s.body, { fontWeight: '500' }]}>{confirming.message}</Text>
           <View style={s.actions}>
             <Button grow secondary disabled={replace.busy} onPress={replace.cancel}>Cancel</Button>
-            <Button grow disabled={replace.busy} onPress={confirming.confirm}>{replace.busy ? 'Replacing…' : 'Replace'}</Button>
+            <Button grow disabled={replace.busy} onPress={confirming.confirm}>{replace.busy ? 'Regenerating…' : 'Regenerate'}</Button>
           </View>
         </View>
       ) : null}
-      {!online && !confirming ? <Text style={s.caption}>Connect to replace the link.</Text> : null}
+      {!online && !confirming ? <Text style={s.caption}>Connect to regenerate the link.</Text> : null}
       <ErrorMessage message={replace.error ?? action.error} />
     </View>
   );

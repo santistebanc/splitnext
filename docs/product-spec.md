@@ -37,14 +37,14 @@ list shows each locally stored group's people count and the member this
 installation uses. The invite link shows in the monospaced face, without
 https://, on one line that never wraps, smaller where it would not fit, in one
 row between an ink rule and a hairline: a Share icon on its
-left where the device can share, and a Replace icon on its right. Tapping the
+left where the device can share, and a Regenerate icon on its right. Tapping the
 link highlights it and copies it, with https://, then shows Copied below.
 Do not show a copy instruction before tapping. Share also sends it with https://, and
 the join field accepts it either way. There is no separate Copy link button.
-Replace first asks for
-confirmation in the same place, stating that the old link will stop working
-while everyone already in the group keeps their access, with Cancel and
-Replace. Creating a link does not imply anyone has joined.
+Regenerate first asks for
+confirmation in the same place, explaining that it creates a new link and the
+old link will stop working while everyone already in the group keeps their
+access, with Cancel and Regenerate. Creating a link does not imply anyone has joined.
 
 Follow the agreed prototype (`Splitnext Prototype.dc.html`): ink on warm
 paper, square black actions, hairline-ruled rows instead of cards, and large
