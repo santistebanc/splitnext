@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 /**
  * The real app in a browser against a local Worker: flows the action and
@@ -1199,33 +1199,31 @@ test('uses expense-style amount, member rows, and footer in the repayment editor
   await person(page, 'Benjamin Alexander').click();
   await button(page, 'Settle up, 1 payment').click();
   await button(page, 'Record a different payment').click();
-  const from = page.getByRole('combobox', { name: 'Paid by', exact: true });
-  const to = page.getByRole('combobox', { name: 'Paid to', exact: true });
+  const from = button(page, /^Paid by .*Change payer$/);
+  const to = button(page, /^Paid to .*Change recipient$/);
+
+  const choose = async (side: Locator, name: string) => {
+    await side.click();
+    await page.getByRole('radio', { name, exact: true }).click();
+  };
+
   const amount = field(page, 'Amount');
   const record = button(page, 'Record repayment');
 
   await expect(from).toBeVisible();
   await expect(to).toBeVisible();
-  await expect(from.locator('option:checked')).toHaveText('Benjamin Alexander');
-  await expect(to.locator('option:checked')).toHaveText('you');
-
-  const selectedTextFits = await to.evaluate((node) => {
-    const option = node.querySelector('option:checked');
-    const style = getComputedStyle(node);
-    const canvas = document.createElement('canvas').getContext('2d')!;
-
-    canvas.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-
-    return canvas.measureText(option?.textContent ?? '').width <= node.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-  });
-
-  expect(selectedTextFits).toBe(true);
+  await expect(button(page, 'Paid by Benjamin Alexander. Change payer')).toBeVisible();
+  await expect(button(page, 'Paid to Ana (you). Change recipient')).toBeVisible();
+  await from.click();
+  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(3);
+  await from.click();
+  await expect(page.getByRole('radiogroup', { name: 'Paid by' })).toHaveCount(0);
   await amount.fill('7.50');
-  await from.selectOption({ label: 'Cy' });
+  await choose(from, 'Cy');
   await expect(amount).toHaveValue('7.50');
-  await to.selectOption({ label: 'Cy' });
+  await choose(to, 'Cy');
   await expect(record).toBeDisabled();
-  await to.selectOption({ label: 'Benjamin Alexander' });
+  await choose(to, 'Benjamin Alexander');
   await expect(record).toBeEnabled();
 
   const fromBox = (await from.boundingBox())!;
@@ -1253,13 +1251,13 @@ test('uses expense-style amount, member rows, and footer in the repayment editor
   await button(page, 'Back to Benjamin Alexander').click();
   await button(page, 'Back to Dropdown payments').click();
   await button(page, 'Change repayment: Cy paid Benjamin Alexander back 7.50').click();
-  await expect(from.locator('option:checked')).toHaveText('Cy');
-  await expect(to.locator('option:checked')).toHaveText('Benjamin Alexander');
-  await from.selectOption({ label: 'You' });
+  await expect(button(page, 'Paid by Cy. Change payer')).toBeVisible();
+  await expect(button(page, 'Paid to Benjamin Alexander. Change recipient')).toBeVisible();
+  await choose(from, 'Ana (you)');
   await button(page, 'Cancel').click();
   await button(page, 'Change repayment: Cy paid Benjamin Alexander back 7.50').click();
-  await expect(from.locator('option:checked')).toHaveText('Cy');
-  await from.selectOption({ label: 'You' });
+  await expect(button(page, 'Paid by Cy. Change payer')).toBeVisible();
+  await choose(from, 'Ana (you)');
   await button(page, 'Save repayment').click();
   await expect(button(page, 'Change repayment: You paid Benjamin Alexander back 7.50')).toBeVisible();
 });

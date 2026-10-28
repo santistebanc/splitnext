@@ -219,8 +219,9 @@ it shows ✓ Settled. The repayment form is a page with Cancel and Record (Save
 when changing one) in the header, with Delete beside Save for a recorded
 repayment. Match the expense editor: Cancel and Delete in the header, the same
 large formatted amount field and underline, and a Repayment title below it.
-Paid by and Paid to appear in separate labeled rows below the amount, using
-member dropdowns that preserve the amount when either member changes. Long
+Paid by and Paid to appear in separate labeled rows below the amount. Each
+opens the same in-place member list as the expense editor's Paid by, and
+changing either member preserves the amount. Long
 names truncate within the available row width. Record repayment or Save is
 pinned at the bottom, just like the expense editor's primary action. Enter in
 the amount field submits when valid. Show a quiet caption saying whether it is

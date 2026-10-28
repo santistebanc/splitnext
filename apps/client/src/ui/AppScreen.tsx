@@ -353,7 +353,7 @@ function ReadyApp(props: AppProps) {
           footer: <ExpenseEditorFooter />,
         };
       case 'settlements':
-        return { header: <SettlementsHeader />, body: <SettlementsPanel replica={group} />, footer: <SettlementsFooter /> };
+        return { header: <SettlementsHeader />, body: <SettlementsPanel app={app} replica={group} />, footer: <SettlementsFooter /> };
       case 'person':
         return { header: <PersonHeader app={app} />, body: <PersonDetails app={app} />, footer: <PersonFooter app={app} /> };
       case 'settle':

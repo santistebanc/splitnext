@@ -4,7 +4,8 @@ import { minorDigits, parseAmount, preferredMember, repaymentMembers, settlement
 import { memberName, moneyLabel } from '../model/expenses';
 import { ErrorMessage, FooterButton, HeaderAction, ScreenHeader, colors, s } from './components';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
-import { MemberDropdown } from './MemberDropdown';
+import { MemberChoice } from './MemberChoice';
+import type { MemberListApp } from './MemberList';
 import { between, useCompactProgress } from './pageScroll';
 import { fontFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
@@ -99,7 +100,7 @@ export function SettlementsFooter() {
 }
 
 /** Member choices follow the amount, with the same row scale as the expense editor. */
-export function SettlementsPanel(props: { replica: ClientReplicaState }) {
+export function SettlementsPanel(props: { app: MemberListApp; replica: ClientReplicaState }) {
   const snapshot = props.replica.projected_snapshot;
   const draft = useUiState().repayment;
   const action = useActionCall();
@@ -116,12 +117,17 @@ export function SettlementsPanel(props: { replica: ClientReplicaState }) {
     <View style={{ gap: 16, paddingBottom: 24 }}>
       <View>
         {(['from', 'to'] as const).map((side) => (
-          <View key={side} style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderColor: colors.rule }}>
-            <Text style={[s.caption, { width: 64 }]}>{side === 'from' ? 'Paid by' : 'Paid to'}</Text>
-            <MemberDropdown label={side === 'from' ? 'Paid by' : 'Paid to'} value={draft[side]} options={members.map((member) => ({ value: member.id, label: personName(snapshot, member.id, you, side === 'from') }))} fontSize={17} disabled={!action.can('prepareRepayment', input)} onChange={(value) => {
-              void action.call('prepareRepayment', { ...input, [side]: value });
-            }} />
-          </View>
+          <MemberChoice
+            key={side}
+            app={props.app}
+            label={side === 'from' ? 'Paid by' : 'Paid to'}
+            change={side === 'from' ? 'Change payer' : 'Change recipient'}
+            value={draft[side]}
+            members={members.map((member) => member.id)}
+            you={you}
+            disabled={!action.can('prepareRepayment', input)}
+            onChange={(value) => { void action.call('prepareRepayment', { ...input, [side]: value }); }}
+          />
         ))}
       </View>
       <Text style={s.caption}>
