@@ -242,7 +242,8 @@ export function ExpenseControls() {
   const amountFit = Math.min(1, 10 / shownLength);
 
   return (
-    <View style={{ paddingBottom: between(14, 6, progress) }}>
+    // No padding below: the header ends right at the description's underline.
+    <View>
       <View style={{ marginTop: between(12, 0, progress), paddingBottom: between(10, 6, progress), borderBottomWidth: 1.5, borderColor: colors.ink, flexDirection: 'row' }}>
         <View ref={morph(draft.expenseId ? `eamt-${draft.expenseId}` : null, { unclipped: true })} style={{ flex: 1, minWidth: 0, flexDirection: 'row' }}>
         <AmountInput

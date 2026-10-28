@@ -71,7 +71,8 @@ export function SettlementsHeader() {
         scrollRule={false}
       />
       <ErrorMessage message={back.error ?? remove.error} />
-      <View style={{ paddingBottom: between(14, 6, progress) }}>
+      {/* No padding below: the header ends right at the amount's underline. */}
+      <View>
         <View style={{ marginTop: between(12, 0, progress), paddingBottom: between(10, 6, progress), borderBottomWidth: 1.5, borderColor: colors.ink, flexDirection: 'row' }}>
           <AmountInput inputRef={amount} align="right" value={draft.amount} currency={draft.currency} onChangeText={(value) => {
             void actions.dispatch('changeDraft', { field: 'repayment.amount', value }, { origin: 'ui' });
