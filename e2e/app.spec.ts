@@ -997,8 +997,25 @@ test('renames the group in place, copies the invite link, and replaces it after 
   await createGroup(page, 'Trip', 'Ana');
   await button(page, 'Rename group').click();
   await field(page, 'Group name').fill('Lisbon');
+
+  // Every frame after saving: the title goes from the field straight to the new name.
+  const titles = page.evaluate(() => new Promise<string[]>((resolve) => {
+    const seen: string[] = [];
+    const start = performance.now();
+
+    (function frame() {
+      const title = document.querySelector('[role="heading"]')?.textContent ?? '';
+
+      if (title && seen.at(-1) !== title) seen.push(title);
+
+      if (performance.now() - start < 1000) requestAnimationFrame(frame);
+      else resolve(seen);
+    })();
+  }));
+
   await field(page, 'Group name').press('Enter');
   await expect(heading(page, 'Lisbon')).toBeVisible();
+  expect(await titles).toEqual(['Lisbon']);
 
   // The link opens in place under the name.
   await button(page, 'Invite people').click();
