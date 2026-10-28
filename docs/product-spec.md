@@ -237,7 +237,8 @@ blue icons. Keep names, up arrows, right-aligned amounts, and down arrows or
 checkboxes in consistent columns, including excluded people. Excluded
 people stay in place with an empty checkbox. Arrows adjust whole shares and
 reduce equivalent share counts together. Tapping a person's amount edits a
-fixed value, shown in blue; everybody else divides the remainder by their
+fixed value, shown in blue. Leaving the field without typing cancels fixing the
+amount and preserves its original shares or fixed value; everybody else divides the remainder by their
 shares. Clearing the fixed value restores one share; increasing a fixed person's
 share returns it to the next whole proportional share, while decreasing it
 excludes them. Keep one person sharing the remainder. Show the equal split
