@@ -13,7 +13,12 @@ export async function sqliteFiles(root, prefix = "") {
     const name = path.join(prefix, entry.name);
 
     if (entry.isDirectory()) found.push(...(await sqliteFiles(root, name)));
-    else if (entry.name !== "metadata.sqlite" && name.endsWith(".sqlite") && /(^|[\\/])(d1|do)[\\/]/.test(name)) found.push(name);
+    else if (
+      entry.name !== "metadata.sqlite" &&
+      name.endsWith(".sqlite") &&
+      /(^|[\\/])(d1|do)[\\/]/.test(name)
+    )
+      found.push(name);
   }
 
   return found;
@@ -39,10 +44,17 @@ export async function stores(root, edit) {
   const deadline = Date.now() + 5000;
 
   while (true) {
-    try { return await readStores(root, edit); }
-    catch (error) {
+    try {
+      return await readStores(root, edit);
+    } catch (error) {
       // Windows can finish process termination before releasing SQLite WAL handles.
-      if (!['SQLITE_IOERR', 'SQLITE_BUSY', 'ERR_SQLITE_ERROR'].includes(error.code) || Date.now() >= deadline) throw error;
+      if (
+        !["SQLITE_IOERR", "SQLITE_BUSY", "ERR_SQLITE_ERROR"].includes(
+          error.code,
+        ) ||
+        Date.now() >= deadline
+      )
+        throw error;
       await delay(100);
     }
   }

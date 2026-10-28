@@ -125,6 +125,50 @@
         max-width: 100%;
       }
     }
+    main {
+      grid-template-columns: 320px minmax(0, 1fr);
+    }
+    .device {
+      display: grid;
+      grid-template-columns: 325px 300px;
+      gap: 12px 16px;
+      min-width: 641px;
+      max-width: 641px;
+    }
+    .device h2,
+    .device .tools {
+      grid-column: 1 / -1;
+      margin: 0;
+    }
+    .device .screen {
+      grid-column: 1;
+      grid-row: 3 / 9;
+      width: 325px;
+      height: 650px;
+    }
+    .device details,
+    .device > select,
+    .device > p,
+    .device > textarea,
+    .device > button {
+      grid-column: 2;
+      margin: 0;
+    }
+    .device details {
+      height: 330px;
+      overflow: auto;
+    }
+    #server {
+      max-height: 220px;
+    }
+    #timeline {
+      max-height: 160px;
+    }
+    @media (max-width: 850px) {
+      main {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
   </style>
   <header>
     <h1>Splitnext / Device lab</h1>
@@ -150,14 +194,6 @@
           Start process
         </button>
       </div>
-      <label for="operation">Lab operation</label
-      ><select id="operation"></select>
-      <pre id="schema"></pre>
-      <label for="input">Input JSON</label><textarea id="input">{}</textarea>
-      <div class="tools">
-        <button id="run">Run operation</button
-        ><button id="export">Download diagnostics & steps</button>
-      </div>
       <p id="error" role="alert"></p>
       <pre id="result"></pre>
       <details open>
@@ -167,6 +203,17 @@
       <details open>
         <summary>Ordered timeline</summary>
         <pre id="timeline"></pre>
+      </details>
+      <details>
+        <summary>Lab operations & input schemas</summary>
+        <label for="operation">Lab operation</label
+        ><select id="operation"></select>
+        <pre id="schema"></pre>
+        <label for="input">Input JSON</label><textarea id="input">{}</textarea>
+        <div class="tools">
+          <button id="run">Run operation</button
+          ><button id="export">Download diagnostics & steps</button>
+        </div>
       </details>
     </section>
     <section>
@@ -265,18 +312,51 @@
       panel.dataset.device = id;
       panel.image = image;
       panel.state = pre;
-      const actionSelect = document.createElement('select');
-      actionSelect.setAttribute('aria-label', 'App action for '+id);
-      const actionInput = document.createElement('textarea');
-      actionInput.setAttribute('aria-label', 'App action input for '+id);
-      const actionReason = document.createElement('p');
-      const invoke = document.createElement('button');
-      invoke.textContent = 'Invoke app action';
-      const choose = () => { const action = panel.actions.find(a=>a.name===actionSelect.value); if(action){actionInput.value=JSON.stringify(action.example ?? {},null,2);actionReason.textContent=action.availability.available?action.description:action.availability.reason;} };
+      const actionSelect = document.createElement("select");
+      actionSelect.setAttribute("aria-label", "App action for " + id);
+      const actionInput = document.createElement("textarea");
+      actionInput.setAttribute("aria-label", "App action input for " + id);
+      const actionReason = document.createElement("p");
+      const invoke = document.createElement("button");
+      invoke.textContent = "Invoke app action";
+      const choose = () => {
+        const action = panel.actions.find((a) => a.name === actionSelect.value);
+        if (action) {
+          actionInput.value = JSON.stringify(action.example ?? {}, null, 2);
+          actionReason.textContent = action.availability.available
+            ? action.description
+            : action.availability.reason;
+        }
+      };
       actionSelect.onchange = choose;
-      invoke.onclick = () => {try{void run('action',{device:id,name:actionSelect.value,input:JSON.parse(actionInput.value)})}catch(e){showError(e)}};
-      panel.updateActions = actions => { panel.actions=actions;if(!actionSelect.options.length){for(const a of actions){const option=document.createElement('option');option.value=a.name;option.textContent=a.name;actionSelect.append(option)}choose()}const action=actions.find(a=>a.name===actionSelect.value);actionReason.textContent=action?.availability.available?action.description:action?.availability.reason; };
-      panel.append(actionSelect,actionReason,actionInput,invoke);
+      invoke.onclick = () => {
+        try {
+          void run("action", {
+            device: id,
+            name: actionSelect.value,
+            input: JSON.parse(actionInput.value),
+          });
+        } catch (e) {
+          showError(e);
+        }
+      };
+      panel.updateActions = (actions) => {
+        panel.actions = actions;
+        if (!actionSelect.options.length) {
+          for (const a of actions) {
+            const option = document.createElement("option");
+            option.value = a.name;
+            option.textContent = a.name;
+            actionSelect.append(option);
+          }
+          choose();
+        }
+        const action = actions.find((a) => a.name === actionSelect.value);
+        actionReason.textContent = action?.availability.available
+          ? action.description
+          : action?.availability.reason;
+      };
+      panel.append(actionSelect, actionReason, actionInput, invoke);
       return panel;
     }
     async function refresh() {
@@ -296,7 +376,17 @@
         p.state.textContent = JSON.stringify(state, null, 2);
         p.updateActions(state.actions);
       }
-      $("timeline").textContent = JSON.stringify((await api("timeline")).slice(-20).map(e=>({sequence:e.sequence,at:e.at,kind:e.kind,operation:e.detail.operation,device:e.detail.device})),null,2);
+      $("timeline").textContent = JSON.stringify(
+        (await api("timeline")).slice(-20).map((e) => ({
+          sequence: e.sequence,
+          at: e.at,
+          kind: e.kind,
+          operation: e.detail.operation,
+          device: e.detail.device,
+        })),
+        null,
+        2,
+      );
       $("server").textContent = JSON.stringify(
         await api("inspectServer"),
         null,
@@ -354,12 +444,15 @@
         option.textContent = name;
         $("operation").append(option);
       }
+      $("operation").value = "status";
       $("operation").onchange();
       await refresh();
     } catch (e) {
       showError(e);
     }
-    setInterval(() => {void refresh().catch(showError)}, 4000);
+    setInterval(() => {
+      void refresh().catch(showError);
+    }, 4000);
     // Screen mirroring observes the same pages; it never creates another app instance.
     setInterval(() => {
       for (const p of $("devices").children)

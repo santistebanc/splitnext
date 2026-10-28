@@ -17,7 +17,10 @@ function labBridge(app: AppController, actions: Dispatcher) {
   return {
     inspect: () => ({ state: actions.state(), actions: actions.describe(), inputOptions: Object.fromEntries(valueSources.map((source) => [source, actions.inputOptions(source)])), diagnostics: actions.diagnostics.snapshot() }),
     dispatch: (name: string, input: JsonValue, confirmed = false) => actions.dispatchJson(name, input, { confirmed, origin: 'lab' }),
-    online: (online: boolean) => app.setOnline(online),
+    online: async (online: boolean) => {
+      try { await app.setOnline(online); }
+      catch (error) { app.reportSyncError(error); }
+    },
   };
 }
 
