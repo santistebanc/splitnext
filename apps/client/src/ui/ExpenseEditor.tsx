@@ -132,7 +132,7 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
                     accessibilityLabel={`Amount for ${props.name}: ${shown} ${props.currency}${fixed ? ', fixed' : ''}. Change amount`}
                     accessibilityState={{ disabled: !canFix }}
                     disabled={!canFix}
-                    onPress={() => { void edit.call('setExpenseFixedAmount', fixing, () => setEditing(true)); }}
+                    onPress={() => setEditing(true)}
                     style={({ pressed }) => [{ minHeight: 44, justifyContent: 'center' }, pressed && s.pressed]}
                   >
                     <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ textAlign: 'right', fontFamily: monoFamily, fontSize: 14, lineHeight: 20, fontWeight: '600', color: fixed ? colors.action : colors.muted }}>
