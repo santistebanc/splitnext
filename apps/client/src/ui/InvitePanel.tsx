@@ -24,7 +24,7 @@ const linkId = 'invite-link-text';
 
 /**
  * The invite link in a drawer over the group: tapping the link selects
- * and copies it; Share and Replace link sit side by side, and replacing asks
+ * and copies it; Share and Regenerate sit side by side, and replacing asks
  * first in the same sheet because the old link stops working.
  */
 export function InviteSheet(props: { app: InvitePanelApp }) {
@@ -48,13 +48,13 @@ export function InviteSheet(props: { app: InvitePanelApp }) {
     else void close.call('closePanel', {});
   }
 
-  const title = confirming ? 'Replace invite link?' : 'Invite people';
+  const title = confirming ? 'Regenerate invite link?' : 'Invite people';
 
   return (
     <Drawer title={title} onClose={dismiss}>
 
       {confirming ? (
-        <Confirmation message={confirming.message} confirmLabel="Replace link" busy={replace.busy} onConfirm={confirming.confirm} onCancel={replace.cancel} />
+        <Confirmation message={confirming.message} confirmLabel="Regenerate" busy={replace.busy} onConfirm={confirming.confirm} onCancel={replace.cancel} />
       ) : (
         <>
           {link ? (
@@ -99,10 +99,10 @@ export function InviteSheet(props: { app: InvitePanelApp }) {
               </Button>
             ) : null}
             <Button grow secondary disabled={!replace.can('regenerateInvite')} onPress={() => { void replace.call('regenerateInvite', {}); }}>
-              {replace.busy ? 'Replacing…' : 'Replace link'}
+              {replace.busy ? 'Regenerating…' : 'Regenerate'}
             </Button>
           </View>
-          {!online ? <Text style={s.caption}>Connect to replace the link.</Text> : null}
+          {!online ? <Text style={s.caption}>Connect to regenerate the link.</Text> : null}
         </>
       )}
       <ErrorMessage message={replace.error ?? action.error ?? close.error} />

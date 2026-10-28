@@ -671,8 +671,8 @@ test('keeps drawer titles and controls at the currency drawer scale', async ({ p
   const invite = page.getByRole('dialog', { name: 'Invite people' });
 
   await expect(invite.getByRole('heading', { name: 'Invite people', exact: true })).toHaveCSS('font-size', '18px');
-  await expect(invite.getByText('Replace link', { exact: true })).toHaveCSS('font-size', referenceSize);
-  expect((await invite.getByRole('button', { name: 'Replace link', exact: true }).boundingBox())!.height).toBe(referenceHeight);
+  await expect(invite.getByText('Regenerate', { exact: true })).toHaveCSS('font-size', referenceSize);
+  expect((await invite.getByRole('button', { name: 'Regenerate', exact: true }).boundingBox())!.height).toBe(referenceHeight);
   await page.screenshot({ path: testInfo.outputPath('invite-drawer.png') });
   await invite.getByRole('button', { name: 'Close', exact: true }).click();
   await button(page, 'Group settings').click();
@@ -703,9 +703,9 @@ test('renames the group, copies the invite link by tapping it, and replaces it a
   await expect(page.getByRole('dialog').getByRole('button', { name: 'Link copied', exact: true })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(before);
   expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(before);
-  await page.getByRole('dialog').getByRole('button', { name: 'Replace link', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Replace invite link?' })).toBeVisible();
-  await page.getByRole('dialog').getByRole('button', { name: 'Replace link', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Regenerate', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Regenerate invite link?' })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Regenerate', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Invite people' })).toBeVisible();
   await expect(page.getByTestId('invite-link')).not.toHaveText(before);
   await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
