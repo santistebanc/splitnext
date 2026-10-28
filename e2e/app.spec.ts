@@ -754,7 +754,7 @@ test('explains a balance and settles it with the fewest payments', async ({ page
   await button(page, 'Record a different payment').click();
   await expect(field(page, 'Amount')).toHaveValue('10.00');
   await field(page, 'Amount').fill('4');
-  await button(page, 'Record repayment').click();
+  await button(page, 'Save').click();
   await expect(button(page, 'Ben pays you 6.00. Record this payment')).toBeVisible();
 
   // Record records a planned payment at once.
@@ -1179,7 +1179,7 @@ test('records planned and other repayments offline', async ({ page, context }) =
   await button(page, 'Record a different payment').click();
   await expect(field(page, 'Amount')).toHaveValue('30.00');
   await field(page, 'Amount').fill('10');
-  await button(page, 'Record repayment').click();
+  await button(page, 'Save').click();
   await expect(button(page, 'Benjamin Alexander pays you 20.00. Record this payment')).toBeVisible();
   expect(await page.locator('#splitnext-page').evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 
@@ -1187,7 +1187,7 @@ test('records planned and other repayments offline', async ({ page, context }) =
   await expect(heading(page, 'Earlier repayments')).toHaveCount(0);
   await expect(button(page, /^Change repayment:/)).toHaveCount(0);
   await field(page, 'Amount').fill('5');
-  await button(page, 'Record repayment').click();
+  await button(page, 'Save').click();
   await expect(button(page, 'Benjamin Alexander pays you 15.00. Record this payment')).toBeVisible();
   await page.reload();
   await expect(button(page, 'Change repayment: Benjamin Alexander paid you back 10.00')).toBeVisible();
@@ -1214,7 +1214,7 @@ test('uses expense-style amount, member rows, and footer in the repayment editor
   };
 
   const amount = field(page, 'Amount');
-  const record = button(page, 'Record repayment');
+  const record = button(page, 'Save');
 
   await expect(from).toBeVisible();
   await expect(to).toBeVisible();
@@ -1264,7 +1264,7 @@ test('uses expense-style amount, member rows, and footer in the repayment editor
   await button(page, 'Change repayment: Cy paid Benjamin Alexander back 7.50').click();
   await expect(button(page, 'Paid by Cy. Change payer')).toBeVisible();
   await choose(from, 'Ana (you)');
-  await button(page, 'Save repayment').click();
+  await button(page, 'Save').click();
   await expect(button(page, 'Change repayment: You paid Benjamin Alexander back 7.50')).toBeVisible();
 });
 
@@ -1328,7 +1328,7 @@ test('switches a new entry between expense and payment, keeping what each has', 
   // The payment remembers who was paid.
   await tab('Payment').click();
   await expect(button(page, 'Paid to Cy. Change recipient')).toBeVisible();
-  await button(page, 'Record repayment').click();
+  await button(page, 'Save').click();
   await button(page, 'Change repayment: Ben paid Cy back 20.25').click();
   await expect(tabs).toHaveCount(0);
   await button(page, 'Cancel').click();
@@ -1358,12 +1358,12 @@ test('edits and removes a repayment offline', async ({ page, context }, testInfo
   await goOffline(page, context);
   await button(page, 'Change repayment: Ben paid you back 12.00').click();
   await field(page, 'Amount').fill('15');
-  await button(page, 'Save repayment').click();
+  await button(page, 'Save').click();
   await expect(button(page, 'Change repayment: Ben paid you back 15.00')).toBeVisible();
   await expect(button(page, 'Ben, +3.00. Show details')).toBeVisible();
   await button(page, 'Change repayment: Ben paid you back 15.00').click();
   const remove = button(page, 'Delete');
-  const save = button(page, 'Save repayment');
+  const save = button(page, 'Save');
 
   await expect(remove).toBeVisible();
   const removeBox = (await remove.boundingBox())!;

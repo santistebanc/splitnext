@@ -215,11 +215,10 @@ drawer over those details with the payments in the group's plan that involve
 them, each From → To with its amount and Record, which records it as
 planned, then Record a different payment, which opens the repayment form with
 the first planned amount for a partial or other payment. When nothing is owed
-it shows ✓ Settled. The repayment form is a page with Cancel and Record (Save
-when changing one) in the header, with Delete beside Save for a recorded
-repayment. Match the expense editor: Cancel and Delete in the header, the same
-large right-aligned formatted amount field and underline, and a Repayment title
-below it. A new expense or repayment has an Expense | Payment switch in the
+it shows ✓ Settled. The repayment form is a page with Cancel in the header, with Delete beside it
+for a recorded repayment, and Save at the foot. Match the expense editor: Cancel and Delete in the header, the same
+large right-aligned formatted amount field and underline, with no title below
+it. A new expense or repayment has an Expense | Payment switch in the
 header, opposite Cancel, that swaps between the two forms in place like tabs.
 The amount and who paid carry over; the description and split, and who was
 paid, are kept for when you switch back. Each new entry starts afresh, and a
@@ -227,8 +226,8 @@ recorded expense or repayment has no switch.
 Paid by and Paid to appear in separate labeled rows below the amount. Each
 opens the same in-place member list as the expense editor's Paid by, and
 changing either member preserves the amount. Long
-names truncate within the available row width. Record repayment or Save is
-pinned at the bottom, just like the expense editor's primary action. Enter in
+names truncate within the available row width. Save is pinned at the
+bottom, just like the expense editor's primary action. Enter in
 the amount field submits when valid. Show a quiet caption saying whether it is
 the full amount owed and that payment happened outside splitnext. Earlier
 repayments stay in the group ledger. Selecting the same member on both sides

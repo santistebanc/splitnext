@@ -8,7 +8,6 @@ import { EntrySwitch } from './EntrySwitch';
 import { MemberChoice } from './MemberChoice';
 import type { MemberListApp } from './MemberList';
 import { between, useCompactProgress } from './pageScroll';
-import { fontFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 type Snapshot = ClientReplicaState['projected_snapshot'];
@@ -78,9 +77,6 @@ export function SettlementsHeader() {
             void actions.dispatch('changeDraft', { field: 'repayment.amount', value }, { origin: 'ui' });
           }} onSubmitEditing={submit} height={between(60, 36, progress)} fontSize={between(56, 32, progress) * amountFit} />
         </View>
-        <View style={{ paddingTop: between(16, 8, progress), paddingBottom: between(14, 8, progress), borderBottomWidth: 1, borderColor: colors.rule }}>
-          <Text accessibilityRole="header" style={{ fontFamily, fontSize: between(24, 18, progress), fontWeight: '600', color: colors.ink }}>Repayment</Text>
-        </View>
       </View>
     </>
   );
@@ -88,13 +84,13 @@ export function SettlementsHeader() {
 
 /** The same pinned primary action as the expense editor. */
 export function SettlementsFooter() {
-  const { save, editing, ready, submit } = useSaveRepayment();
+  const { save, ready, submit } = useSaveRepayment();
 
   return (
     <>
       <ErrorMessage message={save.error} />
-      <FooterButton label={editing ? 'Save repayment' : 'Record repayment'} busy={save.busy} disabled={!ready} onPress={submit}>
-        {save.busy ? 'Saving…' : editing ? 'Save' : 'Record repayment'}
+      <FooterButton label="Save" busy={save.busy} disabled={!ready} onPress={submit}>
+        {save.busy ? 'Saving…' : 'Save'}
       </FooterButton>
     </>
   );
