@@ -360,8 +360,10 @@ or hide the original audit event as the implementation of undo.
 ### Activity count
 
 Changes from other people never pop up. A bell in the header of the group and of each person opens
-Activity and shows, on its shoulder, a count of new Activity entries from other access identities plus this device's
-changes waiting for review. Compare identities, not preferred-member names, when
+Activity and shows, on its shoulder, a count of new Activity entries from other access identities that move
+balances, plus this device's changes waiting for review. Expenses and repayments recorded, changed, removed or
+restored count; an expense edit counts only when its amount, who paid or how it is split changes, not its
+description alone. Group, people and access changes do not count, though Activity still tags them new. Compare identities, not preferred-member names, when
 leaving out this installation's own actions. The first time a group's Activity
 loads on an installation, everything already there counts as seen.
 
