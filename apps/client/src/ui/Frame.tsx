@@ -36,6 +36,8 @@ type FrameProps = {
    * sum, which stays fixed when header reflow clamps the scroll position.
    * `restored` marks the position a screen opens at rather than a scroll. */
   onScroll?: ((y: number, headerCollapse: number, restored?: boolean) => void) | undefined;
+  /** A downward content scroll, excluding restoration and header layout. */
+  onScrollDown?: (() => void) | undefined;
   /** Receives a way to scroll the content, smoothly unless told not to, such as back to the top. */
   scrollControl?: { current: ((y: number, animated?: boolean) => void) | null } | undefined;
 };
@@ -139,10 +141,13 @@ export function Frame(props: FrameProps) {
               if (restoring.current) return;
               const y = event.nativeEvent.contentOffset.y;
               const header = headerSize.current;
+              const down = y > scrolled.current;
 
               scrolled.current = y;
               positions.current.set(scrollKey, y);
               props.onScroll?.(y, y > 0 && header.key === scrollKey ? header.full - header.current : 0);
+
+              if (down) props.onScrollDown?.();
             }}
             scrollEventThrottle={16}
             nativeID="splitnext-page"

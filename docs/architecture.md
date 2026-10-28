@@ -95,8 +95,12 @@ A group has one screen (`home`) without tabs. `GroupHeader` holds ‹ Groups,
 Activity with its count, the group's name with a pencil that renames it in
 place through `renameGroup`. `TitleField` sizes itself from an invisible,
 in-flow copy of the name, with the editable field laid over it, so opening
-and typing never wait for a second layout to set the height. Invite people shows `InvitePanel` in a
-`Reveal` under the name while the view is `invite`, so Back closes it. `Frame`
+and typing never wait for a second layout to set the height. Invite people
+shows `InvitePanel` in a `Reveal` under the name while the view is `invite`,
+so Back closes it. A downward
+content scroll also closes it through `Frame.onScrollDown`; restoration and
+header reflow do not. Balances start 12px below the invite control row or the
+expanded link's bottom rule, without extra list padding. `Frame`
 holds a thin `SyncStatus` strip above the header across all views while
 offline or unreachable. Tapping it opens a `Drawer` with the connection state,
 locally queued change count, and Retry when online. Reconnecting closes it and

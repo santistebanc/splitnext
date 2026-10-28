@@ -402,6 +402,9 @@ function ReadyApp(props: AppProps) {
                   navigationDepth={depth}
                   restoreScroll={ui.navigation.mode === 'restore'}
                   onScroll={(y, headerCollapse, restored) => (restored ? compact.jump(y + headerCollapse) : compact.follow(y + headerCollapse))}
+                  onScrollDown={() => {
+                    if (actions.ui.snapshot().view === 'invite') void actions.dispatch('closePanel', {}, { origin: 'ui' });
+                  }}
                 >
                   <ViewTransition key={pageKey} mobile={mobile}>
                     <ErrorMessage message={backgroundError} />

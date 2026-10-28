@@ -24,7 +24,7 @@ export function Reveal(props: RevealProps) {
 
   if (present) last.current = props.children;
 
-  // A finished tap, not a touch, so starting to scroll the page leaves it open.
+  // A finished tap, not a touch, so scrolling is not an outside tap.
   // Taps on the content, or on the control that toggles it, are its own.
   useEffect(() => {
     if (!present || !props.onOutsidePress) return;
