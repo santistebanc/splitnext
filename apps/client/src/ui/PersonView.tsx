@@ -153,7 +153,6 @@ export function PersonFooter(props: { app: MemberListApp }) {
     <>
       <ErrorMessage message={settle.error} />
       <FooterButton
-        morph={`settle-${memberId}`}
         label={`Settle up, ${payments === 1 ? '1 payment' : `${payments} payments`}`}
         disabled={!settle.can('showSettleUp', { memberId })}
         onPress={() => { void settle.call('showSettleUp', { memberId }); }}

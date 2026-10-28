@@ -15,7 +15,7 @@ import { ExpenseControls, ExpenseEditor, ExpenseEditorFooter, ExpenseEditorHeade
 import { AddExpenseButton } from './ExpenseList';
 import { ActivityHeader, ActivityPanel } from './ActivityPanel';
 import { PersonDetails, PersonFooter, PersonHeader } from './PersonView';
-import { SettleUp, SettleUpHeader } from './SettleUp';
+import { SettleUpDrawer } from './SettleUp';
 import { GroupSettings, GroupSettingsFooter } from './GroupSettings';
 import { GroupsFooter, GroupsHeader, GroupsView } from './GroupsView';
 import { Toast } from './Toast';
@@ -213,7 +213,9 @@ function ReadyApp(props: AppProps) {
   );
 
   useActivityFeed(app, state);
-  const view = ui.view;
+  // Settle up is a drawer over the screen it was opened from.
+  const settling = ui.view === 'settle';
+  const view = settling ? (ui.person ? 'person' : 'home') : ui.view;
   const initialLink = ui.join.link;
 
   const action = useAction();
@@ -356,8 +358,6 @@ function ReadyApp(props: AppProps) {
         return { header: <SettlementsHeader />, body: <SettlementsPanel app={app} replica={group} />, footer: <SettlementsFooter /> };
       case 'person':
         return { header: <PersonHeader app={app} />, body: <PersonDetails app={app} />, footer: <PersonFooter app={app} /> };
-      case 'settle':
-        return { header: <SettleUpHeader app={app} />, body: <SettleUp app={app} /> };
       case 'activity':
         return { header: <ActivityHeader app={app} />, body: <ActivityPanel replica={group} /> };
       case 'settings':
@@ -379,7 +379,7 @@ function ReadyApp(props: AppProps) {
   const screenView = view === 'create' ? 'home' : view;
   const pageKey = onGroupScreen ? `group:${group?.group_id}` : `${screenView}:${group?.group_id ?? ''}:${ui.person ?? ''}`;
   // How deep the screen is, so moving deeper slides forward and returning slides back.
-  const depth = !open ? (screenView === 'home' ? 0 : 1) : onGroupScreen ? 1 : 1 + Math.max(1, ui.trail.length);
+  const depth = !open ? (screenView === 'home' ? 0 : 1) : onGroupScreen ? 1 : 1 + Math.max(1, ui.trail.length - (settling ? 1 : 0));
 
   return (
     <ActionsProvider value={actions}>
@@ -407,6 +407,7 @@ function ReadyApp(props: AppProps) {
                   </ViewTransition>
                 </Frame>
                 </ScreenMorph>
+                {settling && open ? <SettleUpDrawer app={app} /> : null}
                 <RemovalToast />
                 <Devtools />
               </View>
