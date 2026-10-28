@@ -1785,14 +1785,36 @@ test('closes panels in place without the content returning at the end', async ({
 });
 
 
-test('keeps new group labels close to their textboxes', async ({ page }) => {
+test('floats standard field labels without moving the textboxes', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/app');
   await button(page, /^(New group|Create a group)$/).click();
+  const groupName = field(page, 'Group name');
+  const yourName = field(page, 'Your name in this group');
+  const label = page.getByText('Your name in this group', { exact: true });
 
-  for (const label of ['Group name', 'Your name in this group']) {
-    const input = field(page, label);
-    const container = input.locator('..').locator('..');
+  await expect(groupName).toBeFocused();
+  await expect(label).toHaveCSS('font-size', '17px');
+  const before = (await yourName.boundingBox())!;
+  const labelBefore = (await label.boundingBox())!;
 
-    await expect(container).toHaveCSS('row-gap', '2px');
-  }
+  await groupName.fill('Lisbon trip');
+  await groupName.press('Enter');
+  await expect(yourName).toBeFocused();
+  await expect(label).toHaveCSS('font-size', '12px');
+  expect((await label.boundingBox())!.y).toBeLessThan(labelBefore.y);
+  expect((await yourName.boundingBox())!.y).toBe(before.y);
+  await yourName.fill('Ana');
+  await yourName.press('Tab');
+  await expect(label).toHaveCSS('font-size', '12px');
+  await page.screenshot({ path: testInfo.outputPath('standard-fields.png') });
+  await yourName.fill('');
+  await yourName.press('Tab');
+  await expect(label).toHaveCSS('font-size', '17px');
+  expect((await yourName.boundingBox())!.y).toBe(before.y);
+  await label.click();
+  await expect(yourName).toBeFocused();
+  await yourName.fill('Ana');
+  await button(page, 'Create group').click();
+  await expect(heading(page, 'Lisbon trip')).toBeVisible();
 });

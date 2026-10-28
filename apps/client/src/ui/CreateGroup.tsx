@@ -72,7 +72,6 @@ export function CreateGroup(props: CreateGroupProps) {
         returnKeyType="next"
         submitBehavior="submit"
         onSubmitEditing={() => personInput.current?.focus()}
-        labelGap={2}
         style={compact}
       />
       <Field
@@ -87,7 +86,6 @@ export function CreateGroup(props: CreateGroupProps) {
         maxLength={100}
         returnKeyType="done"
         onSubmitEditing={submit}
-        labelGap={2}
         style={compact}
       />
       {suggestions.length ? (
