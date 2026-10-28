@@ -390,7 +390,8 @@ test('records, changes, and removes an expense with plain-number balances', asyn
 
   // The same relative wording as Activity, at the right.
   await expect(timestamp).toHaveText(/^Created (just now|\d+m ago)$/);
-  await expect(timestamp).toHaveCSS('text-align', 'right');
+  await expect(timestamp).toHaveCSS('text-align', 'left');
+  await expect(field(page, 'Amount')).toHaveCSS('text-align', 'right');
   const created = await timestamp.textContent();
   const timestampBox = await timestamp.boundingBox();
   const amountBox = await field(page, 'Amount').boundingBox();

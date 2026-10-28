@@ -748,3 +748,5 @@ Member balance amounts stay on one line in the list, details, and screen transit
 
 The expense description uses the shared Standard floating-label field, while
 keeping its two-line read display, full-text editing, and Enter-to-save behavior.
+
+Right-align the expense editor amount; left-align its Created or Last updated timestamp.
