@@ -94,7 +94,7 @@ function ShareStep(props: { sign: '−' | '+'; label: string; disabled: boolean;
  * rest, and at the end whether they share it.
  * `sharing` counts the people dividing the rest by shares.
  */
-function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; hue: string; part: ExpenseDraftPart | undefined; owed: number | undefined; currency: string; hasAmount: boolean; sharing: number }) {
+function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; hue: string; part: ExpenseDraftPart | undefined; owed: number | undefined; currency: string; hasAmount: boolean; sharing: number; amountWidth: number }) {
   const edit = useActionCall();
   const [editing, setEditing] = useState(false);
   const input = useRef<AmountInputHandle>(null);
@@ -142,10 +142,10 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
             ) : null}
           </View>
         </View>
-        <View style={{ width: 92, alignItems: 'flex-end' }}>
+        <View testID="split-amount-column" style={{ width: props.amountWidth, alignItems: 'flex-end' }}>
           {!dividing ? null : editing || fixed ? (
             // The same field as the expense's own amount: two fixed decimals, dot or comma.
-            <View style={{ width: 92 }}>
+            <View style={{ width: props.amountWidth }}>
               <AmountInput
                 inline
                 inputRef={input}
@@ -232,7 +232,7 @@ export function ExpenseControls() {
   // Read rather than edited: the cut text shows instead of the field's own.
   const shown = !editingDescription && Boolean(draft.description);
   const descriptionKey = draft.expenseId ? `etitle-${draft.expenseId}` : 'addexp';
-  // The amount as shown, grouped in threes, fits the width: up to "999 999.99"
+  // The amount as shown, grouped in threes, fits the width: up to "999,999.99"
   // at full size, and longer figures in proportion.
   const whole = Math.max(1, (draft.amount.split('.')[0] ?? '').length);
   const shownLength = whole + Math.floor((whole - 1) / 3) + 1 + minorDigits(draft.currency);
@@ -338,6 +338,15 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
   const payers = allMembers.filter((member) => member.status === 'active' || member.id === draft.paidBy);
   const preview = previewAllocation(snapshot, draft);
   const entry = entryFromDraft(draft);
+  const [amountWidth, setAmountWidth] = useState(0);
+
+  const widestAmount = draft.parts.map((part) => {
+    const plain = part.kind === 'exact' ? part.amount : formatAmount(preview.get(part.member_id) ?? 0, draft.currency);
+    const parsed = parseAmount(plain, draft.currency);
+
+    return parsed === null ? plain : moneyLabel(parsed, draft.currency);
+  }).reduce((widest, value) => value.length > widest.length ? value : widest, '');
+
   const total = parseAmount(draft.amount, draft.currency) ?? 0;
   const hasAmount = total > 0;
   const hue = (memberId: string) => splitHues[Math.max(0, allMembers.findIndex((member) => member.id === memberId)) % splitHues.length] ?? colors.ink;
@@ -400,8 +409,9 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
         ))}
       </View>
       <View style={{ paddingTop: 8 }}>
+        <Text aria-hidden pointerEvents="none" numberOfLines={1} onLayout={(event) => setAmountWidth(Math.ceil(event.nativeEvent.layout.width))} style={{ position: 'absolute', opacity: 0, fontFamily: monoFamily, fontSize: 15, fontWeight: '500' }}>{widestAmount}</Text>
         {members.map((member) => (
-          <ExpenseSplitRow key={member.id} memberId={member.id} name={memberName(snapshot, member.id)} you={member.id === you} hue={hue(member.id)} part={draft.parts.find((part) => part.member_id === member.id)} owed={preview.get(member.id)} currency={draft.currency} hasAmount={hasAmount} sharing={sharing} />
+          <ExpenseSplitRow key={member.id} memberId={member.id} name={memberName(snapshot, member.id)} you={member.id === you} hue={hue(member.id)} part={draft.parts.find((part) => part.member_id === member.id)} owed={preview.get(member.id)} currency={draft.currency} hasAmount={hasAmount} sharing={sharing} amountWidth={amountWidth} />
         ))}
       </View>
 

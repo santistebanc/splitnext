@@ -1,13 +1,14 @@
 import { useRef } from 'react';
 import { NumericFormat } from 'react-number-format';
 import { formatAmount, minorDigits } from '@splitnext/client';
-import { digitGroupSpace } from '../model/expenses';
+import { digitGroupSeparator } from '../model/expenses';
 import { colors, monoFamily } from './theme';
 import type { AmountInputProps } from './AmountInput';
 
-/** Typed text as a plain decimal: grouping spaces dropped, a comma read as the point. */
-function plainDecimal(text: string): string {
-  const replaced = text.replace(/\s/g, '').replace(',', '.');
+/** Typed text as a plain decimal: grouping removed, or an ungrouped decimal comma read as the point. */
+function plainDecimal(text: string, grouped = text.includes('.') || /^\d{1,3}(,\d{3})+$/.test(text)): string {
+  const compact = text.replace(/\s/g, '');
+  const replaced = grouped ? compact.replace(/,/g, '') : compact.replace(',', '.');
 
   return replaced.startsWith('.') ? `0${replaced}` : replaced;
 }
@@ -43,7 +44,7 @@ export function AmountInput(props: AmountInputProps) {
       decimalSeparator="."
       allowedDecimalSeparators={['.', ',']}
       allowNegative={false}
-      thousandSeparator={digitGroupSpace}
+      thousandSeparator={digitGroupSeparator}
       onBeforeInput={remember}
       onChangeCapture={(event) => {
         const input = event.currentTarget;
@@ -63,7 +64,7 @@ export function AmountInput(props: AmountInputProps) {
           // A comma or a leading point becomes the plain decimal; the caret
           // keeps its place among the characters before it.
           input.value = decimal;
-          const nextCaret = plainDecimal(original.slice(0, caret)).length;
+          const nextCaret = plainDecimal(original.slice(0, caret), original.includes('.') || /^\d{1,3}(,\d{3})+$/.test(original)).length;
 
           input.setSelectionRange(nextCaret, nextCaret);
         }
@@ -72,8 +73,8 @@ export function AmountInput(props: AmountInputProps) {
         if (source.source === 'event') props.onChangeText(value);
       }}
       onPaste={(event) => {
-        // Grouping spaces, such as in a figure copied from the app, are only formatting.
-        const text = event.clipboardData.getData('text').replace(/\s/g, '');
+        // Grouping commas or spaces in copied figures are only formatting.
+        const text = plainDecimal(event.clipboardData.getData('text'));
 
         // Reject ambiguous or over-precise pasted amounts rather than changing their meaning.
         if (!/^\d*(?:[.,]\d*)?$/.test(text) || (text.split(/[.,]/)[1]?.length ?? 0) > minorDigits(props.currency)) event.preventDefault();

@@ -29,22 +29,22 @@ export function currentExpenses(snapshot: Snapshot): Expense[] {
  */
 export const noCurrency = 'XXX';
 
-/** What separates groups of three digits: a space that never breaks a figure across lines. */
-export const digitGroupSpace = '\u00a0';
+/** What separates groups of three digits: a comma. */
+export const digitGroupSeparator = ',';
 
 /**
- * Groups the whole digits of a plain amount in threes, such as "1 234 567.89",
+ * Groups the whole digits of a plain amount in threes, such as "1,234,567.89",
  * so long figures read at a glance. Only for showing: commands and drafts
  * take the plain amount.
  */
 export function groupDigits(plain: string): string {
   const [whole = '', fraction] = plain.split('.');
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, digitGroupSpace);
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, digitGroupSeparator);
 
   return fraction === undefined ? grouped : `${grouped}.${fraction}`;
 }
 
-/** An amount as people read it, such as "1 234.50", never with a currency. */
+/** An amount as people read it, such as "1,234.50", never with a currency. */
 export function moneyLabel(amount: number, currency: string): string {
   return groupDigits(formatAmount(amount, currency));
 }

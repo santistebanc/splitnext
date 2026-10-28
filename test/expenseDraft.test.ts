@@ -120,11 +120,11 @@ describe('expense draft', () => {
 });
 
 describe('amounts as people read them', () => {
-  it('groups whole digits in threes with a space that does not break, and drafts stay plain', () => {
-    const shown = (minor: number) => moneyLabel(minor, noCurrency).replaceAll('\u00a0', ' ');
+  it('groups whole digits in threes with commas, and drafts stay plain', () => {
+    const shown = (minor: number) => moneyLabel(minor, noCurrency);
 
-    expect([1, 99_999, 100_000, 123_456_789, 4_825_000].map(shown)).toEqual(['0.01', '999.99', '1 000.00', '1 234 567.89', '48 250.00']);
-    expect(groupDigits('1200')).toBe('1\u00a0200');
+    expect([1, 99_999, 100_000, 123_456_789, 4_825_000].map(shown)).toEqual(['0.01', '999.99', '1,000.00', '1,234,567.89', '48,250.00']);
+    expect(groupDigits('1200')).toBe('1,200');
     expect(moneyLabel(123_456_789, noCurrency)).not.toContain(' ');
 
     const expense: Expense = {

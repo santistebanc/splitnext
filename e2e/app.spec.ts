@@ -432,13 +432,13 @@ test('keeps the expense amount formatted while typing and accepts dots or commas
   await button(page, 'Add expense').click();
   const amount = field(page, 'Amount');
 
-  for (const [entered, formatted] of [['12', '12.00'], ['12.5', '12.50'], ['12,5', '12.50'], ['.5', '0.50'], ['0', '0.00']]) {
+  for (const [entered, formatted] of [['12', '12.00'], ['12.5', '12.50'], ['12,5', '12.50'], ['.5', '0.50'], ['0', '0.00'], ['1,234.56', '1,234.56']]) {
     await amount.fill(entered!);
     await expect(amount).toHaveValue(formatted!);
     await expect(amount).toBeFocused();
   }
 
-  for (const invalid of ['abc', '-12', '1e3', '12..5', '1,234.56']) {
+  for (const invalid of ['abc', '-12', '1e3', '12..5']) {
     await amount.fill('');
     await amount.fill(invalid);
     await expect(amount).toHaveValue('');
@@ -468,8 +468,8 @@ test('groups the digits of large amounts in threes, as typed and as shown', asyn
   await addMember(page, 'Ben');
   await button(page, 'Add expense').click();
   const amount = field(page, 'Amount');
-  // Groups are separated by a space that never breaks a figure across lines.
-  const grouped = (text: string) => text.replaceAll(' ', '\u00a0');
+  // Groups are separated by commas.
+  const grouped = (text: string) => text.replaceAll(' ', ',');
 
   await amount.pressSequentially('1234567');
   await expect(amount).toHaveValue(grouped('1 234 567.00'));
@@ -487,7 +487,7 @@ test('groups the digits of large amounts in threes, as typed and as shown', asyn
 
   // A grouped figure pasted back in is read as a plain amount.
   await amount.fill('');
-  await page.evaluate(() => navigator.clipboard.writeText('2 500.25'));
+  await page.evaluate(() => navigator.clipboard.writeText('2,500.25'));
   await amount.focus();
   await page.keyboard.press('Control+V');
   await expect(amount).toHaveValue(grouped('2 500.25'));
@@ -606,6 +606,11 @@ test('aligns split controls in columns for weighted, fixed, and excluded people'
     await page.setViewportSize({ width, height: 760 });
     const amount = (await button(page, /^Amount for Ana:/).boundingBox())!;
     const fixed = (await field(page, 'Amount for Cy').boundingBox())!;
+    const plus = (await button(page, 'Increase share for Cy').boundingBox())!;
+
+    expect(fixed.width).toBeLessThan(60);
+    expect(Math.abs(plus.x + plus.width - fixed.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(fixed.width - amount.width)).toBeLessThanOrEqual(1);
     const end = await center(page.getByRole('checkbox', { name: 'Ana shares this expense' }));
     const minus = await center(button(page, 'Decrease share for Ana'));
 
@@ -1217,7 +1222,7 @@ test('uses expense-style amount, member rows, and footer in the repayment editor
   expect(toBox.y + toBox.height).toBeLessThan(recordBox.y);
   await expect(amount).toHaveCSS('font-size', '56px');
   await amount.fill('1234,5');
-  await expect(amount).toHaveValue('1\u00a0234.50');
+  await expect(amount).toHaveValue('1,234.50');
   await amount.fill('7.50');
   expect(await page.locator('#splitnext-page').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
   await record.click();
