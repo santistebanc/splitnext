@@ -112,9 +112,9 @@ once.
 Tapping a person opens their details: back to the group, their name large with
 "you" when it is you, a pencil that edits the name in place (committing on
 leaving the field or Enter; an empty name restores the saved name). Below the
-name: their presence, with This is me at the end of that line, which makes
-that member you on this device without asking first; when another device
-already has the name taken, an inline warning says so afterward. Then their
+name: their presence. There is no way to make someone else you from their
+details: changing who you are on this device means leaving the group and
+rejoining as that member, who may already be taken on another device. Then their
 balance as a large
 figure over its bar, labelled Owes, Gets back, Settled for a numeric zero, or
 No expenses yet when no current expense or repayment names them. Settle up is
@@ -464,7 +464,8 @@ operations remain available without opening an editor, including offline.
   that identity, and stops its synchronization and realtime notifications.
   It does not revoke access or alter any ledger member. A preferred-member
   choice that reaches the server after leaving is rejected (`group_left`).
-- Rejoining unhides the group and selects or creates a preferred member.
+- Rejoining unhides the group and selects or creates a preferred member. It is
+  the only way to change which member is you on this device.
 - Any identity can create groups and join others' groups. Each identity has a
   list of the groups it can access that distinguishes joined groups from ones
   it left, which it can reopen and rejoin. The list may briefly show an old

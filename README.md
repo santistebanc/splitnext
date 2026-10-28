@@ -56,7 +56,7 @@ How it fits together, and the rules each part keeps, is in
   specified in [docs/product-spec.md](./docs/product-spec.md).
 - One group screen with everyone's balance as ruled rows above the expenses
   and repayments; person details with a balance breakdown, Settle up, rename,
-  “I’m …” and remove; and browser Back/Forward support. Forms return to where
+  and remove; and browser Back/Forward support. Forms return to where
   they were opened.
 - A `/components` workbench and in-app devtools, enabled with debug
   inspection, for previewing components and calling any app action.

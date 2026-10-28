@@ -593,7 +593,6 @@ describe('app actions', () => {
     expect(group('confirmAction')).toBe('UI');
     expect(group('saveMemberEdit')).toBe('Ledger changes');
     expect(group('saveGroupSettings')).toBe('Ledger changes');
-    expect(group('setPreferredMember')).toBe('Ledger changes');
     expect(group('submitCreateGroup')).toBe('Access & sync');
     expect(group('submitJoin')).toBe('Access & sync');
     expect(group('regenerateInvite')).toBe('Access & sync');
@@ -740,11 +739,11 @@ describe('app actions', () => {
     if (!snapshot) throw new Error('missing_fixture');
     snapshot.members[1]!.status = 'hidden';
     const input = { memberId: 'member-2______________' };
-    expect(actions.availability('setPreferredMember', input)).toMatchObject({
+    expect(actions.availability('beginEditMember', input)).toMatchObject({
       available: false,
       error: 'member_not_found',
     });
-    expect(await actions.dispatch('setPreferredMember', input)).toMatchObject({
+    expect(await actions.dispatch('beginEditMember', input)).toMatchObject({
       status: 'failed',
       error: 'member_not_found',
     });
@@ -1067,17 +1066,6 @@ describe('app actions', () => {
     expect(calls).toEqual([]);
   });
 
-  it('does not let a caller mutate the input of a pending confirmation', async () => {
-    const { host, calls } = createHost({ others: ['Ben'] });
-    const actions = createDispatcher(host);
-    const input = { memberId: 'member-2______________' };
-    await actions.dispatch('setPreferredMember', input);
-    input.memberId = 'member-1______________';
-    const requestId = actions.state().ui.confirmation?.id ?? '';
-    await actions.dispatch('confirmAction', { requestId });
-    expect(calls).toEqual(['preference.set member-2______________']);
-  });
-
   it('cannot submit a draft after closing its form', async () => {
     const { host, calls } = createHost();
     const actions = createDispatcher(host);
@@ -1213,16 +1201,6 @@ describe('app actions', () => {
       await actions.dispatch('regenerateInvite', {}, { confirmed: true }),
     ).toMatchObject({ status: 'done' });
     expect(calls).toEqual(['regenerateInvite']);
-  });
-
-  it('chooses a member another participant uses without asking', async () => {
-    const { host, calls } = createHost({ others: ['Ben'] });
-    const actions = createDispatcher(host);
-
-    expect(
-      await actions.dispatch('setPreferredMember', { memberId: 'member-2______________' }),
-    ).toMatchObject({ status: 'done' });
-    expect(calls).toEqual(['preference.set member-2______________']);
   });
 
   it('opens a person from the group screen and goes back to it', async () => {

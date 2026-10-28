@@ -87,9 +87,6 @@ describe('devtools action form', () => {
       { value: 'member-2______________', label: 'Ben' },
       { value: 'member-1______________', label: 'Ana (you)' },
     ]);
-    expect(initialValues(fieldsOf('setPreferredMember'), state, '')).toEqual({
-      memberId: 'member-2______________',
-    });
   });
 
   it('builds the input for the chosen variant and omits empty optionals', () => {
