@@ -5,11 +5,10 @@ import { entryFromDraft, expenseLabel, memberName, moneyLabel, previewAllocation
 import { ErrorMessage, Field, FooterButton, HeaderAction, ScreenHeader, colors, s } from './components';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { between, useCompactProgress } from './pageScroll';
-import { Reveal } from './Reveal';
+import { MemberChoice } from './MemberChoice';
 import { morph } from './ScreenMorph';
 import { whenLabel } from './relativeTime';
-import { participantMarkers } from '../model/memberPresentation';
-import { MemberIcon, type MemberListApp } from './MemberList';
+import type { MemberListApp } from './MemberList';
 import { YouBadge } from './YouBadge';
 import { fontFamily, monoFamily, splitHues, withTransition } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
@@ -297,31 +296,6 @@ export function ExpenseControls() {
  * whole width, tinted when it is you, with their presence, the name and
  * “you”, and a check at the end on the one who paid.
  */
-function PayerRow(props: { app: ExpenseEditorApp; memberId: string; you: boolean; selected: boolean; onPress: () => void }) {
-  const state = props.app.snapshot();
-  const replica = state.group;
-  const name = memberName(replica?.projected_snapshot, props.memberId);
-  const participants = replica ? participantMarkers(replica, props.memberId, props.app.client.presence(replica.group_id), state.online && state.reachable) : [];
-
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityLabel={`${name}${props.you ? ' (you)' : ''}`}
-      accessibilityState={{ checked: props.selected }}
-      aria-checked={props.selected}
-      onPress={props.onPress}
-      style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 52, marginHorizontal: -24, paddingHorizontal: 24, borderBottomWidth: 1, borderColor: colors.rule }, props.you && { backgroundColor: colors.youRow }, pressed && s.rowPressed]}
-    >
-      <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-        <MemberIcon participants={participants} size={6} />
-        <Text numberOfLines={1} style={[s.name, { flexShrink: 1 }]}>{name}</Text>
-        {props.you ? <YouBadge /> : null}
-      </View>
-      {props.selected ? <Text aria-hidden style={{ fontFamily, fontSize: 16, fontWeight: '600', color: colors.ink }}>✓</Text> : null}
-    </Pressable>
-  );
-}
-
 /** Who paid, opening the names in place, then how it is split. */
 export function ExpenseEditor(props: ExpenseEditorProps) {
   const replica = props.app.snapshot().group;
@@ -329,8 +303,6 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
   const you = preferredMember(snapshot, replica?.session?.identity.id)?.id;
   const draft = useUiState().expense;
   const edit = useActionCall();
-  const [choosingPayer, setChoosingPayer] = useState(false);
-  const payerToggle = useRef<View>(null);
   const allMembers = snapshot?.members ?? [];
 
   // Active members, and anyone the expense already names who was removed since.
@@ -358,39 +330,15 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
 
   return (
     <View style={{ paddingBottom: 24 }}>
-      <Pressable
-        ref={payerToggle}
-        accessibilityRole="button"
-        accessibilityLabel={`Paid by ${draft.paidBy ? `${memberName(snapshot, draft.paidBy)}${draft.paidBy === you ? ' (you)' : ''}` : 'nobody yet'}. Change payer`}
-        accessibilityState={{ expanded: choosingPayer }}
-        onPress={() => setChoosingPayer(!choosingPayer)}
-        style={({ pressed }) => [{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderColor: colors.rule }, pressed && s.pressed]}
-      >
-        <Text style={{ fontFamily, fontSize: 16, color: colors.muted }}>Paid by</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={{ fontFamily, fontSize: 16, fontWeight: '600', color: colors.ink }}>{draft.paidBy ? memberName(snapshot, draft.paidBy) : 'Choose'}</Text>
-          <Text style={withTransition({ fontSize: 14, color: colors.ink, transform: [{ rotate: choosingPayer ? '180deg' : '0deg' }] }, 'transform', 350)}>▾</Text>
-        </View>
-      </Pressable>
-      <Reveal toggle={payerToggle} onOutsidePress={() => setChoosingPayer(false)}>
-        {choosingPayer ? (
-          <View role="radiogroup" aria-label="Paid by">
-            {payers.map((member) => (
-              <PayerRow
-                key={member.id}
-                app={props.app}
-                memberId={member.id}
-                you={member.id === you}
-                selected={draft.paidBy === member.id}
-                onPress={() => {
-                  setChoosingPayer(false);
-                  void edit.call('chooseExpensePayer', { memberId: member.id });
-                }}
-              />
-            ))}
-          </View>
-        ) : null}
-      </Reveal>
+      <MemberChoice
+        app={props.app}
+        label="Paid by"
+        change="Change payer"
+        value={draft.paidBy ?? ''}
+        members={payers.map((member) => member.id)}
+        you={you}
+        onChange={(memberId) => { void edit.call('chooseExpensePayer', { memberId }); }}
+      />
       <ErrorMessage message={edit.error} />
 
       <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingTop: 16, paddingBottom: 4 }}>

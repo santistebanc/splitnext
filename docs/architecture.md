@@ -174,11 +174,10 @@ key.
   that involve one person. The plan has the fewest payments: it splits nonzero
   balances into as many zero-sum sets as possible with a bitmask search for up
   to 14 people, and settles each set greedily; larger groups use the greedy
-  plan alone. The repayment form lists earlier repayments. Its member
-  dropdowns form the heading “[person] paid [person]”, with Cancel, Record or
-  Save, and Delete for an existing repayment in the header. The web uses native
-  select controls; member changes dispatch the same prepareRepayment action as
-  other callers.
+  plan alone. The repayment form lists earlier repayments. Its Paid by
+  and Paid to rows use the expense editor's member choice, with Cancel, Record
+  or Save, and Delete for an existing repayment in the header. Member changes
+  dispatch the same prepareRepayment action as other callers.
   The expense editor has Cancel and Delete in the header and Save in the
   shared pinned footer, a large amount and description that shrink as the
   split scrolls, Paid by opening the names in
