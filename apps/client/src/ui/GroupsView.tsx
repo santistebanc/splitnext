@@ -4,12 +4,13 @@ import { parseInviteLink, type ClientGroupSummary } from '@splitnext/client';
 import type { AppController } from '../model/controller';
 import { BrandMark } from './BrandMark';
 import { CreateGroup, useSubmitCreate } from './CreateGroup';
+import { FooterDrawer } from './FooterDrawer';
 import { between, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
 import { morph } from './ScreenMorph';
 import { BalanceBar, Button, ErrorMessage, FooterButton, Notice, ScreenHeader, balanceColor, s, signedFigure, titleStyle } from './components';
 import { ArrowRightIcon, TrashIcon } from './icons';
-import { colors, fontFamily, monoFamily, withTransition } from './theme';
+import { colors, fontFamily, monoFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 export type GroupsViewApp = Pick<AppController, 'snapshot'>;
@@ -31,57 +32,39 @@ export function GroupsFooter(props: { app: GroupsViewApp }) {
   }
 
   return (
-    // A drawer: while New group is open, the list above dims and a tap on it
-    // closes the drawer. The footer's own top padding belongs to the drawer.
-    <View style={{ gap: 10, marginTop: -10, paddingTop: 10, zIndex: 10 }}>
-      <Pressable
-        accessibilityLabel="Close New group"
-        aria-hidden={!creating}
-        tabIndex={-1}
-        disabled={!creating || busy}
-        onPress={close}
-        style={withTransition({ position: 'absolute', bottom: '100%', top: -4000, left: -4000, right: -4000, backgroundColor: 'rgba(20, 20, 19, 0.32)', opacity: creating ? 1 : 0, pointerEvents: creating ? 'auto' : 'none' }, 'opacity', creating ? 340 : 260)}
-      />
-      <Reveal upward>
-        {creating ? (
-          <View role="region" aria-label="New group" style={{ paddingBottom: 8 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text accessibilityRole="header" style={[s.headerActionText, { fontSize: 17, fontWeight: '700' }]}>New group</Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Back to groups"
-                disabled={busy}
-                onPress={close}
-                style={({ pressed }) => [{ height: 44, justifyContent: 'center', paddingLeft: 16 }, pressed && s.pressed]}
-              >
-                <Text style={[s.headerActionText, { color: colors.muted }]}>Cancel</Text>
-              </Pressable>
-            </View>
-            <CreateGroup app={props.app} />
-            {!online || !reachable ? (
-              <Notice
-                tone="danger"
-                role="alert"
-                message={`Can’t create the group. ${!online ? 'You’re offline.' : 'Splitnext can’t be reached.'} Nothing you typed was lost.`}
-              />
-            ) : null}
-            <ErrorMessage message={create.error} />
-          </View>
-        ) : null}
-      </Reveal>
-      <ErrorMessage message={action.error} />
-      <FooterButton
-        morph="newgroup"
-        busy={creating && busy}
-        disabled={creating ? !create.can('submitCreateGroup') : !action.can('showCreateGroup')}
-        onPress={() => {
-          if (creating) submit();
-          else void action.call('showCreateGroup', {});
-        }}
-      >
-        {creating ? (busy ? 'Creating…' : create.error ? 'Try again' : 'Create group') : 'New group'}
-      </FooterButton>
-    </View>
+    <FooterDrawer
+      open={creating}
+      title="New group"
+      closeLabel="Back to groups"
+      busy={busy}
+      onClose={close}
+      footer={(
+        <>
+          <ErrorMessage message={action.error} />
+          <FooterButton
+            morph="newgroup"
+            busy={creating && busy}
+            disabled={creating ? !create.can('submitCreateGroup') : !action.can('showCreateGroup')}
+            onPress={() => {
+              if (creating) submit();
+              else void action.call('showCreateGroup', {});
+            }}
+          >
+            {creating ? (busy ? 'Creating…' : create.error ? 'Try again' : 'Create group') : 'New group'}
+          </FooterButton>
+        </>
+      )}
+    >
+      <CreateGroup app={props.app} />
+      {!online || !reachable ? (
+        <Notice
+          tone="danger"
+          role="alert"
+          message={`Can’t create the group. ${!online ? 'You’re offline.' : 'Splitnext can’t be reached.'} Nothing you typed was lost.`}
+        />
+      ) : null}
+      <ErrorMessage message={create.error} />
+    </FooterDrawer>
   );
 }
 

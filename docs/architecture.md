@@ -110,8 +110,9 @@ converges. Each screen measures its own full header height.
 The group screen's content is `GroupView`: everyone's balance as ruled rows
 with a `BalanceBar` scaled to the largest balance, ending with `AddPersonRow`,
 then `ExpenseList` with expenses and repayments newest first. Tapping a person
-opens `person` (`PersonDetails`), whose Settle up opens `settle`, shown as `SettleUpDrawer` over
-`PersonDetails` for that person, so the view keeps its history entry. Record there records a planned payment through
+opens `person` (`PersonDetails`), whose Settle up opens `settle`, shown as a `FooterDrawer` rising
+from `SettleUpFooter` over `PersonDetails`, so the view keeps its history
+entry. `FooterDrawer` is the same drawer New group opens from its button. Record there records a planned payment through
 `recordSettlement` at once; Record a different payment opens the repayment
 form (`settlements`) filled in with the first planned payment.
 `AppUiState.trail` records the views a page was opened from, so Back, Cancel,

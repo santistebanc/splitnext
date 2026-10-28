@@ -14,8 +14,8 @@ import { ScreenMorph } from './ScreenMorph';
 import { ExpenseControls, ExpenseEditor, ExpenseEditorFooter, ExpenseEditorHeader } from './ExpenseEditor';
 import { AddExpenseButton } from './ExpenseList';
 import { ActivityHeader, ActivityPanel } from './ActivityPanel';
-import { PersonDetails, PersonFooter, PersonHeader } from './PersonView';
-import { SettleUpDrawer } from './SettleUp';
+import { PersonDetails, PersonHeader } from './PersonView';
+import { SettleUpFooter } from './SettleUp';
 import { GroupSettings, GroupSettingsFooter } from './GroupSettings';
 import { GroupsFooter, GroupsHeader, GroupsView } from './GroupsView';
 import { Toast } from './Toast';
@@ -213,7 +213,7 @@ function ReadyApp(props: AppProps) {
   );
 
   useActivityFeed(app, state);
-  // Settle up is a drawer over the screen it was opened from.
+  // Settle up is a drawer rising from the person's footer.
   const settling = ui.view === 'settle';
   const view = settling ? (ui.person ? 'person' : 'home') : ui.view;
   const initialLink = ui.join.link;
@@ -357,7 +357,7 @@ function ReadyApp(props: AppProps) {
       case 'settlements':
         return { header: <SettlementsHeader />, body: <SettlementsPanel app={app} replica={group} />, footer: <SettlementsFooter /> };
       case 'person':
-        return { header: <PersonHeader app={app} />, body: <PersonDetails app={app} />, footer: <PersonFooter app={app} /> };
+        return { header: <PersonHeader app={app} />, body: <PersonDetails app={app} />, footer: <SettleUpFooter app={app} /> };
       case 'activity':
         return { header: <ActivityHeader app={app} />, body: <ActivityPanel replica={group} /> };
       case 'settings':
@@ -409,7 +409,6 @@ function ReadyApp(props: AppProps) {
                   </ViewTransition>
                 </Frame>
                 </ScreenMorph>
-                {settling && open ? <SettleUpDrawer app={app} /> : null}
                 <RemovalToast />
                 <Devtools />
               </View>
