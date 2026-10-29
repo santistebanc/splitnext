@@ -75,6 +75,7 @@ try {
       (await op("inspectDevice", { device: "a" })).storage.namespace,
     );
   }
+
   await op("deviceNetwork", { device: "b", online: true });
   await op("wait", { until: "convergence", devices: ["a", "b"] });
   assert.equal(

@@ -3,6 +3,8 @@ import { MemoryNavigation } from '../apps/client/src/lab/memoryNavigation';
 import type { LabEvent } from '../apps/client/src/lab/events';
 import { VirtualNetwork, type ServerGate } from '../apps/client/src/lab/virtualNetwork';
 
+type SocketEvent = { code: number; reason: string };
+
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 function network(gate: ServerGate = { open: true, epoch: 0 }) {
@@ -69,11 +71,11 @@ describe('a virtual device network', () => {
   it('closes realtime connections once when blocked and when the network changes', async () => {
     class FakeSocket {
       static last: FakeSocket;
-      listeners = new Map<string, (event: unknown) => void>();
+      listeners = new Map<string, (event: SocketEvent) => void>();
       constructor() {
         FakeSocket.last = this;
       }
-      addEventListener(name: string, listener: (event: unknown) => void) {
+      addEventListener(name: string, listener: (event: SocketEvent) => void) {
         this.listeners.set(name, listener);
       }
       close() {
