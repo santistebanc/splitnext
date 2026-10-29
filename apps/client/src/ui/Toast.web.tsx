@@ -1,13 +1,16 @@
 import { createPortal } from 'react-dom';
 import { colors, fontFamily, radius, shadows } from './theme';
+import { useScreenHost } from './screenHost';
 import type { ToastProps } from './Toast';
 
 /** A dark message at the foot of the screen, with one action such as Undo, above dialogs. */
 export function Toast(props: ToastProps) {
+  const host = useScreenHost();
+
   return props.message ? createPortal(
     <div role="status" aria-live="polite" style={{
-      position: 'fixed', left: '50%', bottom: 28, transform: 'translateX(-50%)', zIndex: 10002,
-      width: 'min(528px, calc(100vw - 32px))', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 12,
+      position: host ? 'absolute' : 'fixed', left: '50%', bottom: 28, transform: 'translateX(-50%)', zIndex: 10002,
+      width: host ? 'calc(100% - 32px)' : 'min(528px, calc(100vw - 32px))', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 12,
       padding: '8px 8px 8px 16px', borderRadius: radius.card, background: colors.night, color: colors.surface,
       boxShadow: shadows.floating, fontFamily: `"${fontFamily}", system-ui, sans-serif`,
     }}>
@@ -17,6 +20,6 @@ export function Toast(props: ToastProps) {
         color: colors.nightOwed, font: `600 14px "${fontFamily}", system-ui, sans-serif`,
       }}>{props.action.text}</button> : null}
     </div>,
-    document.body,
+    host?.overlay ?? document.body,
   ) : null;
 }

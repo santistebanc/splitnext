@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Platform, ScrollView, Text, View } from 'react-native';
-import { usePathname } from 'expo-router';
 import { s } from './components';
 import { ScrollToTopContext } from './pageScroll';
+import { useHomepage } from './screenHost';
 import {
   useCompactLayout,
   useTouchInput,
@@ -67,7 +67,7 @@ export function Frame(props: FrameProps) {
   const previousDepth = useRef(depth);
   const headerSize = useRef({ key: scrollKey, full: 0, current: 0 });
   const scrolled = useRef(0);
-  const homepage = usePathname() === '/';
+  const homepage = useHomepage();
   const floating = Boolean(props.footer && props.floatingFooter);
 
   // Scrolls caused by switching screens, including late ones from the screen

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { Keyboard, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { clientErrorKind, parseInviteLink } from '@splitnext/client';
 import { AppController } from '../model/controller';
 import { createDispatcher } from '../model/actions';
@@ -25,6 +25,7 @@ import { type NavigationEntry } from './navigation';
 import { Devtools } from '../devtools/Devtools';
 import { ActionsProvider, useActionCall, useActions, useUiState } from './useActionCall';
 import { useCompactLayout } from './useVisibleViewport';
+import { useDismissKeyboard } from './screenHost';
 import { BackButton, Button, ErrorMessage, ScreenHeader, errorMessage, s, useAction } from './components';
 import type { AppSubstrate } from './substrate';
 import type { UiState } from '../model/uiState';
@@ -176,6 +177,7 @@ function RemovalToast() {
 function ReadyApp(props: AppProps) {
   const substrate = props.substrate;
   const mobile = useCompactLayout();
+  const dismissKeyboard = useDismissKeyboard();
   const app = props.controller;
   const state = useSyncExternalStore(app.subscribe, app.snapshot, app.snapshot);
 
@@ -230,7 +232,7 @@ function ReadyApp(props: AppProps) {
     substrate.navigation.write(historyEntry(ui, app.snapshot().group?.group_id ?? null), 'replace');
 
     const back = (next: NavigationEntry) => {
-      Keyboard.dismiss();
+      dismissKeyboard();
 
 
 
@@ -249,7 +251,7 @@ function ReadyApp(props: AppProps) {
   }, [app]);
 
   useEffect(() => {
-    Keyboard.dismiss();
+    dismissKeyboard();
 
     const entry = historyEntry(ui, app.snapshot().group?.group_id ?? null);
 

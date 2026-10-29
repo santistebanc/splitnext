@@ -1,5 +1,6 @@
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Button, s } from './components';
+import { ScreenModal } from './ScreenModal';
 
 type ConfirmSheetProps = {
   title: string;
@@ -31,7 +32,7 @@ export function Confirmation(props: Omit<ConfirmSheetProps, 'title'>) {
 /** A bottom sheet asking the person to approve an action that returned a confirmation. */
 export function ConfirmSheet(props: ConfirmSheetProps) {
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={props.onCancel}>
+    <ScreenModal onRequestClose={props.onCancel}>
       <View style={s.overlay}>
         <Pressable accessibilityLabel="Cancel" style={s.backdrop} onPress={props.onCancel} />
         <View role="dialog" aria-modal aria-label={props.title} style={s.sheet}>
@@ -41,6 +42,6 @@ export function ConfirmSheet(props: ConfirmSheetProps) {
           <Confirmation {...props} />
         </View>
       </View>
-    </Modal>
+    </ScreenModal>
   );
 }

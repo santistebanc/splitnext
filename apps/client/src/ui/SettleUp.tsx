@@ -1,10 +1,11 @@
-import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { memberSettlements, preferredMember, settlementSuggestions } from '@splitnext/client';
 import { memberName, moneyLabel } from '../model/expenses';
 import { ErrorMessage, FooterButton, colors, s } from './components';
 import { FooterDrawer } from './FooterDrawer';
 import type { MemberListApp } from './MemberList';
 import { fontFamily, monoFamily } from './theme';
+import { useScreenSize } from './screenHost';
 import { useActionCall, useUiState } from './useActionCall';
 
 /** The payments to settle: one person's, or the whole group's plan. */
@@ -29,7 +30,7 @@ export function SettleUpFooter(props: { app: MemberListApp }) {
   const open = ui.view === 'settle';
   const settle = useActionCall();
   const back = useActionCall();
-  const { height } = useWindowDimensions();
+  const { height } = useScreenSize();
   const plan = plannedPayments(props.app, person);
 
   // Settled people have nothing to open, unless it is already open and showing ✓ Settled.

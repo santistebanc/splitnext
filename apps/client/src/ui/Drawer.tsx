@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { s } from './components';
 import { CloseIcon } from './icons';
+import { ScreenModal } from './ScreenModal';
 import { useCompactLayout } from './useVisibleViewport';
 
 /**
@@ -15,7 +16,7 @@ export function Drawer(props: { title: string; onClose: () => void; full?: boole
   const compact = useCompactLayout();
 
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={props.onClose}>
+    <ScreenModal onRequestClose={props.onClose}>
       <View style={[s.overlay, !compact && s.overlayCentered]}>
         <Pressable accessibilityLabel="Close" style={s.backdrop} onPress={props.onClose} />
         <View role="dialog" aria-modal aria-label={props.title} style={[s.sheet, s.drawer, !compact && s.popup, props.full && { height: compact ? s.drawer.maxHeight : s.popup.maxHeight }]}>
@@ -33,6 +34,6 @@ export function Drawer(props: { title: string; onClose: () => void; full?: boole
           {props.children}
         </View>
       </View>
-    </Modal>
+    </ScreenModal>
   );
 }

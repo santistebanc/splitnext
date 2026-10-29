@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Pressable, Text, View, type TextInput } from 'react-native';
 import type { AppController } from '../model/controller';
 import { Field, s } from './components';
+import { useFieldFocused } from './screenHost';
 import { colors, fontFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
@@ -31,12 +32,13 @@ export function CreateGroup(props: CreateGroupProps) {
   const actions = useActions();
   const personInput = useRef<TextInput>(null);
   const nameInput = useRef<TextInput>(null);
+  const fieldFocused = useFieldFocused();
 
   // Opening dismisses the keyboard after this form's effects, so focus waits a
   // frame, and tries again once the drawer has opened in case it was taken.
   useEffect(() => {
     const focus = () => {
-      if (!(document.activeElement instanceof HTMLInputElement)) nameInput.current?.focus();
+      if (!fieldFocused()) nameInput.current?.focus();
     };
 
     const frame = requestAnimationFrame(focus);

@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import type { AppController } from '../model/controller';
 import { ErrorMessage, Field, FooterButton, Notice, RadioRow, Tag, errorMessage, s, titleStyle } from './components';
+import { useScreenHost } from './screenHost';
 import { colors, fontFamily } from './theme';
 import { useActions, useUiState, type useActionCall } from './useActionCall';
 
@@ -79,6 +80,7 @@ export function JoinGroupFooter(props: JoinGroupProps) {
 function LinkEntry(props: JoinGroupProps) {
   const ui = useUiState();
   const actions = useActions();
+  const host = useScreenHost();
   const link = ui.join.link;
   const error = props.previewing.error;
   const broken = brokenLink.includes(error ?? '');
@@ -112,7 +114,7 @@ function LinkEntry(props: JoinGroupProps) {
             onPress={() => {
               // Clipboard reads need permission and a secure page; a refusal leaves the field as it is.
               void Promise.resolve()
-                .then(() => navigator.clipboard.readText())
+                .then(() => (host ? host.readClipboard() : navigator.clipboard.readText()))
                 .then(setLink, () => undefined);
             }}
             style={({ pressed }) => [s.fieldButton, pressed && s.pressed]}
