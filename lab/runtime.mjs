@@ -29,6 +29,8 @@ export class Lab {
   sequence = 0;
   initialized = false;
   maintaining = false;
+  // Devices are reopening from the manifest, which a network switch must not rewrite.
+  reopening = false;
   requests = new Set();
   tail = Promise.resolve();
   eventTail = Promise.resolve();
@@ -829,9 +831,15 @@ export class Lab {
         }
       } finally {
         // The Worker must be started before app screens reopen.
+        this.reopening = true;
         this.maintaining = false;
-        await this.start();
-        await this.reopenDevices();
+
+        try {
+          await this.start();
+          await this.reopenDevices();
+        } finally {
+          this.reopening = false;
+        }
 
         if (!running) await this.stop();
       }
@@ -941,7 +949,7 @@ export class Lab {
 
     const task = (concurrent ? Promise.resolve() : this.tail).then(async () => {
       if (
-        this.maintaining &&
+        (this.maintaining || this.reopening) &&
         ["deviceNetwork", "serverNetwork"].includes(operation)
       )
         throw new Error("maintenance_in_progress");
