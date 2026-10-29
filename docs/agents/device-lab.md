@@ -108,12 +108,12 @@ under a namespace no new device reuses.
 
 | | `inpage` | `browser` |
 | --- | --- | --- |
-| What it is | The ordinary app screen, controller and dispatcher, mounted in a box inside one shared lab document. Many devices cost one browser, not one each. | A real persistent headless Chromium profile loading `/app` from the Worker. |
+| What it is | The ordinary app screen, controller and dispatcher, each in its own same-origin frame of the lab page, with its own window and viewport. Many devices cost one browser, not one each. | A real persistent headless Chromium profile loading `/app` from the Worker. |
 | Use it for | Sync, convergence, offline/online, outage and lost-response experiments; many devices; watching several screens live in the lab page; fast agent loops. | Anything about the browser itself: real service worker, URL and history, native scrolling and focus, `navigator` capabilities, IndexedDB eviction or corruption, startup of the real bundle. |
 | Persistence | A per-device namespaced IndexedDB database and `localStorage` keys in the host browser's profile. Survives reloads of the screen and of the host page. | Its own profile directory, copied by checkpoints. |
 | Network | A virtual adapter for fetch and realtime sockets in front of the same real Worker. Offline informs the app; latency, server gate and dropped in-flight responses match browser devices. | Playwright routing and `setOffline`. |
-| Not simulated | Soft keyboard and `visualViewport`, a separate pointer type, reduced motion and viewport per device, multi-window effects, service worker, real URL/history (navigation is in memory), browser clipboard and share (replaced by inspectable fakes). | Nothing beyond headless Chromium. |
-| Cost | One shared browser for any number of devices. | One Chromium context per device. |
+| Not simulated | Soft keyboard, a separate pointer type, reduced motion per device, multi-window effects, service worker, real URL/history (navigation is in memory), browser clipboard and share (replaced by inspectable fakes). The page has one keyboard focus, and a hang in one frame stalls the others. | Nothing beyond headless Chromium. |
+| Cost | One shared browser for any number of devices; each frame loads the app script (cached) into its own realm. | One Chromium context per device. |
 
 A bug that reproduces on an `inpage` device is a bug in the shared app. A bug that
 needs the browser to reproduce, or that must be shown on a real browser before it is
@@ -145,6 +145,11 @@ waits for every device to come back from what it persisted. The frontend's kind
 picker chooses the kind for **Add device**; CLI callers pass `"kind":"inpage"`.
 A lab page that is not the host mirrors an in-page device's screenshot the same as
 a browser device, through the supervisor's headless host.
+
+The host serves each in-page device's frame at `/host/frame?device=ID` and
+forwards the supervisor's calls to the device running in it. A frame whose panel
+is closed keeps running out of sight; moving a panel moves its frame without
+reloading it. See [ADR 0029](../adr/0029-give-each-in-page-lab-device-its-own-frame.md).
 
 ## Devices and experiments
 

@@ -163,7 +163,7 @@ against a dedicated local Worker. Start it with `npm run lab -- --env=NAME` afte
 building the frontend; `npm run lab:cli -- discover` publishes the common operation
 schemas used by its frontend and AI callers. It retains isolated profiles, steps
 and diagnostics under `.wrangler/lab/`. Devices are real headless browsers (`kind: "browser"`)
-or many live app instances in one document (`kind: "inpage"`); the guide says when
+or many live app instances, each in its own frame of the lab page (`kind: "inpage"`); the guide says when
 to use each. See the guide before controlling stores.
 
 | What | Where | What it guarantees |

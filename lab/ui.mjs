@@ -382,15 +382,19 @@ function devicePanel(id, mode) {
       else if (zoom === fitZoom) apply();
     }).observe(viewport);
 
-  // The device itself lives here, in this document; nothing is mirrored.
+  // The device itself lives here, in its own frame; nothing is mirrored.
   const slot = mode === "slot" ? element("div", "slot") : null;
 
   if (slot) {
     frame.append(slot);
     // HTMLElement.slot is a string attribute: this only marks the panel as live.
     panel.slot = id;
-    labHost?.attach(id, slot);
   }
+
+  // Once the panel is in the page, so the frame moves in without reloading.
+  panel.attachScreen = () => {
+    if (slot) labHost?.attach(id, slot);
+  };
 
   // Like Chrome's responsive mode, the right and bottom edges and their corner resize the screen.
   // The stage is centred horizontally, so a width change moves the right edge by half of it.
@@ -613,6 +617,7 @@ function panelFor(id, mode) {
     else $("workspace").append(p);
 
     p.mountSplit();
+    p.attachScreen();
     syncEmpty();
   }
 

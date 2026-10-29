@@ -38,6 +38,8 @@ export type FakeCapabilities = {
   homepageOpens: number;
 };
 
+export const emptyCapabilities = (): FakeCapabilities => ({ clipboardText: '', copied: [], shared: [], notifications: [], homepageOpens: 0 });
+
 const seenSchema = z.record(z.string(), z.number().int());
 
 /**
@@ -47,7 +49,7 @@ const seenSchema = z.record(z.string(), z.number().int());
 export class LabDevice {
   readonly network: VirtualNetwork;
   readonly navigation: MemoryNavigation;
-  readonly capabilities: FakeCapabilities = { clipboardText: '', copied: [], shared: [], notifications: [], homepageOpens: 0 };
+  readonly capabilities: FakeCapabilities;
   /** Changes whenever the screen must start again, as a page reload does. */
   generation = 0;
   bridge: LabBridge | null = null;
@@ -58,7 +60,10 @@ export class LabDevice {
   constructor(
     public config: DeviceConfig,
     private readonly environment: HostEnvironment,
+    // The host keeps the fakes, so what a device copied or shared outlives its frame.
+    capabilities: FakeCapabilities = emptyCapabilities(),
   ) {
+    this.capabilities = capabilities;
     this.network = new VirtualNetwork(config.id, environment.server, environment.report);
     this.network.online = config.online;
     this.network.latencyMs = config.latencyMs;

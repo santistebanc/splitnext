@@ -29,15 +29,37 @@ async function readBody(req, limit = 10_000_000) {
   return body;
 }
 
-/** The built app's client script, which also carries the many-device host. */
-async function hostEntry() {
-  const directory = path.join(appAssets, "_expo", "static", "js", "web");
-  const files = await readdir(directory).catch(() => []);
+const entryDirectory = path.join(appAssets, "_expo", "static", "js", "web");
+
+/** The built app's client script, which also carries the many-device host and a device's frame. */
+async function entryName() {
+  const files = await readdir(entryDirectory).catch(() => []);
   const entry = files.find((name) => /^index-.*\.js$/.test(name));
 
   if (!entry) throw new Error("frontend_not_built: run npm run frontend:build");
 
-  return readFile(path.join(directory, entry));
+  return entry;
+}
+
+async function hostEntry() {
+  return readFile(path.join(entryDirectory, await entryName()));
+}
+
+/**
+ * The page inside each in-page device's frame. It loads the app's script by its
+ * content-hashed name, so every frame after the first reads it from the cache.
+ */
+async function framePage() {
+  const script = `/_expo/static/js/web/${await entryName()}`;
+
+  return `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Lab device</title></head>
+<body>
+<script>window.splitnextLabFramePage = true;</script>
+<script src="${script}"></script>
+</body>
+</html>`;
 }
 
 /** Built app files the host page needs, never anything outside them. */
@@ -148,6 +170,14 @@ export function createLabServer(lab, port) {
         return;
       }
 
+      if (req.method === "GET" && url.pathname === "/host/frame") {
+        res.setHeader("content-type", "text/html; charset=utf-8");
+        res.setHeader("cache-control", "no-store");
+        res.end(await framePage());
+
+        return;
+      }
+
       if (req.method === "GET" && url.pathname === "/host/entry.js") {
         res.setHeader("content-type", types[".js"]);
         res.setHeader("cache-control", "no-store");
@@ -161,6 +191,9 @@ export function createLabServer(lab, port) {
 
         if (asset) {
           res.setHeader("content-type", asset.type);
+
+          // Built scripts are named by their content, so they never change.
+          if (url.pathname.startsWith("/_expo/static/")) res.setHeader("cache-control", "public, max-age=31536000, immutable");
           res.end(asset.content);
 
           return;

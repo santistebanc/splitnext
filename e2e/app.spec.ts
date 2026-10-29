@@ -21,7 +21,7 @@ test('device lab runs the same acceptance scenario with in-page devices in a hea
   expect(result.stdout).toContain('Lab acceptance (inpage) passed');
 });
 
-test('device lab frontend shows in-page devices live in its own page, each contained in its box', async ({ page, request }) => {
+test('device lab frontend shows in-page devices live in its own page, each in its own frame', async ({ page, request }) => {
   test.setTimeout(120_000);
   const base = 'http://127.0.0.1:8846';
   const child = spawn(process.execPath, ['lab/server.mjs', `--env=inpage-${Date.now()}`, '--port=8846', '--workerPort=8847'], { windowsHide: true, stdio: 'ignore' });
@@ -34,65 +34,74 @@ test('device lab frontend shows in-page devices live in its own page, each conta
     await page.goto(base);
     await expect(page.locator('#hosting')).toContainText('Hosting in-page devices in this page');
     await page.getByRole('button', { name: 'Add device', exact: true }).click();
-    await expect(page.locator('.device .slot [data-lab-device]')).toHaveCount(1);
+    await expect(page.locator('.device .slot iframe[data-lab-device]')).toHaveCount(1);
     await page.getByRole('button', { name: 'Add device', exact: true }).click();
-    await expect(page.locator('.device .slot [data-lab-device]')).toHaveCount(2);
+    await expect(page.locator('.device .slot iframe[data-lab-device]')).toHaveCount(2);
 
-    const first = page.locator('[data-lab-device]').first();
-    const second = page.locator('[data-lab-device]').last();
+    const ids = await page.locator('.device .slot iframe[data-lab-device]').evaluateAll((frames) => frames.map((frame) => frame.getAttribute('data-lab-device') ?? ''));
+    const [id = '', otherId = ''] = ids;
 
-    await first.getByRole('button', { name: 'New group' }).click();
-    await expect(first.getByRole('button', { name: 'Back to groups' })).toBeVisible();
-    await expect(second.getByRole('button', { name: 'Back to groups' })).toHaveCount(0);
-    await expect(second.getByRole('button', { name: 'New group' })).toBeVisible();
-    await expect(page.locator('.device').first().locator('pre')).toContainText('"view": "create"');
-    await expect(page.locator('.device').last().locator('pre')).not.toContainText('"view": "create"');
-
-    await page.locator('.device').first().getByRole('button', { name: 'Offline', exact: true }).click();
-    await expect(page.locator('.device').first().locator('pre')).toContainText('"online": false');
-    await expect(page.locator('.device').last().locator('pre')).toContainText('"online": true');
-    const original = page.locator('.device').first();
-    const id = await original.getAttribute('data-device');
+    // Playwright places clicks inside a frame under CSS zoom wrongly; a person's clicks land.
+    for (const each of ids) await page.getByLabel(`Zoom for ${each}`).selectOption('1');
     const device = page.locator(`.device[data-device="${id}"]`);
-    const live = device.locator('[data-lab-device]');
+    const other = page.locator(`.device[data-device="${otherId}"]`);
+    const live = page.frameLocator(`iframe[data-lab-device="${id}"]`);
+    const otherLive = page.frameLocator(`iframe[data-lab-device="${otherId}"]`);
+
+    await live.getByRole('button', { name: 'New group' }).click();
+    await expect(live.getByRole('button', { name: 'Back to groups' })).toBeVisible();
+    await expect(otherLive.getByRole('button', { name: 'Back to groups' })).toHaveCount(0);
+    await expect(otherLive.getByRole('button', { name: 'New group' })).toBeVisible();
+    await expect(device.locator('.insp-overview')).toContainText('View: create');
+    await expect(other.locator('.insp-overview')).toContainText('View: home');
+
+    // Each frame is the device's own window, at its screen size.
+    await expect.poll(() => page.locator(`iframe[data-lab-device="${id}"]`).evaluate((frame: HTMLIFrameElement) => frame.contentWindow?.innerWidth)).toBe(390);
+
+    await device.getByRole('button', { name: `Network for ${id}` }).click();
+    await expect(device.locator('.insp-overview')).toContainText('Offline');
+    await expect(other.locator('.insp-overview')).toContainText('Online');
     const groupName = live.getByRole('textbox', { name: 'Group name', exact: true });
 
     await groupName.fill('Draft before reorder');
     await groupName.evaluate((node) => { node.setAttribute('data-reorder-probe', 'same-node'); });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
     const inspector = device.getByRole('separator', { name: 'Resize inspector', exact: true });
+    // The inspector sits right of its separator, so ArrowLeft widens it.
+    const inspectorWidth = String(Number(await inspector.getAttribute('aria-valuenow')) + 10);
 
     await inspector.press('ArrowLeft');
-    await expect(inspector).toHaveAttribute('aria-valuenow', '310');
+    await expect(inspector).toHaveAttribute('aria-valuenow', inspectorWidth);
     await inspector.press('Enter');
     await expect(device.getByRole('button', { name: /Toggle inspector/ })).toHaveAttribute('aria-expanded', 'false');
     await device.getByRole('button', { name: /Toggle inspector/ }).click();
     // Dragging the device's tab onto the right edge of the other device's section puts it there.
-    const tab = page.getByRole('tab', { name: new RegExp(id!) });
+    const tab = page.getByRole('tab', { name: new RegExp(id) });
     const from = await tab.boundingBox();
-    const other = await page.locator('.device').last().boundingBox();
+    const target = await other.boundingBox();
 
     await page.mouse.move(from!.x + 20, from!.y + from!.height / 2);
     await page.mouse.down();
-    await page.mouse.move(other!.x + other!.width - 10, other!.y + other!.height / 2, { steps: 10 });
+    await page.mouse.move(target!.x + target!.width - 10, target!.y + target!.height / 2, { steps: 10 });
     await page.mouse.up();
-    await expect(page.locator('.device').last()).toHaveAttribute('data-device', id!);
+    await expect(page.locator('.device').last()).toHaveAttribute('data-device', id);
     const divider = page.getByRole('separator', { name: 'Resize sections' }).last();
     const width = Number(await divider.getAttribute('aria-valuenow'));
 
     await divider.press('ArrowRight');
     await expect(divider).toHaveAttribute('aria-valuenow', String(width + 16));
+    // Moving the panel moved its frame without reloading it.
     await expect(groupName).toHaveAttribute('data-reorder-probe', 'same-node');
     await expect(groupName).toHaveValue('Draft before reorder');
     await groupName.fill('Draft after reorder');
     await live.getByRole('textbox', { name: 'Your name in this group', exact: true }).fill('Ana');
-    await device.getByRole('button', { name: 'Online', exact: true }).click();
+    await device.getByRole('button', { name: `Network for ${id}` }).click();
     await live.getByRole('button', { name: 'Create group', exact: true }).click();
     await expect(live.getByRole('button', { name: 'Invite people' })).toBeVisible();
     await page.reload();
-    await expect(page.locator('.device').last()).toHaveAttribute('data-device', id!);
+    await expect(page.locator('.device').last()).toHaveAttribute('data-device', id);
     await expect(page.getByRole('separator', { name: 'Resize sections' }).last()).toHaveAttribute('aria-valuenow', String(width + 16));
-    await expect(device.getByRole('separator', { name: 'Resize inspector', exact: true })).toHaveAttribute('aria-valuenow', '310');
+    await expect(device.getByRole('separator', { name: 'Resize inspector', exact: true })).toHaveAttribute('aria-valuenow', inspectorWidth);
     await expect(live.getByRole('button', { name: 'Invite people' })).toBeVisible();
     await device.getByRole('button', { name: /Toggle inspector/ }).click();
     await page.reload();
@@ -121,23 +130,32 @@ test('device lab frontend controls its actual installations and shows inspector 
     await page.getByRole('button', { name: 'Add device', exact: true }).click();
     await expect(page.locator('.device')).toHaveCount(1);
     await expect.poll(() => page.locator('.screen').evaluate((image) => image instanceof HTMLImageElement && image.naturalWidth === 390)).toBe(true);
-    // New group sits at (192, 744) on the 390 × 780 screen; Preview draws it at half size.
-    await page.locator('.screen').click({ position: { x: 96, y: 372 } });
-    await expect(page.locator('.device pre')).toContainText('"view": "create"');
+    // New group sits at (192, 744) on the 390 × 780 screen, drawn here at whatever zoom fits.
+    const drawn = await page.locator('.screen').boundingBox();
+
+    await page.locator('.screen').click({ position: { x: (drawn!.width * 192) / 390, y: (drawn!.height * 744) / 780 } });
+    await expect(page.locator('.device .insp-overview')).toContainText('View: create');
     await page.locator('.screen').press('L');
-    await expect(page.locator('.device pre')).toContainText('"name": "L"');
-    await page.getByRole('button', { name: 'Offline', exact: true }).click();
-    await expect(page.locator('.device pre')).toContainText('"online": false');
-    await page.getByRole('button', { name: 'Reload', exact: true }).click();
-    await expect(page.getByRole('alert')).toBeEmpty();
-    await page.getByRole('button', { name: 'Online', exact: true }).click();
-    await expect(page.locator('.device pre')).toContainText('"online": true');
+    await expect(page.locator('.device .insp-overview')).toContainText('name: "L"');
+    const overview = page.locator('.device .insp-overview');
+    const network = page.getByRole('button', { name: /^Network for / });
+
+    await network.click();
+    await expect(overview).toContainText('Offline');
+    await page.getByRole('button', { name: /^Reload for / }).click();
+    await expect(page.locator('#server-panel [role=alert]')).toBeHidden();
+    await network.click();
+    await expect(overview).toContainText('Online');
     await page.getByRole('button', { name: 'Unavailable', exact: true }).click();
     await expect(page.locator('#status')).toContainText('Unavailable');
-    await expect(page.locator('.device pre')).toContainText('"online": true');
+    await expect(overview).toContainText('Online');
     await page.getByRole('button', { name: 'Available', exact: true }).click();
     await expect(page.locator('#status')).toContainText('Available');
-    await expect(page.locator('#schema')).toContainText('properties');
+    // Every lab operation is a form; device fields offer the devices that exist.
+    await page.getByRole('tab', { name: 'Operations' }).click();
+    await page.getByPlaceholder('Find an operation…').fill('reload device');
+    await page.locator('#operations-panel .insp-action-head', { hasText: /^Reload device/ }).click();
+    await expect(page.locator('#operations-panel .insp-action[data-open] select').first()).toContainText('(browser)');
     await page.screenshot({ path: '.wrangler/lab-ui.png', fullPage: true });
   } finally {
     await call('shutdown').catch(() => undefined);
