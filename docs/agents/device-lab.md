@@ -42,7 +42,8 @@ to the side. The screen section has a device toolbar (Dimensions, width × heigh
 Zoom, Online/Offline, Rotate, Reload, Inspector). Beside it is an inspector that
 motion-panels resizes and collapses (Enter on its separator, or the Inspector
 button); the screen section narrows down to a minimum width first, then the
-inspector does. A device's tab shows a × on hover (or Delete on the focused tab)
+inspector does. Both always fill the panel, which never scrolls as a whole: the
+screen's viewport and the inspector each scroll on their own. A device's tab shows a × on hover (or Delete on the focused tab)
 that removes the device after confirming. Hidden tabs and collapsed content stay
 mounted.
 
