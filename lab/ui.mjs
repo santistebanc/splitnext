@@ -355,6 +355,9 @@ function devicePanel(id, mode) {
   const apply = () => {
     const drawn = scale();
     viewport.toggleAttribute("data-full", fullPanel);
+    // A screen sized to its room never needs scrolling. Its room shrinks a frame before the
+    // screen follows, and scrollbars shown for that frame would shrink the room again.
+    viewport.toggleAttribute("data-fits", fullPanel || zoom === fitZoom);
     stage.style.width = current.width * drawn + border() + "px";
     stage.style.height = current.height * drawn + border() + "px";
 

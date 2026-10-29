@@ -38,7 +38,11 @@ test('device lab frontend shows in-page devices live in its own page, each in it
     await page.getByRole('button', { name: 'Add device', exact: true }).click();
     await expect(page.locator('.device .slot iframe[data-lab-device]')).toHaveCount(2);
 
-    const ids = await page.locator('.device .slot iframe[data-lab-device]').evaluateAll((frames) => frames.map((frame) => frame.getAttribute('data-lab-device') ?? ''));
+    // A panel docking beside another can move its frame out of its slot for a moment.
+    const slotted = () => page.locator('.device .slot iframe[data-lab-device]').evaluateAll((frames) => frames.map((frame) => frame.getAttribute('data-lab-device') ?? ''));
+
+    await expect.poll(async () => (await slotted()).length).toBe(2);
+    const ids = await slotted();
     const [id = '', otherId = ''] = ids;
 
     // Playwright places clicks inside a frame under CSS zoom wrongly; a person's clicks land.
