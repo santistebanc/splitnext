@@ -2,7 +2,7 @@
   "name": "@splitnext/app",
   "version": "0.1.0",
   "private": true,
-  "main": "expo-router/entry",
+  "main": "index.ts",
   "scripts": {
     "dev": "EXPO_PUBLIC_API_URL=http://localhost:8787 expo start --web --port 8081",
     "build": "expo export --platform web",

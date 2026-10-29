@@ -44,7 +44,7 @@ export function ScreenModal(props: { onRequestClose: () => void; children: React
         if (event.key === 'Escape') close.current();
         else if (event.key === 'Tab') trapTab(event, event.currentTarget);
       }}
-      style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', outline: 'none' }}
+      style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', outline: 'none', pointerEvents: 'auto' }}
     >
       {props.children}
     </div>,

@@ -9,7 +9,7 @@ export function Toast(props: ToastProps) {
 
   return props.message ? createPortal(
     <div role="status" aria-live="polite" style={{
-      position: host ? 'absolute' : 'fixed', left: '50%', bottom: 28, transform: 'translateX(-50%)', zIndex: 10002,
+      position: host ? 'absolute' : 'fixed', left: '50%', bottom: 28, transform: 'translateX(-50%)', zIndex: 10002, pointerEvents: 'auto',
       width: host ? 'calc(100% - 32px)' : 'min(528px, calc(100vw - 32px))', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 12,
       padding: '8px 8px 8px 16px', borderRadius: radius.card, background: colors.night, color: colors.surface,
       boxShadow: shadows.floating, fontFamily: `"${fontFamily}", system-ui, sans-serif`,
