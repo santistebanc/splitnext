@@ -166,8 +166,7 @@ function movePanel(panel, to) {
 export function addReorderHandle(panel, heading, id) {
   const handle = document.createElement("button");
 
-  handle.className = "reorder-handle";
-  handle.textContent = "Move";
+  handle.className = "reorder-handle ghost";
   handle.setAttribute("aria-label", `Move ${id}`);
   handle.title = "Drag to reorder, or use Left and Right arrow keys.";
   heading.prepend(handle);
