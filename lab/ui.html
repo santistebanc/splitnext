@@ -37,13 +37,13 @@
       font-size: 24px;
       margin: 0;
     }
-    h2 {
+    h2:not(.slot *) {
       font-size: 20px;
     }
-    button,
-    input,
-    select,
-    textarea {
+    button:not(.slot *),
+    input:not(.slot *),
+    select:not(.slot *),
+    textarea:not(.slot *) {
       font: inherit;
       border: 1px solid #4a4944;
       background: transparent;
@@ -51,33 +51,33 @@
       padding: 8px;
       border-radius: 0;
     }
-    button {
+    button:not(.slot *) {
       cursor: pointer;
     }
-    button:hover {
+    button:not(.slot *):hover {
       background: #26251f;
     }
-    button:focus-visible,
-    input:focus-visible {
+    button:not(.slot *):focus-visible,
+    input:not(.slot *):focus-visible {
       outline: 2px solid #e8e6df;
     }
-    pre {
+    pre:not(.slot *) {
       font: 12px/1.5 monospace;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
       max-height: 440px;
       overflow: auto;
     }
-    textarea {
+    textarea:not(.slot *) {
       width: 100%;
       min-height: 120px;
       font: 13px monospace;
     }
-    details {
+    details:not(.slot *) {
       border-top: 1px solid #3a3935;
       padding: 12px 0;
     }
-    summary {
+    summary:not(.slot *) {
       cursor: pointer;
     }
     #error {
@@ -90,7 +90,7 @@
       flex-wrap: wrap;
       margin: 12px 0;
     }
-    label {
+    label:not(.slot *) {
       display: block;
       margin: 12px 0 4px;
     }
@@ -172,6 +172,9 @@
       min-width: 0;
     }
     .device .slot {
+      /* In-page devices are the light app in this document: lab styles stop at the slot. */
+      color-scheme: light;
+      color: #191917;
       width: 392px;
       height: 782px;
       border: 1px solid #4a4944;
@@ -222,11 +225,11 @@
     .split-separator:hover::after, .split-separator[data-resizing]::after {
       background: #e8e6df;
     }
-    :focus-visible {
+    :focus-visible:not(.slot *) {
       outline: 2px solid #e8e6df;
       outline-offset: 2px;
     }
-    [aria-expanded="false"] {
+    [aria-expanded="false"]:not(.slot *) {
       color: #a8a69d;
     }
     .reorder-handle {

@@ -11,18 +11,35 @@ let hostRole = "unknown",
 
 let schemas = {};
 
+// A browser opens about six connections to the supervisor. When this page hosts
+// in-page devices, an operation can wait on this page's own host results, so
+// operations never take the connections those results, events and screens need.
+const apiLimit = 3;
+
+let apiActive = 0;
+
+const apiWaiting = [];
+
 async function api(operation, input = {}) {
-  const response = await fetch("/api", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ operation, input }),
-  });
+  if (apiActive >= apiLimit) await new Promise((resolve) => apiWaiting.push(resolve));
+  apiActive++;
 
-  const data = await response.json();
+  try {
+    const response = await fetch("/api", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operation, input }),
+    });
 
-  if (!response.ok) throw Error(JSON.stringify(data));
+    const data = await response.json();
 
-  return data;
+    if (!response.ok) throw Error(JSON.stringify(data));
+
+    return data;
+  } finally {
+    apiActive--;
+    apiWaiting.shift()?.();
+  }
 }
 
 function showError(e) {
@@ -35,7 +52,7 @@ async function run(operation, input) {
   try {
     const result = await api(operation, input);
     $("result").textContent = JSON.stringify(result, null, 2);
-    await refresh();
+    await requestRefresh();
 
     return result;
   } catch (e) {
@@ -124,17 +141,36 @@ function devicePanel(id, mode) {
     });
   };
 
+  // A scroll gesture fires dozens of wheel events: they are summed and sent one at a time.
+  let wheel = null,
+    wheeling = false;
+
+  const sendWheel = async () => {
+    wheeling = true;
+
+    while (wheel) {
+      const input = wheel;
+      wheel = null;
+      await run("input", input);
+    }
+
+    wheeling = false;
+  };
+
   image.onwheel = (e) => {
     e.preventDefault();
     const r = image.getBoundingClientRect();
-    void run("input", {
+
+    wheel = {
       device: id,
       kind: "wheel",
-      x: e.deltaX,
-      y: e.deltaY,
+      x: (wheel?.x ?? 0) + e.deltaX,
+      y: (wheel?.y ?? 0) + e.deltaY,
       pointerX: (e.clientX - r.left) * 390 / r.width,
       pointerY: (e.clientY - r.top) * 780 / r.height,
-    });
+    };
+
+    if (!wheeling) void sendWheel();
   };
 
   if (mode !== "slot") screen.append(image);
@@ -243,6 +279,31 @@ function showHosting(status) {
     : status?.host?.connected
       ? `In-page devices are hosted ${status.host.headless ? "headlessly" : "in another page"}; screens here are mirrored.`
       : "";
+}
+
+let refreshing = null,
+  refreshAgain = false;
+
+/** One refresh at a time; requests during it are folded into one more. */
+function requestRefresh() {
+  if (refreshing) {
+    refreshAgain = true;
+
+    return refreshing;
+  }
+
+  refreshing = (async () => {
+    try {
+      do {
+        refreshAgain = false;
+        await refresh();
+      } while (refreshAgain);
+    } finally {
+      refreshing = null;
+    }
+  })();
+
+  return refreshing;
 }
 
 async function refresh() {
@@ -452,7 +513,7 @@ if (!headless) {
   }
 
   setInterval(() => {
-    void refresh().catch(showError);
+    void requestRefresh().catch(showError);
   }, 4000);
   // Screen mirroring observes the same pages; it never creates another app instance.
   setInterval(() => {
