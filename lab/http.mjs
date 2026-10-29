@@ -1,3 +1,4 @@
+import { build } from "esbuild";
 import { createServer } from "node:http";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -57,6 +58,17 @@ export function createLabServer(lab, port) {
 
   lab.labOrigin = origin;
 
+  let uiBundle;
+
+  const bundle = () => uiBundle ??= build({
+    entryPoints: [path.join(repo, "lab/ui.mjs")],
+    bundle: true,
+    write: false,
+    format: "esm",
+    platform: "browser",
+    define: { "process.env.NODE_ENV": '"production"' },
+  }).then((result) => result.outputFiles[0].contents);
+
   const server = createServer(async (req, res) => {
     try {
       if (
@@ -87,6 +99,14 @@ export function createLabServer(lab, port) {
       if (req.method === "GET" && url.pathname === "/") {
         res.setHeader("content-type", "text/html; charset=utf-8");
         res.end(await readFile(new URL("./ui.html", import.meta.url)));
+
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/ui.js") {
+        res.setHeader("content-type", types[".js"]);
+        res.setHeader("cache-control", "no-store");
+        res.end(await bundle());
 
         return;
       }

@@ -51,6 +51,50 @@ test('device lab frontend shows in-page devices live in its own page, each conta
     await page.locator('.device').first().getByRole('button', { name: 'Offline', exact: true }).click();
     await expect(page.locator('.device').first().locator('pre')).toContainText('"online": false');
     await expect(page.locator('.device').last().locator('pre')).toContainText('"online": true');
+    const original = page.locator('.device').first();
+    const id = await original.getAttribute('data-device');
+    const device = page.locator(`.device[data-device="${id}"]`);
+    const live = device.locator('[data-lab-device]');
+    const groupName = live.getByRole('textbox', { name: 'Group name', exact: true });
+
+    await groupName.fill('Draft before reorder');
+    await groupName.evaluate((node) => { node.setAttribute('data-reorder-probe', 'same-node'); });
+    const sidebar = page.getByRole('separator', { name: 'Resize server panel', exact: true });
+
+    await sidebar.press('ArrowRight');
+    await expect(sidebar).toHaveAttribute('aria-valuenow', '330');
+    await sidebar.dblclick();
+    await expect(sidebar).toHaveAttribute('aria-valuenow', '320');
+    await sidebar.press('Enter');
+    await expect(page.locator('#server-toggle')).toHaveAttribute('aria-expanded', 'false');
+    await page.locator('#server-toggle').click();
+    await sidebar.press('ArrowRight');
+    const inspector = device.getByRole('separator', { name: 'Resize inspector', exact: true });
+
+    await inspector.press('ArrowLeft');
+    await expect(inspector).toHaveAttribute('aria-valuenow', '310');
+    await inspector.press('Enter');
+    await expect(device.getByRole('button', { name: /Toggle inspector/ })).toHaveAttribute('aria-expanded', 'false');
+    await device.getByRole('button', { name: /Toggle inspector/ }).click();
+    const handle = device.getByRole('button', { name: `Move ${id}`, exact: true });
+
+    await handle.press('ArrowRight');
+    await expect(page.locator('.device').last()).toHaveAttribute('data-device', id!);
+    await expect(groupName).toHaveAttribute('data-reorder-probe', 'same-node');
+    await expect(groupName).toHaveValue('Draft before reorder');
+    await groupName.fill('Draft after reorder');
+    await live.getByRole('textbox', { name: 'Your name in this group', exact: true }).fill('Ana');
+    await device.getByRole('button', { name: 'Online', exact: true }).click();
+    await live.getByRole('button', { name: 'Create group', exact: true }).click();
+    await expect(live.getByRole('button', { name: 'Invite people' })).toBeVisible();
+    await page.reload();
+    await expect(page.locator('.device').last()).toHaveAttribute('data-device', id!);
+    await expect(page.getByRole('separator', { name: 'Resize server panel', exact: true })).toHaveAttribute('aria-valuenow', '330');
+    await expect(device.getByRole('separator', { name: 'Resize inspector', exact: true })).toHaveAttribute('aria-valuenow', '310');
+    await expect(live.getByRole('button', { name: 'Invite people' })).toBeVisible();
+    await device.getByRole('button', { name: /Toggle inspector/ }).click();
+    await page.reload();
+    await expect(device.getByRole('button', { name: /Toggle inspector/ })).toHaveAttribute('aria-expanded', 'false');
     await page.screenshot({ path: '.wrangler/lab-inpage-ui.png', fullPage: true });
   } finally {
     await call('shutdown').catch(() => undefined);
