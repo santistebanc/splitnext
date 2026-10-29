@@ -509,15 +509,17 @@ function dataPane() {
   };
 
   const node = (key, value, path, open) => {
-    if (!isContainer(value)) {
+    const entries = isContainer(value) ? Object.entries(value) : null;
+
+    // Leaves, and empty lists and objects, which have nothing to open.
+    if (!entries?.length) {
       const row = h("div", "insp-leaf");
-      row.dataset.kind = leafKind(value);
-      row.append(h("span", "insp-key", key), leaf(value));
+      row.dataset.kind = entries ? "empty" : leafKind(value);
+      row.append(h("span", "insp-key", key), entries ? muted(Array.isArray(value) ? "[]" : "{}") : leaf(value));
 
       return row;
     }
 
-    const entries = Object.entries(value);
     const details = h("details");
     const summary = h("summary");
     summary.append(h("span", "insp-key", key), muted(Array.isArray(value) ? `[${entries.length}]` : `{${entries.length}}`));
