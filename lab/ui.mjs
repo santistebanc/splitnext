@@ -1,4 +1,6 @@
 import { createInspector } from "./inspector.mjs";
+import { createServerUi } from "./server-ui.mjs";
+import { readableError } from "./views.mjs";
 import { mountSplit, zoomOf, saveZoom, fullPanelOf, saveFullPanel, createDock, section, split } from "./panels.mjs";
 
 const $ = (id) => document.getElementById(id);
@@ -46,8 +48,6 @@ if (dock) {
 
 let hostRole = "unknown",
   labHost = null;
-
-let schemas = {};
 
 // Fit (the default) draws each screen as large as its viewport allows, up to 100%.
 const fitZoom = 0;
@@ -107,24 +107,38 @@ async function api(operation, input = {}) {
   }
 }
 
-function showError(e) {
-  $("error").textContent = String(e);
-}
-
-async function run(operation, input) {
-  $("error").textContent = "";
-
+async function download() {
   try {
-    const result = await api(operation, input);
-    $("result").textContent = JSON.stringify(result, null, 2);
-    $("result-box").hidden = false;
-    await requestRefresh();
-
-    return result;
+    const data = await api("export");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+    a.download = "splitnext-experiment.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
   } catch (e) {
     showError(e);
   }
 }
+
+const serverUi = createServerUi({
+  api,
+  async perform(operation, input) {
+    try {
+      return await api(operation, input);
+    } finally {
+      void requestRefresh().catch(showError);
+    }
+  },
+  download,
+  sections: { server: $("server-panel"), timeline: $("timeline-panel"), state: $("state-panel"), operations: $("operations-panel") },
+});
+
+function showError(e) {
+  serverUi.showError(readableError(e));
+}
+
+// Device controls report through the Server panel.
+const run = (operation, input) => serverUi.run(operation, input);
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -532,24 +546,10 @@ function devicePanel(id, mode) {
   panel.dataset.device = id;
   panel.image = mode === "slot" ? null : image;
 
-  // Inline actions report their own outcome; the Server panel's last result shows it too.
+  // Inline actions report their own outcome next to their form.
   const perform = async (name, input) => {
     try {
-      const result = await api("action", { device: id, name, input });
-      $("result").textContent = JSON.stringify(result, null, 2);
-      $("result-box").hidden = false;
-
-      return result;
-    } catch (e) {
-      let message = e.message;
-
-      try {
-        message = JSON.parse(message).error ?? message;
-      } catch {
-        // Not a JSON error body: keep the message as it is.
-      }
-
-      throw Error(message);
+      return await api("action", { device: id, name, input });
     } finally {
       void requestRefresh().catch(showError);
     }
@@ -700,26 +700,11 @@ async function refresh() {
     p.updateState(await api("inspectDevice", { device: id }));
   }
 
-  $("timeline").textContent = JSON.stringify(
-    (await api("timeline")).slice(-20).map((e) => ({
-      sequence: e.sequence,
-      at: e.at,
-      kind: e.kind,
-      operation: e.detail.operation,
-      device: e.detail.device,
-    })),
-    null,
-    2,
-  );
-  $("server").textContent = JSON.stringify(
-    await api("inspectServer"),
-    null,
-    2,
-  );
+  if (!headless) await serverUi.update(status);
 }
 
 $("add").onclick = () =>
-  run("addDevice", {
+  serverUi.run("addDevice", {
     device: `device-${Date.now()}`,
     kind: $("kind").value,
   });
@@ -727,51 +712,6 @@ $("add").onclick = () =>
 $("refresh").onclick = () => refresh().catch(showError);
 
 $("reset-layout").onclick = () => dock?.reset();
-
-document
-  .querySelectorAll("[data-op]")
-  .forEach(
-    (b) =>
-      (b.onclick = () => run(b.dataset.op, JSON.parse(b.dataset.input))),
-  );
-
-$("operation").onchange = () => {
-  $("schema").textContent = JSON.stringify(
-    schemas[$("operation").value],
-    null,
-    2,
-  );
-};
-
-$("run").onclick = () => {
-  try {
-    void run($("operation").value, JSON.parse($("input").value));
-  } catch (e) {
-    showError(e);
-  }
-};
-
-$("export").onclick = async () => {
-  try {
-    const data = await api("export");
-    $("timeline").textContent = JSON.stringify(
-      data.timeline.slice(-40),
-      null,
-      2,
-    );
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(
-      new Blob([JSON.stringify(data, null, 2)], {
-        type: "application/json",
-      }),
-    );
-    a.download = "splitnext-experiment.json";
-    a.click();
-    URL.revokeObjectURL(a.href);
-  } catch (e) {
-    showError(e);
-  }
-};
 
 // Reports and results reach the supervisor in the order they happened.
 let sent = Promise.resolve();
@@ -872,16 +812,7 @@ channel.addEventListener("reload", () => location.reload());
 
 if (!headless) {
   try {
-    schemas = (await api("discover")).operations;
-
-    for (const name of Object.keys(schemas)) {
-      const option = document.createElement("option");
-      option.textContent = name;
-      $("operation").append(option);
-    }
-
-    $("operation").value = "status";
-    $("operation").onchange();
+    serverUi.setSchemas((await api("discover")).operations);
     await refresh();
   } catch (e) {
     showError(e);
