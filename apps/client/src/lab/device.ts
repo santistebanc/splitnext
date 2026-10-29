@@ -242,4 +242,18 @@ export class LabDevice {
     this.network.online = false;
     this.network.reset();
   }
+
+  /** Deletes everything this device persisted, once its screen is gone. */
+  async forget(): Promise<void> {
+    const prefix = this.key('');
+
+    for (const name of Object.keys(localStorage)) if (name.startsWith(prefix)) localStorage.removeItem(name);
+
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(this.databaseName);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
 }

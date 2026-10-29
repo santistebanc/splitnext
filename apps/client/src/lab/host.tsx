@@ -29,6 +29,7 @@ const commandSchema = z.discriminatedUnion('method', [
   z.object({ method: z.literal('foreground') }),
   z.object({ method: z.literal('navigate'), direction: z.enum(['back', 'forward']) }),
   z.object({ method: z.literal('capabilities'), clipboard: z.boolean().optional(), share: z.boolean().optional(), clipboardText: z.string().optional() }),
+  z.object({ method: z.literal('remove') }),
 ]);
 
 const notReady = { status: 'failed', error: 'app_not_ready', issues: ['This installation needs to finish startup before app actions are available.'] };
@@ -167,6 +168,15 @@ export class LabHost {
         device.setCapabilities(command);
 
         return { capabilities: device.capabilities };
+      case 'remove':
+        device.dispose();
+        this.devices.delete(id);
+        this.touch();
+        // The screen unmounts before its data goes, so nothing writes it back.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await device.forget();
+
+        return { removed: true };
       case 'ready':
         // Started, or stopped at the screen that offers to try starting again.
         return { ready: Boolean(device.bridge) || this.offersRetry(id) };

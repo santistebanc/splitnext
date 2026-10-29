@@ -310,7 +310,13 @@ function openDatabase(name: string): Promise<IDBDatabase> {
       }
     };
 
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      // Deleting the database, as the lab does for a removed device, waits for this connection.
+      request.result.onversionchange = () => request.result.close();
+
+      resolve(request.result);
+    };
+
     request.onerror = () => reject(request.error);
     request.onblocked = () => reject(new Error('indexeddb_upgrade_blocked'));
   });

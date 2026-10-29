@@ -647,6 +647,34 @@ export class Lab {
 
     return { device: id, kind: "inpage" };
   }
+  /**
+   * Closes a device and deletes what it persisted. A browser device's profile
+   * goes with it. An in-page device's data is deleted by its host; without a
+   * connected host it stays behind in that profile under a namespace no new
+   * device reuses.
+   */
+  async removeDevice(id) {
+    const d = this.device(id);
+    let storage = "deleted";
+
+    if (d.kind === "browser") {
+      await this.closeSockets(d);
+      await d.page.goto("about:blank").catch(() => {});
+      await d.context.close();
+      this.devices.delete(id);
+      await rm(path.join(this.data, "devices", id), { recursive: true, force: true });
+    } else {
+      if (this.host?.ready) await this.rawHostCall(this.host, { type: "device", device: id, command: { method: "remove" } });
+      else storage = "left_in_host_profile";
+      this.devices.delete(id);
+      await this.syncHost().catch(() => {});
+    }
+
+    await this.save();
+    await this.event("device.removed", { device: id, kind: d.kind, storage });
+
+    return { device: id, removed: true, storage };
+  }
   deviceConfigs() {
     const environment = path.basename(this.root);
 
@@ -980,6 +1008,8 @@ export class Lab {
         };
       case "addDevice":
         return this.addDevice({ id: input.device, kind: input.kind });
+      case "removeDevice":
+        return this.removeDevice(input.device);
       case "inspectDevice":
         return this.inspectDevice(input.device);
       case "reloadDevice": {

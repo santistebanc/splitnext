@@ -213,6 +213,12 @@ test("in-page devices are driven through their host and namespaced by environmen
     await assert.rejects(lab.execute("input", { device: "a", kind: "click" }), /input_needs_headless_host/);
     await assert.rejects(lab.execute("checkpoint", { name: "tab" }), /checkpoint_needs_headless_host/);
 
+    assert.equal((await lab.execute("removeDevice", { device: "b" })).storage, "deleted");
+    assert.deepEqual(page.calls.filter((call) => call.type === "device").at(-1), { type: "device", device: "b", command: { method: "remove" } });
+    assert.deepEqual((await lab.execute("status", {})).devices, ["a"]);
+    assert.deepEqual((await lab.manifest()).devices.map((device) => device.id), ["a"]);
+    await assert.rejects(lab.execute("inspectDevice", { device: "b" }), /unknown_device/);
+
     await lab.execute("serverNetwork", { available: false });
     assert.deepEqual(page.calls.at(-1), { type: "gate", open: false, epoch: lab.epoch });
     page.res.end();

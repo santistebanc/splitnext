@@ -15,6 +15,7 @@ export const operations = {
     device: id,
     kind: z.enum(["browser", "inpage"]).default("browser"),
   }),
+  removeDevice: z.object(device),
   inspectDevice: z.object(device),
   reloadDevice: z.object(device),
   deviceNetwork: z.object({
