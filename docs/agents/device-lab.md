@@ -47,6 +47,16 @@ screen's viewport and the inspector each scroll on their own. A device's tab sho
 that removes the device after confirming. Hidden tabs and collapsed content stay
 mounted.
 
+The inspector (`lab/inspector.mjs`) has three tabs, all fed by `inspectDevice`:
+Overview summarises status, the open group (members, outbox, notices, latest
+expenses), groups, filled drafts, recent activity and network events. Actions
+lists the app actions by group with a search and a Show unavailable toggle (an
+unavailable action says why); opening one shows a form built from its input
+schema, where `choices` become dropdowns from `inputOptions`, lists and objects
+are typed as JSON, and Run reports the outcome inline. Data is a collapsible tree
+of the whole inspection with a key and value filter and Copy JSON. Open forms,
+typed values and expanded nodes survive the periodic refresh.
+
 Each device has a screen size and the page draws it at a zoom. The size is the
 device's own viewport (default 390 × 780): set it with `deviceScreen` (`width`
 240–1600, `height` 320–1600), pick a Dimensions preset, type it, rotate it, or drag
@@ -66,8 +76,8 @@ sizes and zooms are saved in this browser's localStorage, separate from the lab
 environment and its checkpoints. The headless host page shows only devices, each
 whole, for the supervisor to screenshot and click.
 
-The supervisor bundles the plain DOM entry in `lab/ui.mjs` and its motion-panels
-core adapter in `lab/panels.mjs` with esbuild on the first `/ui.js` request,
+The supervisor bundles the plain DOM entry in `lab/ui.mjs`, its motion-panels
+core adapter in `lab/panels.mjs` and `lab/inspector.mjs` with esbuild on the first `/ui.js` request,
 then caches it and rebuilds when any bundled lab source file changes, so edits to
 `lab/ui.html` and these modules show on reload without a restart. No package
 directories are served; app assets retain their existing loading paths. There is no separate lab build command.
