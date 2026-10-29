@@ -937,16 +937,32 @@
       letter-spacing: 0;
       text-transform: none;
       color: var(--text);
-      list-style-position: outside;
+      display: flex;
+      list-style: none;
+    }
+    .insp-tree summary::-webkit-details-marker {
+      display: none;
+    }
+    /* The triangle takes the first 14px of a row, inside the pane; leaf keys start after it. */
+    .insp-tree summary::before {
+      content: "▸";
+      flex: none;
+      width: 14px;
+      color: var(--muted);
+    }
+    .insp-tree details[open] > summary::before {
+      content: "▾";
+    }
+    .insp-tree summary:hover::before {
+      color: var(--text);
     }
     .insp-children {
-      margin-inline-start: 6px;
-      padding-inline-start: 10px;
+      margin-inline-start: 5px;
+      padding-inline-start: 8px;
       border-inline-start: 1px solid var(--border);
     }
     .insp-leaf {
       display: flex;
-      gap: 6px;
       padding-inline-start: 14px;
     }
     .insp-key {
