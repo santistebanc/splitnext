@@ -188,6 +188,13 @@ try {
       (entry, i, entries) => !i || entry.sequence > entries[i - 1].sequence,
     ),
   );
+  // A removed device's data goes with it: the same name starts a new installation.
+  await op("removeDevice", { device: "b" });
+  assert.equal((await op("status")).devices.includes("b"), false);
+  await op("addDevice", { device: "b", kind });
+  const readded = await op("inspectDevice", { device: "b" });
+  assert.equal(readded.state.group ?? null, null);
+  assert.equal(readded.state.groups.length, 0);
   await op("freshStart");
   assert.deepEqual((await op("status")).devices, []);
   assert.deepEqual((await op("inspectServer")).groups, []);

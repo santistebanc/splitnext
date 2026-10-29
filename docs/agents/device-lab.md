@@ -27,6 +27,10 @@ to avoid shell quoting differences. The frontend calls exactly the same API:
 ## Device kinds: pick one per question
 
 `addDevice` takes a unique device name and a `kind`. The default is `browser`.
+`removeDevice` closes a device and deletes its data, so re-adding the name starts a
+new installation. An in-page device's data is deleted by its connected host;
+without one, the result reports `storage: "left_in_host_profile"` and the data stays
+under a namespace no new device reuses.
 
 | | `inpage` | `browser` |
 | --- | --- | --- |

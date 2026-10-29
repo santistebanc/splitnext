@@ -307,6 +307,12 @@
       panel.append(tools);
       if (mode === "slot") {
         // The device itself lives here, in this document; nothing is mirrored.
+      const remove = document.createElement("button");
+      remove.textContent = "Remove";
+      remove.onclick = () => {
+        if (confirm(`Remove ${id} and delete its data?`)) run("removeDevice", { device: id });
+      };
+      tools.append(remove);
         const slot = document.createElement("div");
         slot.className = "slot";
         panel.append(slot);
