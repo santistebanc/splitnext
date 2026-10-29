@@ -55,7 +55,10 @@ focused handle; Shift takes larger steps). The screen is centred, so dragging th
 right edge changes the width by twice the pointer's movement, as in Chrome. The size
 is saved with the device and applied to both kinds. Zoom only changes how large the
 page draws a screen and is saved in this browser. Fit to window (default) draws the
-whole screen in its section at up to 100% and follows the section's size. A
+whole screen in its section at up to 100% and follows the section's size. The Full
+panel dimension sizes the screen to the view beside the inspector (at 100% under
+Fit, or to fill it at a chosen zoom) and keeps following it, for example when the
+inspector collapses; it is saved in this browser and any other resize leaves it. A
 headless host always draws at 100%, so its screenshots and clicks use screen pixels.
 
 Moving a panel retains the live screen and its drafts. The layout, inspector

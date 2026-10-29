@@ -41,6 +41,16 @@ export function saveZoom(id, zoom) {
   persist();
 }
 
+/** Whether a device's screen follows the size of its panel. */
+export function fullPanelOf(id) {
+  return z.record(z.string(), z.boolean()).safeParse(layout.fullPanel).data?.[id] === true;
+}
+
+export function saveFullPanel(id, on) {
+  layout.fullPanel = { ...z.record(z.string(), z.boolean()).safeParse(layout.fullPanel).data, [id]: on };
+  persist();
+}
+
 /** Bind core motion values to DOM while keeping panel contents mounted. */
 export function mountSplit(root, sized, fill, toggle, key, defaultSize, minSize, maxSize, end = false) {
   const group = createPanelGroup();
