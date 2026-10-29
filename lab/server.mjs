@@ -69,9 +69,12 @@ let closing = false;
 async function close() {
   if (closing) return;
   closing = true;
-  server.close();
   await lab.tail;
+  // A hosting lab page answers the closing devices over new connections, so the
+  // server keeps accepting until the lab has closed.
   await lab.close();
+  server.close();
+  server.closeAllConnections();
   await lock.close();
   await rm(lockPath);
 }
