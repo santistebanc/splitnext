@@ -13,7 +13,8 @@ declare global {
   }
 }
 
-function labBridge(app: AppController, actions: Dispatcher) {
+/** Inspection and control of one running screen, the same for every lab device kind. */
+export function labBridge(app: AppController, actions: Dispatcher) {
   return {
     inspect: () => ({ state: actions.state(), actions: actions.describe(), inputOptions: Object.fromEntries(valueSources.map((source) => [source, actions.inputOptions(source)])), diagnostics: actions.diagnostics.snapshot() }),
     dispatch: (name: string, input: JsonValue, confirmed = false) => actions.dispatchJson(name, input, { confirmed, origin: 'lab' }),
@@ -24,24 +25,31 @@ function labBridge(app: AppController, actions: Dispatcher) {
   };
 }
 
-/** Bind automation to the dispatcher used by the screen. */
-export function attachLabBridge(app: AppController, actions: Dispatcher) {
-  if (!window.splitnextLabEnabled) return;
-  const bridge = labBridge(app, actions);
-  window.splitnextLab = bridge;
+export type LabBridge = ReturnType<typeof labBridge>;
 
-  const emit = (kind: string, detail: AppState | UiState | DispatchRecord) => {
-    void window.splitnextLabEvent?.(JSON.stringify({ kind, detail })).catch(() => undefined);
-  };
-
+/** Reports what a screen does, in the form the lab timeline records. */
+export function observeLabEvents(app: AppController, actions: Dispatcher, emit: (kind: string, detail: AppState | UiState | DispatchRecord) => void): () => void {
   const unsubscribe = [
     app.subscribe(() => emit('state', app.snapshot())),
     actions.ui.subscribe(() => emit('ui', actions.ui.snapshot())),
     actions.observe((record) => emit('action', record)),
   ];
 
+  return () => unsubscribe.forEach((stop) => stop());
+}
+
+/** Bind automation to the dispatcher used by the screen. */
+export function attachLabBridge(app: AppController, actions: Dispatcher) {
+  if (!window.splitnextLabEnabled) return;
+  const bridge = labBridge(app, actions);
+  window.splitnextLab = bridge;
+
+  const stop = observeLabEvents(app, actions, (kind, detail) => {
+    void window.splitnextLabEvent?.(JSON.stringify({ kind, detail })).catch(() => undefined);
+  });
+
   return () => {
-    unsubscribe.forEach((stop) => stop());
+    stop();
 
     if (window.splitnextLab === bridge) delete window.splitnextLab;
   };
