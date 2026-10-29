@@ -199,7 +199,8 @@ derived index inconsistent; every operation is logged. No arbitrary SQL or remot
 path/target is accepted. Take a checkpoint before exploratory edits.
 
 `checkpoint` names a coordinated copy of all server stores, browser profiles and
-the device manifest. The Worker is stopped and profiles closed before copying.
+the device manifest. The Worker is stopped and profiles closed before copying;
+network switches answer `maintenance_in_progress` until the devices have reopened.
 `restore` replaces the current environment from that checkpoint. `freshStart`
 explicitly resets all current server and device data. Timeline, steps, Worker logs
 and named checkpoints survive these operations. Snapshots contain test credentials
