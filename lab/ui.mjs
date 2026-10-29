@@ -1,4 +1,4 @@
-import { mountSplit, zoomOf, saveZoom, createDock, section, split } from "./panels.mjs";
+import { mountSplit, zoomOf, saveZoom, fullPanelOf, saveFullPanel, createDock, section, split } from "./panels.mjs";
 
 const $ = (id) => document.getElementById(id);
 
@@ -178,13 +178,15 @@ function devicePanel(id, mode) {
   let zoom = headless ? 1 : zoomOf(id, fitZoom);
   // While a handle is dragged the drawn scale holds still, so the edge follows the pointer.
   let heldScale = null;
+  // Full panel keeps the screen as large as the view beside the inspector, as that view resizes.
+  let fullPanel = !headless && fullPanelOf(id);
   const stage = element("div", "screen-stage");
   const frame = element("div", "screen-frame");
   stage.append(frame);
   viewport.append(stage);
 
   const dimensions = labelled(element("select"), "Dimensions");
-  dimensions.append(option("Responsive", "responsive"));
+  dimensions.append(option("Responsive", "responsive"), option("Full panel", "full-panel"));
 
   for (const [name] of screenPresets) dimensions.append(option(name, name));
 
@@ -217,11 +219,17 @@ function devicePanel(id, mode) {
     height: clamp(height, minScreen.height, maxScreen),
   });
 
+  // The room the viewport leaves for a drawn screen, its border included.
+  const room = () => ({
+    width: viewport.clientWidth - 2 * stageMargin - handleSize,
+    height: viewport.clientHeight - 2 * stageMargin - handleSize,
+  });
+
   // Fit draws the whole screen inside the viewport, never larger than its own pixels.
   const fitScale = () => {
-    const room = { width: viewport.clientWidth - 2 * stageMargin - handleSize, height: viewport.clientHeight - 2 * stageMargin - handleSize };
+    const { width, height } = room();
 
-    return Math.max(0.1, Math.min(1, room.width / (current.width + 2), room.height / (current.height + 2)));
+    return Math.max(0.1, Math.min(1, width / (current.width + 2), height / (current.height + 2)));
   };
 
   const scale = () => heldScale ?? (zoom === fitZoom ? fitScale() : zoom);
@@ -251,25 +259,59 @@ function devicePanel(id, mode) {
     void commit();
   };
 
+  const setFullPanel = (on) => {
+    if (fullPanel === on) return;
+    fullPanel = on;
+    saveFullPanel(id, on);
+  };
+
+  let filling = null;
+
+  // A full-panel screen is the room at the chosen zoom (100% under Fit). While the view keeps
+  // resizing, the screen follows at once and the device takes its size when the view settles.
+  const fill = (settle = 0) => {
+    const drawn = zoom === fitZoom ? 1 : zoom;
+    const next = bounded({ width: (room().width - 2) / drawn, height: (room().height - 2) / drawn });
+
+    if (next.width === current.width && next.height === current.height) return apply();
+    current = next;
+    resizing = true;
+    apply();
+    clearTimeout(filling);
+
+    filling = setTimeout(() => void commit(), settle);
+  };
+
   const setZoom = (value) => {
     zoom = value;
     saveZoom(id, value);
-    apply();
+
+    if (fullPanel) fill();
+    else apply();
   };
 
   zoomSelect.onchange = () => setZoom(Number(zoomSelect.value));
 
   dimensions.onchange = () => {
+    setFullPanel(dimensions.value === "full-panel");
+
+    if (fullPanel) return fill();
     const preset = screenPresets.find(([name]) => name === dimensions.value);
 
     if (preset) setScreen({ width: preset[1], height: preset[2] });
   };
 
-  widthInput.onchange = () => setScreen({ ...current, width: Number(widthInput.value) || current.width });
+  // Any other way of sizing the screen leaves full panel.
+  const resize = (next) => {
+    setFullPanel(false);
+    setScreen(next);
+  };
 
-  heightInput.onchange = () => setScreen({ ...current, height: Number(heightInput.value) || current.height });
+  widthInput.onchange = () => resize({ ...current, width: Number(widthInput.value) || current.width });
 
-  rotate.onclick = () => setScreen({ width: current.height, height: current.width });
+  heightInput.onchange = () => resize({ ...current, height: Number(heightInput.value) || current.height });
+
+  rotate.onclick = () => resize({ width: current.height, height: current.width });
 
   const apply = () => {
     const drawn = scale();
@@ -287,14 +329,20 @@ function devicePanel(id, mode) {
     if (document.activeElement !== heightInput) heightInput.value = String(current.height);
 
     const preset = screenPresets.find(([, width, height]) => width === current.width && height === current.height);
-    dimensions.value = preset ? preset[0] : "responsive";
+    dimensions.value = fullPanel ? "full-panel" : preset ? preset[0] : "responsive";
     fitOption.textContent = `Fit to window (${Math.round(fitScale() * 100)}%)`;
 
     if (![fitZoom, ...zoomLevels].includes(zoom)) zoomSelect.append(option(Math.round(zoom * 100) + "%", zoom));
     zoomSelect.value = String(zoom);
   };
 
-  if (!headless) new ResizeObserver(() => zoom === fitZoom && !heldScale && apply()).observe(viewport);
+  if (!headless)
+    new ResizeObserver(() => {
+      if (heldScale || !viewport.clientWidth) return;
+
+      if (fullPanel) fill(300);
+      else if (zoom === fitZoom) apply();
+    }).observe(viewport);
 
   // The device itself lives here, in this document; nothing is mirrored.
   const slot = mode === "slot" ? element("div", "slot") : null;
@@ -322,6 +370,7 @@ function devicePanel(id, mode) {
       start = { x: event.clientX, y: event.clientY, ...current };
       heldScale = scale();
       resizing = true;
+      setFullPanel(false);
       frame.dataset.resizing = "";
       grip.setPointerCapture(event.pointerId);
     };
@@ -362,6 +411,7 @@ function devicePanel(id, mode) {
 
       if (!dx && !dy) return;
       event.preventDefault();
+      setFullPanel(false);
       current = bounded({ width: current.width + dx, height: current.height + dy });
       resizing = true;
       apply();
