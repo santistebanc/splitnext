@@ -261,11 +261,12 @@ function devicePanel(id, mode) {
           height: viewport.clientHeight - 2 * stageMargin - handleSize,
         };
 
-  // Fit draws the whole screen inside the viewport, never larger than its own pixels.
+  // Fit draws the whole screen inside the viewport, never larger than its own pixels. Only the
+  // screen is zoomed, not its border, so the border comes off the room before dividing.
   const fitScale = () => {
     const { width, height } = room();
 
-    return Math.max(0.1, Math.min(1, width / (current.width + border()), height / (current.height + border())));
+    return Math.max(0.1, Math.min(1, (width - border()) / current.width, (height - border()) / current.height));
   };
 
   const scale = () => heldScale ?? (zoom === fitZoom ? fitScale() : zoom);
@@ -307,7 +308,8 @@ function devicePanel(id, mode) {
   // resizing, the screen follows at once and the device takes its size when the view settles.
   const fill = (settle = 0) => {
     const drawn = zoom === fitZoom ? 1 : zoom;
-    const next = bounded({ width: (room().width - border()) / drawn, height: (room().height - border()) / drawn });
+    // Rounded down, so the drawn screen never overflows the room by a fraction of a pixel.
+    const next = bounded({ width: Math.floor((room().width - border()) / drawn), height: Math.floor((room().height - border()) / drawn) });
 
     if (next.width === current.width && next.height === current.height) return apply();
     current = next;
