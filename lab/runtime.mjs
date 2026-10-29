@@ -995,8 +995,12 @@ export class Lab {
     switch (operation) {
       case "shutdown":
         return { closing: true };
-      case "timeline":
-        return this.lines("timeline");
+      case "timeline": {
+        const records = (await this.lines("timeline")).filter((record) => record.sequence > (input.after ?? 0));
+
+        return input.limit ? records.slice(-input.limit) : records;
+      }
+
       case "discover":
         return {
           operations: discovery(),
@@ -1021,6 +1025,7 @@ export class Lab {
             headless: Boolean(this.host?.headless),
           },
           sequence: this.sequence,
+          checkpoints: await readdir(path.join(this.root, "checkpoints")).catch(() => []),
         };
       case "addDevice":
         return this.addDevice({ id: input.device, kind: input.kind });

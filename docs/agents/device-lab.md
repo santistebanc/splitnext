@@ -59,6 +59,19 @@ are typed as JSON, and Run reports the outcome inline. Data is a collapsible tre
 of the whole inspection with a key and value filter and Copy JSON. Open forms,
 typed values and expanded nodes survive the periodic refresh.
 
+The server panels (`lab/server-ui.mjs`) share the inspector's building blocks in
+`lab/views.mjs`. Server shows status, the Process and Network switches, saved
+checkpoints with Restore and a name to save one, Fresh start, the diagnostics
+download, and the last result as a tree; a slow operation says it is running.
+Timeline is a live log, newest first, that reads only records after the last it
+saw. Each operation shows its duration or failure, filters narrow it by text, kind
+and device, Hide lab polling (on by default) drops the page's own successful polls,
+Pause holds the view, and opening an event shows its detail. Server state has
+Groups, Identities, Stores and Data tabs; Stores loads only on request because
+`inspectStores` stops the Worker briefly. Operations lists every lab operation by
+group as a form, like the inspector's Actions; device, device-list and checkpoint
+fields offer the ones that exist, and destructive operations confirm first.
+
 Each device has a screen size and the page draws it at a zoom. The size is the
 device's own viewport (default 390 × 780): set it with `deviceScreen` (`width`
 240–1600, `height` 320–1600), pick a Dimensions preset, type it, rotate it, or drag
@@ -80,7 +93,7 @@ environment and its checkpoints. The headless host page shows only devices, each
 whole, for the supervisor to screenshot and click.
 
 The supervisor bundles the plain DOM entry in `lab/ui.mjs`, its motion-panels
-core adapter in `lab/panels.mjs` and `lab/inspector.mjs` with esbuild on the first `/ui.js` request,
+core adapter in `lab/panels.mjs` and the modules they import with esbuild on the first `/ui.js` request,
 then caches it and rebuilds when any bundled lab source file changes, so edits to
 `lab/ui.html` and these modules show on reload without a restart. No package
 directories are served; app assets retain their existing loading paths. There is no separate lab build command.
@@ -177,7 +190,9 @@ outboxes. Recovery requires online, reachable devices with no sync error and emp
 outboxes. A timeout returns device/server diagnostics and records them in the
 timeline. Inspectors and connectivity controls remain usable during a wait.
 
-`timeline` reads ordered operation, request, realtime, action and state records.
+`timeline` reads ordered operation, request, realtime, action and state records;
+optional `after` (a sequence) and `limit` (the latest N) narrow it. `status` lists
+saved checkpoints.
 `export` preserves steps and diagnostics; the frontend can download them.
 `replay` executes supplied `{operation,input}` steps in order on the current
 environment. Use a named starting checkpoint for steps containing concrete group

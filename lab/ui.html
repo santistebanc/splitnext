@@ -265,21 +265,6 @@
       color: var(--muted);
       font-size: 13px;
     }
-    #error {
-      margin: 0;
-      padding: 8px 10px;
-      border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
-      border-radius: var(--radius);
-      background: color-mix(in srgb, var(--danger) 10%, transparent);
-      color: var(--danger);
-      font: 12px/1.5 var(--mono);
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-    }
-    #error:empty {
-      padding: 0;
-      border: 0;
-    }
 
     /* The page is one screen: sections share it and each panel scrolls on its own. */
     #workspace {
@@ -461,20 +446,6 @@
       background: var(--accent);
     }
 
-    /* Panels run edge to edge; their content keeps a small inset. */
-    .pad {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      padding: 12px;
-    }
-    .output > pre:not(.slot *) {
-      min-height: 100%;
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-      padding: 10px 12px;
-    }
     h2:not(.slot *) {
       margin: 0;
       font-size: 14px;
@@ -1030,6 +1001,220 @@
     .insp-leaf[data-kind="null"] .insp-value {
       color: #8fc3f2;
     }
+    /* Server panel: a column of cards. */
+    .srv-pane {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 12px;
+    }
+    .srv-switches {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .srv-inline {
+      display: flex;
+      gap: 6px;
+    }
+    .srv-inline input:not(.slot *) {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .srv-mono {
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .srv-result-title {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .insp-result {
+      max-height: 320px;
+      overflow: auto;
+    }
+    .srv-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .srv-group-title {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .srv-stores {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .srv-store,
+    .srv-store-table {
+      font-size: 13px;
+    }
+    .srv-store > summary,
+    .srv-store-table > summary {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 4px 0;
+      cursor: pointer;
+    }
+    .srv-store-table {
+      margin-inline-start: 16px;
+    }
+    .srv-table {
+      max-height: 280px;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .srv-table table {
+      border-collapse: collapse;
+      font: 12px var(--mono);
+    }
+    .srv-table th,
+    .srv-table td {
+      padding: 3px 8px;
+      border-bottom: 1px solid var(--border);
+      text-align: start;
+      white-space: nowrap;
+    }
+    .srv-table th {
+      position: sticky;
+      top: 0;
+      background: var(--raised);
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    /* Timeline: a live log, newest first, under sticky filters. */
+    .tl-tools {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      padding: 8px 12px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+    .tl-tools select:not(.slot *) {
+      width: auto;
+    }
+    .tl-count {
+      margin-inline-start: auto;
+    }
+    .tl {
+      container-type: inline-size;
+    }
+    .tl-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 12px;
+    }
+    .tl-empty {
+      padding: 16px 12px;
+    }
+    .tl-row {
+      border-bottom: 1px solid var(--border);
+    }
+    .tl-row > .insp-result {
+      padding: 4px 12px 10px;
+    }
+    button.tl-head:not(.slot *) {
+      display: grid;
+      grid-template-columns: auto auto minmax(0, 1fr) auto;
+      grid-template-areas: "time kind device status" "summary summary summary summary";
+      align-items: baseline;
+      gap: 2px 8px;
+      width: 100%;
+      min-height: 0;
+      padding: 4px 12px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--text);
+      font-size: 12px;
+      text-align: start;
+    }
+    button.tl-head:not(.slot *):hover {
+      background: var(--surface);
+    }
+    .tl-time {
+      grid-area: time;
+    }
+    .tl-kind {
+      grid-area: kind;
+    }
+    .tl-device {
+      grid-area: device;
+    }
+    .tl-summary {
+      grid-area: summary;
+    }
+    .tl-status {
+      grid-area: status;
+    }
+    /* Wide enough, each event is one line. */
+    @container (min-width: 640px) {
+      button.tl-head:not(.slot *) {
+        grid-template-columns: 84px 128px minmax(0, 160px) minmax(0, 1fr) auto;
+        grid-template-areas: "time kind device summary status";
+      }
+    }
+    .tl-time,
+    .tl-status {
+      font-family: var(--mono);
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .tl-kind {
+      justify-self: start;
+      padding: 0 6px;
+      border-radius: 4px;
+      background: var(--raised);
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    .tl-kind[data-category="operation"] {
+      color: var(--accent);
+    }
+    .tl-kind[data-category="app"] {
+      color: #b9a3f5;
+    }
+    .tl-kind[data-category="network"] {
+      color: #8fc3f2;
+    }
+    .tl-kind[data-category="device"],
+    .tl-kind[data-category="server"],
+    .tl-kind[data-category="host"] {
+      color: var(--good);
+    }
+    .tl-device,
+    .tl-summary {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .tl-device {
+      color: var(--muted);
+    }
+    .tl-row[data-outcome="failed"] .tl-status,
+    .tl-error {
+      color: var(--danger);
+    }
+    .tl-error {
+      display: block;
+      padding: 0 12px 4px;
+      font-family: var(--mono);
+    }
+    .tl-error:empty {
+      display: none;
+    }
     .split-separator {
       flex: none;
       position: relative;
@@ -1106,72 +1291,10 @@
   </header>
   <div id="layout-announcement" role="status" aria-live="polite"></div>
   <main id="workspace">
-    <section id="server-panel" class="pad" data-title="Server" aria-label="Server">
-      <p class="hint">
-        Local Worker and isolated stores. Click a mirrored screen, then type:
-        Tab, Enter, Backspace and scrolling reach that same app.
-      </p>
-      <div class="control-row">
-        <span>Network</span>
-        <div class="segmented" role="group" aria-label="Server network">
-          <button
-            data-op="serverNetwork"
-            data-input='{"available":true}'
-            data-server="available"
-            aria-pressed="false"
-          >Available</button
-          ><button
-            data-op="serverNetwork"
-            data-input='{"available":false}'
-            data-server="available"
-            aria-pressed="false"
-          >Unavailable</button>
-        </div>
-      </div>
-      <div class="control-row">
-        <span>Process</span>
-        <div class="segmented" role="group" aria-label="Server process">
-          <button
-            data-op="serverProcess"
-            data-input='{"running":true}'
-            data-server="running"
-            aria-pressed="false"
-          >Running</button
-          ><button
-            data-op="serverProcess"
-            data-input='{"running":false}'
-            data-server="running"
-            aria-pressed="false"
-          >Stopped</button>
-        </div>
-      </div>
-      <p id="error" role="alert"></p>
-      <details id="result-box" open hidden>
-        <summary>Last result</summary>
-        <pre id="result"></pre>
-      </details>
-    </section>
-    <section id="timeline-panel" class="output" data-title="Timeline" aria-label="Ordered timeline">
-      <pre id="timeline"></pre>
-    </section>
-    <section id="state-panel" class="output" data-title="Server state" aria-label="Authoritative server state">
-      <pre id="server"></pre>
-    </section>
-    <section id="operations-panel" class="pad" data-title="Operations" aria-label="Lab operations and input schemas">
-      <div>
-        <label class="label" for="operation">Lab operation</label
-        ><select id="operation"></select>
-      </div>
-      <pre id="schema"></pre>
-      <div>
-        <label class="label" for="input">Input JSON</label
-        ><textarea id="input">{}</textarea>
-      </div>
-      <div class="tools">
-        <button id="run" class="primary">Run operation</button
-        ><button id="export">Download diagnostics & steps</button>
-      </div>
-    </section>
+    <section id="server-panel" data-title="Server" aria-label="Server"></section>
+    <section id="timeline-panel" data-title="Timeline" aria-label="Ordered timeline"></section>
+    <section id="state-panel" data-title="Server state" aria-label="Authoritative server state"></section>
+    <section id="operations-panel" data-title="Operations" aria-label="Lab operations"></section>
     <section id="empty-devices" class="empty-devices" data-title="Devices">
       No devices yet. Choose a kind and add a device to begin an experiment.
     </section>

@@ -8,7 +8,11 @@ const empty = z.object({});
 
 export const operations = {
   shutdown: empty,
-  timeline: empty,
+  // Without input, every record; the lab page reads only those after the last it saw.
+  timeline: z.object({
+    after: z.number().int().min(0).optional(),
+    limit: z.number().int().min(1).max(5000).optional(),
+  }),
   status: empty,
   discover: empty,
   addDevice: z.object({
