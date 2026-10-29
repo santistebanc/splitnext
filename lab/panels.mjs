@@ -451,6 +451,25 @@ export function createDock(root, { initial, near }) {
 
     if (panel.tone) tab.dataset.tone = panel.tone;
 
+    // A closable panel shows its × on hover; Delete on the focused tab does the same.
+    if (panel.onClose) {
+      const close = document.createElement("span");
+
+      close.className = "dock-tab-close";
+      close.setAttribute("role", "button");
+      close.setAttribute("aria-label", "Close " + panel.title);
+      close.title = "Close " + panel.title;
+      close.textContent = "×";
+      close.onpointerdown = (event) => event.stopPropagation();
+
+      close.onclick = (event) => {
+        event.stopPropagation();
+        panel.onClose();
+      };
+
+      tab.append(close);
+    }
+
     let start = null;
 
     const end = (commitDrop) => {
@@ -491,6 +510,13 @@ export function createDock(root, { initial, near }) {
     };
 
     tab.onkeydown = (event) => {
+      if (event.key === "Delete" && panel.onClose) {
+        event.preventDefault();
+        panel.onClose();
+
+        return;
+      }
+
       if (event.key === "Escape" && drag) {
         event.preventDefault();
         end(false);
@@ -689,12 +715,12 @@ export function createDock(root, { initial, near }) {
 
   return {
     /** Shows a panel where the tree keeps it, or places it as `near` says. */
-    add(id, element, { title = id, tone, detail, placeholder = false } = {}) {
+    add(id, element, { title = id, tone, detail, placeholder = false, onClose } = {}) {
       element.id ||= "panel-" + id.replace(/[^\w-]/g, "-");
       element.classList.add("dock-panel");
       element.setAttribute("role", "tabpanel");
       element.setAttribute("aria-labelledby", "tab-" + element.id);
-      panels.set(id, { element, title, tone, detail, placeholder });
+      panels.set(id, { element, title, tone, detail, placeholder, onClose });
 
       if (!sectionOf(id)) {
         place(id);

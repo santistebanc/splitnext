@@ -363,6 +363,27 @@
     .dock-tab[data-dragging] {
       opacity: 0.5;
     }
+    /* The × keeps its room so the tab does not shift when it appears on hover. */
+    .dock-tab-close {
+      display: grid;
+      place-content: center;
+      width: 18px;
+      height: 18px;
+      margin-inline: 2px -6px;
+      border-radius: 4px;
+      font-size: 15px;
+      line-height: 1;
+      color: var(--muted);
+      cursor: pointer;
+      visibility: hidden;
+    }
+    .dock-tab:is(:hover, :focus-visible) .dock-tab-close {
+      visibility: visible;
+    }
+    .dock-tab-close:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
     #workspace[data-dragging],
     #workspace[data-dragging] * {
       cursor: grabbing !important;
@@ -472,22 +493,6 @@
       flex-direction: column;
       overflow: hidden;
     }
-    .device-toolbar {
-      flex: none;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 8px;
-      border-bottom: 1px solid var(--border);
-    }
-    .device-toolbar .end {
-      margin-inline-start: auto;
-    }
-    .device-toolbar select {
-      min-height: 30px;
-      padding-inline: 6px 2px;
-    }
     /* The screen keeps its width; the inspector gives way first, then the panel scrolls sideways. */
     .device-split {
       flex: 1;
@@ -495,26 +500,91 @@
       display: flex;
       overflow-x: auto;
     }
+    /* Like Chrome's device mode: a compact toolbar above a viewport that holds the screen. */
     .device-screen {
-      flex: 1 0 auto;
+      flex: 1 1 0;
+      min-width: 280px;
       display: flex;
-      overflow: auto;
-      padding: 12px;
+      flex-direction: column;
       background: var(--sunken);
     }
-    .screen-size {
-      font: 12px var(--mono);
-      color: var(--muted);
-      white-space: nowrap;
+    .device-toolbar {
+      flex: none;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
     }
-    /* Sized by the script: the device's screen times its zoom, plus the border. Margins centre it and still scroll. */
-    .screen-frame {
+    .device-toolbar :is(button, select, input):not(.slot *) {
+      min-height: 26px;
+      padding: 2px 6px;
+      font-size: 12px;
+    }
+    .device-toolbar select:not(.slot *) {
+      max-width: 150px;
+      border-color: transparent;
+      background: transparent;
+    }
+    .device-toolbar select:not(.slot *):hover {
+      background: var(--hover);
+    }
+    .device-toolbar .screen-dimension {
+      width: 58px;
+      text-align: center;
+      font-family: var(--mono);
+      background: var(--sunken);
+      appearance: textfield;
+    }
+    .device-toolbar .screen-dimension::-webkit-inner-spin-button {
+      appearance: none;
+    }
+    .device-toolbar .times {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .device-toolbar .icon {
+      min-width: 26px;
+      font-size: 15px;
+      line-height: 1;
+    }
+    .toolbar-divider {
+      align-self: stretch;
+      width: 1px;
+      margin: 3px 4px;
+      background: var(--border);
+    }
+    .toolbar-end {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-inline-start: auto;
+    }
+    .device-viewport {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: flex-start;
+      overflow: auto;
+      /* Room for the handles beyond the right and bottom edges. */
+      padding: 16px 28px 28px 16px;
+    }
+    /* Sized by the script: the device's screen times its zoom, plus the border. Auto margins centre it and still scroll. */
+    .screen-stage {
       position: relative;
       flex: none;
-      margin: auto;
+      margin-inline: auto;
+    }
+    .screen-frame {
+      width: 100%;
+      height: 100%;
       border: 1px solid var(--border-strong);
       background: var(--sunken);
       overflow: hidden;
+      box-shadow: 0 2px 12px rgb(0 0 0 / 0.35);
     }
     .screen-frame[data-resizing] {
       border-color: var(--accent);
@@ -533,24 +603,76 @@
       display: block;
       cursor: crosshair;
     }
-    .screen-resize {
+    /* Chrome-like grips just outside the right edge, the bottom edge and their corner. */
+    button.screen-handle:not(.slot *) {
       position: absolute;
-      right: 0;
-      bottom: 0;
-      z-index: 1;
-      width: 18px;
-      min-height: 18px !important;
-      height: 18px;
-      padding: 0 !important;
-      border: 0 !important;
-      border-radius: 4px 0 0 0 !important;
-      background: linear-gradient(135deg, transparent 45%, var(--muted) 45% 52%, transparent 52% 64%, var(--muted) 64% 71%, transparent 71%), color-mix(in srgb, var(--bg) 70%, transparent) !important;
-      cursor: nwse-resize;
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0 0 3px 0;
+      background: var(--raised);
       touch-action: none;
+      transition: background-color 120ms ease;
     }
-    .screen-resize:hover,
-    .screen-frame[data-resizing] .screen-resize {
-      background: linear-gradient(135deg, transparent 45%, var(--accent) 45% 52%, transparent 52% 64%, var(--accent) 64% 71%, transparent 71%), var(--bg) !important;
+    button.screen-handle:not(.slot *):hover,
+    button.screen-handle:not(.slot *):focus-visible,
+    button.screen-handle:not(.slot *):active {
+      background: var(--hover);
+    }
+    button.screen-handle:not(.slot *):active {
+      transform: none;
+    }
+    button.screen-handle::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      margin: auto;
+      border-radius: 1px;
+      background: var(--muted);
+    }
+    .screen-handle.edge-x {
+      top: 0;
+      left: 100%;
+      width: 12px;
+      height: 100%;
+      border-radius: 0 3px 0 0 !important;
+      cursor: ew-resize;
+    }
+    .screen-handle.edge-x::after {
+      width: 2px;
+      height: 24px;
+      box-shadow: 3px 0 0 var(--muted);
+      transform: translateX(-1.5px);
+    }
+    .screen-handle.edge-y {
+      top: 100%;
+      left: 0;
+      width: 100%;
+      height: 12px;
+      border-radius: 0 0 0 3px !important;
+      cursor: ns-resize;
+    }
+    .screen-handle.edge-y::after {
+      width: 24px;
+      height: 2px;
+      box-shadow: 0 3px 0 var(--muted);
+      transform: translateY(-1.5px);
+    }
+    .screen-handle.edge-xy {
+      top: 100%;
+      left: 100%;
+      width: 12px;
+      height: 12px;
+      cursor: nwse-resize;
+    }
+    .screen-handle.edge-xy::after {
+      width: 6px;
+      height: 6px;
+      background: linear-gradient(135deg, transparent 40%, var(--muted) 40% 55%, transparent 55%);
+    }
+    .screen-stage:has(.screen-frame[data-resizing]) :is(.edge-x, .edge-y)::after {
+      background: var(--accent);
+      box-shadow: none;
     }
     .screen-placeholder {
       display: grid;
@@ -625,9 +747,12 @@
       flex: none;
       overflow: visible;
     }
-    [data-headless] .device-screen {
+    [data-headless] :is(.device-screen, .device-viewport) {
       flex: none;
       overflow: visible;
+    }
+    [data-headless] :is(.device-toolbar, .screen-handle) {
+      display: none !important;
     }
     #layout-announcement {
       position: absolute;
