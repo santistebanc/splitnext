@@ -18,6 +18,9 @@ import { randomUUID } from "node:crypto";
 import { operations, discovery } from "./operations.mjs";
 import { stores } from "./stores.mjs";
 
+/** A phone screen in CSS pixels; each device can be given another. */
+const defaultScreen = { width: 390, height: 780 };
+
 export class Lab {
   devices = new Map();
   worker = null;
@@ -75,7 +78,7 @@ export class Lab {
         port: this.port,
         available: this.available,
         devices: [...this.devices.values()].map(
-          ({ id, kind, online, latencyMs, generation, clipboard, share }) => ({
+          ({ id, kind, online, latencyMs, generation, clipboard, share, screen }) => ({
             id,
             kind,
             online,
@@ -83,6 +86,7 @@ export class Lab {
             generation,
             clipboard,
             share,
+            screen,
           }),
         ),
       },
@@ -248,7 +252,7 @@ export class Lab {
     }
   }
   async addDevice(item, restoring = false) {
-    const { id, kind = "browser", online = true, latencyMs = 0 } = item;
+    const { id, kind = "browser", online = true, latencyMs = 0, screen = defaultScreen } = item;
 
     if (this.devices.has(id)) throw new Error("device_exists");
 
@@ -258,7 +262,7 @@ export class Lab {
       path.join(this.data, "devices", id),
       {
         headless: true,
-        viewport: { width: 390, height: 780 },
+        viewport: screen,
         reducedMotion: "reduce",
         serviceWorkers: "block",
       },
@@ -269,6 +273,7 @@ export class Lab {
       kind: "browser",
       online,
       latencyMs,
+      screen,
       context,
       epoch: 0,
       sockets: new Set(),
@@ -615,7 +620,7 @@ export class Lab {
     return d;
   }
   async addInPageDevice(
-    { id, online = true, latencyMs = 0, generation, clipboard = true, share = true },
+    { id, online = true, latencyMs = 0, generation, clipboard = true, share = true, screen = defaultScreen },
     restoring,
   ) {
     const d = {
@@ -626,6 +631,7 @@ export class Lab {
       generation: generation ?? randomUUID().slice(0, 8),
       clipboard,
       share,
+      screen,
     };
 
     this.devices.set(id, d);
@@ -688,6 +694,7 @@ export class Lab {
         latencyMs: d.latencyMs,
         clipboard: d.clipboard,
         share: d.share,
+        screen: d.screen,
       }))
       .toArray();
   }
@@ -710,7 +717,7 @@ export class Lab {
     if (d.kind === "inpage") {
       const app = await this.hostDevice(id, { method: "inspect" });
 
-      return { ...app, online: d.online, latencyMs: d.latencyMs };
+      return { ...app, online: d.online, latencyMs: d.latencyMs, screen: d.screen };
     }
 
     const app = await d.page.evaluate(() => window.splitnextLab?.inspect() ?? {
@@ -725,6 +732,7 @@ export class Lab {
       kind: "browser",
       online: d.online,
       latencyMs: d.latencyMs,
+      screen: d.screen,
       ...app,
       storage,
     };
@@ -1060,6 +1068,18 @@ export class Lab {
         await this.save();
 
         return { online: d.online, latencyMs: d.latencyMs };
+      }
+
+      case "deviceScreen": {
+        const d = this.device(input.device);
+        const screen = { width: input.width, height: input.height };
+
+        if (d.kind === "inpage") await this.hostDevice(d.id, { method: "resize", ...screen });
+        else await d.page.setViewportSize(screen);
+        d.screen = screen;
+        await this.save();
+
+        return { screen };
       }
 
       case "deviceForeground": {

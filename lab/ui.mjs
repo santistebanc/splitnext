@@ -1,4 +1,4 @@
-import { mountSplit, restoreOrder, addReorderHandle } from "./panels.mjs";
+import { mountSplit, restoreOrder, addReorderHandle, zoomOf, saveZoom } from "./panels.mjs";
 
 const $ = (id) => document.getElementById(id);
 
@@ -10,6 +10,11 @@ let hostRole = "unknown",
   labHost = null;
 
 let schemas = {};
+
+// Preview draws a screen at half its size, so more devices fit side by side.
+const previewZoom = 0.5;
+
+const zoomLevels = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5];
 
 // A browser opens about six connections to the supervisor. When this page hosts
 // in-page devices, an operation can wait on this page's own host results, so
@@ -131,13 +136,140 @@ function devicePanel(id, mode) {
   tools.append(network, reload, remove);
   inspector.append(tools);
 
-  if (mode === "slot") {
-    // The device itself lives here, in this document; nothing is mirrored.
-    const slot = element("div", "slot");
-    screen.append(slot);
-    panel.slot = slot;
+  // The screen keeps its size in CSS pixels; zoom only changes how large it is drawn here.
+  const defaultScreen = { width: 390, height: 780 };
+  let current = { ...defaultScreen };
+  let resizing = false;
+  // A headless host is screenshot and clicked by the supervisor at the screen's own size.
+  let zoom = headless ? 1 : zoomOf(id, previewZoom);
+  const bar = element("div", "screen-bar");
+  const frame = element("div", "screen-frame");
+  const sizeLabel = element("span", "screen-size");
+  const zoomSelect = element("select");
+  zoomSelect.setAttribute("aria-label", "Zoom for " + id);
+
+  for (const value of zoomLevels) {
+    const option = element("option", "", Math.round(value * 100) + "%");
+    option.value = String(value);
+    zoomSelect.append(option);
+  }
+
+  // Refreshes leave the size alone until the device has taken the new one.
+  const commit = async () => {
+    resizing = true;
+
+    try {
+      await run("deviceScreen", { device: id, ...current });
+    } finally {
+      resizing = false;
+    }
+  };
+
+  const setScreen = (next) => {
+    if (next.width === current.width && next.height === current.height) return;
+    current = next;
+    apply();
+    void commit();
+  };
+
+  const setZoom = (value) => {
+    zoom = value;
+    saveZoom(id, value);
+    apply();
+  };
+
+  const presets = segmented("Screen preset for " + id, [
+    ["Preview", "preview", () => { setZoom(previewZoom); setScreen(defaultScreen); }],
+    ["Full", "full", () => { setZoom(1); setScreen(defaultScreen); }],
+  ]);
+
+  zoomSelect.onchange = () => setZoom(Number(zoomSelect.value));
+
+  const apply = () => {
+    frame.style.width = current.width * zoom + 2 + "px";
+    frame.style.height = current.height * zoom + 2 + "px";
+
+    if (slot) {
+      slot.style.zoom = String(zoom);
+      slot.style.width = current.width + "px";
+      slot.style.height = current.height + "px";
+    }
+
+    sizeLabel.textContent = `${current.width} × ${current.height}`;
+
+    if (!zoomLevels.includes(zoom)) zoomSelect.append(Object.assign(element("option", "", Math.round(zoom * 100) + "%"), { value: String(zoom) }));
+    zoomSelect.value = String(zoom);
+    const standard = current.width === defaultScreen.width && current.height === defaultScreen.height;
+    presets.select(standard && zoom === previewZoom ? "preview" : standard && zoom === 1 ? "full" : null);
+  };
+
+  bar.append(presets, zoomSelect, sizeLabel);
+  screen.append(bar, frame);
+
+  // The device itself lives here, in this document; nothing is mirrored.
+  const slot = mode === "slot" ? element("div", "slot") : null;
+
+  if (slot) {
+    frame.append(slot);
+    // HTMLElement.slot is a string attribute: this only marks the panel as live.
+    panel.slot = id;
     labHost?.attach(id, slot);
   }
+
+  // Dragging the corner gives the app a larger or smaller screen, at this zoom.
+  const grip = element("button", "screen-resize");
+  grip.setAttribute("aria-label", "Resize screen of " + id);
+  grip.title = "Drag to resize the screen, or use the arrow keys. Shift moves 50 pixels.";
+  const clamp = (value, min, max) => Math.round(Math.min(max, Math.max(min, value)));
+  let start = null;
+
+  grip.onpointerdown = (event) => {
+    if (event.button !== 0) return;
+    start = { x: event.clientX, y: event.clientY, ...current };
+    resizing = true;
+    frame.dataset.resizing = "";
+    grip.setPointerCapture(event.pointerId);
+  };
+
+  grip.onpointermove = (event) => {
+    if (!start) return;
+    current = {
+      width: clamp(start.width + (event.clientX - start.x) / zoom, 240, 1600),
+      height: clamp(start.height + (event.clientY - start.y) / zoom, 320, 1600),
+    };
+    apply();
+  };
+
+  const release = () => {
+    if (!start) return;
+    const from = start;
+    start = null;
+    resizing = false;
+    delete frame.dataset.resizing;
+
+    if (from.width !== current.width || from.height !== current.height) void commit();
+  };
+
+  grip.onpointerup = release;
+
+  grip.onpointercancel = release;
+
+  let keyed = null;
+
+  grip.onkeydown = (event) => {
+    const step = event.shiftKey ? 50 : 10;
+    const dx = event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0;
+    const dy = event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0;
+
+    if (!dx && !dy) return;
+    event.preventDefault();
+    current = { width: clamp(current.width + dx, 240, 1600), height: clamp(current.height + dy, 320, 1600) };
+    resizing = true;
+    apply();
+    clearTimeout(keyed);
+
+    keyed = setTimeout(() => void commit(), 400);
+  };
 
   const image = element("img", "screen");
   image.alt = `Actual app screen for ${id}`;
@@ -156,16 +288,19 @@ function devicePanel(id, mode) {
     placeholder.hidden = true;
   };
 
-  image.onclick = (e) => {
-    image.focus();
+  // Points on the drawn image map to the screenshot's own pixels, whatever the zoom.
+  const pointOf = (e) => {
     const r = image.getBoundingClientRect();
 
-    void run("input", {
-      device: id,
-      kind: "click",
-      x: ((e.clientX - r.left) * 390) / r.width,
-      y: ((e.clientY - r.top) * 780) / r.height,
-    });
+    return {
+      x: ((e.clientX - r.left) * (image.naturalWidth || current.width)) / r.width,
+      y: ((e.clientY - r.top) * (image.naturalHeight || current.height)) / r.height,
+    };
+  };
+
+  image.onclick = (e) => {
+    image.focus();
+    void run("input", { device: id, kind: "click", ...pointOf(e) });
   };
 
   image.onkeydown = (e) => {
@@ -196,21 +331,23 @@ function devicePanel(id, mode) {
 
   image.onwheel = (e) => {
     e.preventDefault();
-    const r = image.getBoundingClientRect();
+    const point = pointOf(e);
 
     wheel = {
       device: id,
       kind: "wheel",
       x: (wheel?.x ?? 0) + e.deltaX,
       y: (wheel?.y ?? 0) + e.deltaY,
-      pointerX: (e.clientX - r.left) * 390 / r.width,
-      pointerY: (e.clientY - r.top) * 780 / r.height,
+      pointerX: point.x,
+      pointerY: point.y,
     };
 
     if (!wheeling) void sendWheel();
   };
 
-  if (mode !== "slot") screen.append(image, placeholder);
+  if (mode !== "slot") frame.append(image, placeholder);
+  frame.append(grip);
+  apply();
   const details = element("details");
   details.open = true;
   const summary = element("summary", "", "State, drafts, outbox & action schemas");
@@ -259,6 +396,12 @@ function devicePanel(id, mode) {
   panel.updateState = (state) => {
     pre.textContent = JSON.stringify(state, null, 2);
     network.select(state.online);
+
+    if (!resizing && state.screen) {
+      current = state.screen;
+      apply();
+    }
+
     offline.hidden = state.online !== false;
 
     if (mode !== "slot") kind.textContent = state.kind === "inpage" ? "in-page" : "browser";

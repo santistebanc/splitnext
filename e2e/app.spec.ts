@@ -119,7 +119,8 @@ test('device lab frontend controls its actual installations and shows inspector 
     await page.getByRole('button', { name: 'Add device', exact: true }).click();
     await expect(page.locator('.device')).toHaveCount(1);
     await expect.poll(() => page.locator('.screen').evaluate((image) => image instanceof HTMLImageElement && image.naturalWidth === 390)).toBe(true);
-    await page.locator('.screen').click({ position: { x: 160, y: 620 } });
+    // New group sits at (192, 744) on the 390 × 780 screen; Preview draws it at half size.
+    await page.locator('.screen').click({ position: { x: 96, y: 372 } });
     await expect(page.locator('.device pre')).toContainText('"view": "create"');
     await page.locator('.screen').press('L');
     await expect(page.locator('.device pre')).toContainText('"name": "L"');

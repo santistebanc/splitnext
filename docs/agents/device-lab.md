@@ -30,10 +30,19 @@ The dark lab page uses motion-panels for the server sidebar and each device's
 inspector. Drag a separator to resize; arrow keys resize a focused separator
 (Shift takes larger steps), Enter collapses or expands it, and double-click resets
 its size. The Server panel and Inspector buttons also toggle visibility.
-Collapsed content stays mounted. Device screens keep their own fixed viewport.
+Collapsed content stays mounted.
+
+Each device has a screen size and the page draws it at a zoom. The size is the
+device's own viewport (default 390 × 780): set it with `deviceScreen` (`width`
+240–1600, `height` 320–1600), or drag the screen's corner grip (arrow keys on the
+focused grip; Shift takes larger steps). It is saved with the device and applied to
+both kinds. Zoom only changes how large the page draws a screen and is saved in
+this browser. Preview (default) is 390 × 780 at 50%; Full is 390 × 780 at 100%. A
+headless host always draws at 100%, so its screenshots and clicks use screen pixels.
 
 Drag a device's Move handle onto another device to reorder, or focus the handle
-and use Left/Right. The strip scrolls horizontally when devices exceed the page.
+and use Left/Right. While dragging, the other devices make room and a dashed slot
+shows where the device lands; Escape cancels. The strip scrolls horizontally when devices exceed the page.
 Moving a panel retains the live screen and its drafts. Sizes, collapsed states
 and device order are saved in this browser's localStorage, separate from the lab
 environment and its checkpoints. Reduced motion disables layout travel.

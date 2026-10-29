@@ -19,7 +19,7 @@ try {
   saved = {};
 }
 
-const parsed = z.object({ order: z.array(z.string()).optional() })
+const parsed = z.object({ order: z.array(z.string()).optional(), zoom: z.record(z.string(), z.number()).optional() })
   .catchall(z.object({ size: z.number(), collapsed: z.boolean() }))
   .safeParse(saved);
 
@@ -34,6 +34,18 @@ const persist = () => {
     // The lab remains usable when this browser disallows local storage.
   }
 };
+
+/** How large a device's screen is drawn in this page; the screen keeps its own size. */
+export function zoomOf(id, fallback) {
+  const zoom = layout.zoom?.[id];
+
+  return Number.isFinite(zoom) ? zoom : fallback;
+}
+
+export function saveZoom(id, zoom) {
+  layout.zoom = { ...layout.zoom, [id]: zoom };
+  persist();
+}
 
 /** Bind core motion values to DOM while keeping panel contents mounted. */
 export function mountSplit(root, sized, fill, toggle, key, defaultSize, minSize, maxSize, end = false) {
@@ -59,12 +71,9 @@ export function mountSplit(root, sized, fill, toggle, key, defaultSize, minSize,
 
   if (end) root.append(fill, separator, sized);
   else root.insertBefore(separator, fill);
-  const screenWidth = root.closest(".device")?.classList.contains("live") ? 392 : 325;
 
   const updateWidth = (value) => {
     sized.style.width = Math.abs(value) + "px";
-
-    if (end) root.style.width = screenWidth + 12 + Math.abs(value) + "px";
   };
 
   const options = () => ({
