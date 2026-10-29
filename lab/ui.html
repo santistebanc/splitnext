@@ -583,6 +583,10 @@
     .device-viewport[data-full] {
       padding: 0;
     }
+    /* Fit and full panel size the screen to the viewport: nothing to scroll, and no scrollbar to come and go. */
+    .device-viewport[data-fits] {
+      overflow: hidden;
+    }
     .device-viewport[data-full] .screen-frame {
       border: 0;
       box-shadow: none;
