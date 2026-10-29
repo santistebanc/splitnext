@@ -32,7 +32,7 @@ If a decision changes, update the relevant document in the same slice.
 
 ## Agent skills
 
-For multi-device experiments or sync bugs, use the isolated [device lab](docs/agents/device-lab.md).
+For multi-device experiments or sync bugs, use the isolated [device lab](docs/agents/device-lab.md). It offers lightweight in-page devices (`kind: "inpage"`, many per document, usable headlessly) and real browser devices (`kind: "browser"`, for browser-fidelity questions); the guide says which to pick.
 
 ### Issue tracker
 

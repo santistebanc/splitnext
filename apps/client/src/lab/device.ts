@@ -3,8 +3,8 @@ import { z } from 'zod';
 import { createAppRuntime } from '../model/runtime';
 import type { AppController } from '../model/controller';
 import type { ActionPlatform, Dispatcher } from '../model/actions';
-import { navigationSchema, type AppNavigation, type NavigationEntry } from '../ui/navigation';
 import type { AppSubstrate } from '../ui/substrate';
+import { MemoryNavigation } from './memoryNavigation';
 import { labBridge, observeLabEvents, type LabBridge } from './bridge';
 import type { LabReport } from './events';
 import { VirtualNetwork, type ServerGate } from './virtualNetwork';
@@ -35,44 +35,6 @@ export type FakeCapabilities = {
   notifications: string[];
   homepageOpens: number;
 };
-
-/** Navigation kept in memory: history entries the screen writes, read back by Back. */
-export class MemoryNavigation implements AppNavigation {
-  entries: (NavigationEntry | null)[] = [null];
-  index = 0;
-  private readonly listeners = new Set<(entry: NavigationEntry) => void>();
-
-  constructor(private readonly address: string) {}
-
-  url = () => this.address;
-  enterApp = () => undefined;
-
-  write = (entry: NavigationEntry, mode: 'push' | 'replace') => {
-    if (mode === 'push') {
-      this.entries.splice(this.index + 1, this.entries.length, entry);
-      this.index = this.entries.length - 1;
-    } else this.entries[this.index] = entry;
-  };
-
-  subscribe = (listener: (entry: NavigationEntry) => void) => {
-    this.listeners.add(listener);
-
-    return () => {
-      this.listeners.delete(listener);
-    };
-  };
-
-  go(step: -1 | 1): boolean {
-    const next = this.index + step;
-    const parsed = navigationSchema.safeParse(this.entries[next]);
-
-    if (!parsed.success) return false;
-    this.index = next;
-    this.listeners.forEach((listener) => listener(parsed.data));
-
-    return true;
-  }
-}
 
 const seenSchema = z.record(z.string(), z.number().int());
 

@@ -358,7 +358,7 @@
       details.append(summary, pre);
       panel.append(details);
       panel.dataset.device = id;
-      panel.image = image;
+      panel.image = mode === "slot" ? null : image;
       panel.state = pre;
       const actionSelect = document.createElement("select");
       actionSelect.setAttribute("aria-label", "App action for " + id);
@@ -423,8 +423,9 @@
       }
       return p;
     }
+    // An in-page device's place waits until this page knows whether it hosts.
     const modeOf = (kind) =>
-      kind === "inpage" && hostRole === "host" ? "slot" : "image";
+      kind !== "inpage" ? "image" : hostRole === "host" ? "slot" : hostRole === "viewer" ? "image" : null;
     function showHosting(status) {
       const mine = hostRole === "host";
       $("hosting").textContent = mine
@@ -441,7 +442,9 @@
       for (const panel of [...$("devices").children])
         if (!status.devices.includes(panel.dataset.device)) removePanel(panel);
       for (const id of status.devices) {
-        const p = panelFor(id, modeOf(status.deviceKinds[id]));
+        const mode = modeOf(status.deviceKinds[id]);
+        if (!mode) continue;
+        const p = panelFor(id, mode);
         if (p.image) p.image.src = `/screen?device=${encodeURIComponent(id)}&t=${Date.now()}`;
         const state = await api("inspectDevice", { device: id });
         p.state.textContent = JSON.stringify(state, null, 2);

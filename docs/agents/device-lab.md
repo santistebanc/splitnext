@@ -9,7 +9,8 @@ Start from the repository checkout that owns the experiment, after `npm ci`,
 npm run lab -- --env=my-experiment --port=8806 --workerPort=8807
 ```
 
-Both ports must be free. Startup refuses occupied ports, reserved development/test
+Add `--host=auto|headless|tab` to choose where in-page devices render (see
+below). Both ports must be free. Startup refuses occupied ports, reserved development/test
 ports, another supervisor for the environment, and an environment's changed Worker
 port. The supervisor binds only to `127.0.0.1`. Keep it running while using its
 frontend at the printed URL or the CLI. Ctrl+C closes owned browsers and the
@@ -23,23 +24,79 @@ with `node lab/cli.mjs status`. Pass JSON as the second argument, or `@file.json
 to avoid shell quoting differences. The frontend calls exactly the same API:
 `POST /api` with `Content-Type: application/json` and `{operation,input}`.
 
+## Device kinds: pick one per question
+
+`addDevice` takes a unique device name and a `kind`. The default is `browser`.
+
+| | `inpage` | `browser` |
+| --- | --- | --- |
+| What it is | The ordinary app screen, controller and dispatcher, mounted in a box inside one shared lab document. Many devices cost one browser, not one each. | A real persistent headless Chromium profile loading `/app` from the Worker. |
+| Use it for | Sync, convergence, offline/online, outage and lost-response experiments; many devices; watching several screens live in the lab page; fast agent loops. | Anything about the browser itself: real service worker, URL and history, native scrolling and focus, `navigator` capabilities, IndexedDB eviction or corruption, startup of the real bundle. |
+| Persistence | A per-device namespaced IndexedDB database and `localStorage` keys in the host browser's profile. Survives reloads of the screen and of the host page. | Its own profile directory, copied by checkpoints. |
+| Network | A virtual adapter for fetch and realtime sockets in front of the same real Worker. Offline informs the app; latency, server gate and dropped in-flight responses match browser devices. | Playwright routing and `setOffline`. |
+| Not simulated | Soft keyboard and `visualViewport`, a separate pointer type, reduced motion and viewport per device, multi-window effects, service worker, real URL/history (navigation is in memory), browser clipboard and share (replaced by inspectable fakes). | Nothing beyond headless Chromium. |
+| Cost | One shared browser for any number of devices. | One Chromium context per device. |
+
+A bug that reproduces on an `inpage` device is a bug in the shared app. A bug that
+needs the browser to reproduce, or that must be shown on a real browser before it is
+fixed, belongs to a `browser` device. When unsure, reproduce on `inpage` first and
+confirm on `browser`. The two kinds can share one environment and one Worker.
+
+### Hosting in-page devices
+
+In-page devices need a page to render in. The supervisor serves the lab page at
+its own URL, and the first page that offers itself becomes the host:
+
+- `--host=auto` (default): a lab page you open hosts if it is first. Otherwise the
+  supervisor starts its own headless Chromium on the same page the first time a
+  device needs it. No human tab is required, so agents and CI can use in-page
+  devices from the CLI. Mirrors of the host's screens appear in any other lab page.
+- `--host=headless`: always host headlessly; the open lab page is only a viewer.
+  Data lives in the environment's `host` profile, so checkpoints and `restore` cover
+  it. Use this for reproducible agent runs.
+- `--host=tab`: never start a headless host. In-page operations fail with
+  `host_unavailable` until a lab page is open. The devices render live in that
+  tab and you click and type in them directly. Its data lives in your browser's
+  profile, not in the environment, so `checkpoint` and `restore` refuse
+  (`checkpoint_needs_headless_host`), `input` needs the tab itself, and reloading
+  the tab keeps each device's data but moving to another browser does not.
+
+Only one page hosts at a time. A second page is a viewer; reload it after the host
+goes away to take over. `reloadHost` reloads the host page, as a person would, and
+waits for every device to come back from what it persisted. The frontend's kind
+picker chooses the kind for **Add device**; CLI callers pass `"kind":"inpage"`.
+A lab page that is not the host mirrors an in-page device's screenshot the same as
+a browser device, through the supervisor's headless host.
+
 ## Devices and experiments
 
-`addDevice` takes a unique device name. `inspectDevice` returns the actual screen's
+`inspectDevice` returns the actual screen's
 controller state, UI drafts, all app action schemas, availability reasons, resolved
-input choices, diagnostics and durable browser storage including IndexedDB.
+input choices, diagnostics and durable storage: browser storage including IndexedDB
+for `browser` devices; for `inpage` devices the namespace, its `localStorage` keys,
+its IndexedDB document, in-memory navigation entries and the fake platform's record
+of copied text, shares, replica notifications and homepage opens.
 `action` invokes the screen's dispatcher with `device`, `name`, `input` and optional
 `confirmed`. Confirmations retain the app's ordinary rules. `input` sends clicks,
 text, keys and wheel events to that same page. The frontend displays its screenshot
-and forwards input; these are real app screens, with a 1.5-second mirror refresh.
-The mirror is not a native browser accessibility tree or a touch/IME emulator.
+and forwards input for browser devices (a 1.5-second mirror); an in-page device in
+the hosting page is the live screen itself and takes real input. The mirror is not
+a native browser accessibility tree or a touch/IME emulator.
+
+`deviceForeground` signals that a device returned to the foreground, so the app
+refreshes. `deviceNavigate` goes `back` or `forward` through the device's history
+entries. `deviceCapabilities` (in-page only) sets the fake clipboard text a Paste
+reads and turns copy/share support on or off; changing support restarts the screen
+with the same persisted data. Timeline records of an in-page device's state and
+draft changes are coalesced to the latest one per quarter second.
 
 A new installation needs the server to establish its identity. If it starts
 during an outage, inspection reports the actual startup error screen and
 `app_not_ready`, with no controller/actions yet. Once the server returns, use
 `reloadDevice` or the screen's Try again button to complete ordinary app startup.
 
-`deviceNetwork` informs the app of offline/online status and gates traffic.
+`deviceNetwork` informs the app of offline/online status and gates traffic
+(for in-page devices the app's lifecycle adapter reports it, as the browser does).
 `serverNetwork` gates traffic while devices remain online. `serverProcess`
 actually stops/restarts the owned Worker. All three close existing realtime
 connections; pending HTTP responses are discarded across a gate change. A lost
@@ -85,7 +142,8 @@ and invite links: keep their files local. Data lives under `.wrangler/lab/ENV`.
 
 ## Boundaries
 
-MCP, native builds, arbitrary SQL, deterministic in-memory simulation, packet
+MCP, native builds, arbitrary SQL, deterministic in-memory simulation, an
+in-browser server emulation, iframe-per-device isolation, packet
 reordering and production/remote store control are deferred. Use the CLI/API for
 experimentation and `e2e/app.spec.ts` for real browser regression coverage. A bug
 found in the lab should retain its steps/diagnostics and gain a focused regression
