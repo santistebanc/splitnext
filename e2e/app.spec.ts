@@ -59,16 +59,7 @@ test('device lab frontend shows in-page devices live in its own page, each conta
 
     await groupName.fill('Draft before reorder');
     await groupName.evaluate((node) => { node.setAttribute('data-reorder-probe', 'same-node'); });
-    const sidebar = page.getByRole('separator', { name: 'Resize server panel', exact: true });
-
-    await sidebar.press('ArrowRight');
-    await expect(sidebar).toHaveAttribute('aria-valuenow', '330');
-    await sidebar.dblclick();
-    await expect(sidebar).toHaveAttribute('aria-valuenow', '320');
-    await sidebar.press('Enter');
-    await expect(page.locator('#server-toggle')).toHaveAttribute('aria-expanded', 'false');
-    await page.locator('#server-toggle').click();
-    await sidebar.press('ArrowRight');
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
     const inspector = device.getByRole('separator', { name: 'Resize inspector', exact: true });
 
     await inspector.press('ArrowLeft');
@@ -76,10 +67,21 @@ test('device lab frontend shows in-page devices live in its own page, each conta
     await inspector.press('Enter');
     await expect(device.getByRole('button', { name: /Toggle inspector/ })).toHaveAttribute('aria-expanded', 'false');
     await device.getByRole('button', { name: /Toggle inspector/ }).click();
-    const handle = device.getByRole('button', { name: `Move ${id}`, exact: true });
+    // Dragging the device's tab onto the right edge of the other device's section puts it there.
+    const tab = page.getByRole('tab', { name: new RegExp(id!) });
+    const from = await tab.boundingBox();
+    const other = await page.locator('.device').last().boundingBox();
 
-    await handle.press('ArrowRight');
+    await page.mouse.move(from!.x + 20, from!.y + from!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(other!.x + other!.width - 10, other!.y + other!.height / 2, { steps: 10 });
+    await page.mouse.up();
     await expect(page.locator('.device').last()).toHaveAttribute('data-device', id!);
+    const divider = page.getByRole('separator', { name: 'Resize sections' }).last();
+    const width = Number(await divider.getAttribute('aria-valuenow'));
+
+    await divider.press('ArrowRight');
+    await expect(divider).toHaveAttribute('aria-valuenow', String(width + 16));
     await expect(groupName).toHaveAttribute('data-reorder-probe', 'same-node');
     await expect(groupName).toHaveValue('Draft before reorder');
     await groupName.fill('Draft after reorder');
@@ -89,7 +91,7 @@ test('device lab frontend shows in-page devices live in its own page, each conta
     await expect(live.getByRole('button', { name: 'Invite people' })).toBeVisible();
     await page.reload();
     await expect(page.locator('.device').last()).toHaveAttribute('data-device', id!);
-    await expect(page.getByRole('separator', { name: 'Resize server panel', exact: true })).toHaveAttribute('aria-valuenow', '330');
+    await expect(page.getByRole('separator', { name: 'Resize sections' }).last()).toHaveAttribute('aria-valuenow', String(width + 16));
     await expect(device.getByRole('separator', { name: 'Resize inspector', exact: true })).toHaveAttribute('aria-valuenow', '310');
     await expect(live.getByRole('button', { name: 'Invite people' })).toBeVisible();
     await device.getByRole('button', { name: /Toggle inspector/ }).click();
