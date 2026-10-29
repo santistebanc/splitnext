@@ -38,6 +38,17 @@ an `AppSubstrate` for runtime creation, navigation, lifecycle, seen markers and
 clipboard/share capabilities; the default browser assembly keeps existing web
 behavior. See [ADR 0027](./adr/0027-own-real-browser-installations-in-a-local-device-lab.md).
 
+A screen that does not own the browser window, such as an in-page lab device
+among others in one document, receives a `ScreenHost` (`ui/screenHost.tsx`):
+its box, an overlay layer inside it, its size and a clipboard. Modals
+(`ScreenModal`), the toast, the edit cover, outside-tap dismissal, keyboard
+dismissal and focus checks, viewport sizing, the homepage test and the invite
+origin read the host when there is one and the window, document and router
+otherwise. Never reach for `document.body`, `document.activeElement`,
+`document.getElementById`, `window.innerWidth` or `position: fixed` in shared
+screen code without going through the host. See
+[ADR 0028](./adr/0028-run-lab-devices-inside-one-document.md).
+
 The Worker serves a public homepage, invite entry pages, and the Expo web app
 at `/app`.
 

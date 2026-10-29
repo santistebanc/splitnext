@@ -162,7 +162,9 @@ The [device lab](./docs/agents/device-lab.md) runs real independent installation
 against a dedicated local Worker. Start it with `npm run lab -- --env=NAME` after
 building the frontend; `npm run lab:cli -- discover` publishes the common operation
 schemas used by its frontend and AI callers. It retains isolated profiles, steps
-and diagnostics under `.wrangler/lab/`. See the guide before controlling stores.
+and diagnostics under `.wrangler/lab/`. Devices are real headless browsers (`kind: "browser"`)
+or many live app instances in one document (`kind: "inpage"`); the guide says when
+to use each. See the guide before controlling stores.
 
 | What | Where | What it guarantees |
 | --- | --- | --- |
