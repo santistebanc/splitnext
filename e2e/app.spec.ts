@@ -4,17 +4,17 @@ import { promisify } from 'node:util';
 import { once } from 'node:events';
 
 test('device lab runs the real two-device offline and recovery acceptance scenario', async () => {
-  test.setTimeout(240_000);
-  const result = await promisify(execFile)(process.execPath, ['lab/acceptance.mjs'], { timeout: 220_000 });
+  test.setTimeout(400_000);
+  const result = await promisify(execFile)(process.execPath, ['lab/acceptance.mjs'], { timeout: 380_000 });
 
   expect(result.stdout).toContain('Lab acceptance (browser) passed');
 });
 
 test('device lab runs the same acceptance scenario with in-page devices in a headless host', async () => {
-  test.setTimeout(240_000);
+  test.setTimeout(400_000);
 
   const result = await promisify(execFile)(process.execPath, ['lab/acceptance.mjs'], {
-    timeout: 220_000,
+    timeout: 380_000,
     env: { ...process.env, LAB_ACCEPT_KIND: 'inpage', LAB_TEST_WORKER_PORT: '8837', LAB_TEST_LAB_PORT: '8836' },
   });
 

@@ -121,12 +121,19 @@ try {
 
   await op("serverNetwork", { available: false });
   await inflight;
-  assert.ok(
-    (await lab.lines("timeline")).some(
+  // The action finishes once applied locally; the delayed response is dropped after.
+  const lostDeadline = Date.now() + 15000;
+
+  while (
+    !(await lab.lines("timeline")).some(
       (entry) =>
         entry.sequence > beforeInflight && entry.kind === "response.lost",
-    ),
-  );
+    )
+  ) {
+    if (Date.now() > lostDeadline) throw new Error("response_not_lost");
+    await delay(20);
+  }
+
   await op("deviceNetwork", { device: "a", online: true, latencyMs: 0 });
   await op("serverNetwork", { available: true });
   await op("wait", {
