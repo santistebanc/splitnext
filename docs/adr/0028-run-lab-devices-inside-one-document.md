@@ -1,5 +1,8 @@
 # Run lab devices inside one document
 
+Partially superseded by [ADR 0029](./0029-give-each-in-page-lab-device-its-own-frame.md):
+each in-page device now renders in its own frame rather than a box of one document.
+
 [ADR 0027](./0027-own-real-browser-installations-in-a-local-device-lab.md) gives
 each lab device a real headless Chromium profile and mirrors screenshots. That is
 faithful but heavy, and its mirror is not the live screen. The lab now also offers

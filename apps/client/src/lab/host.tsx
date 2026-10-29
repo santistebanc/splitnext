@@ -1,19 +1,17 @@
-import { Component, createElement, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
-import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import type { JsonValue } from '@splitnext/client';
-import { AppScreen } from '../ui/AppScreen';
-import { ScreenHostContext, type ScreenHost } from '../ui/screenHost';
-import { colors, fontFamily, monoFamily } from '../ui/theme';
-import { LabDevice, type DeviceConfig, type HostEnvironment } from './device';
+import { emptyCapabilities, type DeviceConfig, type FakeCapabilities, type HostEnvironment, type LabDevice } from './device';
 import type { LabReport } from './events';
+import type { FrameLink } from './frame';
 import type { ServerGate } from './virtualNetwork';
 
 type Size = { width: number; height: number };
 
 /** The size of a phone screen, as the browser devices' viewport, until the supervisor sets another. */
 const screenSize: Size = { width: 390, height: 780 };
+
+/** How long a call waits for a device's frame to start, as after it reloaded. */
+const connectTimeoutMs = 15_000;
 
 /** What the lab page gives its host: where the Worker is and where reports go. */
 export type HostOptions = {
@@ -37,16 +35,35 @@ const commandSchema = z.discriminatedUnion('method', [
 
 const notReady = { status: 'failed', error: 'app_not_ready', issues: ['This installation needs to finish startup before app actions are available.'] };
 
+/** One device: its frame, and the device running in it once the frame has started. */
+type Entry = {
+  config: DeviceConfig;
+  capabilities: FakeCapabilities;
+  screen: Size;
+  frame: HTMLIFrameElement;
+  device: LabDevice | null;
+  unmount: (() => void) | null;
+  connected: Set<() => void>;
+};
+
+/** Moves a frame without reloading it where the browser can. */
+function place(frame: HTMLIFrameElement, parent: HTMLElement): void {
+  if (frame.parentElement === parent) return;
+
+  if ('moveBefore' in parent && frame.isConnected && parent.isConnected) parent.moveBefore(frame, null);
+  else parent.appendChild(frame);
+}
+
 /**
- * Many devices in one document. The lab page gives each device a slot to
+ * Many devices in one lab page, each in its own frame: its own document and
+ * window, running the ordinary app. The lab page gives each device a slot to
  * show it in; the supervisor drives them through `call`.
  */
 export class LabHost {
-  private readonly devices = new Map<string, LabDevice>();
+  private readonly entries = new Map<string, Entry>();
   private readonly slots = new Map<string, HTMLElement>();
-  private readonly screens = new Map<string, Size>();
-  private readonly listeners = new Set<() => void>();
-  private version = 0;
+  /** Frames without a slot keep running here, at their size but out of sight. */
+  private readonly holder: HTMLElement;
   private readonly environment: HostEnvironment;
 
   constructor(private readonly options: HostOptions) {
@@ -55,69 +72,110 @@ export class LabHost {
       server: options.gate,
       report: options.report,
     };
+    this.holder = document.createElement('div');
+    this.holder.setAttribute('aria-hidden', 'true');
+    Object.assign(this.holder.style, { position: 'fixed', top: '0', left: '-20000px', pointerEvents: 'none' });
+    document.body.appendChild(this.holder);
+    window.splitnextLabFrameLink = (id) => this.link(id);
   }
 
-  subscribe = (listener: () => void) => {
-    this.listeners.add(listener);
+  private link(id: string): FrameLink | undefined {
+    const entry = this.entries.get(id);
 
-    return () => {
-      this.listeners.delete(listener);
+    if (!entry) return undefined;
+
+    return {
+      config: entry.config,
+      capabilities: entry.capabilities,
+      environment: this.environment,
+      connect: (device, unmount) => {
+        entry.device = device;
+        entry.unmount = unmount;
+        entry.connected.forEach((resolve) => resolve());
+        entry.connected.clear();
+      },
+      disconnect: (device) => {
+        if (entry.device !== device) return;
+        // The next frame starts where this one left its network and capabilities.
+        entry.config = { ...device.config, screen: entry.screen };
+        entry.device = null;
+        entry.unmount = null;
+      },
     };
-  };
-
-  snapshot = () => this.version;
-
-  private touch() {
-    this.version++;
-    this.listeners.forEach((listener) => listener());
   }
 
   ids(): string[] {
-    return [...this.devices.keys()];
-  }
-
-  device(id: string): LabDevice | undefined {
-    return this.devices.get(id);
-  }
-
-  slotFor(id: string): HTMLElement | undefined {
-    return this.slots.get(id);
-  }
-
-  screenOf(id: string): Size {
-    return this.screens.get(id) ?? screenSize;
+    return [...this.entries.keys()];
   }
 
   /** Where a device shows; the lab page owns the element. */
   attach(id: string, slot: HTMLElement): void {
     this.slots.set(id, slot);
-    this.touch();
+    const entry = this.entries.get(id);
+
+    if (entry) place(entry.frame, slot);
   }
 
   detach(id: string): void {
     this.slots.delete(id);
-    this.touch();
+    const entry = this.entries.get(id);
+
+    if (entry) place(entry.frame, this.holder);
+  }
+
+  private size(entry: Entry): void {
+    entry.frame.style.width = `${entry.screen.width}px`;
+    entry.frame.style.height = `${entry.screen.height}px`;
+  }
+
+  private open(config: DeviceConfig): Entry {
+    const frame = document.createElement('iframe');
+
+    frame.dataset.labDevice = config.id;
+    frame.title = config.id;
+    Object.assign(frame.style, { display: 'block', border: '0', background: 'transparent' });
+    frame.src = `/host/frame?device=${encodeURIComponent(config.id)}`;
+
+    const entry: Entry = {
+      config,
+      capabilities: emptyCapabilities(),
+      screen: config.screen ?? screenSize,
+      frame,
+      device: null,
+      unmount: null,
+      connected: new Set(),
+    };
+
+    this.size(entry);
+    this.entries.set(config.id, entry);
+    (this.slots.get(config.id) ?? this.holder).appendChild(frame);
+
+    return entry;
+  }
+
+  private close(id: string): void {
+    const entry = this.entries.get(id);
+
+    if (!entry) return;
+    entry.device?.dispose();
+    entry.frame.remove();
+    this.entries.delete(id);
   }
 
   /** Makes the devices match the supervisor's list, keeping those already running. */
   sync(configs: DeviceConfig[]): void {
     const wanted = new Set(configs.map((config) => config.id));
 
-    for (const [id, device] of this.devices)
-      if (!wanted.has(id)) {
-        device.dispose();
-        this.devices.delete(id);
-        this.screens.delete(id);
-      }
+    for (const id of this.ids()) if (!wanted.has(id)) this.close(id);
 
     for (const config of configs) {
-      if (!this.devices.has(config.id))
-        this.devices.set(config.id, new LabDevice(config, this.environment));
+      const entry = this.entries.get(config.id) ?? this.open(config);
 
-      if (config.screen) this.screens.set(config.id, config.screen);
+      if (config.screen) {
+        entry.screen = config.screen;
+        this.size(entry);
+      }
     }
-
-    this.touch();
   }
 
   /** The server became reachable or not, or its connections were cut. */
@@ -125,27 +183,69 @@ export class LabHost {
     this.options.gate.open = open;
     this.options.gate.epoch = epoch;
 
-    for (const device of this.devices.values()) device.network.reset();
+    for (const entry of this.entries.values()) entry.device?.network.reset();
   }
 
-  private known(id: string): LabDevice {
-    const device = this.devices.get(id);
+  private known(id: string): Entry {
+    const entry = this.entries.get(id);
 
-    if (!device) throw new Error('unknown_device');
+    if (!entry) throw new Error('unknown_device');
 
-    return device;
+    return entry;
+  }
+
+  /** The device running in the entry's frame, once the frame has started. */
+  private async running(entry: Entry): Promise<LabDevice> {
+    if (!entry.device)
+      await new Promise<void>((resolve) => {
+        const done = () => {
+          clearTimeout(timer);
+          entry.connected.delete(done);
+          resolve();
+        };
+
+        const timer = setTimeout(done, connectTimeoutMs);
+
+        entry.connected.add(done);
+      });
+
+    if (!entry.device) throw new Error('device_frame_not_started');
+
+    return entry.device;
+  }
+
+  /** What the device's screen shows, read from its own document. */
+  private screenText(entry: Entry): string {
+    return entry.frame.contentDocument?.body?.innerText ?? '';
   }
 
   /** The operations a supervisor performs on one device. */
   async call(id: string, input: JsonValue) {
-    const device = this.known(id);
+    const entry = this.known(id);
     const command = commandSchema.parse(input);
 
     switch (command.method) {
+      case 'ready':
+        // Started, or stopped at the screen that offers to try starting again.
+        return { ready: Boolean(entry.device?.bridge) || this.offersRetry(entry) };
+      case 'resize':
+        entry.screen = { width: command.width, height: command.height };
+        this.size(entry);
+
+        return { screen: entry.screen };
       case 'inspect': {
+        if (!entry.device)
+          return {
+            device: id, kind: 'inpage', online: entry.config.online, latencyMs: entry.config.latencyMs, screen: entry.screen,
+            state: null, actions: [], inputOptions: {}, diagnostics: null,
+            startup: { reason: 'frame_not_started', screen: '' },
+          };
+
+        const device = entry.device;
+
         const app = device.bridge?.inspect() ?? {
           state: null, actions: [], inputOptions: {}, diagnostics: null,
-          startup: { reason: 'app_not_ready', screen: this.slots.get(id)?.innerText ?? '' },
+          startup: { reason: 'app_not_ready', screen: this.screenText(entry) },
         };
 
         return {
@@ -153,14 +253,21 @@ export class LabHost {
           kind: 'inpage',
           online: device.network.online,
           latencyMs: device.network.latencyMs,
-          screen: this.screenOf(id),
+          screen: entry.screen,
           ...app,
           navigation: { index: device.navigation.index, entries: device.navigation.entries },
-          capabilities: { clipboard: device.config.clipboard, share: device.config.share, ...device.capabilities },
+          capabilities: { clipboard: device.config.clipboard, share: device.config.share, ...entry.capabilities },
           storage: await device.storage(),
         };
       }
 
+      default:
+        break;
+    }
+
+    const device = await this.running(entry);
+
+    switch (command.method) {
       case 'action':
         return device.bridge?.dispatch(command.name, command.input, command.confirmed) ?? notReady;
       case 'network':
@@ -180,153 +287,27 @@ export class LabHost {
       case 'capabilities':
         device.setCapabilities(command);
 
-        return { capabilities: device.capabilities };
+        return { capabilities: entry.capabilities };
       case 'remove':
         device.dispose();
-        this.devices.delete(id);
-        this.screens.delete(id);
-        this.touch();
         // The screen unmounts before its data goes, so nothing writes it back.
+        entry.unmount?.();
         await new Promise((resolve) => setTimeout(resolve, 0));
         await device.forget();
+        this.close(id);
 
         return { removed: true };
-      case 'resize':
-        this.screens.set(id, { width: command.width, height: command.height });
-        this.touch();
-
-        return { screen: this.screenOf(id) };
-      case 'ready':
-        // Started, or stopped at the screen that offers to try starting again.
-        return { ready: Boolean(device.bridge) || this.offersRetry(id) };
     }
   }
 
-  private offersRetry(id: string): boolean {
-    const buttons = this.slots.get(id)?.querySelectorAll('button,[role="button"]');
+  private offersRetry(entry: Entry): boolean {
+    const buttons = entry.frame.contentDocument?.querySelectorAll('button,[role="button"]');
 
     return Array.from(buttons ?? []).some((button) => button.textContent?.trim() === 'Try again');
   }
 }
 
-type BoundaryState = { error: string | null };
-
-/** Reports a screen that failed, so one device cannot take the others down. */
-class DeviceBoundary extends Component<{ children: ReactNode; device: string; report: LabReport }, BoundaryState> {
-  override state: BoundaryState = { error: null };
-
-  static getDerivedStateFromError(error: Error) {
-    return { error: String(error) };
-  }
-
-  override componentDidCatch(error: Error) {
-    this.props.report({ name: 'page.error', detail: { device: this.props.device, error: String(error) } });
-  }
-
-  override render() {
-    return this.state.error ? createElement('pre', { style: { padding: 12, color: colors.dangerInk, whiteSpace: 'pre-wrap' } }, this.state.error) : this.props.children;
-  }
-}
-
-function DeviceFrame(props: { device: LabDevice; screen: Size; report: LabReport }) {
-  const device = props.device;
-  const { width, height } = props.screen;
-  const generation = useSyncExternalStore((listener) => device.subscribe(listener), () => device.generation);
-  const [frame, setFrame] = useState<HTMLElement | null>(null);
-  const [overlay, setOverlay] = useState<HTMLElement | null>(null);
-
-  const host = useMemo<ScreenHost | null>(() => frame && overlay ? {
-    frame,
-    overlay,
-    size: { width, height },
-    readClipboard: async () => device.capabilities.clipboardText,
-  } : null, [frame, overlay, device, width, height]);
-
-  return (
-    <div
-      data-lab-device={device.config.id}
-      ref={setFrame}
-      style={{ position: 'relative', display: 'flex', flexDirection: 'column', width, height, overflow: 'hidden', contain: 'layout paint', isolation: 'isolate', background: colors.background, color: colors.ink, colorScheme: 'light' }}
-    >
-      <div ref={setOverlay} style={{ position: 'absolute', inset: 0, zIndex: 1000, pointerEvents: 'none' }} />
-      {host ? (
-        <ScreenHostContext.Provider value={host}>
-          <DeviceBoundary device={device.config.id} report={props.report}>
-            <AppScreen key={generation} substrate={device.substrate} />
-          </DeviceBoundary>
-        </ScreenHostContext.Provider>
-      ) : null}
-    </div>
-  );
-}
-
-function HostView(props: { host: LabHost; report: LabReport }) {
-  useSyncExternalStore(props.host.subscribe, props.host.snapshot);
-
-  return (
-    <>
-      {props.host.ids().map((id) => {
-        const device = props.host.device(id);
-        const slot = props.host.slotFor(id);
-
-        return device && slot ? createPortal(<DeviceFrame device={device} screen={props.host.screenOf(id)} report={props.report} />, slot, id) : null;
-      })}
-    </>
-  );
-}
-
-const styleId = 'splitnext-lab-device-styles';
-
-/** The document-level rules the standalone page carries in its head. */
-function installStyles(): void {
-  if (document.getElementById(styleId)) return;
-  const style = document.createElement('style');
-
-  style.id = styleId;
-  style.textContent =
-    `@font-face{font-family:"${fontFamily}";src:url(/assets/instrument-sans.woff2) format("woff2");font-style:normal;font-weight:400 700;font-display:swap}` +
-    `@font-face{font-family:"${monoFamily}";src:url(/assets/geist-mono.woff2) format("woff2");font-style:normal;font-weight:400 700;font-display:swap}` +
-    `[data-lab-device]{-webkit-font-smoothing:antialiased}` +
-    `[data-lab-device] :focus-visible{outline:3px solid ${colors.action}!important;outline-offset:2px}` +
-    '[data-lab-device] input:focus-visible,[data-lab-device] textarea:focus-visible{outline:none!important}';
-  document.head.appendChild(style);
-}
-
-function deviceOf(node: Element | null): Element | null {
-  return node?.closest('[data-lab-device]') ?? null;
-}
-
-/**
- * The document has one keyboard focus. A device that focuses its own field on
- * its own, such as a form opening on a remote action, must not take it from a
- * field someone is typing in on another device.
- */
-function guardFocus(): void {
-  // SAFETY: the original is only ever called on the element it was looked up for.
-  // eslint-disable-next-line typescript/unbound-method
-  const focus = HTMLElement.prototype.focus;
-
-  HTMLElement.prototype.focus = function guardedFocus(options?: FocusOptions) {
-    const mine = deviceOf(this);
-    const current = document.activeElement;
-    const typing = current instanceof HTMLInputElement || current instanceof HTMLTextAreaElement;
-
-    if (mine && typing && deviceOf(current) !== mine) return;
-    focus.call(this, options);
-  };
-}
-
 /** Mounts the many-device host into the lab page and returns it. */
 export function mountLabHost(options: HostOptions): LabHost {
-  installStyles();
-  guardFocus();
-
-  const host = new LabHost(options);
-  const root = document.createElement('div');
-
-  root.hidden = true;
-  document.body.appendChild(root);
-  createRoot(root).render(<HostView host={host} report={options.report} />);
-
-  return host;
+  return new LabHost(options);
 }
