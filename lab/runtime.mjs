@@ -14,6 +14,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { randomUUID } from "node:crypto";
 import { operations, discovery } from "./operations.mjs";
 import { stores } from "./stores.mjs";
 
@@ -29,9 +30,16 @@ export class Lab {
   tail = Promise.resolve();
   eventTail = Promise.resolve();
   saveTail = Promise.resolve();
-  constructor(root, port) {
+  host = null;
+  hosting = null;
+  headless = null;
+  stopping = false;
+  hostWaiters = [];
+  labOrigin = null;
+  constructor(root, port, options = {}) {
     this.root = root;
     this.port = port;
+    this.hostMode = options.host ?? "auto";
     this.base = `http://127.0.0.1:${port}`;
     this.data = path.join(root, "current");
   }
@@ -52,7 +60,7 @@ export class Lab {
     this.sequence = timeline.trim().split("\n").filter(Boolean).length;
     await this.start();
 
-    for (const item of manifest.devices ?? []) await this.addDevice(item);
+    for (const item of manifest.devices ?? []) await this.addDevice(item, true);
     await this.save();
     this.initialized = true;
   }
@@ -67,7 +75,15 @@ export class Lab {
         port: this.port,
         available: this.available,
         devices: [...this.devices.values()].map(
-          ({ id, online, latencyMs }) => ({ id, online, latencyMs }),
+          ({ id, kind, online, latencyMs, generation, clipboard, share }) => ({
+            id,
+            kind,
+            online,
+            latencyMs,
+            generation,
+            clipboard,
+            share,
+          }),
         ),
       },
       null,
@@ -173,6 +189,7 @@ export class Lab {
           .catch(() => false)
       ) {
         await this.event("server.started", { port: this.port, persist });
+        await this.pushGate();
 
         return;
       }
@@ -185,10 +202,16 @@ export class Lab {
   }
   async stop() {
     this.epoch++;
+    this.stopping = true;
     await this.closeSockets();
+    await this.pushGate();
     const child = this.worker;
 
-    if (!child) return;
+    if (!child) {
+      this.stopping = false;
+
+      return;
+    }
 
     if (process.platform === "win32") {
       const killer = spawn(
@@ -202,15 +225,21 @@ export class Lab {
 
     if (child.exitCode === null) await once(child, "exit");
     this.worker = null;
+    this.stopping = false;
+    await this.pushGate();
     await this.event("server.stopped", {});
   }
-  blocked(device) {
+  gateOpen() {
     return (
-      !device.online || !this.available || !this.worker || this.maintaining
+      this.available && Boolean(this.worker) && !this.maintaining && !this.stopping
     );
+  }
+  blocked(device) {
+    return !device.online || !this.gateOpen();
   }
   async closeSockets(device) {
     for (const d of device ? [device] : this.devices.values()) {
+      if (d.kind === "inpage") continue;
       d.epoch++;
 
       for (const socket of d.sockets)
@@ -218,8 +247,12 @@ export class Lab {
       d.sockets.clear();
     }
   }
-  async addDevice({ id, online = true, latencyMs = 0 }) {
+  async addDevice(item, restoring = false) {
+    const { id, kind = "browser", online = true, latencyMs = 0 } = item;
+
     if (this.devices.has(id)) throw new Error("device_exists");
+
+    if (kind === "inpage") return this.addInPageDevice(item, restoring);
 
     const context = await chromium.launchPersistentContext(
       path.join(this.data, "devices", id),
@@ -233,6 +266,7 @@ export class Lab {
 
     const d = {
       id,
+      kind: "browser",
       online,
       latencyMs,
       context,
@@ -356,11 +390,298 @@ export class Lab {
 
     return d;
   }
+  sendHost(host, event, data) {
+    host.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  }
+  /** A page offers to show in-page devices; the first suitable one hosts them. */
+  registerHost(res, headless) {
+    const suitable =
+      this.hostMode === "auto" ||
+      (this.hostMode === "headless" ? headless : !headless);
+
+    const replaces = Boolean(this.host && headless && this.host.headless);
+
+    if (!suitable || (this.host && !replaces)) {
+      res.write(`event: init\ndata: ${JSON.stringify({ role: "viewer" })}\n\n`);
+
+      return;
+    }
+
+    if (replaces) this.host.res.end();
+    const host = { res, headless, ready: false, seq: 0, pending: new Map() };
+    const ping = setInterval(() => res.write(": ping\n\n"), 15000);
+
+    this.host = host;
+    res.on("close", () => {
+      clearInterval(ping);
+
+      for (const call of host.pending.values()) {
+        clearTimeout(call.timer);
+        call.reject(new Error("host_disconnected"));
+      }
+
+      if (this.host === host) {
+        this.host = null;
+        void this.event("host.lost", { headless });
+      }
+    });
+    this.sendHost(host, "init", {
+      role: "host",
+      headless,
+      workerOrigin: this.base,
+    });
+  }
+  async hostReady() {
+    const host = this.host;
+
+    if (!host) return;
+    await this.event("host.registered", { headless: host.headless });
+
+    try {
+      await this.rawHostCall(host, { type: "sync", devices: this.deviceConfigs() });
+
+      await this.rawHostCall(host, {
+        type: "gate",
+        open: this.gateOpen(),
+        epoch: this.epoch,
+      });
+      // Usable only once it has this environment's devices and server gate.
+      host.ready = true;
+      await this.event("host.ready", { headless: host.headless });
+    } catch (error) {
+      await this.event("host.sync.failed", { error: String(error) });
+    }
+  }
+  hostResult({ id, ok, value, error }) {
+    const call = this.host?.pending.get(id);
+
+    if (!call) return;
+    this.host.pending.delete(id);
+    clearTimeout(call.timer);
+
+    if (ok) call.resolve(value);
+    else call.reject(new Error(error));
+  }
+  async hostReport({ name, detail }) {
+    await this.event(name, detail);
+  }
+  rawHostCall(host, command) {
+    return new Promise((resolve, reject) => {
+      const id = ++host.seq;
+
+      const timer = setTimeout(() => {
+        host.pending.delete(id);
+        reject(new Error("host_timeout"));
+      }, 30000);
+
+      host.pending.set(id, { resolve, reject, timer });
+      this.sendHost(host, "call", { id, command });
+    });
+  }
+  async hostCall(command) {
+    return this.rawHostCall(await this.ensureHost(), command);
+  }
+  hostDevice(device, command) {
+    return this.hostCall({ type: "device", device, command });
+  }
+  async syncHost() {
+    if (this.host?.ready)
+      await this.rawHostCall(this.host, { type: "sync", devices: this.deviceConfigs() });
+  }
+  async pushGate() {
+    if (!this.host?.ready) return;
+
+    await this.rawHostCall(this.host, {
+      type: "gate",
+      open: this.gateOpen(),
+      epoch: this.epoch,
+    }).catch(() => {});
+  }
+  ensureHost() {
+    if (this.host?.ready) return Promise.resolve(this.host);
+    this.hosting ??= this.acquireHost().finally(() => {
+      this.hosting = null;
+    });
+
+    return this.hosting;
+  }
+  async acquireHost() {
+    if (!this.host && this.hostMode !== "tab") await this.startHeadlessHost();
+
+    const deadline = Date.now() + (this.host ? 30000 : 10000);
+
+    while (Date.now() < deadline) {
+      if (this.host?.ready) {
+        // Restored devices start with their host: let their screens come up.
+        for (const d of this.devices.values())
+          if (d.kind === "inpage") await this.waitForInPageScreen(d.id);
+
+        return this.host;
+      }
+
+      await delay(50);
+    }
+
+    throw new Error(
+      this.hostMode === "tab"
+        ? `host_unavailable: open the lab page at ${this.labOrigin} to host in-page devices`
+        : "host_unavailable: the in-page device host did not start",
+    );
+  }
+  async startHeadlessHost() {
+    if (this.headless) return;
+
+    if (!this.labOrigin) throw new Error("host_unavailable: no lab page surface");
+
+    const context = await chromium.launchPersistentContext(
+      path.join(this.data, "host"),
+      {
+        headless: true,
+        viewport: { width: 1700, height: 1000 },
+        reducedMotion: "reduce",
+        serviceWorkers: "block",
+      },
+    );
+
+    const page = context.pages()[0] ?? (await context.newPage());
+
+    page.on("pageerror", (error) => {
+      void this.event("page.error", { host: true, error: String(error) });
+    });
+    this.headless = { context, page };
+    await page.goto(`${this.labOrigin}/?host=headless`);
+  }
+  async stopHeadlessHost() {
+    const headless = this.headless;
+
+    if (!headless) return;
+    this.headless = null;
+    await headless.context.close();
+  }
+  async reloadHost() {
+    const before = await this.ensureHost();
+
+    this.sendHost(before, "reload", {});
+
+    const deadline = Date.now() + 30000;
+
+    while (Date.now() < deadline) {
+      if (this.host && this.host !== before && this.host.ready) break;
+      await delay(50);
+    }
+
+    if (!this.host?.ready) throw new Error("host_reload_timeout");
+
+    for (const d of this.devices.values())
+      if (d.kind === "inpage") await this.waitForInPageScreen(d.id);
+  }
+  async screenshot(id) {
+    const d = this.device(id);
+
+    if (d.kind === "browser") return d.page.screenshot();
+
+    if (!this.headless) throw new Error("screen_is_live_in_the_hosting_lab_page");
+
+    return this.headless.page.locator(`[data-lab-device="${id}"]`).screenshot();
+  }
+  async inPageInput(id, input) {
+    if (!this.headless) throw new Error("input_needs_headless_host: use the hosting lab page directly");
+
+    const page = this.headless.page;
+    const frame = page.locator(`[data-lab-device="${id}"]`);
+
+    await frame.scrollIntoViewIfNeeded();
+    const box = await frame.boundingBox();
+
+    if (!box) throw new Error("device_not_visible");
+
+    if (input.kind === "click")
+      await page.mouse.click(box.x + (input.x ?? 0), box.y + (input.y ?? 0));
+
+    if (input.kind === "type") await page.keyboard.insertText(input.text ?? "");
+
+    if (input.kind === "key") await page.keyboard.press(input.text ?? "Enter");
+
+    if (input.kind === "wheel") {
+      await page.mouse.move(box.x + (input.pointerX ?? 195), box.y + (input.pointerY ?? 390));
+      await page.mouse.wheel(input.x ?? 0, input.y ?? 0);
+    }
+  }
+  browserDevice(id) {
+    const d = this.device(id);
+
+    if (d.kind !== "browser") throw new Error("browser_device_required");
+
+    return d;
+  }
+  async addInPageDevice(
+    { id, online = true, latencyMs = 0, generation, clipboard = true, share = true },
+    restoring,
+  ) {
+    const d = {
+      id,
+      kind: "inpage",
+      online,
+      latencyMs,
+      generation: generation ?? randomUUID().slice(0, 8),
+      clipboard,
+      share,
+    };
+
+    this.devices.set(id, d);
+
+    // A restored device waits for a host to appear; a new one needs it now.
+    if (!restoring) {
+      try {
+        await this.syncHost();
+        await this.waitForInPageScreen(id);
+      } catch (error) {
+        this.devices.delete(id);
+        await this.syncHost().catch(() => {});
+        throw error;
+      }
+
+      await this.save();
+      await this.event("device.added", { device: id, kind: "inpage" });
+    }
+
+    return { device: id, kind: "inpage" };
+  }
+  deviceConfigs() {
+    const environment = path.basename(this.root);
+
+    return [...this.devices.values()]
+      .filter((d) => d.kind === "inpage")
+      .map((d) => ({
+        id: d.id,
+        namespace: `${environment}-${d.id}-${d.generation}`,
+        online: d.online,
+        latencyMs: d.latencyMs,
+        clipboard: d.clipboard,
+        share: d.share,
+      }));
+  }
+  async waitForInPageScreen(id) {
+    const deadline = Date.now() + 30000;
+
+    while (Date.now() < deadline) {
+      if ((await this.hostDevice(id, { method: "ready" })).ready) return;
+      await delay(100);
+    }
+
+    throw new Error("device_screen_timeout");
+  }
   async waitForScreen(page) {
     await page.waitForFunction(() => window.splitnextLab || [...document.querySelectorAll('button,[role="button"]')].some((button) => button.textContent.trim() === 'Try again'));
   }
   async inspectDevice(id) {
     const d = this.device(id);
+
+    if (d.kind === "inpage") {
+      const app = await this.hostDevice(id, { method: "inspect" });
+
+      return { ...app, online: d.online, latencyMs: d.latencyMs };
+    }
 
     const app = await d.page.evaluate(() => window.splitnextLab?.inspect() ?? {
       state: null, actions: [], inputOptions: {}, diagnostics: null,
@@ -371,6 +692,7 @@ export class Lab {
 
     return {
       device: id,
+      kind: "browser",
       online: d.online,
       latencyMs: d.latencyMs,
       ...app,
@@ -403,6 +725,7 @@ export class Lab {
   async maintenance(run) {
     const running = Boolean(this.worker);
     this.maintaining = true;
+    await this.pushGate();
     await Promise.allSettled(this.requests);
     await this.stop();
 
@@ -412,27 +735,44 @@ export class Lab {
       this.maintaining = false;
 
       if (running) await this.start();
+      else await this.pushGate();
     }
   }
   async closeDevices() {
     if (this.initialized) await this.save();
 
     for (const d of this.devices.values()) {
+      if (d.kind !== "browser") continue;
       await d.page.goto("about:blank");
       await d.context.close();
     }
 
     this.devices.clear();
+    // The headless host's profile holds its devices' data and must be closed to copy.
+    await this.stopHeadlessHost();
+    // A hosting lab page drops the devices it no longer has.
+    await this.syncHost().catch(() => {});
   }
   async reopenDevices() {
     for (const d of (await this.manifest()).devices ?? [])
-      await this.addDevice(d);
+      await this.addDevice(d, true);
+
+    await this.syncHost().catch(() => {});
   }
   async checkpoint(name, restore = false) {
     const snapshot = path.join(this.root, "checkpoints", name);
     const running = Boolean(this.worker);
 
     if (restore) await readFile(path.join(snapshot, "manifest.json"));
+
+    // A lab page keeps its in-page devices' data in its own browser profile,
+    // which a checkpoint cannot copy.
+    if (
+      this.host &&
+      !this.host.headless &&
+      [...this.devices.values()].some((d) => d.kind === "inpage")
+    )
+      throw new Error("checkpoint_needs_headless_host");
 
     return this.maintenance(async () => {
       await this.closeDevices();
@@ -626,14 +966,30 @@ export class Lab {
           running: Boolean(this.worker),
           available: this.available,
           devices: [...this.devices.keys()],
+          deviceKinds: Object.fromEntries(
+            [...this.devices.values()].map((d) => [d.id, d.kind]),
+          ),
+          host: {
+            mode: this.hostMode,
+            connected: Boolean(this.host?.ready),
+            headless: Boolean(this.host?.headless),
+          },
           sequence: this.sequence,
         };
       case "addDevice":
-        return this.addDevice({ id: input.device });
+        return this.addDevice({ id: input.device, kind: input.kind });
       case "inspectDevice":
         return this.inspectDevice(input.device);
       case "reloadDevice": {
         const d = this.device(input.device);
+
+        if (d.kind === "inpage") {
+          await this.hostDevice(d.id, { method: "reload" });
+          await this.waitForInPageScreen(d.id);
+
+          return { reloaded: true };
+        }
+
         await d.context.setOffline(false);
         await d.page.reload();
         await this.waitForScreen(d.page);
@@ -651,6 +1007,18 @@ export class Lab {
         const d = this.device(input.device);
         d.online = input.online;
         d.latencyMs = input.latencyMs ?? d.latencyMs;
+
+        if (d.kind === "inpage") {
+          await this.hostDevice(d.id, {
+            method: "network",
+            online: d.online,
+            latencyMs: d.latencyMs,
+          });
+          await this.save();
+
+          return { online: d.online, latencyMs: d.latencyMs };
+        }
+
         await this.closeSockets(d);
         await d.context.setOffline(!d.online);
         await d.page.evaluate(
@@ -662,11 +1030,61 @@ export class Lab {
         return { online: d.online, latencyMs: d.latencyMs };
       }
 
+      case "deviceForeground": {
+        const d = this.device(input.device);
+
+        if (d.kind === "inpage")
+          return this.hostDevice(d.id, { method: "foreground" });
+
+        await d.page.evaluate(() =>
+          document.dispatchEvent(new Event("visibilitychange")),
+        );
+
+        return { foreground: true };
+      }
+      case "deviceNavigate": {
+        const d = this.device(input.device);
+
+        if (d.kind === "inpage")
+          return this.hostDevice(d.id, {
+            method: "navigate",
+            direction: input.direction,
+          });
+
+        await d.page.evaluate(
+          (direction) =>
+            direction === "back" ? history.back() : history.forward(),
+          input.direction,
+        );
+
+        return { moved: true };
+      }
+      case "deviceCapabilities": {
+        const d = this.device(input.device);
+
+        if (d.kind !== "inpage") throw new Error("in_page_device_required");
+        const { device: _device, ...change } = input;
+        const result = await this.hostDevice(d.id, { method: "capabilities", ...change });
+
+        d.clipboard = input.clipboard ?? d.clipboard;
+        d.share = input.share ?? d.share;
+        await this.save();
+
+        if (input.clipboard !== undefined || input.share !== undefined)
+          await this.waitForInPageScreen(d.id);
+
+        return result;
+      }
+      case "reloadHost":
+        await this.reloadHost();
+
+        return { reloaded: true };
       case "serverNetwork":
         this.available = input.available;
         await this.save();
         this.epoch++;
         await this.closeSockets();
+        await this.pushGate();
 
         return { available: this.available };
       case "serverProcess":
@@ -675,12 +1093,29 @@ export class Lab {
 
         return { running: Boolean(this.worker) };
       case "action":
+        if (this.device(input.device).kind === "inpage") {
+          await this.waitForInPageScreen(input.device);
+
+          return this.hostDevice(input.device, {
+            method: "action",
+            name: input.name,
+            input: input.input,
+            confirmed: input.confirmed,
+          });
+        }
+
         return this.device(input.device).page.evaluate(
           ({ name, input, confirmed }) =>
             window.splitnextLab?.dispatch(name, input, confirmed) ?? { status: 'failed', error: 'app_not_ready', issues: ['This installation needs to finish startup before app actions are available.'] },
           input,
         );
       case "input": {
+        if (this.device(input.device).kind === "inpage") {
+          await this.inPageInput(input.device, input);
+
+          return { sent: true };
+        }
+
         const page = this.device(input.device).page;
 
         if (input.kind === "click")

@@ -11,7 +11,10 @@ export const operations = {
   timeline: empty,
   status: empty,
   discover: empty,
-  addDevice: z.object({ device: id }),
+  addDevice: z.object({
+    device: id,
+    kind: z.enum(["browser", "inpage"]).default("browser"),
+  }),
   inspectDevice: z.object(device),
   reloadDevice: z.object(device),
   deviceNetwork: z.object({
@@ -19,6 +22,18 @@ export const operations = {
     online: z.boolean(),
     latencyMs: z.number().int().min(0).max(30000).optional(),
   }),
+  deviceForeground: z.object(device),
+  deviceNavigate: z.object({
+    ...device,
+    direction: z.enum(["back", "forward"]),
+  }),
+  deviceCapabilities: z.object({
+    ...device,
+    clipboard: z.boolean().optional(),
+    share: z.boolean().optional(),
+    clipboardText: z.string().max(100000).optional(),
+  }),
+  reloadHost: empty,
   action: z.object({
     ...device,
     name: z.string(),

@@ -2,13 +2,24 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { Lab } from "./runtime.mjs";
+import { createLabServer } from "./http.mjs";
 import { setTimeout as delay } from "node:timers/promises";
+
+// Run once per device kind: LAB_ACCEPT_KIND=browser (default) or inpage.
+const kind = process.env.LAB_ACCEPT_KIND ?? "browser";
 
 const root = path.resolve(".wrangler/lab", `test-${Date.now()}`);
 
 await mkdir(root, { recursive: true });
 
-const lab = new Lab(root, Number(process.env.LAB_TEST_WORKER_PORT ?? 8817));
+const lab = new Lab(root, Number(process.env.LAB_TEST_WORKER_PORT ?? 8817), {
+  host: "headless",
+});
+
+// In-page devices live in a lab page, which the supervisor's HTTP surface serves.
+const { server } = createLabServer(lab, Number(process.env.LAB_TEST_LAB_PORT ?? 8816));
+
+await new Promise((resolve) => server.listen(Number(process.env.LAB_TEST_LAB_PORT ?? 8816), "127.0.0.1", resolve));
 
 const op = (name, input = {}) => lab.execute(name, input);
 
@@ -19,8 +30,8 @@ const action = async (device, name, input = {}) => {
 
 try {
   await lab.init();
-  await op("addDevice", { device: "a" });
-  await op("addDevice", { device: "b" });
+  await op("addDevice", { device: "a", kind });
+  await op("addDevice", { device: "b", kind });
   await action("a", "createGroup", { name: "Lab trip", yourName: "Ana" });
   const first = await op("inspectDevice", { device: "a" });
   const groupId = first.state.group.group_id;
@@ -46,6 +57,24 @@ try {
     (await op("inspectDevice", { device: "b" })).state.group.outbox.length,
     1,
   );
+
+  if (kind === "inpage") {
+    // The whole host page reloads: each device keeps only what it persisted.
+    const before = await op("inspectDevice", { device: "b" });
+    await op("reloadHost");
+    const reloaded = await op("inspectDevice", { device: "b" });
+    assert.equal(reloaded.state.group.outbox.length, 1);
+    assert.equal(reloaded.online, false);
+    assert.equal(reloaded.state.online, false);
+    assert.equal(
+      reloaded.state.group.session.identity.id,
+      before.state.group.session.identity.id,
+    );
+    assert.notEqual(
+      reloaded.storage.namespace,
+      (await op("inspectDevice", { device: "a" })).storage.namespace,
+    );
+  }
   await op("deviceNetwork", { device: "b", online: true });
   await op("wait", { until: "convergence", devices: ["a", "b"] });
   assert.equal(
@@ -162,7 +191,7 @@ try {
   assert.deepEqual((await op("status")).devices, []);
   assert.deepEqual((await op("inspectServer")).groups, []);
   await op('serverNetwork', { available: false });
-  await op('addDevice', { device: 'new-during-outage' });
+  await op('addDevice', { device: 'new-during-outage', kind });
   const starting = await op('inspectDevice', { device: 'new-during-outage' });
   assert.equal(starting.state, null);
   assert.equal(starting.startup.reason, 'app_not_ready');
@@ -170,7 +199,8 @@ try {
   await op('serverNetwork', { available: true });
   await op('reloadDevice', { device: 'new-during-outage' });
   assert.equal((await op('inspectDevice', { device: 'new-during-outage' })).state.ready, true);
-  console.log(`Lab acceptance passed: ${root}`);
+  console.log(`Lab acceptance (${kind}) passed: ${root}`);
 } finally {
   await lab.close();
+  server.close();
 }

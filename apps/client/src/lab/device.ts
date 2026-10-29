@@ -232,6 +232,7 @@ export class LabDevice {
 
   /** Starts the screen again with the same persisted data, as a page reload does. */
   reload(): void {
+    this.bridge = null;
     this.generation++;
     this.touch();
   }

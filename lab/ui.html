@@ -158,6 +158,27 @@
       height: 330px;
       overflow: auto;
     }
+    .device.live {
+      grid-template-columns: 392px 300px;
+      min-width: 708px;
+      max-width: 708px;
+    }
+    .device .slot {
+      grid-column: 1;
+      grid-row: 3 / 9;
+      width: 392px;
+      height: 782px;
+      border: 1px solid #999;
+    }
+    .device .kind {
+      font: 12px monospace;
+      color: #666;
+      margin-left: 8px;
+    }
+    #hosting {
+      font-size: 13px;
+      color: #555;
+    }
     #server {
       max-height: 220px;
     }
@@ -173,8 +194,12 @@
   <header>
     <h1>Splitnext / Device lab</h1>
     <span id="status">Opening isolated environment…</span
+    ><select id="kind" aria-label="Device kind">
+      <option value="inpage">In-page device</option>
+      <option value="browser">Browser device</option></select
     ><button id="add">Add device</button
-    ><button id="refresh">Refresh inspectors</button>
+    ><button id="refresh">Refresh inspectors</button
+    ><span id="hosting"></span>
   </header>
   <main>
     <section>
@@ -221,8 +246,15 @@
       <div class="devices" id="devices"></div>
     </section>
   </main>
+  <script>
+    window.splitnextLabHostPage = true;
+  </script>
+  <script src="/host/entry.js" defer></script>
   <script type="module">
     const $ = (id) => document.getElementById(id);
+    const headless = new URLSearchParams(location.search).get("host") === "headless";
+    let hostRole = "unknown",
+      labHost = null;
     let schemas = {},
       focused = null;
     async function api(operation, input = {}) {
@@ -249,11 +281,16 @@
         showError(e);
       }
     }
-    function devicePanel(id) {
+    function devicePanel(id, mode) {
       const panel = document.createElement("article");
-      panel.className = "device";
+      panel.className = mode === "slot" ? "device live" : "device";
+      panel.dataset.mode = mode;
       const title = document.createElement("h2");
       title.textContent = id;
+      const kind = document.createElement("span");
+      kind.className = "kind";
+      kind.textContent = mode === "slot" ? "in-page · live" : "";
+      title.append(kind);
       panel.append(title);
       const tools = document.createElement("div");
       tools.className = "tools";
@@ -268,6 +305,14 @@
         tools.append(b);
       }
       panel.append(tools);
+      if (mode === "slot") {
+        // The device itself lives here, in this document; nothing is mirrored.
+        const slot = document.createElement("div");
+        slot.className = "slot";
+        panel.append(slot);
+        panel.slot = slot;
+        labHost?.attach(id, slot);
+      }
       const image = document.createElement("img");
       image.className = "screen";
       image.alt = `Actual app screen for ${id}`;
@@ -304,7 +349,7 @@
           pointerY: (e.clientY - r.top) * 780 / r.height,
         });
       };
-      panel.append(image);
+      if (mode !== "slot") panel.append(image);
       const details = document.createElement("details");
       details.open = true;
       const summary = document.createElement("summary");
@@ -362,19 +407,42 @@
       panel.append(actionSelect, actionReason, actionInput, invoke);
       return panel;
     }
+    function removePanel(panel) {
+      if (panel.slot) labHost?.detach(panel.dataset.device);
+      panel.remove();
+    }
+    function panelFor(id, mode) {
+      let p = [...$("devices").children].find((p) => p.dataset.device === id);
+      if (p && p.dataset.mode !== mode) {
+        removePanel(p);
+        p = null;
+      }
+      if (!p) {
+        p = devicePanel(id, mode);
+        $("devices").append(p);
+      }
+      return p;
+    }
+    const modeOf = (kind) =>
+      kind === "inpage" && hostRole === "host" ? "slot" : "image";
+    function showHosting(status) {
+      const mine = hostRole === "host";
+      $("hosting").textContent = mine
+        ? "Hosting in-page devices in this page."
+        : status?.host?.connected
+          ? `In-page devices are hosted ${status.host.headless ? "headlessly" : "in another page"}; screens here are mirrored.`
+          : "";
+    }
     async function refresh() {
       const status = await api("status");
       $("status").textContent =
         `${status.running ? "Running" : "Stopped"} · ${status.available ? "Available" : "Unavailable"} · ${status.devices.length} devices`;
+      showHosting(status);
       for (const panel of [...$("devices").children])
-        if (!status.devices.includes(panel.dataset.device)) panel.remove();
+        if (!status.devices.includes(panel.dataset.device)) removePanel(panel);
       for (const id of status.devices) {
-        let p = [...$("devices").children].find((p) => p.dataset.device === id);
-        if (!p) {
-          p = devicePanel(id);
-          $("devices").append(p);
-        }
-        p.image.src = `/screen?device=${encodeURIComponent(id)}&t=${Date.now()}`;
+        const p = panelFor(id, modeOf(status.deviceKinds[id]));
+        if (p.image) p.image.src = `/screen?device=${encodeURIComponent(id)}&t=${Date.now()}`;
         const state = await api("inspectDevice", { device: id });
         p.state.textContent = JSON.stringify(state, null, 2);
         p.updateActions(state.actions);
@@ -397,7 +465,10 @@
       );
     }
     $("add").onclick = () =>
-      run("addDevice", { device: `device-${Date.now()}` });
+      run("addDevice", {
+        device: `device-${Date.now()}`,
+        kind: $("kind").value,
+      });
     $("refresh").onclick = () => refresh().catch(showError);
     document
       .querySelectorAll("[data-op]")
@@ -440,26 +511,106 @@
         showError(e);
       }
     };
-    try {
-      schemas = (await api("discover")).operations;
-      for (const name of Object.keys(schemas)) {
-        const option = document.createElement("option");
-        option.textContent = name;
-        $("operation").append(option);
+    // Reports and results reach the supervisor in the order they happened.
+    let sent = Promise.resolve();
+    const post = (path, body) => {
+      const request = sent.then(() =>
+        fetch(path, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          // Errors carry their message into the report instead of vanishing.
+          body: JSON.stringify(body ?? {}, (key, value) =>
+            value instanceof Error
+              ? { name: value.name, message: value.message }
+              : value,
+          ),
+        }),
+      );
+      sent = request.catch(() => undefined);
+      return request;
+    };
+    // Whole-state snapshots are large and change in bursts: only the latest
+    // of each per device is kept for each quarter second.
+    const latest = new Map();
+    const coalescedReport = (report) => {
+      const record = report.detail;
+      if (report.name !== "app" || !["state", "ui"].includes(record.kind))
+        return void post("/host/report", report);
+      const first = latest.size === 0;
+      latest.set(record.device + ":" + record.kind, report);
+      if (first)
+        setTimeout(() => {
+          const reports = [...latest.values()];
+          latest.clear();
+          for (const next of reports) void post("/host/report", next);
+        }, 250);
+    };
+    // Rendering in-page devices: the supervisor drives this page as their host.
+    async function handleCall({ id, command }) {
+      try {
+        let value = {};
+        if (command.type === "sync") {
+          labHost.sync(command.devices);
+          const ids = labHost.ids();
+          for (const panel of [...$("devices").children])
+            if (panel.slot && !ids.includes(panel.dataset.device))
+              removePanel(panel);
+          for (const device of ids) panelFor(device, "slot");
+          value = { ids };
+        } else if (command.type === "gate") {
+          labHost.gate(command.open, command.epoch);
+        } else if (command.type === "device") {
+          value = await labHost.call(command.device, command.command);
+        }
+        await post("/host/result", { id, ok: true, value });
+      } catch (e) {
+        await post("/host/result", { id, ok: false, error: String(e) });
       }
-      $("operation").value = "status";
-      $("operation").onchange();
-      await refresh();
-    } catch (e) {
-      showError(e);
     }
-    setInterval(() => {
-      void refresh().catch(showError);
-    }, 4000);
-    // Screen mirroring observes the same pages; it never creates another app instance.
-    setInterval(() => {
-      for (const p of $("devices").children)
-        p.image.src = `/screen?device=${encodeURIComponent(p.dataset.device)}&t=${Date.now()}`;
-    }, 1500);
+    const channel = new EventSource(
+      headless ? "/host/events?headless=1" : "/host/events",
+    );
+    channel.addEventListener("init", async (event) => {
+      const init = JSON.parse(event.data);
+      hostRole = init.role;
+      if (init.role !== "host") return;
+      if (!window.splitnextLabHostMount)
+        return showError("The app bundle with the in-page host is not built: run npm run frontend:build.");
+      labHost ??= window.splitnextLabHostMount({
+        workerOrigin: init.workerOrigin,
+        gate: { open: true, epoch: 0 },
+        report: coalescedReport,
+      });
+      await post("/host/ready");
+      showHosting();
+    });
+    channel.addEventListener("call", (event) =>
+      void handleCall(JSON.parse(event.data)),
+    );
+    channel.addEventListener("reload", () => location.reload());
+    if (!headless) {
+      try {
+        schemas = (await api("discover")).operations;
+        for (const name of Object.keys(schemas)) {
+          const option = document.createElement("option");
+          option.textContent = name;
+          $("operation").append(option);
+        }
+        $("operation").value = "status";
+        $("operation").onchange();
+        await refresh();
+      } catch (e) {
+        showError(e);
+      }
+      setInterval(() => {
+        void refresh().catch(showError);
+      }, 4000);
+      // Screen mirroring observes the same pages; it never creates another app instance.
+      setInterval(() => {
+        for (const p of $("devices").children)
+          if (p.image)
+            p.image.src = `/screen?device=${encodeURIComponent(p.dataset.device)}&t=${Date.now()}`;
+      }, 1500);
+    }
   </script>
 </html>
