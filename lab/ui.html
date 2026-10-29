@@ -13,111 +13,280 @@
     * {
       box-sizing: border-box;
     }
+    [hidden]:not(.slot *) {
+      display: none !important;
+    }
     :root {
       color-scheme: dark;
+      /* Warm neutrals and the burnt accent of the app, lifted for a dark page. */
+      --bg: #121211;
+      --sunken: #0d0d0c;
+      --surface: #1a1a18;
+      --raised: #242422;
+      --hover: #2e2d2a;
+      --border: #2c2b28;
+      --border-strong: #46453f;
+      --text: #ecebe6;
+      --muted: #a3a198;
+      --accent: #ec8f5e;
+      --accent-text: #1c120c;
+      --good: #5fd39c;
+      --warn: #f2b45a;
+      --danger: #ff8a70;
+      --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+      --radius: 6px;
+      --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     }
     body {
       margin: 0;
-      background: #141413;
-      color: #e8e6df;
+      background: var(--bg);
+      color: var(--text);
       font:
-        16px Instrument,
+        14px/1.45 Instrument,
         system-ui,
         sans-serif;
     }
     header {
-      padding: 24px;
-      border-bottom: 1px solid #3a3935;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in srgb, var(--bg) 88%, transparent);
+      backdrop-filter: blur(8px);
       display: flex;
-      gap: 24px;
-      align-items: baseline;
+      gap: 12px 24px;
+      align-items: center;
       flex-wrap: wrap;
     }
     h1 {
-      font-size: 24px;
+      font-size: 16px;
+      font-weight: 600;
       margin: 0;
+      white-space: nowrap;
     }
-    h2:not(.slot *) {
-      font-size: 20px;
+    h1 .dim {
+      color: var(--muted);
+      font-weight: 400;
     }
+    .header-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-inline-start: auto;
+    }
+    #status {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font: 12px Instrument, system-ui, sans-serif;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .chip[data-tone]::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .chip[data-tone="good"] {
+      color: var(--good);
+    }
+    .chip[data-tone="bad"] {
+      color: var(--warn);
+      border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+    }
+    #hosting {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* Lab controls. Selectors stop at .slot: in-page devices are the app's own UI. */
     button:not(.slot *),
     input:not(.slot *),
     select:not(.slot *),
     textarea:not(.slot *) {
       font: inherit;
-      border: 1px solid #4a4944;
-      background: transparent;
+      font-size: 13px;
       color: inherit;
-      padding: 8px;
-      border-radius: 0;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      background: var(--raised);
+      padding: 5px 10px;
+      min-height: 30px;
     }
     button:not(.slot *) {
       cursor: pointer;
+      white-space: nowrap;
+      transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        transform 100ms var(--ease-out);
     }
     button:not(.slot *):hover {
-      background: #26251f;
+      background: var(--hover);
     }
-    button:not(.slot *):focus-visible,
-    input:not(.slot *):focus-visible {
-      outline: 2px solid #e8e6df;
+    button:not(.slot *):active {
+      transform: scale(0.97);
     }
-    pre:not(.slot *) {
-      font: 12px/1.5 monospace;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      max-height: 440px;
-      overflow: auto;
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--accent-text);
+      font-weight: 600;
+    }
+    button.primary:hover {
+      background: color-mix(in srgb, var(--accent) 88%, white);
+    }
+    button.ghost:not(:hover) {
+      background: transparent;
+      border-color: transparent;
+    }
+    button.danger {
+      color: var(--danger);
+      background: transparent;
+      border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+    }
+    button.danger:hover {
+      background: color-mix(in srgb, var(--danger) 14%, transparent);
+    }
+    button[aria-expanded="false"]:not(.slot *) {
+      color: var(--muted);
+    }
+    :focus-visible:not(.slot *) {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    select:not(.slot *) {
+      padding-inline-end: 6px;
     }
     textarea:not(.slot *) {
       width: 100%;
-      min-height: 120px;
-      font: 13px monospace;
+      min-height: 96px;
+      font: 12px/1.5 var(--mono);
+      background: var(--sunken);
+      resize: vertical;
     }
-    details:not(.slot *) {
-      border-top: 1px solid #3a3935;
-      padding: 12px 0;
-    }
-    summary:not(.slot *) {
-      cursor: pointer;
-    }
-    #error {
-      color: #ff8a65;
+    pre:not(.slot *) {
+      margin: 0;
+      padding: 8px 10px;
+      font: 12px/1.5 var(--mono);
+      color: #d6d4cc;
+      background: var(--sunken);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
       white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      max-height: 300px;
+      overflow: auto;
+    }
+    pre:empty {
+      display: none;
+    }
+    details:not(.slot *) > summary {
+      cursor: pointer;
+      padding: 4px 0;
+      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    details:not(.slot *) > summary:hover {
+      color: var(--text);
+    }
+    .label {
+      display: block;
+      margin: 0 0 6px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    label.label {
+      margin-top: 12px;
+    }
+    .hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
     }
     .tools {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
-      margin: 12px 0;
+      align-items: center;
     }
-    label:not(.slot *) {
-      display: block;
-      margin: 12px 0 4px;
+    .tools .end {
+      margin-inline-start: auto;
     }
-    #timeline {
-      max-height: 220px;
+    .segmented {
+      display: inline-flex;
+      padding: 2px;
+      gap: 2px;
+      border: 1px solid var(--border-strong);
+      border-radius: calc(var(--radius) + 2px);
+      background: var(--sunken);
     }
-    .device .kind {
-      font: 12px monospace;
-      color: #9a988f;
-      margin-left: 8px;
+    .segmented button:not(.slot *) {
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+      min-height: 26px;
+      padding: 3px 10px;
     }
-    #hosting {
+    .segmented button:not(.slot *):hover {
+      color: var(--text);
+      background: var(--raised);
+    }
+    .segmented button[aria-pressed="true"]:not(.slot *) {
+      background: var(--hover);
+      border-color: var(--border-strong);
+      color: var(--text);
+    }
+    .control-row {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      align-items: center;
+      gap: 8px;
+    }
+    .control-row > span {
+      color: var(--muted);
       font-size: 13px;
-      color: #a8a69d;
     }
-    #server {
-      max-height: 220px;
+    #error {
+      margin: 0;
+      padding: 8px 10px;
+      border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--danger) 10%, transparent);
+      color: var(--danger);
+      font: 12px/1.5 var(--mono);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
     }
-    #timeline {
-      max-height: 160px;
+    #error:empty {
+      padding: 0;
+      border: 0;
     }
 
     main {
       display: flex;
-      padding: 24px;
+      padding: 16px 24px 24px;
       align-items: stretch;
-      min-height: calc(100vh - 100px);
+      min-height: calc(100dvh - 56px);
     }
     #server-panel {
       flex: none;
@@ -125,43 +294,86 @@
     }
     .panel-content {
       height: 100%;
-      padding: 0 12px;
       overflow: auto;
+    }
+    #server-panel .panel-content {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 4px 12px 4px 0;
+    }
+    h2:not(.slot *) {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .section-heading {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin: 4px 0 12px;
     }
     #devices-area {
       min-width: 0;
       flex: 1;
+      padding-inline-start: 12px;
     }
-    #devices-area > h2 {
-      margin-left: 12px;
+    #device-count {
+      color: var(--muted);
+      font-size: 13px;
     }
     .devices {
       display: flex;
-      gap: 24px;
+      gap: 16px;
       overflow: auto;
       align-items: flex-start;
-      padding: 0 12px 24px;
+      padding-bottom: 16px;
     }
     .devices:empty::after {
-      content: "Add a device to begin an experiment.";
-      color: #a8a69d;
-      padding: 24px 0;
+      content: "No devices yet. Choose a kind and add a device to begin an experiment.";
+      display: block;
+      width: 100%;
+      padding: 48px 24px;
+      border: 1px dashed var(--border-strong);
+      border-radius: 10px;
+      text-align: center;
+      color: var(--muted);
     }
+
     .device {
       flex: none;
       min-width: 0;
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      transition:
+        opacity 200ms var(--ease-out),
+        transform 200ms var(--ease-out);
+      @starting-style {
+        opacity: 0;
+        transform: translateY(6px);
+      }
     }
     .device-heading {
       display: flex;
-      gap: 12px;
+      gap: 8px;
       align-items: center;
-      margin: 0 0 16px;
+      margin: 0 0 12px;
     }
     .device-heading h2 {
-      margin: 0;
-      font-size: 18px;
-      overflow-wrap: anywhere;
       flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      overflow-wrap: anywhere;
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+    .device .offline-badge {
+      color: var(--warn);
     }
     .device-split {
       display: flex;
@@ -177,14 +389,26 @@
       color: #191917;
       width: 392px;
       height: 782px;
-      border: 1px solid #4a4944;
+      border: 1px solid var(--border-strong);
     }
-    .screen {
+    .screen,
+    .screen-placeholder {
       width: 325px;
       height: 650px;
-      border: 1px solid #4a4944;
+      border: 1px solid var(--border-strong);
+      background: var(--sunken);
+    }
+    .screen {
       display: block;
       cursor: crosshair;
+    }
+    .screen-placeholder {
+      display: grid;
+      place-content: center;
+      padding: 24px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
     }
     .inspector {
       flex: none;
@@ -193,19 +417,20 @@
     .inspector .panel-content {
       display: flex;
       flex-direction: column;
-      gap: 12px;
-    }
-    .inspector .tools {
-      margin: 0;
-    }
-    .inspector details {
-      height: 330px;
-      overflow: auto;
-      flex: none;
+      gap: 16px;
     }
     .inspector textarea {
       flex: none;
     }
+    .action {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .action .label {
+      margin: 0;
+    }
+
     .split-separator {
       flex: none;
       width: 12px;
@@ -220,21 +445,28 @@
       bottom: 0;
       left: 5px;
       width: 2px;
-      background: #3a3935;
+      border-radius: 1px;
+      background: var(--border);
+      transition: background-color 120ms ease;
     }
-    .split-separator:hover::after, .split-separator[data-resizing]::after {
-      background: #e8e6df;
-    }
-    :focus-visible:not(.slot *) {
-      outline: 2px solid #e8e6df;
-      outline-offset: 2px;
-    }
-    [aria-expanded="false"]:not(.slot *) {
-      color: #a8a69d;
+    .split-separator:hover::after,
+    .split-separator[data-resizing]::after {
+      background: var(--accent);
     }
     .reorder-handle {
       cursor: grab;
       touch-action: none;
+      display: grid;
+      place-items: center;
+      width: 26px;
+      padding: 0 !important;
+    }
+    .reorder-handle::before {
+      content: "";
+      width: 9px;
+      height: 14px;
+      background: radial-gradient(circle, currentColor 1.3px, transparent 1.6px) 0 0 / 4.5px 4.67px;
+      opacity: 0.7;
     }
     .reorder-handle:active {
       cursor: grabbing;
@@ -246,47 +478,87 @@
       overflow: hidden;
       clip-path: inset(50%);
     }
+    @media (prefers-reduced-motion: reduce) {
+      *:not(.slot *) {
+        transition-duration: 0ms !important;
+      }
+      button:not(.slot *):active {
+        transform: none;
+      }
+    }
     @media (max-width: 650px) {
       header {
-        padding: 16px;
-        gap: 12px;
+        padding: 12px 16px;
       }
       main {
-        padding: 16px;
+        padding: 12px 16px;
       }
     }
   </style>
   <header>
-    <h1>Splitnext / Device lab</h1>
-    <span id="status">Opening isolated environment…</span
-    ><select id="kind" aria-label="Device kind">
-      <option value="inpage">In-page device</option>
-      <option value="browser">Browser device</option></select
-    ><button id="add">Add device</button
-    ><button id="refresh">Refresh inspectors</button
-    ><button id="server-toggle" aria-controls="server-panel">Server panel</button><span id="hosting"></span>
+    <h1><span class="dim">Splitnext /</span> Device lab</h1>
+    <div id="status" aria-live="polite">
+      <span class="chip">Opening isolated environment…</span>
+    </div>
+    <span id="hosting"></span>
+    <div class="header-actions">
+      <select id="kind" aria-label="Device kind">
+        <option value="inpage">In-page device</option>
+        <option value="browser">Browser device</option></select
+      ><button id="add" class="primary">Add device</button
+      ><button id="refresh" class="ghost">Refresh inspectors</button
+      ><button id="server-toggle" aria-controls="server-panel">
+        Server panel
+      </button>
+    </div>
   </header>
   <div id="layout-announcement" role="status" aria-live="polite"></div>
   <main id="workspace">
-    <section id="server-panel">
-      <h2>Server & experiment</h2>
-      <p>
-        Local Worker and isolated stores. Click a device screen, then type. Tab,
-        Enter, Backspace and scrolling reach that same app.
+    <section id="server-panel" aria-labelledby="server-heading">
+      <div class="section-heading"><h2 id="server-heading">Server</h2></div>
+      <p class="hint">
+        Local Worker and isolated stores. Click a mirrored screen, then type:
+        Tab, Enter, Backspace and scrolling reach that same app.
       </p>
-      <div class="tools">
-        <button data-op="serverNetwork" data-input='{"available":false}'>
-          Make unavailable</button
-        ><button data-op="serverNetwork" data-input='{"available":true}'>
-          Make available</button
-        ><button data-op="serverProcess" data-input='{"running":false}'>
-          Stop process</button
-        ><button data-op="serverProcess" data-input='{"running":true}'>
-          Start process
-        </button>
+      <div class="control-row">
+        <span>Network</span>
+        <div class="segmented" role="group" aria-label="Server network">
+          <button
+            data-op="serverNetwork"
+            data-input='{"available":true}'
+            data-server="available"
+            aria-pressed="false"
+          >Available</button
+          ><button
+            data-op="serverNetwork"
+            data-input='{"available":false}'
+            data-server="available"
+            aria-pressed="false"
+          >Unavailable</button>
+        </div>
+      </div>
+      <div class="control-row">
+        <span>Process</span>
+        <div class="segmented" role="group" aria-label="Server process">
+          <button
+            data-op="serverProcess"
+            data-input='{"running":true}'
+            data-server="running"
+            aria-pressed="false"
+          >Running</button
+          ><button
+            data-op="serverProcess"
+            data-input='{"running":false}'
+            data-server="running"
+            aria-pressed="false"
+          >Stopped</button>
+        </div>
       </div>
       <p id="error" role="alert"></p>
-      <pre id="result"></pre>
+      <details id="result-box" open hidden>
+        <summary>Last result</summary>
+        <pre id="result"></pre>
+      </details>
       <details open>
         <summary>Authoritative server state</summary>
         <pre id="server"></pre>
@@ -297,18 +569,22 @@
       </details>
       <details>
         <summary>Lab operations & input schemas</summary>
-        <label for="operation">Lab operation</label
+        <label class="label" for="operation">Lab operation</label
         ><select id="operation"></select>
-        <pre id="schema"></pre>
-        <label for="input">Input JSON</label><textarea id="input">{}</textarea>
-        <div class="tools">
-          <button id="run">Run operation</button
+        <pre id="schema" style="margin-top: 8px"></pre>
+        <label class="label" for="input">Input JSON</label
+        ><textarea id="input">{}</textarea>
+        <div class="tools" style="margin-top: 8px">
+          <button id="run" class="primary">Run operation</button
           ><button id="export">Download diagnostics & steps</button>
         </div>
       </details>
     </section>
-    <section id="devices-area">
-      <h2>Independent installations</h2>
+    <section id="devices-area" aria-labelledby="devices-heading">
+      <div class="section-heading">
+        <h2 id="devices-heading">Independent installations</h2>
+        <span id="device-count"></span>
+      </div>
       <div class="devices" id="devices"></div>
     </section>
   </main>

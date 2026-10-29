@@ -129,10 +129,10 @@ test('device lab frontend controls its actual installations and shows inspector 
     await expect(page.getByRole('alert')).toBeEmpty();
     await page.getByRole('button', { name: 'Online', exact: true }).click();
     await expect(page.locator('.device pre')).toContainText('"online": true');
-    await page.getByRole('button', { name: 'Make unavailable', exact: true }).click();
+    await page.getByRole('button', { name: 'Unavailable', exact: true }).click();
     await expect(page.locator('#status')).toContainText('Unavailable');
     await expect(page.locator('.device pre')).toContainText('"online": true');
-    await page.getByRole('button', { name: 'Make available', exact: true }).click();
+    await page.getByRole('button', { name: 'Available', exact: true }).click();
     await expect(page.locator('#status')).toContainText('Available');
     await expect(page.locator('#schema')).toContainText('properties');
     await page.screenshot({ path: '.wrangler/lab-ui.png', fullPage: true });

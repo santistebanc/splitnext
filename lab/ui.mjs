@@ -52,6 +52,7 @@ async function run(operation, input) {
   try {
     const result = await api(operation, input);
     $("result").textContent = JSON.stringify(result, null, 2);
+    $("result-box").hidden = false;
     await requestRefresh();
 
     return result;
@@ -60,71 +61,105 @@ async function run(operation, input) {
   }
 }
 
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+
+  if (className) node.className = className;
+
+  if (text !== undefined) node.textContent = text;
+
+  return node;
+}
+
+/** Buttons for one exclusive setting; the current value is pressed. */
+function segmented(label, options) {
+  const group = element("div", "segmented");
+  group.setAttribute("role", "group");
+  group.setAttribute("aria-label", label);
+
+  const buttons = options.map(([text, value, onclick]) => {
+    const button = element("button", "", text);
+    button.setAttribute("aria-pressed", "false");
+    button.onclick = onclick;
+    group.append(button);
+
+    return [value, button];
+  });
+
+  group.select = (current) => {
+    for (const [value, button] of buttons) button.setAttribute("aria-pressed", String(value === current));
+  };
+
+  return group;
+}
+
 function devicePanel(id, mode) {
-  const panel = document.createElement("article");
-  panel.className = mode === "slot" ? "device live" : "device";
+  const panel = element("article", mode === "slot" ? "device live" : "device");
   panel.dataset.mode = mode;
-  const title = document.createElement("h2");
-  title.textContent = id;
-  const kind = document.createElement("span");
-  kind.className = "kind";
-  kind.textContent = mode === "slot" ? "in-page · live" : "";
-  title.append(kind);
-  const heading = document.createElement("div");
-  heading.className = "device-heading";
+  const title = element("h2", "", id);
+  const kind = element("span", "kind chip", mode === "slot" ? "in-page · live" : "");
+  const offline = element("span", "chip offline-badge", "Offline");
+  offline.hidden = true;
+  title.append(kind, offline);
+  const heading = element("div", "device-heading");
   heading.append(title);
   addReorderHandle(panel, heading, id);
-  const toggle = document.createElement("button");
-  toggle.textContent = "Inspector";
+  const toggle = element("button", "ghost", "Inspector");
   toggle.setAttribute("aria-label", "Toggle inspector for " + id);
   heading.append(toggle);
   panel.append(heading);
-  const split = document.createElement("div");
-  split.className = "device-split";
-  const screen = document.createElement("div");
-  screen.className = "device-screen";
-  const inspector = document.createElement("div");
-  inspector.className = "inspector";
+  const split = element("div", "device-split");
+  const screen = element("div", "device-screen");
+  const inspector = element("div", "inspector");
   split.append(screen, inspector);
   panel.append(split);
-  const tools = document.createElement("div");
-  tools.className = "tools";
+  const tools = element("div", "tools");
 
-  for (const [label, operation, input] of [
-    ["Offline", "deviceNetwork", { device: id, online: false }],
-    ["Online", "deviceNetwork", { device: id, online: true }],
-    ["Reload", "reloadDevice", { device: id }],
-  ]) {
-    const b = document.createElement("button");
-    b.textContent = label;
-    b.onclick = () => run(operation, input);
-    tools.append(b);
-  }
+  const network = segmented("Network for " + id, [
+    ["Online", true, () => run("deviceNetwork", { device: id, online: true })],
+    ["Offline", false, () => run("deviceNetwork", { device: id, online: false })],
+  ]);
 
-  const remove = document.createElement("button");
-  remove.textContent = "Remove";
+  const reload = element("button", "", "Reload");
+  reload.onclick = () => run("reloadDevice", { device: id });
+  const remove = element("button", "danger end", "Remove");
+
   remove.onclick = () => {
     if (confirm(`Remove ${id} and delete its data?`)) void run("removeDevice", { device: id });
   };
 
-  tools.append(remove);
+  tools.append(network, reload, remove);
   inspector.append(tools);
 
   if (mode === "slot") {
     // The device itself lives here, in this document; nothing is mirrored.
-    const slot = document.createElement("div");
-    slot.className = "slot";
+    const slot = element("div", "slot");
     screen.append(slot);
     panel.slot = slot;
     labHost?.attach(id, slot);
   }
 
-  const image = document.createElement("img");
-  image.className = "screen";
+  const image = element("img", "screen");
   image.alt = `Actual app screen for ${id}`;
   image.tabIndex = 0;
-  image.onclick = (e) => {    image.focus();
+  // A screen that cannot be mirrored here says where the device is instead of a broken image.
+  const placeholder = element("div", "screen-placeholder", "Waiting for this device’s screen.");
+  placeholder.hidden = true;
+
+  image.onerror = () => {
+    image.hidden = true;
+    placeholder.hidden = false;
+  };
+
+  image.onload = () => {
+    image.hidden = false;
+    placeholder.hidden = true;
+  };
+
+  image.onclick = (e) => {
+    image.focus();
     const r = image.getBoundingClientRect();
+
     void run("input", {
       device: id,
       kind: "click",
@@ -134,7 +169,9 @@ function devicePanel(id, mode) {
   };
 
   image.onkeydown = (e) => {
-    e.preventDefault();    void run("input", {
+    e.preventDefault();
+
+    void run("input", {
       device: id,
       kind: e.key.length === 1 ? "type" : "key",
       text: e.key === " " ? " " : e.key,
@@ -173,37 +210,40 @@ function devicePanel(id, mode) {
     if (!wheeling) void sendWheel();
   };
 
-  if (mode !== "slot") screen.append(image);
-  const details = document.createElement("details");
+  if (mode !== "slot") screen.append(image, placeholder);
+  const details = element("details");
   details.open = true;
-  const summary = document.createElement("summary");
-  summary.textContent = "State, drafts, outbox & action schemas";
-  const pre = document.createElement("pre");
+  const summary = element("summary", "", "State, drafts, outbox & action schemas");
+  const pre = element("pre");
   details.append(summary, pre);
   inspector.append(details);
   panel.dataset.device = id;
   panel.image = mode === "slot" ? null : image;
   panel.state = pre;
-  const actionSelect = document.createElement("select");
+  const action = element("div", "action");
+  const actionLabel = element("label", "label", "App action");
+  const actionSelect = element("select");
+  actionSelect.id = "action-" + id;
+  actionLabel.htmlFor = actionSelect.id;
   actionSelect.setAttribute("aria-label", "App action for " + id);
-  const actionInput = document.createElement("textarea");
+  const actionReason = element("p", "hint");
+  const actionInput = element("textarea");
   actionInput.setAttribute("aria-label", "App action input for " + id);
-  const actionReason = document.createElement("p");
-  const invoke = document.createElement("button");
-  invoke.textContent = "Invoke app action";
+  const invoke = element("button", "primary", "Invoke app action");
 
   const choose = () => {
-    const action = panel.actions.find((a) => a.name === actionSelect.value);
+    const chosen = panel.actions.find((a) => a.name === actionSelect.value);
 
-    if (action) {
-      actionInput.value = JSON.stringify(action.example ?? {}, null, 2);
-      actionReason.textContent = action.availability.available
-        ? action.description
-        : action.availability.reason;
+    if (chosen) {
+      actionInput.value = JSON.stringify(chosen.example ?? {}, null, 2);
+      actionReason.textContent = chosen.availability.available
+        ? chosen.description
+        : chosen.availability.reason;
     }
   };
 
   actionSelect.onchange = choose;
+
   invoke.onclick = () => {
     try {
       void run("action", {
@@ -216,27 +256,36 @@ function devicePanel(id, mode) {
     }
   };
 
-  panel.updateActions = (actions) => {
-    panel.actions = actions;
+  panel.updateState = (state) => {
+    pre.textContent = JSON.stringify(state, null, 2);
+    network.select(state.online);
+    offline.hidden = state.online !== false;
+
+    if (mode !== "slot") kind.textContent = state.kind === "inpage" ? "in-page" : "browser";
+
+    if (state.kind === "inpage")
+      placeholder.textContent = "This device runs live in the lab page that hosts in-page devices. Open that page to see and use it.";
+    panel.actions = state.actions;
 
     if (!actionSelect.options.length) {
-      for (const a of actions) {
-        const option = document.createElement("option");
+      for (const a of state.actions) {
+        const option = element("option", "", a.name);
         option.value = a.name;
-        option.textContent = a.name;
         actionSelect.append(option);
       }
 
       choose();
     }
 
-    const action = actions.find((a) => a.name === actionSelect.value);
-    actionReason.textContent = action?.availability.available
-      ? action.description
-      : action?.availability.reason;
+    const chosen = state.actions.find((a) => a.name === actionSelect.value);
+    actionReason.textContent = chosen?.availability.available
+      ? chosen.description
+      : chosen?.availability.reason;
   };
 
-  inspector.append(actionSelect, actionReason, actionInput, invoke);
+  action.append(actionLabel, actionSelect, actionReason, actionInput, invoke);
+  inspector.append(action);
+
   panel.mountSplit = () => {
     panel.disposeSplit = mountSplit(split, inspector, screen, toggle, "inspector:" + id, 300, 200, 440, true);
   };
@@ -281,6 +330,28 @@ function showHosting(status) {
       : "";
 }
 
+function showStatus(status) {
+  const count = `${status.devices.length} ${status.devices.length === 1 ? "device" : "devices"}`;
+
+  const chips = [
+    [status.running ? "Running" : "Stopped", status.running ? "good" : "bad"],
+    [status.available ? "Available" : "Unavailable", status.available ? "good" : "bad"],
+    [count],
+  ].map(([text, tone]) => {
+    const chip = element("span", "chip", text);
+
+    if (tone) chip.dataset.tone = tone;
+
+    return chip;
+  });
+
+  $("status").replaceChildren(...chips);
+  $("device-count").textContent = count;
+
+  for (const button of document.querySelectorAll("[data-server]"))
+    button.setAttribute("aria-pressed", String(JSON.parse(button.dataset.input)[button.dataset.server] === status[button.dataset.server]));
+}
+
 let refreshing = null,
   refreshAgain = false;
 
@@ -308,8 +379,7 @@ function requestRefresh() {
 
 async function refresh() {
   const status = await api("status");
-  $("status").textContent =
-    `${status.running ? "Running" : "Stopped"} · ${status.available ? "Available" : "Unavailable"} · ${status.devices.length} devices`;
+  showStatus(status);
   showHosting(status);
 
   for (const panel of [...$("devices").children])
@@ -322,9 +392,7 @@ async function refresh() {
     const p = panelFor(id, mode);
 
     if (p.image) p.image.src = `/screen?device=${encodeURIComponent(id)}&t=${Date.now()}`;
-    const state = await api("inspectDevice", { device: id });
-    p.state.textContent = JSON.stringify(state, null, 2);
-    p.updateActions(state.actions);
+    p.updateState(await api("inspectDevice", { device: id }));
   }
 
   $("timeline").textContent = JSON.stringify(
@@ -518,7 +586,7 @@ if (!headless) {
   // Screen mirroring observes the same pages; it never creates another app instance.
   setInterval(() => {
     for (const p of $("devices").children)
-      if (p.image)
+      if (p.image && !p.image.hidden)
         p.image.src = `/screen?device=${encodeURIComponent(p.dataset.device)}&t=${Date.now()}`;
   }, 1500);
 }
