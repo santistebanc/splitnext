@@ -24,6 +24,26 @@ with `node lab/cli.mjs status`. Pass JSON as the second argument, or `@file.json
 to avoid shell quoting differences. The frontend calls exactly the same API:
 `POST /api` with `Content-Type: application/json` and `{operation,input}`.
 
+## Page layout
+
+The dark lab page uses motion-panels for the server sidebar and each device's
+inspector. Drag a separator to resize; arrow keys resize a focused separator
+(Shift takes larger steps), Enter collapses or expands it, and double-click resets
+its size. The Server panel and Inspector buttons also toggle visibility.
+Collapsed content stays mounted. Device screens keep their own fixed viewport.
+
+Drag a device's Move handle onto another device to reorder, or focus the handle
+and use Left/Right. The strip scrolls horizontally when devices exceed the page.
+Moving a panel retains the live screen and its drafts. Sizes, collapsed states
+and device order are saved in this browser's localStorage, separate from the lab
+environment and its checkpoints. Reduced motion disables layout travel.
+
+The supervisor bundles the plain DOM entry in `lab/ui.mjs` and its motion-panels
+core adapter in `lab/panels.mjs` with esbuild on the first `/ui.js` request,
+then caches it until restart. No package directories are served. Restart the
+supervisor after editing these modules; HTML and app assets retain their existing
+loading paths. There is no separate lab build command.
+
 ## Device kinds: pick one per question
 
 `addDevice` takes a unique device name and a `kind`. The default is `browser`.
