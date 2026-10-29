@@ -1,3 +1,4 @@
+import { createInspector } from "./inspector.mjs";
 import { mountSplit, zoomOf, saveZoom, fullPanelOf, saveFullPanel, createDock, section, split } from "./panels.mjs";
 
 const $ = (id) => document.getElementById(id);
@@ -505,53 +506,37 @@ function devicePanel(id, mode) {
 
   if (mode !== "slot") frame.append(image, placeholder);
   apply();
-  const details = element("details");
-  details.open = true;
-  const summary = element("summary", "", "State, drafts, outbox & action schemas");
-  const pre = element("pre");
-  details.append(summary, pre);
-  inspector.append(details);
   panel.dataset.device = id;
   panel.image = mode === "slot" ? null : image;
-  panel.state = pre;
-  const action = element("div", "action");
-  const actionLabel = element("label", "label", "App action");
-  const actionSelect = element("select");
-  actionSelect.id = "action-" + id;
-  actionLabel.htmlFor = actionSelect.id;
-  actionSelect.setAttribute("aria-label", "App action for " + id);
-  const actionReason = element("p", "hint");
-  const actionInput = element("textarea");
-  actionInput.setAttribute("aria-label", "App action input for " + id);
-  const invoke = element("button", "primary", "Invoke app action");
 
-  const choose = () => {
-    const chosen = panel.actions.find((a) => a.name === actionSelect.value);
-
-    if (chosen) {
-      actionInput.value = JSON.stringify(chosen.example ?? {}, null, 2);
-      actionReason.textContent = chosen.availability.available
-        ? chosen.description
-        : chosen.availability.reason;
-    }
-  };
-
-  actionSelect.onchange = choose;
-
-  invoke.onclick = () => {
+  // Inline actions report their own outcome; the Server panel's last result shows it too.
+  const perform = async (name, input) => {
     try {
-      void run("action", {
-        device: id,
-        name: actionSelect.value,
-        input: JSON.parse(actionInput.value),
-      });
+      const result = await api("action", { device: id, name, input });
+      $("result").textContent = JSON.stringify(result, null, 2);
+      $("result-box").hidden = false;
+
+      return result;
     } catch (e) {
-      showError(e);
+      let message = e.message;
+
+      try {
+        message = JSON.parse(message).error ?? message;
+      } catch {
+        // Not a JSON error body: keep the message as it is.
+      }
+
+      throw Error(message);
+    } finally {
+      void requestRefresh().catch(showError);
     }
   };
+
+  const details = createInspector(id, perform);
+  inspector.append(details.element);
 
   panel.updateState = (state) => {
-    pre.textContent = JSON.stringify(state, null, 2);
+    details.update(state);
     network.value = String(state.online !== false);
 
     if (!resizing && state.screen) {
@@ -566,29 +551,10 @@ function devicePanel(id, mode) {
 
     if (state.kind === "inpage")
       placeholder.textContent = "This device runs live in the lab page that hosts in-page devices. Open that page to see and use it.";
-    panel.actions = state.actions;
-
-    if (!actionSelect.options.length) {
-      for (const a of state.actions) {
-        const option = element("option", "", a.name);
-        option.value = a.name;
-        actionSelect.append(option);
-      }
-
-      choose();
-    }
-
-    const chosen = state.actions.find((a) => a.name === actionSelect.value);
-    actionReason.textContent = chosen?.availability.available
-      ? chosen.description
-      : chosen?.availability.reason;
   };
 
-  action.append(actionLabel, actionSelect, actionReason, actionInput, invoke);
-  inspector.append(action);
-
   panel.mountSplit = () => {
-    panel.disposeSplit = mountSplit(body, inspector, screen, toggle, "inspector:" + id, 300, 200, 440, true);
+    panel.disposeSplit = mountSplit(body, inspector, screen, toggle, "inspector:" + id, 340, 240, 640, true);
   };
 
   return panel;
