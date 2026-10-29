@@ -323,6 +323,7 @@
       font-size: 13px;
     }
     .devices {
+      position: relative;
       display: flex;
       gap: 16px;
       overflow: auto;
@@ -347,13 +348,40 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 10px;
+      /* translate, not transform: reorder animations own transform. */
       transition:
         opacity 200ms var(--ease-out),
-        transform 200ms var(--ease-out);
+        translate 200ms var(--ease-out),
+        box-shadow 150ms ease,
+        border-color 150ms ease;
       @starting-style {
         opacity: 0;
-        transform: translateY(6px);
+        translate: 0 6px;
       }
+    }
+    .device[data-dragging] {
+      position: relative;
+      z-index: 3;
+      border-color: var(--accent);
+      box-shadow:
+        0 18px 40px rgb(0 0 0 / 55%),
+        0 0 0 1px var(--accent);
+    }
+    .devices[data-settling] > .device {
+      transition: none;
+    }
+    .devices[data-reordering],
+    .devices[data-reordering] * {
+      cursor: grabbing !important;
+      user-select: none;
+    }
+    .reorder-slot {
+      position: absolute;
+      border: 2px dashed color-mix(in srgb, var(--accent) 70%, transparent);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--accent) 6%, transparent);
+      pointer-events: none;
+      transition: left 200ms var(--ease-out);
     }
     .device-heading {
       display: flex;

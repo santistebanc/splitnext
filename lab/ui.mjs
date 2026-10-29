@@ -383,7 +383,7 @@ async function refresh() {
   showHosting(status);
 
   for (const panel of [...$("devices").children])
-    if (!status.devices.includes(panel.dataset.device)) removePanel(panel);
+    if (panel.dataset.device && !status.devices.includes(panel.dataset.device)) removePanel(panel);
 
   for (const id of status.devices) {
     const mode = modeOf(status.deviceKinds[id]);

@@ -147,13 +147,18 @@ export function restoreOrder(root) {
     if (root.children[i] !== panels[i]) move(root, panels[i], root.children[i]);
 }
 
-function movePanel(panel, to) {
+function movePanel(panel, to, before) {
   const root = panel.parentElement;
   const panels = [...root.children];
   const from = panels.indexOf(panel);
 
-  if (to < 0 || to >= panels.length || from === to) return;
-  const before = reorder.measure(root, orderGroup.axes);
+  if (to < 0 || to >= panels.length || from === to) {
+    if (before) reorder.play(before, orderGroup.axes);
+
+    return;
+  }
+
+  before ??= reorder.measure(root, orderGroup.axes);
 
   move(root, panel, to > from ? panels[to].nextElementSibling : panels[to]);
   reorder.play(before, orderGroup.axes);
@@ -162,23 +167,118 @@ function movePanel(panel, to) {
   document.getElementById("layout-announcement").textContent = `${panel.dataset.device} moved to position ${to + 1}`;
 }
 
+/**
+ * Pointer drag: the card follows the pointer, the others slide aside to open its
+ * new place and a slot marks where it lands. The DOM moves once, on release, so
+ * live in-page devices keep their nodes and state.
+ */
+function startDrag(panel, startX) {
+  const root = panel.parentElement;
+  const panels = [...root.children];
+  const from = panels.indexOf(panel);
+  const rects = panels.map((child) => child.getBoundingClientRect());
+  const rootRect = root.getBoundingClientRect();
+  const startScroll = root.scrollLeft;
+  const width = rects[from].width;
+  const gap = parseFloat(getComputedStyle(root).columnGap) || 0;
+  const slot = document.createElement("div");
+  let to = from;
+
+  slot.className = "reorder-slot";
+  slot.style.width = width + "px";
+  slot.style.height = rects[from].height + "px";
+  slot.style.top = rects[from].top - rootRect.top + root.scrollTop + "px";
+  root.dataset.reordering = "";
+  panel.dataset.dragging = "";
+  root.append(slot);
+
+  const place = () => {
+    const left = to > from ? rects[to].right - width : rects[to].left;
+
+    slot.style.left = left - rootRect.left + startScroll + "px";
+  };
+
+  place();
+
+  const update = (clientX) => {
+    const dx = clientX - startX + root.scrollLeft - startScroll;
+    const center = rects[from].left + width / 2 + dx;
+
+    panel.style.transform = `translateX(${dx}px)`;
+    to = from;
+
+    for (let i = 0; i < panels.length; i++) {
+      const middle = rects[i].left + rects[i].width / 2;
+
+      if (i > from && center > middle) to = i;
+
+      if (i < from && center < middle && to === from) to = i;
+    }
+
+    for (let i = 0; i < panels.length; i++) {
+      if (i === from) continue;
+      const shift = from < i && i <= to ? -(width + gap) : to <= i && i < from ? width + gap : 0;
+
+      panels[i].style.translate = shift ? `${shift}px 0` : "";
+    }
+
+    place();
+  };
+
+  const finish = (commit) => {
+    const before = reorder.measure(root, orderGroup.axes);
+
+    root.dataset.settling = "";
+    slot.remove();
+    delete root.dataset.reordering;
+    delete panel.dataset.dragging;
+    panel.style.transform = "";
+
+    for (const child of panels) child.style.translate = "";
+
+    before.delete(slot);
+
+    if (commit) movePanel(panel, to, before);
+    else reorder.play(before, orderGroup.axes);
+
+    requestAnimationFrame(() => delete root.dataset.settling);
+  };
+
+  return { update, finish };
+}
+
 /** Drag only from the handle, leaving the live screen's pointer input alone. */
 export function addReorderHandle(panel, heading, id) {
   const handle = document.createElement("button");
 
   handle.className = "reorder-handle ghost";
   handle.setAttribute("aria-label", `Move ${id}`);
-  handle.title = "Drag to reorder, or use Left and Right arrow keys.";
+  handle.title = "Drag to reorder, or use Left and Right arrow keys. Escape cancels a drag.";
   heading.prepend(handle);
+
+  let start = null,
+    drag = null;
+
+  const end = (commit) => {
+    drag?.finish(commit);
+    drag = null;
+    start = null;
+  };
+
   handle.onkeydown = (event) => {
+    if (event.key === "Escape" && drag) {
+      event.preventDefault();
+      end(false);
+
+      return;
+    }
+
     const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
 
-    if (!step) return;
+    if (!step || drag) return;
     event.preventDefault();
     movePanel(panel, [...panel.parentElement.children].indexOf(panel) + step);
   };
-
-  let start = null;
 
   handle.onpointerdown = (event) => {
     if (event.button !== 0) return;
@@ -186,36 +286,29 @@ export function addReorderHandle(panel, heading, id) {
     handle.setPointerCapture(event.pointerId);
   };
 
-  handle.onpointerup = (event) => {
-    if (start === null || Math.abs(event.clientX - start) < 8) {
-      start = null;
+  handle.onpointerup = () => end(true);
 
-      return;
-    }
+  handle.onpointercancel = () => end(false);
 
-    start = null;
-    const panels = [...panel.parentElement.children];
-    let to = panels.indexOf(panel);
-
-    for (let i = 0; i < panels.length; i++) {
-      const box = panels[i].getBoundingClientRect();
-
-      if (event.clientX >= box.left && event.clientX <= box.right) to = i;
-    }
-
-    movePanel(panel, to);
+  handle.onlostpointercapture = () => {
+    if (drag) end(false);
   };
-
-  handle.onpointercancel = () => { start = null; };
 
   handle.onpointermove = (event) => {
     if (start === null) return;
+
+    if (!drag) {
+      if (Math.abs(event.clientX - start) < 4) return;
+      drag = startDrag(panel, start);
+    }
+
     const root = panel.parentElement;
     const box = root.getBoundingClientRect();
 
     if (event.clientX > box.right - 40) root.scrollLeft += 24;
 
     if (event.clientX < box.left + 40) root.scrollLeft -= 24;
+
+    drag.update(event.clientX);
   };
 }
-
