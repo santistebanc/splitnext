@@ -1,6 +1,6 @@
 import { build } from "esbuild";
 import { createServer } from "node:http";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -60,14 +60,51 @@ export function createLabServer(lab, port) {
 
   let uiBundle;
 
-  const bundle = () => uiBundle ??= build({
-    entryPoints: [path.join(repo, "lab/ui.mjs")],
-    bundle: true,
-    write: false,
-    format: "esm",
-    platform: "browser",
-    define: { "process.env.NODE_ENV": '"production"' },
-  }).then((result) => result.outputFiles[0].contents);
+  // The page is read fresh on every request, so the script it loads must follow
+  // edits too: rebuild whenever a bundled lab source file changed.
+  const stampOf = async (sources) =>
+    (
+      await Promise.all(
+        sources.map((file) => stat(file).then((info) => info.mtimeMs, () => 0)),
+      )
+    ).join(",");
+
+  const rebuild = async () => {
+    const result = await build({
+      entryPoints: [path.join(repo, "lab/ui.mjs")],
+      bundle: true,
+      write: false,
+      metafile: true,
+      format: "esm",
+      platform: "browser",
+      define: { "process.env.NODE_ENV": '"production"' },
+    });
+
+    const sources = Object.keys(result.metafile.inputs)
+      .filter((input) => !input.includes("node_modules"))
+      .map((input) => path.resolve(repo, input));
+
+    return {
+      contents: result.outputFiles[0].contents,
+      sources,
+      stamp: await stampOf(sources),
+    };
+  };
+
+  const bundle = async () => {
+    const pending = (uiBundle ??= rebuild());
+
+    // A failed build (say, a syntax error mid-edit) is retried on the next request.
+    pending.catch(() => uiBundle === pending && (uiBundle = undefined));
+
+    const current = await pending;
+
+    if ((await stampOf(current.sources)) === current.stamp) return current.contents;
+
+    if (uiBundle === pending) uiBundle = undefined;
+
+    return bundle();
+  };
 
   const server = createServer(async (req, res) => {
     try {
