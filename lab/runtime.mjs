@@ -549,7 +549,7 @@ export class Lab {
       void this.event("page.error", { host: true, error: String(error) });
     });
     this.headless = { context, page };
-    await page.goto(`${this.labOrigin}/?host=headless`);
+    await page.goto(new URL("/?host=headless", this.labOrigin).href);
   }
   async stopHeadlessHost() {
     const headless = this.headless;
@@ -650,7 +650,8 @@ export class Lab {
   deviceConfigs() {
     const environment = path.basename(this.root);
 
-    return [...this.devices.values()]
+    return this.devices
+      .values()
       .filter((d) => d.kind === "inpage")
       .map((d) => ({
         id: d.id,
@@ -659,7 +660,8 @@ export class Lab {
         latencyMs: d.latencyMs,
         clipboard: d.clipboard,
         share: d.share,
-      }));
+      }))
+      .toArray();
   }
   async waitForInPageScreen(id) {
     const deadline = Date.now() + 30000;
@@ -1042,6 +1044,7 @@ export class Lab {
 
         return { foreground: true };
       }
+
       case "deviceNavigate": {
         const d = this.device(input.device);
 
@@ -1059,6 +1062,7 @@ export class Lab {
 
         return { moved: true };
       }
+
       case "deviceCapabilities": {
         const d = this.device(input.device);
 
@@ -1075,6 +1079,7 @@ export class Lab {
 
         return result;
       }
+
       case "reloadHost":
         await this.reloadHost();
 
