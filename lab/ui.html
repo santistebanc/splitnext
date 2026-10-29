@@ -488,24 +488,29 @@
       color: var(--muted);
     }
 
+    /* A device panel never scrolls as a whole: the screen's viewport and the inspector
+       each scroll on their own. Clip, unlike hidden, also stops focus and scrollIntoView
+       inside the live app from scrolling these. */
     .device {
       display: flex;
       flex-direction: column;
-      overflow: hidden;
+      overflow: clip;
     }
-    /* The screen keeps its width; the inspector gives way first, then the panel scrolls sideways. */
     .device-split {
       flex: 1;
       min-height: 0;
       display: flex;
-      overflow-x: auto;
+      overflow: clip;
     }
-    /* Like Chrome's device mode: a compact toolbar above a viewport that holds the screen. */
+    /* Like Chrome's device mode: a compact toolbar above a viewport that holds the screen.
+       It narrows to its minimum first, then the inspector gives way. */
     .device-screen {
       flex: 1 1 0;
-      min-width: 280px;
+      min-width: 160px;
+      min-height: 0;
       display: flex;
       flex-direction: column;
+      overflow: clip;
       background: var(--sunken);
     }
     .device-toolbar {
@@ -747,7 +752,7 @@
       flex: none;
       overflow: visible;
     }
-    [data-headless] :is(.device-screen, .device-viewport) {
+    [data-headless] :is(.device-split, .device-screen, .device-viewport) {
       flex: none;
       overflow: visible;
     }
