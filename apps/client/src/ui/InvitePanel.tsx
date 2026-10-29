@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { formatInviteLink } from '@splitnext/client';
 import type { AppController } from '../model/controller';
@@ -10,16 +10,12 @@ import { useActionCall, useActions, useUiState } from './useActionCall';
 export type InvitePanelApp = Pick<AppController, 'snapshot'>;
 
 /** Selects the link's text on the web, so copying shows what was copied. */
-function selectLink(): void {
-  if (Platform.OS !== 'web') return;
+function selectLink(node: Text | null): void {
+  // On the web a text ref is its element.
+  if (Platform.OS !== 'web' || !(node instanceof Node)) return;
 
-  const node = document.getElementById(linkId);
-  const selection = window.getSelection();
-
-  if (node && selection) selection.selectAllChildren(node);
+  window.getSelection()?.selectAllChildren(node);
 }
-
-const linkId = 'invite-link-text';
 
 /** A square icon action beside the link. */
 function LinkAction(props: { label: string; disabled: boolean; onPress: () => void; children: ReactNode }) {
@@ -48,7 +44,9 @@ export function InvitePanel(props: { app: InvitePanelApp }) {
   const replica = props.app.snapshot().group;
   const invite = replica?.projected_snapshot?.invite;
   const copied = useUiState().copiedInviteId === invite?.id;
-  const canShare = useActions().capabilities.shareLink;
+  const actions = useActions();
+  const canShare = actions.capabilities.shareLink;
+  const linkText = useRef<Text>(null);
   const action = useActionCall();
   const replace = useActionCall();
   const online = props.app.snapshot().online;
@@ -56,7 +54,7 @@ export function InvitePanel(props: { app: InvitePanelApp }) {
 
   const link =
     invite && replica
-      ? formatInviteLink(window.location.origin, replica.group_id, invite.token)
+      ? formatInviteLink(actions.appUrl, replica.group_id, invite.token)
       : null;
 
   const shown = link?.replace(/^https?:\/\//, '') ?? '';
@@ -82,13 +80,13 @@ export function InvitePanel(props: { app: InvitePanelApp }) {
             accessibilityLabel={copied ? 'Link copied' : 'Copy link'}
             disabled={!action.can('copyInviteLink')}
             onPress={() => {
-              selectLink();
+              selectLink(linkText.current);
               void action.call('copyInviteLink', {});
             }}
             onLayout={(event) => setRoom(event.nativeEvent.layout.width)}
             style={({ pressed }) => [{ flex: 1, minWidth: 0, paddingVertical: 14 }, pressed && s.pressed]}
           >
-            <Text testID="invite-link" nativeID={linkId} selectable numberOfLines={1} style={{ fontFamily: monoFamily, fontSize: linkSize, lineHeight: 21, fontWeight: '500', color: colors.ink }}>
+            <Text ref={linkText} testID="invite-link" selectable numberOfLines={1} style={{ fontFamily: monoFamily, fontSize: linkSize, lineHeight: 21, fontWeight: '500', color: colors.ink }}>
               {shown}
             </Text>
           </Pressable>

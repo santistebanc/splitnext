@@ -327,6 +327,7 @@ export function createDispatcher(
       report: () => diagnostics.report(host.snapshot(), ui.snapshot()),
     },
     ui: { snapshot: ui.snapshot, subscribe: ui.subscribe },
+    appUrl: platform.appUrl,
     capabilities: {
       copyText: Boolean(platform.copyText),
       shareLink: Boolean(platform.shareLink),

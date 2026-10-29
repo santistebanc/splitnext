@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
-import { useWindowDimensions } from 'react-native';
+import { useScreenHost, useScreenSize } from './screenHost';
 
 /**
  * Phone-width layouts. The server cannot measure the window, so server markup
  * and the hydrating render both use the compact layout before measuring.
  */
 export function useCompactLayout(): boolean {
-  const width = useWindowDimensions().width;
+  const width = useScreenSize().width;
   const [measured, setMeasured] = useState(false);
 
   useLayoutEffect(() => setMeasured(true), []);
@@ -34,11 +34,13 @@ export function useTouchInput(): boolean {
 /** Keep the page's scroll area reaching the visible bottom above the keyboard. */
 export function useVisibleViewportHeight(enabled: boolean): number | null {
   const [height, setHeight] = useState<number | null>(null);
+  // A hosted screen has no keyboard of its own: the window's belongs to none of its devices.
+  const hosted = useScreenHost() !== null;
 
   useEffect(() => {
     const viewport = window.visualViewport;
 
-    if (!enabled || !viewport) return;
+    if (!enabled || hosted || !viewport) return;
 
     let frame: number | null = null;
 
@@ -90,7 +92,7 @@ export function useVisibleViewportHeight(enabled: boolean): number | null {
 
       if (frame !== null) cancelAnimationFrame(frame);
     };
-  }, [enabled]);
+  }, [enabled, hosted]);
 
-  return enabled ? height : null;
+  return enabled && !hosted ? height : null;
 }

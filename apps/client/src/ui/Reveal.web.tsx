@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from 'react';
 import type { RevealProps } from './Reveal';
+import { useScreenHost } from './screenHost';
 import { easeOut } from './theme';
 
 type Frame = { height: string; opacity: string | number; transform: string };
@@ -19,6 +20,7 @@ export function Reveal(props: RevealProps) {
   const [closing, setClosing] = useState(false);
   const [, rerender] = useReducer((count: number) => count + 1, 0);
   const dismiss = useRef(props.onOutsidePress);
+  const host = useScreenHost();
 
   dismiss.current = props.onOutsidePress;
 
@@ -31,7 +33,7 @@ export function Reveal(props: RevealProps) {
 
     const toggle = props.toggle;
 
-    function outside(event: MouseEvent): void {
+    function outside(event: Event): void {
       const target = event.target;
 
       if (!(target instanceof Node) || !target.isConnected) return;
@@ -42,10 +44,13 @@ export function Reveal(props: RevealProps) {
       dismiss.current?.();
     }
 
-    document.addEventListener('click', outside, true);
+    // A hosted screen answers taps in its own box, not those on other devices.
+    const scope = host?.frame ?? document;
 
-    return () => document.removeEventListener('click', outside, true);
-  }, [present, Boolean(props.onOutsidePress), props.toggle]);
+    scope.addEventListener('click', outside, true);
+
+    return () => scope.removeEventListener('click', outside, true);
+  }, [present, Boolean(props.onOutsidePress), props.toggle, host]);
 
   useLayoutEffect(() => {
     const node = element.current;

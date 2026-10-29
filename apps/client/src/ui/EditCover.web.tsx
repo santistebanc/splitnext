@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useScreenHost } from './screenHost';
 import type { EditCoverProps } from './EditCover';
 
 /** The same shade as the drawers' backdrop. */
@@ -17,6 +18,7 @@ type Box = { top: number; left: number; right: number; bottom: number };
  * and out like the drawers' backdrop.
  */
 export function EditCover(props: EditCoverProps) {
+  const host = useScreenHost();
   const [box, setBox] = useState<Box | null>(null);
   const [shown, setShown] = useState(false);
 
@@ -35,10 +37,11 @@ export function EditCover(props: EditCoverProps) {
 
       if (target instanceof Element) {
         const rect = target.getBoundingClientRect();
+        // A hosted cover fills its device's box, so the field is placed within it.
+        const origin = host?.frame.getBoundingClientRect();
+        const next = { top: rect.top - (origin?.top ?? 0), left: rect.left - (origin?.left ?? 0), right: rect.right - (origin?.left ?? 0), bottom: rect.bottom - (origin?.top ?? 0) };
 
-        setBox((last) => last && last.top === rect.top && last.left === rect.left && last.right === rect.right && last.bottom === rect.bottom
-          ? last
-          : { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom });
+        setBox((last) => last && last.top === next.top && last.left === next.left && last.right === next.right && last.bottom === next.bottom ? last : next);
       }
 
       frame = requestAnimationFrame(follow);
@@ -52,7 +55,7 @@ export function EditCover(props: EditCoverProps) {
       cancelAnimationFrame(frame);
       cancelAnimationFrame(reveal);
     };
-  }, [props.open, props.target]);
+  }, [props.open, props.target, host]);
 
   if (!box) return null;
 
@@ -67,7 +70,7 @@ export function EditCover(props: EditCoverProps) {
   ];
 
   return createPortal(
-    <div data-testid="edit-cover" aria-hidden style={{ position: 'fixed', inset: 0, zIndex: 1000, pointerEvents: 'none', opacity: shown ? 1 : 0, transition: `opacity ${shown ? 340 : 260}ms` }}>
+    <div data-testid="edit-cover" aria-hidden style={{ position: host ? 'absolute' : 'fixed', inset: 0, zIndex: 1000, pointerEvents: 'none', opacity: shown ? 1 : 0, transition: `opacity ${shown ? 340 : 260}ms` }}>
       {parts.map((part, index) => (
         <div
           key={index}
@@ -76,6 +79,6 @@ export function EditCover(props: EditCoverProps) {
         />
       ))}
     </div>,
-    document.body,
+    host?.overlay ?? document.body,
   );
 }
