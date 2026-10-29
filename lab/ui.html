@@ -562,11 +562,42 @@
       margin: 3px 4px;
       background: var(--border);
     }
-    .toolbar-end {
+    /* The device's own controls, in one thin bar across the screen and the inspector. */
+    .device-bar {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      min-height: 28px;
+      padding: 1px 6px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .device-bar button:not(.slot *) {
+      min-height: 24px;
+      padding: 1px 8px;
+      font-size: 12px;
+    }
+    .network-toggle {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      margin-inline-start: auto;
+      gap: 6px;
+    }
+    .network-toggle::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--good);
+    }
+    .network-toggle[data-tone="bad"] {
+      color: var(--warn);
+    }
+    .network-toggle[data-tone="bad"]::before {
+      background: var(--warn);
+    }
+    .bar-spacer {
+      flex: 1;
     }
     .device-viewport {
       flex: 1;
@@ -576,6 +607,17 @@
       overflow: auto;
       /* Room for the handles beyond the right and bottom edges. */
       padding: 16px 28px 28px 16px;
+    }
+    /* Full panel: the screen fills the viewport edge to edge, with no frame or handles. */
+    .device-viewport[data-full] {
+      padding: 0;
+    }
+    .device-viewport[data-full] .screen-frame {
+      border: 0;
+      box-shadow: none;
+    }
+    .device-viewport[data-full] .screen-handle {
+      display: none;
     }
     /* Sized by the script: the device's screen times its zoom, plus the border. Auto margins centre it and still scroll. */
     .screen-stage {
@@ -1028,7 +1070,7 @@
       flex: none;
       overflow: visible;
     }
-    [data-headless] :is(.device-toolbar, .screen-handle) {
+    [data-headless] :is(.device-bar, .device-toolbar, .screen-handle) {
       display: none !important;
     }
     #layout-announcement {
