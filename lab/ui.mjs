@@ -48,10 +48,32 @@ let hostRole = "unknown",
 
 let schemas = {};
 
-// Preview draws a screen at half its size, so more devices fit side by side.
-const previewZoom = 0.5;
+// Fit (the default) draws each screen as large as its viewport allows, up to 100%.
+const fitZoom = 0;
 
 const zoomLevels = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5];
+
+const defaultScreen = { width: 390, height: 780 };
+
+const minScreen = { width: 240, height: 320 };
+
+const maxScreen = 1600;
+
+// The space around a drawn screen and the width of its resize handles, in page pixels.
+const stageMargin = 16;
+
+const handleSize = 12;
+
+// The phones and tablets Chrome's device toolbar lists, in CSS pixels.
+const screenPresets = [
+  ["iPhone SE", 375, 667],
+  ["iPhone 12 Pro", 390, 844],
+  ["iPhone 14 Pro Max", 430, 932],
+  ["Pixel 7", 412, 915],
+  ["Samsung Galaxy S8+", 360, 740],
+  ["iPad Mini", 768, 1024],
+  ["iPad Air", 820, 1180],
+];
 
 // A browser opens about six connections to the supervisor. When this page hosts
 // in-page devices, an operation can wait on this page's own host results, so
@@ -113,70 +135,96 @@ function element(tag, className, text) {
   return node;
 }
 
-/** Buttons for one exclusive setting; the current value is pressed. */
-function segmented(label, options) {
-  const group = element("div", "segmented");
-  group.setAttribute("role", "group");
-  group.setAttribute("aria-label", label);
-
-  const buttons = options.map(([text, value, onclick]) => {
-    const button = element("button", "", text);
-    button.setAttribute("aria-pressed", "false");
-    button.onclick = onclick;
-    group.append(button);
-
-    return [value, button];
-  });
-
-  group.select = (current) => {
-    for (const [value, button] of buttons) button.setAttribute("aria-pressed", String(value === current));
-  };
-
-  return group;
-}
-
 function devicePanel(id, mode) {
   const panel = element("article", mode === "slot" ? "device live" : "device");
   panel.dataset.mode = mode;
   panel.setAttribute("aria-label", id);
-  const toggle = element("button", "ghost end", "Inspector");
+  const toggle = element("button", "ghost", "Inspector");
   toggle.setAttribute("aria-label", "Toggle inspector for " + id);
-  const toolbar = element("div", "device-toolbar");
   const body = element("div", "device-split");
   const screen = element("div", "device-screen");
+  const toolbar = element("div", "device-toolbar");
+  const viewport = element("div", "device-viewport");
   const inspector = element("div", "inspector");
+  screen.append(toolbar, viewport);
   body.append(screen, inspector);
-  panel.append(toolbar, body);
+  panel.append(body);
 
-  const network = segmented("Network for " + id, [
-    ["Online", true, () => run("deviceNetwork", { device: id, online: true })],
-    ["Offline", false, () => run("deviceNetwork", { device: id, online: false })],
-  ]);
+  const labelled = (node, label) => {
+    node.setAttribute("aria-label", label + " for " + id);
+    node.title = label;
 
-  const reload = element("button", "", "Reload");
+    return node;
+  };
+
+  const option = (text, value) => Object.assign(element("option", "", text), { value: String(value) });
+
+  // Chrome's network throttling menu, reduced to what the lab can do.
+  const network = labelled(element("select"), "Network");
+  network.append(option("Online", true), option("Offline", false));
+  network.onchange = () => run("deviceNetwork", { device: id, online: network.value === "true" });
+
+  const reload = labelled(element("button", "ghost", "Reload"), "Reload");
   reload.onclick = () => run("reloadDevice", { device: id });
-  const remove = element("button", "danger", "Remove");
 
-  remove.onclick = () => {
+  panel.close = () => {
     if (confirm(`Remove ${id} and delete its data?`)) void run("removeDevice", { device: id });
   };
 
   // The screen keeps its size in CSS pixels; zoom only changes how large it is drawn here.
-  const defaultScreen = { width: 390, height: 780 };
   let current = { ...defaultScreen };
   let resizing = false;
   // A headless host is screenshot and clicked by the supervisor at the screen's own size.
-  let zoom = headless ? 1 : zoomOf(id, previewZoom);
+  let zoom = headless ? 1 : zoomOf(id, fitZoom);
+  // While a handle is dragged the drawn scale holds still, so the edge follows the pointer.
+  let heldScale = null;
+  const stage = element("div", "screen-stage");
   const frame = element("div", "screen-frame");
-  const sizeLabel = element("span", "screen-size");
-  const zoomSelect = element("select");
-  zoomSelect.setAttribute("aria-label", "Zoom for " + id);
+  stage.append(frame);
+  viewport.append(stage);
 
-  for (const value of zoomLevels) {
-    const option = element("option", "", Math.round(value * 100) + "%");
-    option.value = String(value);
-    zoomSelect.append(option);
-  }
+  const dimensions = labelled(element("select"), "Dimensions");
+  dimensions.append(option("Responsive", "responsive"));
+
+  for (const [name] of screenPresets) dimensions.append(option(name, name));
+
+  const sizeInput = (label, min, max) => {
+    const input = labelled(element("input", "screen-dimension"), label);
+    Object.assign(input, { type: "number", min, max, step: 1 });
+
+    return input;
+  };
+
+  const widthInput = sizeInput("Width", minScreen.width, maxScreen);
+  const heightInput = sizeInput("Height", minScreen.height, maxScreen);
+  const zoomSelect = labelled(element("select"), "Zoom");
+  const fitOption = option("Fit to window", fitZoom);
+  zoomSelect.append(fitOption);
+
+  for (const value of zoomLevels) zoomSelect.append(option(Math.round(value * 100) + "%", value));
+
+  const rotate = labelled(element("button", "ghost icon", "⟲"), "Rotate");
+  const times = element("span", "times", "×");
+  const divider = () => element("span", "toolbar-divider");
+  const end = element("span", "toolbar-end");
+  end.append(reload, toggle);
+  toolbar.append(dimensions, widthInput, times, heightInput, divider(), zoomSelect, network, rotate, end);
+
+  const clamp = (value, min, max) => Math.round(Math.min(max, Math.max(min, value)));
+
+  const bounded = ({ width, height }) => ({
+    width: clamp(width, minScreen.width, maxScreen),
+    height: clamp(height, minScreen.height, maxScreen),
+  });
+
+  // Fit draws the whole screen inside the viewport, never larger than its own pixels.
+  const fitScale = () => {
+    const room = { width: viewport.clientWidth - 2 * stageMargin - handleSize, height: viewport.clientHeight - 2 * stageMargin - handleSize };
+
+    return Math.max(0.1, Math.min(1, room.width / (current.width + 2), room.height / (current.height + 2)));
+  };
+
+  const scale = () => heldScale ?? (zoom === fitZoom ? fitScale() : zoom);
 
   // Refreshes leave the size alone until the device has taken the new one.
   const commit = async () => {
@@ -190,7 +238,14 @@ function devicePanel(id, mode) {
   };
 
   const setScreen = (next) => {
-    if (next.width === current.width && next.height === current.height) return;
+    next = bounded(next);
+
+    if (next.width === current.width && next.height === current.height) {
+      apply();
+
+      return;
+    }
+
     current = next;
     apply();
     void commit();
@@ -202,33 +257,44 @@ function devicePanel(id, mode) {
     apply();
   };
 
-  const presets = segmented("Screen preset for " + id, [
-    ["Preview", "preview", () => { setZoom(previewZoom); setScreen(defaultScreen); }],
-    ["Full", "full", () => { setZoom(1); setScreen(defaultScreen); }],
-  ]);
-
   zoomSelect.onchange = () => setZoom(Number(zoomSelect.value));
 
+  dimensions.onchange = () => {
+    const preset = screenPresets.find(([name]) => name === dimensions.value);
+
+    if (preset) setScreen({ width: preset[1], height: preset[2] });
+  };
+
+  widthInput.onchange = () => setScreen({ ...current, width: Number(widthInput.value) || current.width });
+
+  heightInput.onchange = () => setScreen({ ...current, height: Number(heightInput.value) || current.height });
+
+  rotate.onclick = () => setScreen({ width: current.height, height: current.width });
+
   const apply = () => {
-    frame.style.width = current.width * zoom + 2 + "px";
-    frame.style.height = current.height * zoom + 2 + "px";
+    const drawn = scale();
+    stage.style.width = current.width * drawn + 2 + "px";
+    stage.style.height = current.height * drawn + 2 + "px";
 
     if (slot) {
-      slot.style.zoom = String(zoom);
+      slot.style.zoom = String(drawn);
       slot.style.width = current.width + "px";
       slot.style.height = current.height + "px";
     }
 
-    sizeLabel.textContent = `${current.width} × ${current.height}`;
+    if (document.activeElement !== widthInput) widthInput.value = String(current.width);
 
-    if (!zoomLevels.includes(zoom)) zoomSelect.append(Object.assign(element("option", "", Math.round(zoom * 100) + "%"), { value: String(zoom) }));
+    if (document.activeElement !== heightInput) heightInput.value = String(current.height);
+
+    const preset = screenPresets.find(([, width, height]) => width === current.width && height === current.height);
+    dimensions.value = preset ? preset[0] : "responsive";
+    fitOption.textContent = `Fit to window (${Math.round(fitScale() * 100)}%)`;
+
+    if (![fitZoom, ...zoomLevels].includes(zoom)) zoomSelect.append(option(Math.round(zoom * 100) + "%", zoom));
     zoomSelect.value = String(zoom);
-    const standard = current.width === defaultScreen.width && current.height === defaultScreen.height;
-    presets.select(standard && zoom === previewZoom ? "preview" : standard && zoom === 1 ? "full" : null);
   };
 
-  toolbar.append(network, reload, presets, zoomSelect, sizeLabel, toggle, remove);
-  screen.append(frame);
+  if (!headless) new ResizeObserver(() => zoom === fitZoom && !heldScale && apply()).observe(viewport);
 
   // The device itself lives here, in this document; nothing is mirrored.
   const slot = mode === "slot" ? element("div", "slot") : null;
@@ -240,60 +306,78 @@ function devicePanel(id, mode) {
     labHost?.attach(id, slot);
   }
 
-  // Dragging the corner gives the app a larger or smaller screen, at this zoom.
-  const grip = element("button", "screen-resize");
-  grip.setAttribute("aria-label", "Resize screen of " + id);
-  grip.title = "Drag to resize the screen, or use the arrow keys. Shift moves 50 pixels.";
-  const clamp = (value, min, max) => Math.round(Math.min(max, Math.max(min, value)));
-  let start = null;
+  // Like Chrome's responsive mode, the right and bottom edges and their corner resize the screen.
+  // The stage is centred horizontally, so a width change moves the right edge by half of it.
+  const handle = (edge, label, cursorClass) => {
+    const grip = element("button", "screen-handle " + cursorClass);
+    grip.dataset.edge = edge;
+    grip.setAttribute("aria-label", label + " of " + id);
+    grip.title = "Drag to resize the screen, or use the arrow keys. Shift moves 50 pixels.";
+    const horizontal = edge.includes("x");
+    const vertical = edge.includes("y");
+    let start = null;
 
-  grip.onpointerdown = (event) => {
-    if (event.button !== 0) return;
-    start = { x: event.clientX, y: event.clientY, ...current };
-    resizing = true;
-    frame.dataset.resizing = "";
-    grip.setPointerCapture(event.pointerId);
-  };
-
-  grip.onpointermove = (event) => {
-    if (!start) return;
-    current = {
-      width: clamp(start.width + (event.clientX - start.x) / zoom, 240, 1600),
-      height: clamp(start.height + (event.clientY - start.y) / zoom, 320, 1600),
+    grip.onpointerdown = (event) => {
+      if (event.button !== 0) return;
+      start = { x: event.clientX, y: event.clientY, ...current };
+      heldScale = scale();
+      resizing = true;
+      frame.dataset.resizing = "";
+      grip.setPointerCapture(event.pointerId);
     };
-    apply();
+
+    grip.onpointermove = (event) => {
+      if (!start) return;
+
+      current = bounded({
+        width: horizontal ? start.width + (2 * (event.clientX - start.x)) / heldScale : start.width,
+        height: vertical ? start.height + (event.clientY - start.y) / heldScale : start.height,
+      });
+
+      apply();
+    };
+
+    const release = () => {
+      if (!start) return;
+      const from = start;
+      start = null;
+      heldScale = null;
+      resizing = false;
+      delete frame.dataset.resizing;
+      apply();
+
+      if (from.width !== current.width || from.height !== current.height) void commit();
+    };
+
+    grip.onpointerup = release;
+
+    grip.onpointercancel = release;
+
+    let keyed = null;
+
+    grip.onkeydown = (event) => {
+      const step = event.shiftKey ? 50 : 10;
+      const dx = !horizontal ? 0 : event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0;
+      const dy = !vertical ? 0 : event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0;
+
+      if (!dx && !dy) return;
+      event.preventDefault();
+      current = bounded({ width: current.width + dx, height: current.height + dy });
+      resizing = true;
+      apply();
+      clearTimeout(keyed);
+
+      keyed = setTimeout(() => void commit(), 400);
+    };
+
+    return grip;
   };
 
-  const release = () => {
-    if (!start) return;
-    const from = start;
-    start = null;
-    resizing = false;
-    delete frame.dataset.resizing;
-
-    if (from.width !== current.width || from.height !== current.height) void commit();
-  };
-
-  grip.onpointerup = release;
-
-  grip.onpointercancel = release;
-
-  let keyed = null;
-
-  grip.onkeydown = (event) => {
-    const step = event.shiftKey ? 50 : 10;
-    const dx = event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0;
-    const dy = event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0;
-
-    if (!dx && !dy) return;
-    event.preventDefault();
-    current = { width: clamp(current.width + dx, 240, 1600), height: clamp(current.height + dy, 320, 1600) };
-    resizing = true;
-    apply();
-    clearTimeout(keyed);
-
-    keyed = setTimeout(() => void commit(), 400);
-  };
+  stage.append(
+    handle("x", "Resize width", "edge-x"),
+    handle("y", "Resize height", "edge-y"),
+    handle("xy", "Resize screen", "edge-xy"),
+  );
 
   const image = element("img", "screen");
   image.alt = `Actual app screen for ${id}`;
@@ -370,7 +454,6 @@ function devicePanel(id, mode) {
   };
 
   if (mode !== "slot") frame.append(image, placeholder);
-  frame.append(grip);
   apply();
   const details = element("details");
   details.open = true;
@@ -419,7 +502,7 @@ function devicePanel(id, mode) {
 
   panel.updateState = (state) => {
     pre.textContent = JSON.stringify(state, null, 2);
-    network.select(state.online);
+    network.value = String(state.online !== false);
 
     if (!resizing && state.screen) {
       current = state.screen;
@@ -486,7 +569,8 @@ function panelFor(id, mode) {
     p = devicePanel(id, mode);
     devicePanels.set(id, p);
 
-    if (dock) dock.add("device:" + id, p, { title: id, tone: "good", detail: mode === "slot" ? "in-page · live" : "" });
+    if (dock)
+      dock.add("device:" + id, p, { title: id, tone: "good", detail: mode === "slot" ? "in-page · live" : "", onClose: p.close });
     else $("workspace").append(p);
 
     p.mountSplit();

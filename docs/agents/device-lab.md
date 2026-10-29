@@ -37,17 +37,24 @@ Left/Right switch tabs, Alt+Left/Right reorder them and Alt+Shift+Left/Right mov
 the panel to the previous or next section. Empty sections close. New devices open
 beside the other devices. Reset layout restores the default.
 
-Each device panel has its controls in a toolbar and an inspector beside the
-screen, which motion-panels resizes and collapses (Enter on its separator, or the
-Inspector button). The screen keeps its width: the inspector narrows first.
-Hidden tabs and collapsed content stay mounted.
+Each device panel works like Chrome's responsive device mode with DevTools docked
+to the side. The screen section has a device toolbar (Dimensions, width × height,
+Zoom, Online/Offline, Rotate, Reload, Inspector). Beside it is an inspector that
+motion-panels resizes and collapses (Enter on its separator, or the Inspector
+button); the screen section narrows down to a minimum width first, then the
+inspector does. A device's tab shows a × on hover (or Delete on the focused tab)
+that removes the device after confirming. Hidden tabs and collapsed content stay
+mounted.
 
 Each device has a screen size and the page draws it at a zoom. The size is the
 device's own viewport (default 390 × 780): set it with `deviceScreen` (`width`
-240–1600, `height` 320–1600), or drag the screen's corner grip (arrow keys on the
-focused grip; Shift takes larger steps). It is saved with the device and applied to
-both kinds. Zoom only changes how large the page draws a screen and is saved in
-this browser. Preview (default) is 390 × 780 at 50%; Full is 390 × 780 at 100%. A
+240–1600, `height` 320–1600), pick a Dimensions preset, type it, rotate it, or drag
+the handles on the screen's right edge, bottom edge or corner (arrow keys on a
+focused handle; Shift takes larger steps). The screen is centred, so dragging the
+right edge changes the width by twice the pointer's movement, as in Chrome. The size
+is saved with the device and applied to both kinds. Zoom only changes how large the
+page draws a screen and is saved in this browser. Fit to window (default) draws the
+whole screen in its section at up to 100% and follows the section's size. A
 headless host always draws at 100%, so its screenshots and clicks use screen pixels.
 
 Moving a panel retains the live screen and its drafts. The layout, inspector
