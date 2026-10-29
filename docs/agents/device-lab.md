@@ -26,11 +26,21 @@ to avoid shell quoting differences. The frontend calls exactly the same API:
 
 ## Page layout
 
-The dark lab page uses motion-panels for the server sidebar and each device's
-inspector. Drag a separator to resize; arrow keys resize a focused separator
-(Shift takes larger steps), Enter collapses or expands it, and double-click resets
-its size. The Server panel and Inspector buttons also toggle visibility.
-Collapsed content stays mounted.
+The dark lab page fills the window like an IDE: the page never scrolls, only
+panels do. It is a tree of sections divided by separators; each section shows its
+panels as tabs. The panels are Server, Timeline, Server state, Operations and one
+per device. Drag a separator to resize (arrow keys on a focused separator, Shift
+for larger steps; double-click shares the room evenly). Drag a tab onto another
+section's tabs or body to join it, or near a section's edge to split that section
+there; a highlight shows where it lands and Escape cancels. On a focused tab,
+Left/Right switch tabs, Alt+Left/Right reorder them and Alt+Shift+Left/Right move
+the panel to the previous or next section. Empty sections close. New devices open
+beside the other devices. Reset layout restores the default.
+
+Each device panel has its controls in a toolbar and an inspector beside the
+screen, which motion-panels resizes and collapses (Enter on its separator, or the
+Inspector button). The screen keeps its width: the inspector narrows first.
+Hidden tabs and collapsed content stay mounted.
 
 Each device has a screen size and the page draws it at a zoom. The size is the
 device's own viewport (default 390 × 780): set it with `deviceScreen` (`width`
@@ -40,12 +50,10 @@ both kinds. Zoom only changes how large the page draws a screen and is saved in
 this browser. Preview (default) is 390 × 780 at 50%; Full is 390 × 780 at 100%. A
 headless host always draws at 100%, so its screenshots and clicks use screen pixels.
 
-Drag a device's Move handle onto another device to reorder, or focus the handle
-and use Left/Right. While dragging, the other devices make room and a dashed slot
-shows where the device lands; Escape cancels. The strip scrolls horizontally when devices exceed the page.
-Moving a panel retains the live screen and its drafts. Sizes, collapsed states
-and device order are saved in this browser's localStorage, separate from the lab
-environment and its checkpoints. Reduced motion disables layout travel.
+Moving a panel retains the live screen and its drafts. The layout, inspector
+sizes and zooms are saved in this browser's localStorage, separate from the lab
+environment and its checkpoints. The headless host page shows only devices, each
+whole, for the supervisor to screenshot and click.
 
 The supervisor bundles the plain DOM entry in `lab/ui.mjs` and its motion-panels
 core adapter in `lab/panels.mjs` with esbuild on the first `/ui.js` request,

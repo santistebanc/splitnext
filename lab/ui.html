@@ -39,6 +39,10 @@
     }
     body {
       margin: 0;
+      height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
       background: var(--bg);
       color: var(--text);
       font:
@@ -47,13 +51,10 @@
         sans-serif;
     }
     header {
-      position: sticky;
-      top: 0;
-      z-index: 2;
-      padding: 12px 24px;
+      flex: none;
+      padding: 6px 12px;
       border-bottom: 1px solid var(--border);
-      background: color-mix(in srgb, var(--bg) 88%, transparent);
-      backdrop-filter: blur(8px);
+      background: var(--bg);
       display: flex;
       gap: 12px 24px;
       align-items: center;
@@ -187,8 +188,6 @@
       border-radius: var(--radius);
       white-space: pre-wrap;
       overflow-wrap: anywhere;
-      max-height: 300px;
-      overflow: auto;
     }
     pre:empty {
       display: none;
@@ -214,9 +213,6 @@
       letter-spacing: 0.04em;
       text-transform: uppercase;
       color: var(--muted);
-    }
-    label.label {
-      margin-top: 12px;
     }
     .hint {
       margin: 0;
@@ -262,6 +258,9 @@
       align-items: center;
       gap: 8px;
     }
+    .control-row > .segmented {
+      justify-self: start;
+    }
     .control-row > span {
       color: var(--muted);
       font-size: 13px;
@@ -282,158 +281,237 @@
       border: 0;
     }
 
-    main {
+    /* The page is one screen: sections share it and each panel scrolls on its own. */
+    #workspace {
+      flex: 1;
+      min-height: 0;
       display: flex;
-      padding: 16px 24px 24px;
-      align-items: stretch;
-      min-height: calc(100dvh - 56px);
     }
-    #server-panel {
-      flex: none;
-      overflow: clip;
+    .dock-split {
+      display: flex;
+      min-width: 0;
+      min-height: 0;
     }
-    .panel-content {
-      height: 100%;
-      overflow: auto;
+    .dock-split[data-direction="column"] {
+      flex-direction: column;
     }
-    #server-panel .panel-content {
+    #workspace > *,
+    .dock-split > :not(.dock-separator) {
+      flex: 1 1 0;
+      min-width: 0;
+      min-height: 0;
+    }
+    .dock-section {
       display: flex;
       flex-direction: column;
-      gap: 16px;
-      padding: 4px 12px 4px 0;
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .dock-tabs {
+      flex: none;
+      display: flex;
+      overflow-x: auto;
+      scrollbar-width: none;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+    button.dock-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 32px;
+      padding: 0 12px;
+      border: 0;
+      border-right: 1px solid var(--border);
+      border-radius: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+    }
+    button.dock-tab:hover {
+      background: var(--surface);
+      color: var(--text);
+    }
+    button.dock-tab:active {
+      transform: none;
+    }
+    button.dock-tab[aria-selected="true"] {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: inset 0 2px 0 var(--accent);
+    }
+    button.dock-tab:focus-visible {
+      outline-offset: -2px;
+    }
+    .dock-tab[data-tone]::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--good);
+    }
+    .dock-tab[data-tone="bad"]::before {
+      background: var(--warn);
+    }
+    .dock-tab-detail {
+      color: var(--muted);
+      font-weight: 400;
+    }
+    .dock-tab[data-dragging] {
+      opacity: 0.5;
+    }
+    #workspace[data-dragging],
+    #workspace[data-dragging] * {
+      cursor: grabbing !important;
+      user-select: none;
+    }
+    .dock-body {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .dock-panel {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+    }
+    .dock-separator {
+      flex: none;
+      position: relative;
+      z-index: 1;
+      background: var(--border);
+      touch-action: none;
+      transition: background-color 120ms ease;
+    }
+    .dock-split[data-direction="row"] > .dock-separator {
+      width: 1px;
+      cursor: col-resize;
+    }
+    .dock-split[data-direction="column"] > .dock-separator {
+      height: 1px;
+      cursor: row-resize;
+    }
+    /* A wider grip than the line it draws. */
+    .dock-separator::before {
+      content: "";
+      position: absolute;
+      inset: 0 -3px;
+    }
+    .dock-split[data-direction="column"] > .dock-separator::before {
+      inset: -3px 0;
+    }
+    .dock-separator:hover,
+    .dock-separator[data-resizing],
+    .dock-separator:focus-visible {
+      background: var(--accent);
+      outline: none;
+    }
+    .dock-ghost {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 20;
+      padding: 4px 10px;
+      border: 1px solid var(--accent);
+      border-radius: var(--radius);
+      background: var(--raised);
+      box-shadow: 0 10px 30px rgb(0 0 0 / 50%);
+      font-size: 12px;
+      pointer-events: none;
+    }
+    .dock-drop {
+      position: fixed;
+      z-index: 19;
+      border: 2px solid color-mix(in srgb, var(--accent) 80%, transparent);
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
+      pointer-events: none;
+      transition:
+        left 120ms var(--ease-out),
+        top 120ms var(--ease-out),
+        width 120ms var(--ease-out),
+        height 120ms var(--ease-out);
+    }
+    .dock-drop[data-zone="tabs"] {
+      border: 0;
+      background: var(--accent);
+    }
+
+    /* Panels run edge to edge; their content keeps a small inset. */
+    .pad {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 12px;
+    }
+    .output > pre:not(.slot *) {
+      min-height: 100%;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      padding: 10px 12px;
     }
     h2:not(.slot *) {
       margin: 0;
       font-size: 14px;
       font-weight: 600;
     }
-    .section-heading {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-      margin: 4px 0 12px;
-    }
-    #devices-area {
-      min-width: 0;
-      flex: 1;
-      padding-inline-start: 12px;
-    }
-    #device-count {
-      color: var(--muted);
-      font-size: 13px;
-    }
-    .devices {
-      position: relative;
-      display: flex;
-      gap: 16px;
-      overflow: auto;
-      align-items: flex-start;
-      padding-bottom: 16px;
-    }
-    .devices:empty::after {
-      content: "No devices yet. Choose a kind and add a device to begin an experiment.";
-      display: block;
-      width: 100%;
-      padding: 48px 24px;
-      border: 1px dashed var(--border-strong);
-      border-radius: 10px;
+    .empty-devices {
+      display: grid;
+      place-content: center;
+      padding: 24px;
       text-align: center;
       color: var(--muted);
     }
 
     .device {
-      flex: none;
-      min-width: 0;
-      padding: 12px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      /* translate, not transform: reorder animations own transform. */
-      transition:
-        opacity 200ms var(--ease-out),
-        translate 200ms var(--ease-out),
-        box-shadow 150ms ease,
-        border-color 150ms ease;
-      @starting-style {
-        opacity: 0;
-        translate: 0 6px;
-      }
-    }
-    .device[data-dragging] {
-      position: relative;
-      z-index: 3;
-      border-color: var(--accent);
-      box-shadow:
-        0 18px 40px rgb(0 0 0 / 55%),
-        0 0 0 1px var(--accent);
-    }
-    .devices[data-settling] > .device {
-      transition: none;
-    }
-    .devices[data-reordering],
-    .devices[data-reordering] * {
-      cursor: grabbing !important;
-      user-select: none;
-    }
-    .reorder-slot {
-      position: absolute;
-      border: 2px dashed color-mix(in srgb, var(--accent) 70%, transparent);
-      border-radius: 10px;
-      background: color-mix(in srgb, var(--accent) 6%, transparent);
-      pointer-events: none;
-      transition: left 200ms var(--ease-out);
-    }
-    .device-heading {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      margin: 0 0 12px;
-    }
-    .device-heading h2 {
-      flex: 1;
-      min-width: 0;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      overflow-wrap: anywhere;
-      font-family: var(--mono);
-      font-size: 13px;
-    }
-    .device .offline-badge {
-      color: var(--warn);
-    }
-    .device-split {
-      display: flex;
-      align-items: stretch;
-    }
-    .device-screen {
-      flex: none;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      overflow: hidden;
     }
-    /* As wide as the screen below it: the bar wraps rather than widening the card. */
-    .screen-bar {
-      width: 0;
-      min-width: 100%;
+    .device-toolbar {
+      flex: none;
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: 6px;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border);
     }
-    .screen-bar select {
+    .device-toolbar .end {
+      margin-inline-start: auto;
+    }
+    .device-toolbar select {
       min-height: 30px;
       padding-inline: 6px 2px;
+    }
+    /* The screen keeps its width; the inspector gives way first, then the panel scrolls sideways. */
+    .device-split {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      overflow-x: auto;
+    }
+    .device-screen {
+      flex: 1 0 auto;
+      display: flex;
+      overflow: auto;
+      padding: 12px;
+      background: var(--sunken);
     }
     .screen-size {
       font: 12px var(--mono);
       color: var(--muted);
       white-space: nowrap;
     }
-    /* Sized by the script: the device's screen times its zoom, plus the border. */
+    /* Sized by the script: the device's screen times its zoom, plus the border. Margins centre it and still scroll. */
     .screen-frame {
       position: relative;
+      flex: none;
+      margin: auto;
       border: 1px solid var(--border-strong);
       background: var(--sunken);
       overflow: hidden;
@@ -483,13 +561,22 @@
       font-size: 13px;
     }
     .inspector {
-      flex: none;
+      flex: 0 1 auto;
+      min-width: 0;
       overflow: clip;
+    }
+    .inspector .panel-content {
+      max-width: 100%;
+    }
+    .panel-content {
+      height: 100%;
+      overflow: auto;
     }
     .inspector .panel-content {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 14px;
+      padding: 12px;
     }
     .inspector textarea {
       flex: none;
@@ -502,46 +589,45 @@
     .action .label {
       margin: 0;
     }
-
     .split-separator {
       flex: none;
-      width: 12px;
+      position: relative;
+      width: 1px;
+      background: var(--border);
       cursor: col-resize;
       touch-action: none;
-      position: relative;
-    }
-    .split-separator::after {
-      content: "";
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      left: 5px;
-      width: 2px;
-      border-radius: 1px;
-      background: var(--border);
       transition: background-color 120ms ease;
     }
-    .split-separator:hover::after,
-    .split-separator[data-resizing]::after {
-      background: var(--accent);
-    }
-    .reorder-handle {
-      cursor: grab;
-      touch-action: none;
-      display: grid;
-      place-items: center;
-      width: 26px;
-      padding: 0 !important;
-    }
-    .reorder-handle::before {
+    .split-separator::before {
       content: "";
-      width: 9px;
-      height: 14px;
-      background: radial-gradient(circle, currentColor 1.3px, transparent 1.6px) 0 0 / 4.5px 4.67px;
-      opacity: 0.7;
+      position: absolute;
+      inset: 0 -3px;
     }
-    .reorder-handle:active {
-      cursor: grabbing;
+    .split-separator:hover,
+    .split-separator[data-resizing],
+    .split-separator:focus-visible {
+      background: var(--accent);
+      outline: none;
+    }
+
+    /* The headless host only shows devices, each whole, for the supervisor to screenshot and click. */
+    [data-headless] body {
+      height: auto;
+      overflow: auto;
+    }
+    [data-headless] #workspace {
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 16px;
+    }
+    [data-headless] #workspace > .device {
+      flex: none;
+      overflow: visible;
+    }
+    [data-headless] .device-screen {
+      flex: none;
+      overflow: visible;
     }
     #layout-announcement {
       position: absolute;
@@ -558,14 +644,6 @@
         transform: none;
       }
     }
-    @media (max-width: 650px) {
-      header {
-        padding: 12px 16px;
-      }
-      main {
-        padding: 12px 16px;
-      }
-    }
   </style>
   <header>
     <h1><span class="dim">Splitnext /</span> Device lab</h1>
@@ -579,15 +657,12 @@
         <option value="browser">Browser device</option></select
       ><button id="add" class="primary">Add device</button
       ><button id="refresh" class="ghost">Refresh inspectors</button
-      ><button id="server-toggle" aria-controls="server-panel">
-        Server panel
-      </button>
+      ><button id="reset-layout" class="ghost">Reset layout</button>
     </div>
   </header>
   <div id="layout-announcement" role="status" aria-live="polite"></div>
   <main id="workspace">
-    <section id="server-panel" aria-labelledby="server-heading">
-      <div class="section-heading"><h2 id="server-heading">Server</h2></div>
+    <section id="server-panel" class="pad" data-title="Server" aria-label="Server">
       <p class="hint">
         Local Worker and isolated stores. Click a mirrored screen, then type:
         Tab, Enter, Backspace and scrolling reach that same app.
@@ -631,33 +706,30 @@
         <summary>Last result</summary>
         <pre id="result"></pre>
       </details>
-      <details open>
-        <summary>Authoritative server state</summary>
-        <pre id="server"></pre>
-      </details>
-      <details open>
-        <summary>Ordered timeline</summary>
-        <pre id="timeline"></pre>
-      </details>
-      <details>
-        <summary>Lab operations & input schemas</summary>
+    </section>
+    <section id="timeline-panel" class="output" data-title="Timeline" aria-label="Ordered timeline">
+      <pre id="timeline"></pre>
+    </section>
+    <section id="state-panel" class="output" data-title="Server state" aria-label="Authoritative server state">
+      <pre id="server"></pre>
+    </section>
+    <section id="operations-panel" class="pad" data-title="Operations" aria-label="Lab operations and input schemas">
+      <div>
         <label class="label" for="operation">Lab operation</label
         ><select id="operation"></select>
-        <pre id="schema" style="margin-top: 8px"></pre>
+      </div>
+      <pre id="schema"></pre>
+      <div>
         <label class="label" for="input">Input JSON</label
         ><textarea id="input">{}</textarea>
-        <div class="tools" style="margin-top: 8px">
-          <button id="run" class="primary">Run operation</button
-          ><button id="export">Download diagnostics & steps</button>
-        </div>
-      </details>
-    </section>
-    <section id="devices-area" aria-labelledby="devices-heading">
-      <div class="section-heading">
-        <h2 id="devices-heading">Independent installations</h2>
-        <span id="device-count"></span>
       </div>
-      <div class="devices" id="devices"></div>
+      <div class="tools">
+        <button id="run" class="primary">Run operation</button
+        ><button id="export">Download diagnostics & steps</button>
+      </div>
+    </section>
+    <section id="empty-devices" class="empty-devices" data-title="Devices">
+      No devices yet. Choose a kind and add a device to begin an experiment.
     </section>
   </main>
   <script>

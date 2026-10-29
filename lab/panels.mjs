@@ -3,7 +3,6 @@ import {
   createPanel,
   createPanelGroup,
   FILL_ATTRIBUTE,
-  reorder,
   SEPARATOR_ATTRIBUTE,
 } from "motion-panels";
 
@@ -19,13 +18,8 @@ try {
   saved = {};
 }
 
-const parsed = z.object({ order: z.array(z.string()).optional(), zoom: z.record(z.string(), z.number()).optional() })
-  .catchall(z.object({ size: z.number(), collapsed: z.boolean() }))
-  .safeParse(saved);
-
-const layout = parsed.success ? parsed.data : {};
-
-const orderGroup = createPanelGroup();
+// Entries are checked where they are read, so one stale entry costs only itself.
+const layout = z.record(z.string(), z.unknown()).safeParse(saved).data ?? {};
 
 const persist = () => {
   try {
@@ -37,13 +31,13 @@ const persist = () => {
 
 /** How large a device's screen is drawn in this page; the screen keeps its own size. */
 export function zoomOf(id, fallback) {
-  const zoom = layout.zoom?.[id];
+  const zoom = z.record(z.string(), z.number()).safeParse(layout.zoom).data?.[id];
 
   return Number.isFinite(zoom) ? zoom : fallback;
 }
 
 export function saveZoom(id, zoom) {
-  layout.zoom = { ...layout.zoom, [id]: zoom };
+  layout.zoom = { ...z.record(z.string(), z.number()).safeParse(layout.zoom).data, [id]: zoom };
   persist();
 }
 
@@ -133,191 +127,607 @@ export function mountSplit(root, sized, fill, toggle, key, defaultSize, minSize,
   };
 }
 
-function move(root, panel, before) {
-  if (root.moveBefore) root.moveBefore(panel, before);
-  else root.insertBefore(panel, before);
+
+/*
+ * The dock: the page is a tree of splits whose leaves are sections, and each
+ * section shows its panels as tabs. A panel moves by dragging its tab onto
+ * another section's tabs or body, or onto a section's edge to split it.
+ * Panel elements are only ever moved, never rebuilt, so live in-page devices
+ * keep their nodes and state.
+ */
+
+const nodeSchema = z.lazy(() =>
+  z.union([
+    z.object({ id: z.string(), size: z.number().positive(), panels: z.array(z.string()), active: z.string().nullable() }),
+    z.object({ id: z.string(), size: z.number().positive(), direction: z.enum(["row", "column"]), children: z.array(nodeSchema).min(1) }),
+  ]),
+);
+
+let nodeCount = 0;
+
+const nodeId = () => `node-${Date.now().toString(36)}-${nodeCount++}`;
+
+export const section = (panels, size = 1) => ({ id: nodeId(), size, panels, active: panels[0] ?? null });
+
+export const split = (direction, children, size = 1) => ({ id: nodeId(), size, direction, children });
+
+const minSize = 120;
+
+function move(parent, node, before) {
+  if (node.parentNode === parent && node.nextSibling === before) return;
+
+  if (parent.moveBefore && parent.isConnected && node.isConnected) parent.moveBefore(node, before);
+  else parent.insertBefore(node, before);
 }
 
-export function restoreOrder(root) {
-  const order = Array.isArray(layout.order) ? layout.order : [];
-  const panels = [...root.children];
+function sections(node, parent = null, found = []) {
+  if (node.children) for (const child of node.children) sections(child, node, found);
+  else found.push({ node, parent });
 
-  panels.sort((a, b) => {
-    const rank = (panel) => {
-      const index = order.indexOf(panel.dataset.device);
-
-      return index < 0 ? order.length : index;
-    };
-
-    return rank(a) - rank(b);
-  });
-
-  for (let i = 0; i < panels.length; i++)
-    if (root.children[i] !== panels[i]) move(root, panels[i], root.children[i]);
+  return found;
 }
 
-function movePanel(panel, to, before) {
-  const root = panel.parentElement;
-  const panels = [...root.children];
-  const from = panels.indexOf(panel);
+function parentOf(tree, target) {
+  if (!tree.children) return null;
 
-  if (to < 0 || to >= panels.length || from === to) {
-    if (before) reorder.play(before, orderGroup.axes);
+  for (const child of tree.children) {
+    if (child === target) return tree;
+    const found = parentOf(child, target);
 
-    return;
+    if (found) return found;
   }
 
-  before ??= reorder.measure(root, orderGroup.axes);
+  return null;
+}
 
-  move(root, panel, to > from ? panels[to].nextElementSibling : panels[to]);
-  reorder.play(before, orderGroup.axes);
-  layout.order = [...root.children].map((child) => child.dataset.device);
-  persist();
-  document.getElementById("layout-announcement").textContent = `${panel.dataset.device} moved to position ${to + 1}`;
+/** Drops empty sections, giving their room to the next sibling or else the previous, and splits left with one child. */
+function prune(node) {
+  if (!node.children) return node.panels.length ? node : null;
+  const kept = [];
+  let freed = 0;
+
+  for (const child of node.children) {
+    const result = prune(child);
+
+    if (!result) {
+      freed += child.size;
+
+      continue;
+    }
+
+    result.size += freed;
+    freed = 0;
+    kept.push(result);
+  }
+
+  if (!kept.length) return null;
+  kept[kept.length - 1].size += freed;
+
+  if (kept.length === 1) {
+    kept[0].size = node.size;
+
+    return kept[0];
+  }
+
+  node.children = kept;
+
+  return node;
 }
 
 /**
- * Pointer drag: the card follows the pointer, the others slide aside to open its
- * new place and a slot marks where it lands. The DOM moves once, on release, so
- * live in-page devices keep their nodes and state.
+ * @param root the element the dock fills
+ * @param options.initial builds the default tree
+ * @param options.near places a panel the tree does not know yet: after the last section holding a panel it matches
  */
-function startDrag(panel, startX) {
-  const root = panel.parentElement;
-  const panels = [...root.children];
-  const from = panels.indexOf(panel);
-  const rects = panels.map((child) => child.getBoundingClientRect());
-  const rootRect = root.getBoundingClientRect();
-  const startScroll = root.scrollLeft;
-  const width = rects[from].width;
-  const gap = parseFloat(getComputedStyle(root).columnGap) || 0;
-  const slot = document.createElement("div");
-  let to = from;
+export function createDock(root, { initial, near }) {
+  const panels = new Map();
+  const elements = new Map();
+  const stored = nodeSchema.safeParse(layout.dock);
+  let tree = stored.success ? stored.data : initial();
+  let drag = null;
 
-  slot.className = "reorder-slot";
-  slot.style.width = width + "px";
-  slot.style.height = rects[from].height + "px";
-  slot.style.top = rects[from].top - rootRect.top + root.scrollTop + "px";
-  root.dataset.reordering = "";
-  panel.dataset.dragging = "";
-  root.append(slot);
-
-  const place = () => {
-    const left = to > from ? rects[to].right - width : rects[to].left;
-
-    slot.style.left = left - rootRect.left + startScroll + "px";
+  const announce = (text) => {
+    document.getElementById("layout-announcement").textContent = text;
   };
 
-  place();
-
-  const update = (clientX) => {
-    const dx = clientX - startX + root.scrollLeft - startScroll;
-    const center = rects[from].left + width / 2 + dx;
-
-    panel.style.transform = `translateX(${dx}px)`;
-    to = from;
-
-    for (let i = 0; i < panels.length; i++) {
-      const middle = rects[i].left + rects[i].width / 2;
-
-      if (i > from && center > middle) to = i;
-
-      if (i < from && center < middle && to === from) to = i;
-    }
-
-    for (let i = 0; i < panels.length; i++) {
-      if (i === from) continue;
-      const shift = from < i && i <= to ? -(width + gap) : to <= i && i < from ? width + gap : 0;
-
-      panels[i].style.translate = shift ? `${shift}px 0` : "";
-    }
-
-    place();
+  const save = () => {
+    layout.dock = tree;
+    persist();
   };
 
-  const finish = (commit) => {
-    const before = reorder.measure(root, orderGroup.axes);
+  const titleOf = (id) => panels.get(id)?.title ?? id;
 
-    root.dataset.settling = "";
-    slot.remove();
-    delete root.dataset.reordering;
-    delete panel.dataset.dragging;
-    panel.style.transform = "";
+  const sectionOf = (id) => sections(tree).find(({ node }) => node.panels.includes(id));
 
-    for (const child of panels) child.style.translate = "";
+  const shown = (node) => node.panels.filter((id) => panels.has(id));
 
-    before.delete(slot);
+  const commit = (focus) => {
+    tree = prune(tree) ?? initial();
+    save();
+    render();
 
-    if (commit) movePanel(panel, to, before);
-    else reorder.play(before, orderGroup.axes);
-
-    requestAnimationFrame(() => delete root.dataset.settling);
+    if (focus) root.querySelector(`[role="tab"][data-panel="${CSS.escape(focus)}"]`)?.focus();
   };
 
-  return { update, finish };
-}
+  function edge(target, id, side) {
+    const direction = side === "left" || side === "right" ? "row" : "column";
+    const after = side === "right" || side === "bottom";
+    const parent = parentOf(tree, target);
+    const fresh = section([id]);
 
-/** Drag only from the handle, leaving the live screen's pointer input alone. */
-export function addReorderHandle(panel, heading, id) {
-  const handle = document.createElement("button");
-
-  handle.className = "reorder-handle ghost";
-  handle.setAttribute("aria-label", `Move ${id}`);
-  handle.title = "Drag to reorder, or use Left and Right arrow keys. Escape cancels a drag.";
-  heading.prepend(handle);
-
-  let start = null,
-    drag = null;
-
-  const end = (commit) => {
-    drag?.finish(commit);
-    drag = null;
-    start = null;
-  };
-
-  handle.onkeydown = (event) => {
-    if (event.key === "Escape" && drag) {
-      event.preventDefault();
-      end(false);
+    if (parent?.direction === direction) {
+      fresh.size = target.size / 2;
+      target.size /= 2;
+      parent.children.splice(parent.children.indexOf(target) + (after ? 1 : 0), 0, fresh);
 
       return;
     }
 
-    const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    const wrapper = split(direction, after ? [target, fresh] : [fresh, target], target.size);
 
-    if (!step || drag) return;
-    event.preventDefault();
-    movePanel(panel, [...panel.parentElement.children].indexOf(panel) + step);
-  };
+    target.size = 1;
 
-  handle.onpointerdown = (event) => {
-    if (event.button !== 0) return;
-    start = event.clientX;
-    handle.setPointerCapture(event.pointerId);
-  };
+    if (parent) parent.children[parent.children.indexOf(target)] = wrapper;
+    else tree = wrapper;
+  }
 
-  handle.onpointerup = () => end(true);
+  function place(id) {
+    const anchor = sections(tree).findLast(({ node }) => node.panels.some(near));
 
-  handle.onpointercancel = () => end(false);
+    if (!anchor) {
+      const fresh = section([id], tree.size);
 
-  handle.onlostpointercapture = () => {
-    if (drag) end(false);
-  };
+      if (tree.children && tree.direction === "row") tree.children.push(fresh);
+      else tree = split("row", [tree, fresh]);
 
-  handle.onpointermove = (event) => {
-    if (start === null) return;
-
-    if (!drag) {
-      if (Math.abs(event.clientX - start) < 4) return;
-      drag = startDrag(panel, start);
+      return;
     }
 
-    const root = panel.parentElement;
-    const box = root.getBoundingClientRect();
+    // A section that only holds placeholders takes the panel as a tab.
+    if (!shown(anchor.node).some((other) => !panels.get(other)?.placeholder)) {
+      anchor.node.panels.push(id);
+      anchor.node.active = id;
 
-    if (event.clientX > box.right - 40) root.scrollLeft += 24;
+      return;
+    }
 
-    if (event.clientX < box.left + 40) root.scrollLeft -= 24;
+    const parent = anchor.parent;
 
-    drag.update(event.clientX);
+    if (parent?.direction !== "row") {
+      edge(anchor.node, id, "right");
+
+      return;
+    }
+
+    // Like sections share their room with the newcomer; the others keep theirs.
+    const group = parent.children.filter((child) => !child.children && child.panels.some(near));
+    const total = group.reduce((sum, child) => sum + child.size, 0);
+    const fresh = section([id], anchor.node.size);
+    const scale = total / (total + fresh.size);
+
+    parent.children.splice(parent.children.indexOf(anchor.node) + 1, 0, fresh);
+
+    for (const child of [...group, fresh]) child.size *= scale;
+  }
+
+  function take(id) {
+    const from = sectionOf(id)?.node;
+
+    if (!from) return;
+    from.panels.splice(from.panels.indexOf(id), 1);
+
+    if (from.active === id) from.active = shown(from)[0] ?? null;
+  }
+
+  /** Moves a panel to a drop target: a tab position, a section's body or one of its edges. */
+  function drop(id, target) {
+    if (target.zone === "tabs" || target.zone === "center") {
+      const before = target.zone === "tabs" ? shown(target.node)[target.index] : undefined;
+
+      if (before === id) return;
+      take(id);
+      const at = before === undefined ? target.node.panels.length : target.node.panels.indexOf(before);
+
+      target.node.panels.splice(at, 0, id);
+      target.node.active = id;
+    } else {
+      take(id);
+      edge(target.node, id, target.zone);
+    }
+
+    commit(id);
+    announce(`${titleOf(id)} moved`);
+  }
+
+  function activate(node, id, focus) {
+    node.active = id;
+    commit(focus ? id : null);
+  }
+
+  /** Where a dragged tab would land, or null over anything that is not a section. */
+  function targetAt(x, y, id) {
+    const element = document.elementFromPoint(x, y)?.closest(".dock-section");
+    const node = element && sections(tree).find((entry) => entry.node.id === element.dataset.section)?.node;
+
+    if (!node) return null;
+    const alone = node.panels.includes(id) && shown(node).length === 1;
+    const strip = element.tabs.getBoundingClientRect();
+
+    if (y <= strip.bottom) {
+      const tabs = [...element.tabs.children];
+
+      let index = tabs.findIndex((tab) => {
+        const box = tab.getBoundingClientRect();
+
+        return x < box.left + box.width / 2;
+      });
+
+      if (index < 0) index = tabs.length;
+      const line = index < tabs.length ? tabs[index].getBoundingClientRect().left : (tabs.at(-1)?.getBoundingClientRect().right ?? strip.left);
+
+      return { node, zone: "tabs", index, box: { left: line - 1, top: strip.top, width: 3, height: strip.height } };
+    }
+
+    const box = element.body.getBoundingClientRect();
+
+    const fx = (x - box.left) / box.width,
+      fy = (y - box.top) / box.height;
+
+    const [side, distance] = [["left", fx], ["right", 1 - fx], ["top", fy], ["bottom", 1 - fy]].sort((a, b) => a[1] - b[1])[0];
+    const zone = distance < 0.25 && !alone ? side : "center";
+
+    if (zone === "center" && node.panels.includes(id)) return null;
+
+    const half = {
+      center: {},
+      left: { width: box.width / 2 },
+      right: { left: box.left + box.width / 2, width: box.width / 2 },
+      top: { height: box.height / 2 },
+      bottom: { top: box.top + box.height / 2, height: box.height / 2 },
+    };
+
+    return { node, zone, box: { left: box.left, top: box.top, width: box.width, height: box.height, ...half[zone] } };
+  }
+
+  function startDrag(id, tab, x, y) {
+    const ghost = document.createElement("div");
+    const indicator = document.createElement("div");
+
+    ghost.className = "dock-ghost";
+    ghost.textContent = titleOf(id);
+    indicator.className = "dock-drop";
+    indicator.hidden = true;
+    document.body.append(ghost, indicator);
+    root.dataset.dragging = "";
+    tab.dataset.dragging = "";
+    let target = null;
+
+    const update = (px, py) => {
+      ghost.style.translate = `${px + 12}px ${py + 12}px`;
+      target = targetAt(px, py, id);
+      indicator.hidden = !target;
+      indicator.dataset.zone = target?.zone ?? "";
+
+      if (target) for (const [key, value] of Object.entries(target.box)) indicator.style[key] = value + "px";
+    };
+
+    const finish = (commitDrop) => {
+      ghost.remove();
+      indicator.remove();
+      delete root.dataset.dragging;
+      delete tab.dataset.dragging;
+
+      if (commitDrop && target) drop(id, target);
+    };
+
+    update(x, y);
+
+    return { update, finish };
+  }
+
+  function tabFor(node, id, active) {
+    const panel = panels.get(id);
+    const tab = document.createElement("button");
+    const label = document.createElement("span");
+
+    tab.className = "dock-tab";
+    tab.dataset.panel = id;
+    tab.id = "tab-" + panel.element.id;
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-selected", String(active));
+    tab.setAttribute("aria-controls", panel.element.id);
+    tab.tabIndex = active ? 0 : -1;
+    tab.title = "Drag onto another section, or onto an edge to split it. Alt+Arrow keys move it; Escape cancels a drag.";
+    label.textContent = panel.title;
+    tab.append(label);
+
+    if (panel.detail) {
+      const detail = document.createElement("span");
+
+      detail.className = "dock-tab-detail";
+      detail.textContent = panel.detail;
+      tab.append(detail);
+    }
+
+    if (panel.tone) tab.dataset.tone = panel.tone;
+
+    let start = null;
+
+    const end = (commitDrop) => {
+      start = null;
+      const current = drag;
+
+      drag = null;
+      current?.finish(commitDrop);
+
+      return Boolean(current);
+    };
+
+    tab.onpointerdown = (event) => {
+      if (event.button !== 0) return;
+      start = { x: event.clientX, y: event.clientY };
+      tab.setPointerCapture(event.pointerId);
+    };
+
+    tab.onpointermove = (event) => {
+      if (!start) return;
+
+      if (!drag) {
+        if (Math.hypot(event.clientX - start.x, event.clientY - start.y) < 4) return;
+        drag = startDrag(id, tab, event.clientX, event.clientY);
+      }
+
+      drag.update(event.clientX, event.clientY);
+    };
+
+    tab.onpointerup = () => {
+      if (start && !end(true)) activate(node, id, true);
+    };
+
+    tab.onpointercancel = () => end(false);
+
+    tab.onlostpointercapture = () => {
+      if (drag) end(false);
+    };
+
+    tab.onkeydown = (event) => {
+      if (event.key === "Escape" && drag) {
+        event.preventDefault();
+        end(false);
+
+        return;
+      }
+
+      const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+
+      if (!step) return;
+      event.preventDefault();
+      const ids = shown(node);
+      const index = ids.indexOf(id);
+
+      if (event.altKey && event.shiftKey) {
+        const all = sections(tree).filter((entry) => shown(entry.node).length);
+        const next = all[all.findIndex((entry) => entry.node === node) + step]?.node;
+
+        if (next) drop(id, { node: next, zone: "center" });
+      } else if (event.altKey) {
+        const other = ids[index + step];
+
+        if (!other) return;
+        node.panels.splice(node.panels.indexOf(id), 1);
+        node.panels.splice(node.panels.indexOf(other) + (step > 0 ? 1 : 0), 0, id);
+        commit(id);
+        announce(`${titleOf(id)} moved to tab ${index + step + 1}`);
+      } else if (ids[index + step]) activate(node, ids[index + step], true);
+    };
+
+    return tab;
+  }
+
+  function separator(direction, items, index) {
+    const handle = document.createElement("div");
+    const horizontal = direction === "row";
+
+    handle.className = "dock-separator";
+    handle.setAttribute("role", "separator");
+    handle.setAttribute("aria-orientation", horizontal ? "vertical" : "horizontal");
+    handle.setAttribute("aria-label", "Resize sections");
+    handle.title = "Drag or use arrow keys to resize. Double-click to share evenly.";
+    handle.tabIndex = 0;
+
+    const lengths = () => items.map(({ element }) => element.getBoundingClientRect()[horizontal ? "width" : "height"]);
+
+    const show = () => handle.setAttribute("aria-valuenow", String(Math.round(lengths()[index])));
+
+    const resize = (from, delta) => {
+      const pair = from[index] + from[index + 1];
+      const first = Math.min(pair - minSize, Math.max(minSize, from[index] + delta));
+
+      items.forEach((item, i) => {
+        item.node.size = i === index ? first : i === index + 1 ? pair - first : from[i];
+        item.element.style.flexGrow = String(item.node.size);
+      });
+      show();
+    };
+
+    let start = null;
+
+    handle.onpointerdown = (event) => {
+      if (event.button !== 0) return;
+      start = { at: horizontal ? event.clientX : event.clientY, lengths: lengths() };
+      handle.dataset.resizing = "";
+      handle.setPointerCapture(event.pointerId);
+    };
+
+    handle.onpointermove = (event) => {
+      if (start) resize(start.lengths, (horizontal ? event.clientX : event.clientY) - start.at);
+    };
+
+    handle.onpointerup = () => {
+      if (!start) return;
+      start = null;
+      delete handle.dataset.resizing;
+      save();
+    };
+
+    handle.onpointercancel = handle.onpointerup;
+
+    handle.onkeydown = (event) => {
+      const keys = horizontal ? ["ArrowLeft", "ArrowRight"] : ["ArrowUp", "ArrowDown"];
+      const step = (event.shiftKey ? 64 : 16) * (event.key === keys[1] ? 1 : event.key === keys[0] ? -1 : 0);
+
+      if (!step) return;
+      event.preventDefault();
+      resize(lengths(), step);
+      save();
+    };
+
+    handle.ondblclick = () => {
+      const from = lengths();
+
+      resize(from, (from[index + 1] - from[index]) / 2);
+      save();
+    };
+
+    requestAnimationFrame(show);
+
+    return handle;
+  }
+
+  /** What shows: sections with known panels, and splits that still divide something. */
+  function view(node) {
+    if (!node.children) return shown(node).length ? { node, sizeNode: node } : null;
+    const children = node.children.map(view).filter(Boolean);
+
+    if (children.length === 1) return { ...children[0], sizeNode: node };
+
+    return children.length ? { node, sizeNode: node, children } : null;
+  }
+
+  function elementFor(node) {
+    let element = elements.get(node.id);
+
+    if (!element) {
+      element = document.createElement("div");
+
+      if (node.children) element.className = "dock-split";
+      else {
+        element.className = "dock-section";
+        element.dataset.section = node.id;
+        element.tabs = document.createElement("div");
+        element.tabs.className = "dock-tabs";
+        element.tabs.setAttribute("role", "tablist");
+        element.body = document.createElement("div");
+        element.body.className = "dock-body";
+        element.append(element.tabs, element.body);
+      }
+
+      elements.set(node.id, element);
+    }
+
+    return element;
+  }
+
+  // Elements are placed first and stale ones removed last, so no panel is detached on its way.
+  function render() {
+    if (drag) return;
+    const used = new Set();
+    const filled = [];
+
+    const fill = (parent, children) => {
+      children.forEach((child, i) => move(parent, child, parent.children[i] ?? null));
+      filled.push([parent, children.length]);
+    };
+
+    const draw = (item) => {
+      const element = elementFor(item.node);
+
+      used.add(item.node.id);
+      element.style.flexGrow = String(item.sizeNode.size);
+
+      return element;
+    };
+
+    const layoutOf = (item, element) => {
+      const { node } = item;
+
+      if (item.children) {
+        element.dataset.direction = node.direction;
+        const drawn = item.children.map(draw);
+        const items = item.children.map((child, i) => ({ node: child.sizeNode, element: drawn[i] }));
+
+        fill(element, drawn.flatMap((child, i) => (i ? [separator(node.direction, items, i - 1), child] : [child])));
+        item.children.forEach((child, i) => layoutOf(child, drawn[i]));
+
+        return;
+      }
+
+      const ids = shown(node);
+
+      if (!ids.includes(node.active)) node.active = ids[0];
+      const focused = document.activeElement?.closest?.(".dock-tab")?.dataset.panel;
+
+      element.tabs.replaceChildren(...ids.map((id) => tabFor(node, id, id === node.active)));
+      fill(element.body, ids.map((id) => panels.get(id).element));
+
+      for (const id of ids) panels.get(id).element.hidden = id !== node.active;
+
+      if (focused && ids.includes(focused)) element.tabs.querySelector(`[data-panel="${CSS.escape(focused)}"]`)?.focus();
+    };
+
+    const top = view(tree);
+    const topElement = top && draw(top);
+
+    fill(root, topElement ? [topElement] : []);
+
+    if (top) layoutOf(top, topElement);
+
+    for (const [parent, count] of filled.reverse()) while (parent.children.length > count) parent.lastElementChild.remove();
+
+    for (const id of elements.keys()) if (!used.has(id)) elements.delete(id);
+  }
+
+  return {
+    /** Shows a panel where the tree keeps it, or places it as `near` says. */
+    add(id, element, { title = id, tone, detail, placeholder = false } = {}) {
+      element.id ||= "panel-" + id.replace(/[^\w-]/g, "-");
+      element.classList.add("dock-panel");
+      element.setAttribute("role", "tabpanel");
+      element.setAttribute("aria-labelledby", "tab-" + element.id);
+      panels.set(id, { element, title, tone, detail, placeholder });
+
+      if (!sectionOf(id)) {
+        place(id);
+        save();
+      }
+
+      render();
+    },
+    remove(id) {
+      const panel = panels.get(id);
+
+      panels.delete(id);
+      take(id);
+      panel?.element.remove();
+      commit();
+    },
+    /** Every panel the tree places, shown or not. */
+    ids: () => sections(tree).flatMap(({ node }) => node.panels),
+    has: (id) => panels.has(id),
+    setTitle(id, title, tone, detail) {
+      const panel = panels.get(id);
+
+      if (!panel || (panel.title === title && panel.tone === tone && panel.detail === detail)) return;
+      Object.assign(panel, { title, tone, detail });
+      render();
+    },
+    reset() {
+      tree = initial();
+
+      for (const id of panels.keys()) if (!sectionOf(id)) place(id);
+
+      commit();
+      announce("Layout reset");
+    },
   };
 }

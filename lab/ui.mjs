@@ -1,10 +1,47 @@
-import { mountSplit, restoreOrder, addReorderHandle, zoomOf, saveZoom } from "./panels.mjs";
+import { mountSplit, zoomOf, saveZoom, createDock, section, split } from "./panels.mjs";
 
 const $ = (id) => document.getElementById(id);
 
-mountSplit($("workspace"), $("server-panel"), $("devices-area"), $("server-toggle"), "server", 320, 240, 520);
-
 const headless = new URLSearchParams(location.search).get("host") === "headless";
+
+const devicePanels = new Map();
+
+const empty = $("empty-devices");
+
+// Device panels go beside the other devices, or where the placeholder says devices go.
+const dock = headless
+  ? null
+  : createDock($("workspace"), {
+      initial: () =>
+        split("row", [
+          split("column", [section(["server"], 2), section(["timeline", "state", "operations"], 3)], 1),
+          section(["devices"], 3),
+        ]),
+      near: (id) => id === "devices" || id.startsWith("device:"),
+    });
+
+const fixedPanels = Object.entries({ server: "server-panel", timeline: "timeline-panel", state: "state-panel", operations: "operations-panel" }).map(
+  ([id, element]) => [id, $(element)],
+);
+
+/** The placeholder shows only while there are no devices. */
+function syncEmpty() {
+  if (!dock) return;
+
+  if (!devicePanels.size && !dock.has("devices")) dock.add("devices", empty, { title: "Devices", placeholder: true });
+
+  if (devicePanels.size && dock.has("devices")) dock.remove("devices");
+}
+
+if (dock) {
+  for (const [id, element] of fixedPanels) dock.add(id, element, { title: element.dataset.title });
+  syncEmpty();
+} else {
+  // The headless host shows only devices.
+  document.documentElement.dataset.headless = "";
+
+  for (const element of [...fixedPanels.map(([, panel]) => panel), empty]) element.hidden = true;
+}
 
 let hostRole = "unknown",
   labHost = null;
@@ -101,24 +138,15 @@ function segmented(label, options) {
 function devicePanel(id, mode) {
   const panel = element("article", mode === "slot" ? "device live" : "device");
   panel.dataset.mode = mode;
-  const title = element("h2", "", id);
-  const kind = element("span", "kind chip", mode === "slot" ? "in-page · live" : "");
-  const offline = element("span", "chip offline-badge", "Offline");
-  offline.hidden = true;
-  title.append(kind, offline);
-  const heading = element("div", "device-heading");
-  heading.append(title);
-  addReorderHandle(panel, heading, id);
-  const toggle = element("button", "ghost", "Inspector");
+  panel.setAttribute("aria-label", id);
+  const toggle = element("button", "ghost end", "Inspector");
   toggle.setAttribute("aria-label", "Toggle inspector for " + id);
-  heading.append(toggle);
-  panel.append(heading);
-  const split = element("div", "device-split");
+  const toolbar = element("div", "device-toolbar");
+  const body = element("div", "device-split");
   const screen = element("div", "device-screen");
   const inspector = element("div", "inspector");
-  split.append(screen, inspector);
-  panel.append(split);
-  const tools = element("div", "tools");
+  body.append(screen, inspector);
+  panel.append(toolbar, body);
 
   const network = segmented("Network for " + id, [
     ["Online", true, () => run("deviceNetwork", { device: id, online: true })],
@@ -127,14 +155,11 @@ function devicePanel(id, mode) {
 
   const reload = element("button", "", "Reload");
   reload.onclick = () => run("reloadDevice", { device: id });
-  const remove = element("button", "danger end", "Remove");
+  const remove = element("button", "danger", "Remove");
 
   remove.onclick = () => {
     if (confirm(`Remove ${id} and delete its data?`)) void run("removeDevice", { device: id });
   };
-
-  tools.append(network, reload, remove);
-  inspector.append(tools);
 
   // The screen keeps its size in CSS pixels; zoom only changes how large it is drawn here.
   const defaultScreen = { width: 390, height: 780 };
@@ -142,7 +167,6 @@ function devicePanel(id, mode) {
   let resizing = false;
   // A headless host is screenshot and clicked by the supervisor at the screen's own size.
   let zoom = headless ? 1 : zoomOf(id, previewZoom);
-  const bar = element("div", "screen-bar");
   const frame = element("div", "screen-frame");
   const sizeLabel = element("span", "screen-size");
   const zoomSelect = element("select");
@@ -203,8 +227,8 @@ function devicePanel(id, mode) {
     presets.select(standard && zoom === previewZoom ? "preview" : standard && zoom === 1 ? "full" : null);
   };
 
-  bar.append(presets, zoomSelect, sizeLabel);
-  screen.append(bar, frame);
+  toolbar.append(network, reload, presets, zoomSelect, sizeLabel, toggle, remove);
+  screen.append(frame);
 
   // The device itself lives here, in this document; nothing is mirrored.
   const slot = mode === "slot" ? element("div", "slot") : null;
@@ -402,9 +426,10 @@ function devicePanel(id, mode) {
       apply();
     }
 
-    offline.hidden = state.online !== false;
+    // The tab says whether the device is online and where it runs.
+    const where = mode === "slot" ? "in-page · live" : state.kind === "inpage" ? "in-page" : "browser";
 
-    if (mode !== "slot") kind.textContent = state.kind === "inpage" ? "in-page" : "browser";
+    dock?.setTitle("device:" + id, id, state.online === false ? "bad" : "good", where);
 
     if (state.kind === "inpage")
       placeholder.textContent = "This device runs live in the lab page that hosts in-page devices. Open that page to see and use it.";
@@ -430,20 +455,27 @@ function devicePanel(id, mode) {
   inspector.append(action);
 
   panel.mountSplit = () => {
-    panel.disposeSplit = mountSplit(split, inspector, screen, toggle, "inspector:" + id, 300, 200, 440, true);
+    panel.disposeSplit = mountSplit(body, inspector, screen, toggle, "inspector:" + id, 300, 200, 440, true);
   };
 
   return panel;
 }
 
 function removePanel(panel) {
-  if (panel.slot) labHost?.detach(panel.dataset.device);
+  const id = panel.dataset.device;
+
+  if (panel.slot) labHost?.detach(id);
   panel.disposeSplit?.();
-  panel.remove();
+  devicePanels.delete(id);
+
+  if (dock) dock.remove("device:" + id);
+  else panel.remove();
+
+  syncEmpty();
 }
 
 function panelFor(id, mode) {
-  let p = [...$("devices").children].find((p) => p.dataset.device === id);
+  let p = devicePanels.get(id);
 
   if (p && p.dataset.mode !== mode) {
     removePanel(p);
@@ -452,9 +484,13 @@ function panelFor(id, mode) {
 
   if (!p) {
     p = devicePanel(id, mode);
-    $("devices").append(p);
+    devicePanels.set(id, p);
+
+    if (dock) dock.add("device:" + id, p, { title: id, tone: "good", detail: mode === "slot" ? "in-page · live" : "" });
+    else $("workspace").append(p);
+
     p.mountSplit();
-    restoreOrder($("devices"));
+    syncEmpty();
   }
 
   return p;
@@ -489,7 +525,6 @@ function showStatus(status) {
   });
 
   $("status").replaceChildren(...chips);
-  $("device-count").textContent = count;
 
   for (const button of document.querySelectorAll("[data-server]"))
     button.setAttribute("aria-pressed", String(JSON.parse(button.dataset.input)[button.dataset.server] === status[button.dataset.server]));
@@ -525,8 +560,12 @@ async function refresh() {
   showStatus(status);
   showHosting(status);
 
-  for (const panel of [...$("devices").children])
-    if (panel.dataset.device && !status.devices.includes(panel.dataset.device)) removePanel(panel);
+  for (const panel of [...devicePanels.values()])
+    if (!status.devices.includes(panel.dataset.device)) removePanel(panel);
+
+  // Places kept for devices that no longer exist.
+  for (const id of dock?.ids() ?? [])
+    if (id.startsWith("device:") && !status.devices.includes(id.slice("device:".length))) dock.remove(id);
 
   for (const id of status.devices) {
     const mode = modeOf(status.deviceKinds[id]);
@@ -563,6 +602,8 @@ $("add").onclick = () =>
   });
 
 $("refresh").onclick = () => refresh().catch(showError);
+
+$("reset-layout").onclick = () => dock?.reset();
 
 document
   .querySelectorAll("[data-op]")
@@ -661,7 +702,7 @@ async function handleCall({ id, command }) {
       labHost.sync(command.devices);
       const ids = labHost.ids();
 
-      for (const panel of [...$("devices").children])
+      for (const panel of [...devicePanels.values()])
         if (panel.slot && !ids.includes(panel.dataset.device))
           removePanel(panel);
 
@@ -728,8 +769,8 @@ if (!headless) {
   }, 4000);
   // Screen mirroring observes the same pages; it never creates another app instance.
   setInterval(() => {
-    for (const p of $("devices").children)
-      if (p.image && !p.image.hidden)
+    for (const p of devicePanels.values())
+      if (p.image?.checkVisibility())
         p.image.src = `/screen?device=${encodeURIComponent(p.dataset.device)}&t=${Date.now()}`;
   }, 1500);
 }
