@@ -57,9 +57,9 @@ whole, for the supervisor to screenshot and click.
 
 The supervisor bundles the plain DOM entry in `lab/ui.mjs` and its motion-panels
 core adapter in `lab/panels.mjs` with esbuild on the first `/ui.js` request,
-then caches it until restart. No package directories are served. Restart the
-supervisor after editing these modules; HTML and app assets retain their existing
-loading paths. There is no separate lab build command.
+then caches it and rebuilds when any bundled lab source file changes, so edits to
+`lab/ui.html` and these modules show on reload without a restart. No package
+directories are served; app assets retain their existing loading paths. There is no separate lab build command.
 
 ## Device kinds: pick one per question
 
