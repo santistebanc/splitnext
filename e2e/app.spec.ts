@@ -7,7 +7,56 @@ test('device lab runs the real two-device offline and recovery acceptance scenar
   test.setTimeout(240_000);
   const result = await promisify(execFile)(process.execPath, ['lab/acceptance.mjs'], { timeout: 220_000 });
 
-  expect(result.stdout).toContain('Lab acceptance passed');
+  expect(result.stdout).toContain('Lab acceptance (browser) passed');
+});
+
+test('device lab runs the same acceptance scenario with in-page devices in a headless host', async () => {
+  test.setTimeout(240_000);
+
+  const result = await promisify(execFile)(process.execPath, ['lab/acceptance.mjs'], {
+    timeout: 220_000,
+    env: { ...process.env, LAB_ACCEPT_KIND: 'inpage', LAB_TEST_WORKER_PORT: '8837', LAB_TEST_LAB_PORT: '8836' },
+  });
+
+  expect(result.stdout).toContain('Lab acceptance (inpage) passed');
+});
+
+test('device lab frontend shows in-page devices live in its own page, each contained in its box', async ({ page, request }) => {
+  test.setTimeout(120_000);
+  const base = 'http://127.0.0.1:8846';
+  const child = spawn(process.execPath, ['lab/server.mjs', `--env=inpage-${Date.now()}`, '--port=8846', '--workerPort=8847'], { windowsHide: true, stdio: 'ignore' });
+  const call = (operation: string, input = {}) => request.post(`${base}/api`, { data: { operation, input } });
+
+  try {
+    await expect.poll(async () => {
+      try { return (await (await call('status')).json()).initialized === true; } catch { return false; }
+    }, { timeout: 60_000 }).toBe(true);
+    await page.goto(base);
+    await expect(page.locator('#hosting')).toContainText('Hosting in-page devices in this page');
+    await page.getByRole('button', { name: 'Add device', exact: true }).click();
+    await expect(page.locator('.device .slot [data-lab-device]')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Add device', exact: true }).click();
+    await expect(page.locator('.device .slot [data-lab-device]')).toHaveCount(2);
+
+    const first = page.locator('[data-lab-device]').first();
+    const second = page.locator('[data-lab-device]').last();
+
+    await first.getByRole('button', { name: 'New group' }).click();
+    await expect(first.getByRole('button', { name: 'Back to groups' })).toBeVisible();
+    await expect(second.getByRole('button', { name: 'Back to groups' })).toHaveCount(0);
+    await expect(second.getByRole('button', { name: 'New group' })).toBeVisible();
+    await expect(page.locator('.device').first().locator('pre')).toContainText('"view": "create"');
+    await expect(page.locator('.device').last().locator('pre')).not.toContainText('"view": "create"');
+
+    await page.locator('.device').first().getByRole('button', { name: 'Offline', exact: true }).click();
+    await expect(page.locator('.device').first().locator('pre')).toContainText('"online": false');
+    await expect(page.locator('.device').last().locator('pre')).toContainText('"online": true');
+    await page.screenshot({ path: '.wrangler/lab-inpage-ui.png', fullPage: true });
+  } finally {
+    await call('shutdown').catch(() => undefined);
+
+    if (child.exitCode === null) await once(child, 'exit');
+  }
 });
 
 test('device lab frontend controls its actual installations and shows inspector state', async ({ page, request }) => {
@@ -22,6 +71,7 @@ test('device lab frontend controls its actual installations and shows inspector 
     }, { timeout: 60_000 }).toBe(true);
     await page.goto(base);
     await expect(page.getByRole('heading', { name: 'Splitnext / Device lab' })).toBeVisible();
+    await page.getByLabel('Device kind').selectOption('browser');
     await page.getByRole('button', { name: 'Add device', exact: true }).click();
     await expect(page.locator('.device')).toHaveCount(1);
     await expect.poll(() => page.locator('.screen').evaluate((image) => image instanceof HTMLImageElement && image.naturalWidth === 390)).toBe(true);
