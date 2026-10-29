@@ -18,6 +18,8 @@ export type DeviceConfig = {
   /** Whether the device offers copying and sharing, as some real devices lack them. */
   clipboard: boolean;
   share: boolean;
+  /** The screen's size in CSS pixels, as a browser device's viewport. */
+  screen?: { width: number; height: number };
 };
 
 export type HostEnvironment = {

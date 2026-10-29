@@ -23,6 +23,11 @@ export const operations = {
     online: z.boolean(),
     latencyMs: z.number().int().min(0).max(30000).optional(),
   }),
+  deviceScreen: z.object({
+    ...device,
+    width: z.number().int().min(240).max(1600),
+    height: z.number().int().min(320).max(1600),
+  }),
   deviceForeground: z.object(device),
   deviceNavigate: z.object({
     ...device,

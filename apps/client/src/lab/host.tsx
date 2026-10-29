@@ -10,8 +10,10 @@ import { LabDevice, type DeviceConfig, type HostEnvironment } from './device';
 import type { LabReport } from './events';
 import type { ServerGate } from './virtualNetwork';
 
-/** The size of a phone screen, as the browser devices' viewport. */
-const screenSize = { width: 390, height: 780 };
+type Size = { width: number; height: number };
+
+/** The size of a phone screen, as the browser devices' viewport, until the supervisor sets another. */
+const screenSize: Size = { width: 390, height: 780 };
 
 /** What the lab page gives its host: where the Worker is and where reports go. */
 export type HostOptions = {
@@ -30,6 +32,7 @@ const commandSchema = z.discriminatedUnion('method', [
   z.object({ method: z.literal('navigate'), direction: z.enum(['back', 'forward']) }),
   z.object({ method: z.literal('capabilities'), clipboard: z.boolean().optional(), share: z.boolean().optional(), clipboardText: z.string().optional() }),
   z.object({ method: z.literal('remove') }),
+  z.object({ method: z.literal('resize'), width: z.number().int().min(240).max(1600), height: z.number().int().min(320).max(1600) }),
 ]);
 
 const notReady = { status: 'failed', error: 'app_not_ready', issues: ['This installation needs to finish startup before app actions are available.'] };
@@ -41,6 +44,7 @@ const notReady = { status: 'failed', error: 'app_not_ready', issues: ['This inst
 export class LabHost {
   private readonly devices = new Map<string, LabDevice>();
   private readonly slots = new Map<string, HTMLElement>();
+  private readonly screens = new Map<string, Size>();
   private readonly listeners = new Set<() => void>();
   private version = 0;
   private readonly environment: HostEnvironment;
@@ -80,6 +84,10 @@ export class LabHost {
     return this.slots.get(id);
   }
 
+  screenOf(id: string): Size {
+    return this.screens.get(id) ?? screenSize;
+  }
+
   /** Where a device shows; the lab page owns the element. */
   attach(id: string, slot: HTMLElement): void {
     this.slots.set(id, slot);
@@ -99,11 +107,15 @@ export class LabHost {
       if (!wanted.has(id)) {
         device.dispose();
         this.devices.delete(id);
+        this.screens.delete(id);
       }
 
-    for (const config of configs)
+    for (const config of configs) {
       if (!this.devices.has(config.id))
         this.devices.set(config.id, new LabDevice(config, this.environment));
+
+      if (config.screen) this.screens.set(config.id, config.screen);
+    }
 
     this.touch();
   }
@@ -141,6 +153,7 @@ export class LabHost {
           kind: 'inpage',
           online: device.network.online,
           latencyMs: device.network.latencyMs,
+          screen: this.screenOf(id),
           ...app,
           navigation: { index: device.navigation.index, entries: device.navigation.entries },
           capabilities: { clipboard: device.config.clipboard, share: device.config.share, ...device.capabilities },
@@ -171,12 +184,18 @@ export class LabHost {
       case 'remove':
         device.dispose();
         this.devices.delete(id);
+        this.screens.delete(id);
         this.touch();
         // The screen unmounts before its data goes, so nothing writes it back.
         await new Promise((resolve) => setTimeout(resolve, 0));
         await device.forget();
 
         return { removed: true };
+      case 'resize':
+        this.screens.set(id, { width: command.width, height: command.height });
+        this.touch();
+
+        return { screen: this.screenOf(id) };
       case 'ready':
         // Started, or stopped at the screen that offers to try starting again.
         return { ready: Boolean(device.bridge) || this.offersRetry(id) };
@@ -209,8 +228,9 @@ class DeviceBoundary extends Component<{ children: ReactNode; device: string; re
   }
 }
 
-function DeviceFrame(props: { device: LabDevice; report: LabReport }) {
+function DeviceFrame(props: { device: LabDevice; screen: Size; report: LabReport }) {
   const device = props.device;
+  const { width, height } = props.screen;
   const generation = useSyncExternalStore((listener) => device.subscribe(listener), () => device.generation);
   const [frame, setFrame] = useState<HTMLElement | null>(null);
   const [overlay, setOverlay] = useState<HTMLElement | null>(null);
@@ -218,15 +238,15 @@ function DeviceFrame(props: { device: LabDevice; report: LabReport }) {
   const host = useMemo<ScreenHost | null>(() => frame && overlay ? {
     frame,
     overlay,
-    size: screenSize,
+    size: { width, height },
     readClipboard: async () => device.capabilities.clipboardText,
-  } : null, [frame, overlay, device]);
+  } : null, [frame, overlay, device, width, height]);
 
   return (
     <div
       data-lab-device={device.config.id}
       ref={setFrame}
-      style={{ position: 'relative', display: 'flex', flexDirection: 'column', width: screenSize.width, height: screenSize.height, overflow: 'hidden', contain: 'layout paint', isolation: 'isolate', background: colors.background, color: colors.ink, colorScheme: 'light' }}
+      style={{ position: 'relative', display: 'flex', flexDirection: 'column', width, height, overflow: 'hidden', contain: 'layout paint', isolation: 'isolate', background: colors.background, color: colors.ink, colorScheme: 'light' }}
     >
       <div ref={setOverlay} style={{ position: 'absolute', inset: 0, zIndex: 1000, pointerEvents: 'none' }} />
       {host ? (
@@ -249,7 +269,7 @@ function HostView(props: { host: LabHost; report: LabReport }) {
         const device = props.host.device(id);
         const slot = props.host.slotFor(id);
 
-        return device && slot ? createPortal(<DeviceFrame device={device} report={props.report} />, slot, id) : null;
+        return device && slot ? createPortal(<DeviceFrame device={device} screen={props.host.screenOf(id)} report={props.report} />, slot, id) : null;
       })}
     </>
   );

@@ -208,6 +208,12 @@ test("in-page devices are driven through their host and namespaced by environmen
     assert.deepEqual(page.calls.at(-1).command, { method: "network", online: false, latencyMs: 40 });
     assert.equal((await lab.manifest()).devices.find((device) => device.id === "b").online, false);
 
+    assert.deepEqual(sync.devices[0].screen, { width: 390, height: 780 });
+    assert.deepEqual(await lab.execute("deviceScreen", { device: "a", width: 412, height: 915 }), { screen: { width: 412, height: 915 } });
+    assert.deepEqual(page.calls.at(-1).command, { method: "resize", width: 412, height: 915 });
+    assert.deepEqual((await lab.manifest()).devices.find((device) => device.id === "a").screen, { width: 412, height: 915 });
+    assert.equal(operations.deviceScreen.safeParse({ device: "a", width: 100, height: 915 }).success, false);
+
     await lab.execute("deviceForeground", { device: "a" });
     assert.equal(page.calls.at(-1).command.method, "foreground");
     await assert.rejects(lab.execute("input", { device: "a", kind: "click" }), /input_needs_headless_host/);
