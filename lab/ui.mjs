@@ -147,9 +147,11 @@ function devicePanel(id, mode) {
   const toolbar = element("div", "device-toolbar");
   const viewport = element("div", "device-viewport");
   const inspector = element("div", "inspector");
+  // A thin bar across the whole panel holds the device's own controls; the screen's are in its toolbar.
+  const bar = element("div", "device-bar");
   screen.append(toolbar, viewport);
   body.append(screen, inspector);
-  panel.append(body);
+  panel.append(bar, body);
 
   const labelled = (node, label) => {
     node.setAttribute("aria-label", label + " for " + id);
@@ -160,10 +162,24 @@ function devicePanel(id, mode) {
 
   const option = (text, value) => Object.assign(element("option", "", text), { value: String(value) });
 
-  // Chrome's network throttling menu, reduced to what the lab can do.
-  const network = labelled(element("select"), "Network");
-  network.append(option("Online", true), option("Offline", false));
-  network.onchange = () => run("deviceNetwork", { device: id, online: network.value === "true" });
+  // One toggle: it shows whether the device is online, and a click flips it.
+  const network = labelled(element("button", "ghost network-toggle"), "Network");
+  let online = true;
+
+  const showNetwork = (value) => {
+    online = value;
+    network.textContent = online ? "Online" : "Offline";
+    network.dataset.tone = online ? "good" : "bad";
+    network.setAttribute("aria-pressed", String(online));
+    network.title = online ? "Online: click to take this device offline" : "Offline: click to bring this device online";
+  };
+
+  showNetwork(true);
+
+  network.onclick = () => {
+    showNetwork(!online);
+    void run("deviceNetwork", { device: id, online });
+  };
 
   const reload = labelled(element("button", "ghost", "Reload"), "Reload");
   reload.onclick = () => run("reloadDevice", { device: id });
@@ -209,9 +225,8 @@ function devicePanel(id, mode) {
   const rotate = labelled(element("button", "ghost icon", "⟲"), "Rotate");
   const times = element("span", "times", "×");
   const divider = () => element("span", "toolbar-divider");
-  const end = element("span", "toolbar-end");
-  end.append(reload, toggle);
-  toolbar.append(dimensions, widthInput, times, heightInput, divider(), zoomSelect, network, rotate, end);
+  toolbar.append(dimensions, widthInput, times, heightInput, divider(), zoomSelect, rotate);
+  bar.append(network, reload, element("span", "bar-spacer"), toggle);
 
   const clamp = (value, min, max) => Math.round(Math.min(max, Math.max(min, value)));
 
@@ -220,17 +235,23 @@ function devicePanel(id, mode) {
     height: clamp(height, minScreen.height, maxScreen),
   });
 
+  // A full-panel screen fills the viewport edge to edge: no margin, handles or border.
+  const border = () => (fullPanel ? 0 : 2);
+
   // The room the viewport leaves for a drawn screen, its border included.
-  const room = () => ({
-    width: viewport.clientWidth - 2 * stageMargin - handleSize,
-    height: viewport.clientHeight - 2 * stageMargin - handleSize,
-  });
+  const room = () =>
+    fullPanel
+      ? { width: viewport.clientWidth, height: viewport.clientHeight }
+      : {
+          width: viewport.clientWidth - 2 * stageMargin - handleSize,
+          height: viewport.clientHeight - 2 * stageMargin - handleSize,
+        };
 
   // Fit draws the whole screen inside the viewport, never larger than its own pixels.
   const fitScale = () => {
     const { width, height } = room();
 
-    return Math.max(0.1, Math.min(1, width / (current.width + 2), height / (current.height + 2)));
+    return Math.max(0.1, Math.min(1, width / (current.width + border()), height / (current.height + border())));
   };
 
   const scale = () => heldScale ?? (zoom === fitZoom ? fitScale() : zoom);
@@ -272,7 +293,7 @@ function devicePanel(id, mode) {
   // resizing, the screen follows at once and the device takes its size when the view settles.
   const fill = (settle = 0) => {
     const drawn = zoom === fitZoom ? 1 : zoom;
-    const next = bounded({ width: (room().width - 2) / drawn, height: (room().height - 2) / drawn });
+    const next = bounded({ width: (room().width - border()) / drawn, height: (room().height - border()) / drawn });
 
     if (next.width === current.width && next.height === current.height) return apply();
     current = next;
@@ -300,6 +321,7 @@ function devicePanel(id, mode) {
     const preset = screenPresets.find(([name]) => name === dimensions.value);
 
     if (preset) setScreen({ width: preset[1], height: preset[2] });
+    else apply();
   };
 
   // Any other way of sizing the screen leaves full panel.
@@ -316,8 +338,9 @@ function devicePanel(id, mode) {
 
   const apply = () => {
     const drawn = scale();
-    stage.style.width = current.width * drawn + 2 + "px";
-    stage.style.height = current.height * drawn + 2 + "px";
+    viewport.toggleAttribute("data-full", fullPanel);
+    stage.style.width = current.width * drawn + border() + "px";
+    stage.style.height = current.height * drawn + border() + "px";
 
     if (slot) {
       slot.style.zoom = String(drawn);
@@ -537,7 +560,7 @@ function devicePanel(id, mode) {
 
   panel.updateState = (state) => {
     details.update(state);
-    network.value = String(state.online !== false);
+    showNetwork(state.online !== false);
 
     if (!resizing && state.screen) {
       current = state.screen;

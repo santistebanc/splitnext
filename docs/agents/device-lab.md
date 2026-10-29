@@ -38,8 +38,10 @@ the panel to the previous or next section. Empty sections close. New devices ope
 beside the other devices. Reset layout restores the default.
 
 Each device panel works like Chrome's responsive device mode with DevTools docked
-to the side. The screen section has a device toolbar (Dimensions, width × height,
-Zoom, Online/Offline, Rotate, Reload, Inspector). Beside it is an inspector that
+to the side. A thin bar across the whole panel holds the device's own controls: an
+Online/Offline toggle (click to flip), Reload, and the Inspector toggle. The screen
+section has a device toolbar (Dimensions, width × height, Zoom, Rotate). Beside it
+is an inspector that
 motion-panels resizes and collapses (Enter on its separator, or the Inspector
 button); the screen section narrows down to a minimum width first, then the
 inspector does. Both always fill the panel, which never scrolls as a whole: the
@@ -66,7 +68,8 @@ right edge changes the width by twice the pointer's movement, as in Chrome. The 
 is saved with the device and applied to both kinds. Zoom only changes how large the
 page draws a screen and is saved in this browser. Fit to window (default) draws the
 whole screen in its section at up to 100% and follows the section's size. The Full
-panel dimension sizes the screen to the view beside the inspector (at 100% under
+panel dimension sizes the screen to the view beside the inspector, edge to edge with no
+margin, border or handles (at 100% under
 Fit, or to fill it at a chosen zoom) and keeps following it, for example when the
 inspector collapses; it is saved in this browser and any other resize leaves it. A
 headless host always draws at 100%, so its screenshots and clicks use screen pixels.
