@@ -3,6 +3,7 @@ import {
   deviceSecretSchema,
   IndexedDbClientStorage,
 } from '@splitnext/client';
+import { reportBrowserErrors } from './errorReports';
 import { createAppRuntime } from './runtime';
 import type { AppController } from './controller';
 
@@ -31,6 +32,8 @@ function installationSecret(): string {
 }
 
 export async function createBrowserApp(): Promise<AppController> {
+  reportBrowserErrors(apiBaseUrl());
+
   const secret = await navigator.locks.request(
     'splitnext-installation',
     installationSecret,
