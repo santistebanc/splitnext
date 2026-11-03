@@ -5,8 +5,17 @@ or awkward release should leave one small improvement here.
 
 Production deployment, remote migrations and remote data changes need an
 explicit owner decision (see [AGENTS.md](../AGENTS.md#boundaries)).
-`wrangler.jsonc` still has a placeholder D1 `database_id`, so nothing is
-deployed yet.
+Production still has a placeholder D1 `database_id` in `wrangler.jsonc`, so only
+staging is deployed.
+
+## Staging
+
+`env.staging` in `wrangler.jsonc` is a separate Worker, `splitnext-api-staging`,
+with its own D1 database (`splitnext-staging-index`) and group storage. Its
+data is test data. Deploy a clean, committed checkout with
+`npm run deploy:staging`: it builds the app, applies D1 migrations to staging,
+and stamps the commit in `DEPLOY_SHA` (shown by `GET /health`). Run the
+two-phone smoke test there before every production release.
 
 ## Monitoring
 
@@ -19,8 +28,10 @@ from a user's **Copy diagnostics** report.
   and group ids, and synchronization outcomes. They never hold names, amounts,
   links or keys ([docs/architecture.md](./architecture.md#diagnostics)).
 - `unhandled_error` lines are bugs. Look at them after every release.
-- Errors in the browser are not reported anywhere yet; they reach us only
-  through support.
+- `client_error` lines are uncaught errors and rejections in browsers, sent to
+  `POST /client-errors`: the error type, stack frames and page path, with the
+  Worker's `revision`. Messages are left out because they can quote what
+  someone typed. Each page sends at most five distinct reports.
 
 Monitoring stays operational: no analytics on how people use the app. See
 [the support playbook](./support-playbook.md#monitoring-boundary).

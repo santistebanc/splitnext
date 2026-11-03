@@ -15,7 +15,7 @@
   "assets": {
     "directory": "./.wrangler/app-assets",
     "binding": "ASSETS",
-    "run_worker_first": ["/", "/privacy", "/terms","/app", "/app/*", "/j", "/j/", "/join/*"]
+    "run_worker_first": ["/", "/privacy", "/terms", "/app", "/app/*", "/j", "/j/", "/join/*"]
   },
   "vars": {
     "DEPLOY_SHA": "local",
@@ -43,5 +43,27 @@
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
+  // A separate deployment for trying releases before production: its own
+  // Worker (splitnext-api-staging), database and group storage.
+  "env": {
+    "staging": {
+      "vars": {
+        "DEPLOY_SHA": "local",
+        "ENABLE_DEBUG_INSPECTION": "false",
+        "LOG_REQUESTS": "true"
+      },
+      "durable_objects": {
+        "bindings": [{ "name": "GROUPS", "class_name": "GroupObject" }]
+      },
+      "d1_databases": [
+        {
+          "binding": "INDEX",
+          "database_name": "splitnext-staging-index",
+          "database_id": "f3336d8b-adf2-438f-b1df-37bad9112484",
+          "migrations_dir": "migrations"
+        }
+      ]
+    }
+  }
 }
