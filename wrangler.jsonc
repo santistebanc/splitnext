@@ -10,6 +10,8 @@
     { "type": "Text", "globs": ["generated/expo-server/**/*.json"], "fallthrough": false }
   ],
   "workers_dev": true,
+  // Keep the request log lines and uncaught errors in Workers Logs.
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
   "assets": {
     "directory": "./.wrangler/app-assets",
     "binding": "ASSETS",
