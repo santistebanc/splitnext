@@ -62,10 +62,13 @@ for request logs.
 
 ## Deleting a group
 
-Leaving a group only hides it on that installation. Erasing a whole group needs
-an operator, and there is no tool for it yet: until there is, write down the
-request and handle it by hand only with an explicit owner decision, since it
-changes remote data.
+Leaving a group only hides it on that installation. Renaming people does not
+erase their old names either, since Activity keeps them for undo. There is
+deliberately no deletion tool: requests are expected to be rare, so write a
+one-off script when one arrives. It must clear the group's Durable Object
+storage and remove its rows from `identity_group_access` and `invite_codes`.
+Answer within a month, and run it only with an explicit owner decision, since
+it changes remote data.
 
 Ask for:
 
