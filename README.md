@@ -5,6 +5,13 @@ Workers, D1, and one SQLite Durable Object per group. The current MVP handles
 groups, invite links, ledger members, expenses, repayments, Activity and safe undo with
 offline synchronization and realtime revision announcements.
 
+<p>
+  <img src="docs/screenshots/group.png" alt="A group's balances and expenses" width="200">
+  <img src="docs/screenshots/expense.png" alt="Recording an expense split by shares" width="200">
+  <img src="docs/screenshots/person.png" alt="One person's balance and the expenses behind it" width="200">
+  <img src="docs/screenshots/settle.png" alt="The settle-up plan with the fewest payments" width="200">
+</p>
+
 How it fits together, and the rules each part keeps, is in
 [docs/architecture.md](./docs/architecture.md).
 

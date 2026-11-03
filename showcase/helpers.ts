@@ -39,18 +39,18 @@ export function bell(page: Page) {
 /** Opens the groups list, from wherever the app reopens. */
 export async function toGroups(page: Page): Promise<void> {
   await page.goto('/app');
-  const list = button(page, /^(New group|Create a group)$/);
-  const switcher = button(page, /\. Switch group$/);
+  const list = button(page, 'New group');
+  const back = button(page, 'Back to groups');
 
-  await expect(list.or(switcher)).toBeVisible();
+  await expect(list.or(back)).toBeVisible();
 
-  if (await switcher.isVisible()) await switcher.click();
+  if (await back.isVisible()) await back.click();
   await expect(list).toBeVisible();
 }
 
 export async function createGroup(page: Page, name: string, you: string): Promise<void> {
   await toGroups(page);
-  await button(page, /^(New group|Create a group)$/).click();
+  await button(page, 'New group').click();
   await field(page, 'Group name').fill(name);
   await field(page, 'Your name in this group').fill(you);
   await button(page, 'Create group').click();
@@ -69,6 +69,13 @@ export async function addMember(page: Page, name: string): Promise<void> {
   await field(page, 'Add a person').press('Enter');
   // Once the balances collapse, someone new may be past the rows shown.
   await expect(field(page, 'Add a person')).toHaveValue('');
+  await leaveField(page);
+}
+
+/** Leaves the field being edited, so its edit cover stops blocking the rest of the screen. */
+export async function leaveField(page: Page): Promise<void> {
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('edit-cover')).toHaveCount(0);
 }
 
 export async function addExpense(page: Page, description: string, amount: string, payer?: string): Promise<void> {
@@ -86,19 +93,20 @@ export async function addExpense(page: Page, description: string, amount: string
 }
 
 export async function renameGroup(page: Page, name: string): Promise<void> {
-  await button(page, 'Group settings').click();
+  // The name is edited in place in the header; Enter keeps it.
+  await button(page, 'Rename group').click();
   await field(page, 'Group name').fill(name);
-  await button(page, 'Save group name').click();
+  await field(page, 'Group name').press('Enter');
   await expect(heading(page, name)).toBeVisible();
 }
 
 export async function inviteLink(page: Page): Promise<string> {
+  // Invite people opens the link in place under the header and closes it again.
   await button(page, 'Invite people').click();
-  const sheet = page.getByRole('dialog', { name: 'Invite people' });
-  const link = (await sheet.getByTestId('invite-link').textContent()) ?? '';
+  const link = (await page.getByTestId('invite-link').textContent()) ?? '';
 
-  await sheet.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await button(page, 'Invite people').click();
+  await expect(page.getByTestId('invite-link')).toHaveCount(0);
 
   return link;
 }
@@ -139,7 +147,7 @@ export async function openGroup(page: Page, name: string): Promise<void> {
 
 /** Records a planned payment from someone's Settle up screen and returns to it. */
 export async function recordPlanned(page: Page, payment: string | RegExp): Promise<void> {
+  // Record saves the planned payment at once; the plan then drops it.
   await button(page, payment).click();
-  await button(page, 'Record repayment').click();
-  await expect(page.getByRole('heading', { name: 'Settle up', exact: true })).toBeVisible();
+  await expect(button(page, payment)).toHaveCount(0);
 }

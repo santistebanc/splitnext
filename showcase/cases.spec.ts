@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
-import { addExpense, addMember, baseURL, bell, button, createGroup, field, heading, inviteLink, openGroup, out, person, phone, prepare, recordPlanned, setOffline, synced, toGroups, type StorageState } from './helpers';
+import { addExpense, addMember, baseURL, bell, button, createGroup, field, heading, inviteLink, openGroup, out, person, phone, prepare, recordPlanned, renameGroup, setOffline, synced, toGroups, type StorageState } from './helpers';
 
 /**
  * Every piece of UI that appears only under a condition: empty states,
@@ -137,8 +137,8 @@ test('welcome and a new group', async ({ browser }) => {
   const { context, page } = await device(browser);
 
   await page.goto('/app');
-  await spot(page, button(page, 'Create a group').locator('../..'), 'welcome', 'Welcome and groups', 'Welcome', 'No group on this device yet: the logo, Create a group, and Join a group.');
-  await button(page, 'Create a group').click();
+  await spot(page, button(page, 'New group').locator('../..'), 'welcome', 'Welcome and groups', 'Welcome', 'No group on this device yet: no groups, New group, and Join with a link.');
+  await button(page, 'New group').click();
   await spot(page, button(page, 'Create group'), 'create-disabled', 'New group', 'Create group, unavailable', 'Either name is still empty.');
   await field(page, 'Group name').fill('Lisbon');
   await field(page, 'Your name in this group').fill('Ana');
@@ -188,16 +188,14 @@ test('balances and people', async ({ browser }) => {
   await spot(page, page.getByText('Not taken on any device'), 'person-unclaimed', 'People', 'Not taken on any device', 'Nobody has joined as this person.');
   await spot(page, page.getByText('Owes', { exact: true }).locator('../..'), 'person-balances', 'People', 'Balance', 'Owes or Gets back.');
   await spot(page, button(page, /^Settle up, \d+ payments?$/), 'person-settle', 'People', 'Settle up', 'The person is in at least one payment of the settle-up plan.');
-  await spot(page, page.getByText('Settle up first to hide Ben.'), 'person-hide-blocked', 'People', 'Why Hide is unavailable', 'They still owe or are owed.');
-  await spot(page, heading(page, 'Expenses and repayments').locator('..'), 'person-breakdown', 'People', 'Breakdown', 'Their part of each expense and repayment, adding up to the balance.');
+  await spot(page, page.getByRole('list', { name: 'Expenses and repayments' }), 'person-breakdown', 'People', 'Breakdown', 'Their part of each expense and repayment, adding up to the balance.');
   await button(page, 'Rename Ben').click();
   await spot(page, field(page, 'Name').locator('../../..'), 'person-renaming', 'People', 'Renaming in place', 'The name becomes a field, with Done.');
   await field(page, 'Name').press('Escape');
   await button(page, 'Back to Trip').click();
 
   await person(page, 'Ana').click();
-  await spot(page, button(page, 'That’s you'), 'person-you', 'People', 'That’s you', 'Shown instead of “I’m …” on your own page.');
-  await spot(page, page.getByText('Settle up first to hide yourself.'), 'person-hide-yourself', 'People', 'Settle up first to hide yourself', 'Your own balance is not settled.');
+  await spot(page, heading(page, 'Ana').locator('../..'), 'person-you', 'People', 'Your own page', 'Your balance and your part of each expense.');
   await button(page, 'Back to Trip').click();
 
   await addMember(page, 'Dee');
@@ -226,21 +224,9 @@ test('settling up', async ({ browser }) => {
   await button(page, /^Settle up, \d+ payments?$/).click();
   await spot(page, button(page, /^You pay Ben /), 'settle-you-pay', 'Settling up', 'A payment you make', 'You owe in the plan: “You → Ben”.');
 
-  await button(page, /^You pay Ben 30\.00/).click();
-  await spot(page, page.getByText(/^Full amount you owe/), 'repay-full', 'Settling up', 'The full planned amount', 'The amount matches what the plan says is owed.');
-  await field(page, 'Amount').fill('12');
-  await spot(page, page.getByText(/^You owe 30\.00/), 'repay-partial', 'Settling up', 'Part of a planned payment', 'The amount differs from the plan, which is named for comparison.');
-  await spot(page, page.getByRole('combobox', { name: 'Paid to', exact: true }), 'repay-picker', 'Settling up', 'Choosing who was paid', 'The recipient dropdown in the payment sentence.');
-  await page.getByRole('combobox', { name: 'Paid to', exact: true }).selectOption({ label: 'Cy' });
-  await spot(page, page.getByText('Paid outside splitnext.', { exact: true }), 'repay-manual', 'Settling up', 'A payment outside the plan', 'Nobody in the plan owes this pair.');
-  await button(page, 'Cancel').click();
-
   await recordPlanned(page, /^You pay Ben 30\.00/);
   await recordPlanned(page, /^Cy pays Ben 30\.00/);
-  await spot(page, page.getByText('All settled up', { exact: true }).locator('..'), 'settle-done', 'Settling up', 'All settled up', 'No payment involves this person any more.');
-  await button(page, 'Record a different payment').click();
-  await spot(page, heading(page, 'Earlier repayments').locator('..'), 'repay-earlier', 'Settling up', 'Earlier repayments', 'Repayments are already recorded in the group.');
-  await button(page, 'Cancel').click();
+  await spot(page, heading(page, 'Settle up').locator('..'), 'settle-done', 'Settling up', 'Everything recorded', 'Record saves each planned payment at once; none involve this person any more.');
 
   await button(page, 'Back to Ben').click();
   await spot(page, page.getByText('Settled', { exact: true }).locator('..'), 'person-settled', 'People', 'Settled', 'In expenses, with a numeric zero.');
@@ -250,9 +236,12 @@ test('settling up', async ({ browser }) => {
   await button(page, /^Change repayment: You paid Ben back 30\.00/).click();
   await spot(page, button(page, 'Delete'), 'repay-remove', 'Settling up', 'Delete repayment', 'Opening a recorded repayment to change it.');
   await button(page, 'Cancel').click();
-  await person(page, 'Ben').click();
-  await button(page, 'Hide Ben').click();
-  await spot(page, page.getByTestId('toast').locator('..'), 'toast-hidden', 'Group screen', 'Person hidden', 'Right after hiding someone settled who has history.');
+
+  await button(page, 'Add expense').click();
+  await page.getByRole('radio', { name: 'Payment', exact: true }).click();
+  await spot(page, button(page, /^Paid to .*Change recipient$/), 'repay-picker', 'Settling up', 'Choosing who was paid', 'Any other payment is recorded from the expense form, with a payer and a recipient.');
+  await spot(page, page.getByText('Paid outside splitnext.', { exact: true }), 'repay-manual', 'Settling up', 'A payment outside the plan', 'A payment between any two people, not only the planned ones.');
+  await button(page, 'Cancel').click();
   await context.close();
 });
 
@@ -294,21 +283,21 @@ test('expense form', async ({ browser }) => {
 
   await button(page, /^Amount for Ben:/).click();
   await spot(page, field(page, 'Amount for Ben'), 'expense-amount-field', 'Expense form', 'Fix an amount', 'Tap a person’s amount to fix it, keeping the others’ shares.');
-  await field(page, 'Amount for Ben').fill('abc');
-  await spot(page, page.getByText(/^Enter each amount/), 'expense-each-amount', 'Expense form', 'Enter each amount', 'A person’s amount is not a number.');
   await field(page, 'Amount for Ben').fill('20');
   await field(page, 'Amount for Ben').press('Enter');
   await button(page, /^Amount for Cy:/).click();
   await field(page, 'Amount for Cy').fill('20');
   await spot(page, page.getByText('The amounts add up to more than the total.'), 'expense-over', 'Expense form', 'More than the total', 'The amounts typed add up to more than the expense.');
+  // Clearing an amount returns the person to their share; Enter leaves the field if it is still open.
   await field(page, 'Amount for Cy').fill('');
-  await field(page, 'Amount for Cy').press('Enter');
-  await button(page, /^Amount for Ben:/).click();
+  await page.keyboard.press('Enter');
+  await expect(button(page, /^Amount for Cy:/)).toBeVisible();
   await field(page, 'Amount for Ben').fill('');
-  await field(page, 'Amount for Ben').press('Enter');
+  await page.keyboard.press('Enter');
+  await expect(button(page, /^Amount for Ben:/)).toBeVisible();
 
   // Clearing the fixed amounts returns the split to equal shares.
-  await expect(summary).toHaveText(/each · 3 people$/);
+  await expect(summary).toHaveText(/^[\d.,]+ each$/);
   await button(page, 'Save').click();
   await button(page, /^Change Dinner · /).click();
   await spot(page, button(page, /^Delete Dinner/), 'expense-remove', 'Expense form', 'Delete', 'Opening a recorded expense to change it.');
@@ -342,18 +331,18 @@ test('offline and unreachable', async ({ browser }) => {
   await spot(page, page.getByText(/^Offline · taken on/), 'person-offline-you', 'People', 'Offline presence', 'Your own page while this device is offline.');
   await button(page, 'Back to Trip').click();
   await button(page, 'Invite people').click();
-  await spot(page, page.getByText('Connect to replace the link.'), 'invite-offline', 'Invite sheet', 'Connect to replace the link', 'Offline: Replace link is unavailable.');
-  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  await spot(page, page.getByText('Connect to regenerate the link.'), 'invite-offline', 'Invite sheet', 'Connect to regenerate the link', 'Offline: Regenerate link is unavailable.');
+  await button(page, 'Invite people').click();
 
-  await button(page, 'Trip. Switch group').click();
+  await button(page, 'Back to groups').click();
   await spot(page, page.getByText('1 change waiting'), 'groups-waiting', 'Welcome and groups', 'Changes waiting', 'A group card with changes not sent yet.');
   await spot(page, button(page, /^Offline.*Connection details$/), 'groups-offline', 'Offline and sync', 'Offline, on the groups list', 'The same connection strip above the list.');
   await button(page, 'Join with an invite link').click();
-  await spot(page, page.getByText('You’re offline. Connect to open the link.'), 'join-link-offline', 'Joining', 'Offline, before a link', 'Opening a link needs a connection.');
-  await button(page, 'Back').click();
   await setOffline(context, page, false);
+  // Reload to close the link field and let the waiting change sync.
+  await page.goto('/app');
   await synced(page);
-  await button(page, 'Open Trip').click();
+  await openGroup(page, 'Trip');
 
   // The server stops answering while the device stays online.
   await page.route(/\/groups\/[^/]+\/sync/, (route) => route.abort());
@@ -390,14 +379,14 @@ test('invite sheet', async ({ browser }) => {
 
   await createGroup(page, 'Lisbon', 'Ana');
   await button(page, 'Invite people').click();
-  const sheet = page.getByRole('dialog', { name: 'Invite people' });
+  const panel = page.getByRole('region', { name: 'Invite people' });
 
-  await spot(page, sheet.getByRole('button', { name: 'Share link' }), 'invite-share', 'Invite sheet', 'Share', 'The device can share links, as phones can.');
-  await spot(page, sheet.getByText('Tap the link to copy it'), 'invite-tap', 'Invite sheet', 'Tap the link to copy it', 'The device can copy to the clipboard.');
-  await sheet.getByRole('button', { name: 'Copy link' }).click();
-  await spot(page, sheet.getByText('Copied', { exact: true }).locator('../..'), 'invite-copied', 'Invite sheet', 'Copied', 'Right after copying: the link is outlined in blue.');
-  await sheet.getByRole('button', { name: 'Replace link', exact: true }).click();
-  await spot(page, page.getByRole('dialog', { name: 'Replace invite link?' }), 'invite-replace', 'Invite sheet', 'Replace the link?', 'Asked in the same sheet, because the old link stops working.');
+  await spot(page, panel.getByRole('button', { name: 'Share link' }), 'invite-share', 'Invite sheet', 'Share', 'The device can share links, as phones can.');
+  await spot(page, panel.getByRole('button', { name: 'Copy link' }), 'invite-tap', 'Invite sheet', 'Tap the link to copy it', 'The link itself is the copy button.');
+  await panel.getByRole('button', { name: 'Copy link' }).click();
+  await spot(page, panel.getByText('✓ Copied', { exact: true }), 'invite-copied', 'Invite sheet', 'Copied', 'Right after copying the link.');
+  await panel.getByRole('button', { name: 'Regenerate link', exact: true }).click();
+  await spot(page, panel.getByRole('button', { name: 'Regenerate', exact: true }).locator('../..'), 'invite-replace', 'Invite sheet', 'Regenerate the link?', 'Asked in place, because the old link stops working.');
   await sharing.context.close();
 
   const plain = await device(browser, {
@@ -408,7 +397,7 @@ test('invite sheet', async ({ browser }) => {
 
   await createGroup(plain.page, 'Porto', 'Ana');
   await button(plain.page, 'Invite people').click();
-  await spot(plain.page, plain.page.getByText('Select the link to copy it'), 'invite-select', 'Invite sheet', 'Select the link to copy it', 'The browser offers no clipboard, so copying is by hand.');
+  await spot(plain.page, plain.page.getByTestId('invite-link'), 'invite-select', 'Invite sheet', 'Select the link to copy it', 'The browser offers no clipboard, so the link is selectable text.');
   await plain.context.close();
 });
 
@@ -422,12 +411,12 @@ test('joining', async ({ browser }) => {
   const old = await inviteLink(host.page);
 
   await button(host.page, 'Invite people').click();
-  await host.page.getByRole('dialog').getByRole('button', { name: 'Replace link', exact: true }).click();
-  await host.page.getByRole('dialog', { name: 'Replace invite link?' }).getByRole('button', { name: 'Replace link', exact: true }).click();
+  await button(host.page, 'Regenerate link').click();
+  await button(host.page, 'Regenerate').click();
   await expect(host.page.getByTestId('invite-link')).not.toHaveText(old);
   const link = (await host.page.getByTestId('invite-link').textContent()) ?? '';
 
-  await host.page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  await button(host.page, 'Invite people').click();
 
   const { context, page } = await device(browser);
 
@@ -470,13 +459,14 @@ test('joining', async ({ browser }) => {
   await expect(button(page, 'Dana (you), no expenses yet. Show details')).toBeVisible({ timeout: 15_000 });
   await page.unroute(/\/groups\/[^/]+\/join/);
 
-  await button(page, 'Group settings').click();
+  await button(page, 'Rename group').click();
   await field(page, 'Group name').fill('Lisbon trip');
-  await spot(page, button(page, 'Save group name'), 'settings-save', 'Group screen', 'Save group name', 'Group settings, once the name differs from the current one.');
-  await field(page, 'Group name').fill('Lisbon');
-  await button(page, 'Leave group on this device').click();
-  await spot(page, page.getByRole('dialog', { name: 'Leave this group?' }), 'leave-confirm', 'Group screen', 'Leave this group?', 'After tapping Leave group in Group settings.');
-  await page.getByRole('dialog').getByRole('button', { name: 'Leave group', exact: true }).click();
+  await spot(page, field(page, 'Group name'), 'settings-save', 'Group screen', 'Renaming the group', 'The name is edited in place in the header; Enter keeps it.');
+  await field(page, 'Group name').press('Escape');
+  await button(page, 'Back to groups').click();
+  await button(page, 'Leave Lisbon').click();
+  await spot(page, button(page, 'Leave').locator('../..'), 'leave-confirm', 'Welcome and groups', 'Leave this group?', 'After tapping Leave on its row in the groups list.');
+  await button(page, 'Leave').click();
   await spot(page, page.getByText('No groups yet', { exact: true }).locator('..'), 'groups-only-left', 'Welcome and groups', 'No groups yet', 'Every group on this device was left, so the list is empty but the welcome screen does not return.');
   await spot(page, button(page, 'Show 1 group you left'), 'groups-left-toggle', 'Welcome and groups', 'Groups you left, folded', 'There are groups this device left.');
   await button(page, 'Show 1 group you left').click();
@@ -515,11 +505,6 @@ test('two devices: presence, conflicts, and removal', async ({ browser }) => {
   await spot(page, person(page, 'Eli'), 'presence-offline', 'Balances', 'Ring', 'Devices joined as this person, none online now.');
   await person(page, 'Ben').click();
   await spot(page, page.getByText(/^Online · taken on 1 device/), 'person-online', 'People', 'Online presence', 'A device with this name taken is online.');
-  await button(page, 'I’m Ben').click();
-  await spot(page, page.getByText(/Ben is already taken on/), 'person-claim-shared', 'People', 'Shared with another device', 'Choosing a name taken on another device.');
-  await button(page, 'Back to Shared').click();
-  await person(page, 'Ana').click();
-  await button(page, 'I’m Ana').click();
   await button(page, 'Back to Shared').click();
 
   // Conflicting changes: this device changes things offline while the other changes the same things.
@@ -567,20 +552,18 @@ test('two devices: presence, conflicts, and removal', async ({ browser }) => {
 
   await bell(page).click();
   await spot(page, page.getByRole('region', { name: 'Needs your review' }), 'activity-review', 'Activity', 'Needs your review', 'Changes from this device that were not applied, each with Apply again and Dismiss.');
-  await spot(page, activityEntry(page, 'New'), 'activity-new', 'Activity', 'New', 'Changes from others since you last marked them seen, tinted blue.');
-  await spot(page, button(page, 'Mark all seen'), 'activity-mark-seen', 'Activity', 'Mark all seen', 'Anything is new.');
+  await spot(page, activityEntry(page, 'New'), 'activity-new', 'Activity', 'New', 'Changes from others since you last opened Activity, tagged new.');
   await button(page, /^Back to /).click();
-  await button(page, /\. Switch group$/).click();
+  await button(page, 'Back to groups').click();
   await spot(page, page.getByText('A change needs review'), 'groups-review', 'Welcome and groups', 'A change needs review', 'On the card of a group with changes to review.');
 
   // The host removes the other device’s person, so that device has nobody to be.
   await button(page, /^Open /).first().click();
   await person(page, 'Ben').click();
   await button(page, 'Remove Ben').click();
-  await expect(other.page.getByText('Tap your name to choose who you are.')).toBeVisible({ timeout: 15_000 });
-  await spot(other.page, other.page.getByText('Tap your name to choose who you are.'), 'balance-choose-you', 'Balances', 'Choose who you are', 'Nobody in the group is you on this device.');
-  await button(other.page, /\. Switch group$/).click();
-  await spot(other.page, other.page.getByText('Choose who you are', { exact: true }), 'groups-choose-you', 'Welcome and groups', 'Choose who you are', 'On the card of a group where this device has no name.');
+  await expect(person(other.page, 'Ben')).toHaveCount(0, { timeout: 15_000 });
+  await button(other.page, 'Back to groups').click();
+  await spot(other.page, other.page.getByText('choose who you are', { exact: true }), 'groups-choose-you', 'Welcome and groups', 'Choose who you are', 'On the card of a group where this device has no name.');
   await other.context.close();
   await host.context.close();
 });
@@ -607,10 +590,7 @@ test('activity', async ({ browser }) => {
     await button(page, 'Delete Taxi · 18.00').click();
     await person(page, 'Dee').click();
     await button(page, 'Remove Dee').click();
-    await button(page, 'Group settings').click();
-    await field(page, 'Group name').fill('Porto');
-    await button(page, 'Save group name').click();
-    await expect(heading(page, 'Porto')).toBeVisible();
+    await renameGroup(page, 'Porto');
   });
 
   const { context, page } = await device(browser, { storageState });
@@ -626,7 +606,6 @@ test('activity', async ({ browser }) => {
   await spot(page, button(page, 'Restore expense'), 'activity-restore-expense', 'Activity', 'Restore expense', 'The removed expense is still removed.');
   await spot(page, activityEntry(page, /removed a repayment/).first(), 'activity-repayment', 'Activity', 'Repayment change', 'Green icon: a repayment was recorded, changed, or removed.');
   await spot(page, button(page, 'Restore repayment'), 'activity-restore-repayment', 'Activity', 'Restore repayment', 'The removed repayment is still removed.');
-  await spot(page, page.getByText(/cannot be removed by undoing/).first().locator('..'), 'activity-undo-blocked', 'Activity', 'Why Undo is unavailable', 'The person has history, so undoing their addition would leave it orphaned.');
 
   // Later in the day, and then the next day. A frozen clock would stop the
   // screens' fade-in, so screens appear without it.
@@ -689,14 +668,8 @@ test('a long balances list', async ({ browser }) => {
   });
 
   const { context, page } = await device(browser, { storageState });
-  const scroller = page.locator('#splitnext-page');
 
   await openGroup(page, 'Long trip');
-  await spot(page, button(page, /^Show all \d+ people$/), 'balances-more', 'Balances', 'More people', 'Not everyone fits above the first expenses: tap to show everyone.');
-  await button(page, /^Show all \d+ people$/).click();
-  await spot(page, button(page, 'Show fewer people'), 'balances-fewer', 'Balances', 'Show fewer', 'Everyone is listed.');
-  await button(page, 'Show fewer people').click();
-  await scroller.evaluate((node) => { node.scrollTop = node.scrollHeight; });
-  await spot(page, heading(page, 'Balances').first().locator('../..'), 'balances-pinned', 'Balances', 'Pinned heading', 'Scrolled down: the balances shrink to their heading, pinned above the expenses.');
+  await spot(page, person(page, 'Max'), 'balances-more', 'Balances', 'Many people', 'Everyone is listed with their balance, however many people there are.');
   await context.close();
 });
