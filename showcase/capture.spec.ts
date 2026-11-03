@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
-import { addExpense, addMember, baseURL, bell, button, createGroup, field, heading, inviteLink, out, person, phone, prepare, renameGroup, synced, toGroups, type StorageState } from './helpers';
+import { addExpense, addMember, baseURL, bell, button, createGroup, field, heading, inviteLink, leaveField, out, person, phone, prepare, renameGroup, synced, toGroups, type StorageState } from './helpers';
 
 /**
  * Drives the real app through each flow, recording a video per flow and a
@@ -13,14 +13,14 @@ const flows = {
   start: { order: 1, title: 'Getting started', summary: 'A fresh install opens on the welcome screen. Create a group, then add people right in the balances.' },
   expenses: { order: 2, title: 'Recording expenses', summary: 'Enter an amount, pick who paid, and split it equally, by shares, or by exact amounts.' },
   people: { order: 3, title: 'People in a group', summary: 'Open someone to see how their balance adds up, rename them, or remove someone who has no records.' },
-  settle: { order: 4, title: 'Settling up', summary: 'The plan shows the fewest payments. Record a planned payment in full or in part, then change it later.' },
-  invite: { order: 5, title: 'Renaming and inviting', summary: 'Rename the group, copy its invite link, and replace the link when it has gone too far.' },
+  settle: { order: 4, title: 'Settling up', summary: 'The plan shows the fewest payments. Record one with a single press, or any other payment from the expense form, and change it later.' },
+  invite: { order: 5, title: 'Renaming and inviting', summary: 'Rename the group in place, copy its invite link, and regenerate the link when it has gone too far.' },
   join: { order: 6, title: 'Joining from an invite', summary: 'A second device opens the link, sees who is already in the group, and joins as someone new.' },
-  realtime: { order: 7, title: 'Live changes and the bell', summary: 'Changes from another device arrive live. The bell counts them without pop-ups until you have seen them.' },
+  realtime: { order: 7, title: 'Live changes and the bell', summary: 'Changes from another device arrive live. The bell counts them without pop-ups until you open Activity.' },
   history: { order: 8, title: 'Activity, restore, and undo', summary: 'Every change is listed in Activity, where a removed expense can be restored and most changes undone.' },
   offline: { order: 9, title: 'Working offline', summary: 'Without a connection everything keeps working. Changes wait on the device and sync when it is back.' },
-  leave: { order: 10, title: 'Leaving and rejoining', summary: 'Your groups list shows your balance in each. Leave a group on this device, then rejoin it as yourself.' },
-  big: { order: 11, title: 'A big group', summary: 'With many people the balances show who fits above the first expenses, shrink as you scroll, and expand on request.' },
+  leave: { order: 10, title: 'Leaving and rejoining', summary: 'Your groups list shows your balance in each. Leave a group on this device from the list, then rejoin it as yourself.' },
+  big: { order: 11, title: 'A big group', summary: 'With many people everyone stays listed with their balance, and the expenses follow below.' },
 } as const;
 
 type FlowId = keyof typeof flows;
@@ -104,8 +104,12 @@ async function step(rec: Recording, text: string): Promise<void> {
   await pause(rec, 700);
 }
 
-/** Moves the cursor visibly onto a target, then presses it. */
-async function tap(rec: Recording, target: Locator): Promise<void> {
+/**
+ * Moves the cursor visibly onto a target, then presses it. `force` presses
+ * through whatever covers the target, such as a field's floating label, which
+ * passes the press on to its input.
+ */
+async function tap(rec: Recording, target: Locator, options: { force?: boolean } = {}): Promise<void> {
   await target.scrollIntoViewIfNeeded();
   const box = await target.boundingBox();
 
@@ -114,12 +118,12 @@ async function tap(rec: Recording, target: Locator): Promise<void> {
     await pause(rec, 200);
   }
 
-  await target.click();
+  await target.click(options);
   await pause(rec, 450);
 }
 
-async function typeInto(rec: Recording, target: Locator, text: string): Promise<void> {
-  await tap(rec, target);
+async function typeInto(rec: Recording, target: Locator, text: string, options: { force?: boolean } = {}): Promise<void> {
+  await tap(rec, target, options);
   await target.fill('');
   await target.pressSequentially(text, { delay: 55 });
   await pause(rec, 300);
@@ -179,17 +183,17 @@ test('getting started', async ({ browser }) => {
   const page = rec.page;
 
   await page.goto('/app');
-  await expect(button(page, 'Create a group')).toBeVisible();
+  await expect(button(page, 'New group')).toBeVisible();
   await pause(rec, 600);
   await step(rec, 'A fresh install opens on the welcome screen');
   await shot(rec, 'welcome', 'Welcome');
 
-  await step(rec, 'Create a group');
-  await tap(rec, button(page, 'Create a group'));
+  await step(rec, 'Start a new group');
+  await tap(rec, button(page, 'New group'));
   await expect(field(page, 'Group name')).toBeVisible();
   await shot(rec, 'create-empty', 'New group');
-  await typeInto(rec, field(page, 'Group name'), 'Lisbon trip');
-  await typeInto(rec, field(page, 'Your name in this group'), 'Ana');
+  await typeInto(rec, field(page, 'Group name'), 'Lisbon trip', { force: true });
+  await typeInto(rec, field(page, 'Your name in this group'), 'Ana', { force: true });
   await shot(rec, 'create-filled', 'New group, filled in');
   await tap(rec, button(page, 'Create group'));
   await expect(heading(page, 'Lisbon trip')).toBeVisible();
@@ -244,10 +248,11 @@ test('recording expenses', async ({ browser }) => {
   await field(page, 'Amount for Ben').press('Enter');
   await shot(rec, 'expense-amounts', 'Fixed amount and shares');
 
+  // A fixed amount stays an open field; clearing it closes the field and returns Ben to his share.
   await step(rec, 'Back to an equal split, and save');
-  await tap(rec, button(page, /^Amount for Ben:/));
-  await typeInto(rec, field(page, 'Amount for Ben'), '');
-  await field(page, 'Amount for Ben').press('Enter');
+  await tap(rec, field(page, 'Amount for Ben'));
+  await field(page, 'Amount for Ben').fill('');
+  await expect(button(page, /^Amount for Ben:/)).toBeVisible();
   await tap(rec, button(page, 'Decrease share for Cy'));
   await tap(rec, button(page, 'Save'));
   await expect(button(page, 'Change Dinner at Taberna · 90.00')).toBeVisible();
@@ -298,6 +303,7 @@ test('people in a group', async ({ browser }) => {
   await step(rec, 'Add someone new');
   await typeInto(rec, field(page, 'Add a person'), 'Eli');
   await field(page, 'Add a person').press('Enter');
+  await leaveField(page);
   await tap(rec, person(page, 'Eli'));
   await expect(heading(page, 'Eli')).toBeVisible();
   await shot(rec, 'person-new', 'Someone in no expense yet');
@@ -333,39 +339,29 @@ test('settling up', async ({ browser }) => {
   await expect(heading(page, 'Settle up')).toBeVisible();
   await shot(rec, 'settle-plan', 'Settle up');
 
-  await step(rec, 'Record a planned payment');
+  await step(rec, 'Record a planned payment with one press');
   await tap(rec, button(page, 'Ben pays you 10.00. Record this payment'));
-  await expect(field(page, 'Amount')).toHaveValue('10.00');
-  await shot(rec, 'repayment-form', 'Recording a repayment');
-
-  await step(rec, 'Pay part of it');
-  await typeInto(rec, field(page, 'Amount'), '4');
-  await tap(rec, button(page, 'Record repayment'));
-  await expect(button(page, 'Ben pays you 6.00. Record this payment')).toBeVisible();
-  await shot(rec, 'settle-partial', 'After a partial payment');
-
-  await step(rec, 'A payment outside the plan');
-  await tap(rec, button(page, 'Record a different payment'));
-  await shot(rec, 'repayment-other', 'Any other payment');
-  await tap(rec, button(page, 'Cancel'));
-  await expect(heading(page, 'Settle up')).toBeVisible();
-
-  await step(rec, 'Record the rest');
-  await tap(rec, button(page, 'Ben pays you 6.00. Record this payment'));
-  await tap(rec, button(page, 'Record repayment'));
-  await expect(page.getByText('All settled up', { exact: true })).toBeVisible();
-  await shot(rec, 'settle-done', 'All settled up');
+  await expect(button(page, 'Ben paid you back, +10.00')).toBeVisible();
+  await shot(rec, 'settle-done', 'Recorded and settled');
 
   await tap(rec, button(page, 'Back to Ben'));
   await shot(rec, 'person-settled', 'Someone settled');
   await tap(rec, button(page, 'Back to Weekend'));
 
+  await step(rec, 'Any other payment, from the expense form');
+  await tap(rec, button(page, 'Add expense'));
+  await tap(rec, page.getByRole('radio', { name: 'Payment', exact: true }));
+  await typeInto(rec, field(page, 'Amount'), '15');
+  await shot(rec, 'repayment-other', 'Any other payment');
+  await tap(rec, button(page, 'Save'));
+  await expect(heading(page, 'Weekend')).toBeVisible();
+
   await step(rec, 'Repayments sit with the expenses');
-  await expect(button(page, 'Change repayment: Ben paid you back 4.00')).toBeVisible();
+  await expect(button(page, 'Change repayment: Ben paid you back 10.00')).toBeVisible();
   await shot(rec, 'group-repayments', 'Repayments in the list');
 
   await step(rec, 'Open a repayment to change it');
-  await tap(rec, button(page, 'Change repayment: Ben paid you back 4.00'));
+  await tap(rec, button(page, 'Change repayment: Ben paid you back 10.00'));
   await shot(rec, 'repayment-edit', 'Changing a repayment');
   await tap(rec, button(page, 'Cancel'));
   await expect(heading(page, 'Weekend')).toBeVisible();
@@ -382,36 +378,33 @@ test('renaming and inviting', async ({ browser }) => {
   const page = rec.page;
 
   await landOn(rec, 'Lisbon');
-  await step(rec, 'Rename the group');
-  await tap(rec, button(page, 'Group settings'));
-  await expect(heading(page, 'Group settings')).toBeVisible();
+  await step(rec, 'Rename the group in place');
+  await tap(rec, button(page, 'Rename group'));
   await typeInto(rec, field(page, 'Group name'), 'Lisbon & Porto');
   await shot(rec, 'rename-group', 'Renaming the group');
-  await tap(rec, button(page, 'Save group name'));
+  await field(page, 'Group name').press('Enter');
   await expect(heading(page, 'Lisbon & Porto')).toBeVisible();
 
   await step(rec, 'Invite people with a link');
   await tap(rec, button(page, 'Invite people'));
-  const sheet = page.getByRole('dialog', { name: 'Invite people' });
-
-  await expect(sheet).toBeVisible();
+  await expect(page.getByTestId('invite-link')).toBeVisible();
   await shot(rec, 'invite-sheet', 'Invite people');
 
   await step(rec, 'Tap the link to copy it');
-  await tap(rec, sheet.getByRole('button', { name: 'Copy link', exact: true }));
-  await expect(sheet.getByRole('button', { name: 'Link copied', exact: true })).toBeVisible();
+  await tap(rec, button(page, 'Copy link'));
+  await expect(button(page, 'Link copied')).toBeVisible();
   await shot(rec, 'invite-copied', 'Link copied');
 
-  await step(rec, 'Replace a link that went too far');
-  await tap(rec, sheet.getByRole('button', { name: 'Replace link', exact: true }));
-  const confirm = page.getByRole('dialog', { name: 'Replace invite link?' });
+  await step(rec, 'Regenerate a link that went too far');
+  const old = await page.getByTestId('invite-link').textContent();
 
-  await expect(confirm).toBeVisible();
-  await shot(rec, 'invite-replace', 'Replace the link?');
-  await tap(rec, confirm.getByRole('button', { name: 'Replace link', exact: true }));
-  await expect(sheet).toBeVisible();
+  await tap(rec, button(page, 'Regenerate link'));
+  await expect(button(page, 'Regenerate')).toBeVisible();
+  await shot(rec, 'invite-replace', 'Regenerate the link?');
+  await tap(rec, button(page, 'Regenerate'));
+  await expect(page.getByTestId('invite-link')).not.toHaveText(old ?? '');
   await pause(rec, 800);
-  await tap(rec, sheet.getByRole('button', { name: 'Close', exact: true }));
+  await tap(rec, button(page, 'Invite people'));
   await finish(rec);
 });
 
@@ -429,9 +422,9 @@ test('joining from an invite', async ({ browser }) => {
   const page = rec.page;
 
   await page.goto('/app');
-  await expect(button(page, 'Join a group')).toBeVisible();
-  await step(rec, 'Join from the welcome screen');
-  await tap(rec, button(page, 'Join a group'));
+  await expect(button(page, 'Join with an invite link')).toBeVisible();
+  await step(rec, 'Join from the groups list');
+  await tap(rec, button(page, 'Join with an invite link'));
   await expect(field(page, 'Invite link')).toBeVisible();
   await shot(rec, 'join-empty', 'Join with a link');
 
@@ -439,7 +432,6 @@ test('joining from an invite', async ({ browser }) => {
   await typeInto(rec, field(page, 'Invite link'), 'https://example.com/hello');
   await pause(rec, 600);
   await shot(rec, 'join-invalid', 'Not an invite link');
-  await tap(rec, button(page, 'Back'));
 
   // Slow the invite check so its state shows.
   await page.route('**/invites/preview', async (route) => {
@@ -502,11 +494,11 @@ test('live changes and the bell', async ({ browser }) => {
   await expect(heading(page, 'Activity')).toBeVisible();
   await shot(rec, 'activity-new', 'New updates');
 
-  await step(rec, 'Mark them seen');
-  await tap(rec, button(page, 'Mark all seen'));
-  await expect(page.getByText('New', { exact: true })).toHaveCount(0);
-  await shot(rec, 'activity-seen', 'All seen');
+  // Opening Activity counts as seeing what is new, so the bell clears on the way back.
+  await step(rec, 'Back in the group, the bell is clear');
   await tap(rec, button(page, 'Back to Shared'));
+  await expect(button(page, 'Activity, no new updates')).toBeVisible();
+  await shot(rec, 'activity-seen', 'All seen');
   await finish(rec);
   await other.close();
 });
@@ -538,9 +530,10 @@ test('activity, restore, and undo', async ({ browser }) => {
   await tap(rec, button(page, 'Restore expense'));
   await shot(rec, 'activity-restored', 'Expense restored');
 
+  // Undo records the reverse change, so the history keeps both.
   await step(rec, 'Undo the rename');
   await tap(rec, button(page, 'Undo: You renamed the group'));
-  await expect(page.getByText('You undid a change', { exact: true })).toBeVisible();
+  await expect(page.getByText('Porto weekend → Trip')).toBeVisible();
   await shot(rec, 'activity-undone', 'A change undone');
   await tap(rec, button(page, /^Back to /));
   await expect(heading(page, 'Trip')).toBeVisible();
@@ -576,11 +569,11 @@ test('working offline', async ({ browser }) => {
   await field(page, 'Name').press('Enter');
   await expect(heading(page, 'Benjamin')).toBeVisible();
   await tap(rec, button(page, 'Back to Trip'));
-  await expect(page.getByText('Offline · 1 change saved here', { exact: true })).toBeVisible();
+  await expect(button(page, /^Offline · 1 change saved here/)).toBeVisible();
   await shot(rec, 'offline-pending', 'Changes waiting');
 
   await step(rec, 'The groups list shows what is waiting');
-  await tap(rec, button(page, 'Trip. Switch group'));
+  await tap(rec, button(page, 'Back to groups'));
   await shot(rec, 'groups-offline', 'Groups list, offline');
 
   await step(rec, 'Back online, the changes sync');
@@ -612,11 +605,10 @@ test('leaving and rejoining', async ({ browser }) => {
   await shot(rec, 'groups-list', 'Your groups');
 
   await step(rec, 'Leave a group on this device');
-  await tap(rec, button(page, 'Open Lisbon'));
-  await tap(rec, button(page, 'Group settings'));
-  await tap(rec, button(page, 'Leave group on this device'));
+  await tap(rec, button(page, 'Leave Lisbon'));
+  await expect(button(page, 'Leave')).toBeVisible();
   await shot(rec, 'leave-confirm', 'Leave the group?');
-  await tap(rec, page.getByRole('dialog').getByRole('button', { name: 'Leave group', exact: true }));
+  await tap(rec, button(page, 'Leave'));
 
   await step(rec, 'Groups you left stay within reach');
   await tap(rec, button(page, 'Show 1 group you left'));
@@ -644,14 +636,13 @@ test('a big group', async ({ browser }) => {
 
   const rec = await record(browser, 'big', { storageState });
   const page = rec.page;
-  const showAll = button(page, /^Show all \d+ people$/);
 
   await landOn(rec, 'Long trip');
-  await page.locator('#splitnext-page').evaluate((node) => { node.scrollTop = 0; });
-  await step(rec, 'Only who fits above the first expenses');
-  await shot(rec, 'balances-collapsed', 'Many people');
+  await step(rec, 'Everyone listed with their balance');
+  await expect(person(page, 'Max')).toBeVisible();
+  await shot(rec, 'balances-all', 'Many people');
 
-  await step(rec, 'Scrolling shrinks the balances');
+  await step(rec, 'The expenses follow below');
   await rec.page.mouse.move(195, 600, { steps: 10 });
 
   for (let index = 0; index < 8; index += 1) {
@@ -660,14 +651,5 @@ test('a big group', async ({ browser }) => {
   }
 
   await shot(rec, 'balances-scrolled', 'Scrolled down');
-
-  await step(rec, 'Tap the heading to go back up');
-  await tap(rec, heading(page, 'Balances').first());
-  await pause(rec, 600);
-
-  await step(rec, 'Show everyone');
-  await tap(rec, showAll);
-  await shot(rec, 'balances-all', 'Everyone shown');
-  await tap(rec, button(page, 'Show fewer people'));
   await finish(rec);
 });
