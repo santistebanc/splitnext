@@ -2,6 +2,7 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { Scalar } from '@scalar/hono-api-reference';
 import { cors } from 'hono/cors';
 import { requestIdOf, requestLogging } from './requestLog';
+import { clientErrorRoutes } from './routes/clientErrors';
 import { debugRoutes } from './routes/debug';
 import { groupRoutes } from './routes/groups';
 import { identityRoutes } from './routes/identities';
@@ -28,6 +29,7 @@ app.use('*', requestLogging);
 
 const routedApp = app
   .route('/', systemRoutes)
+  .route('/', clientErrorRoutes)
   .route('/', debugRoutes)
   .route('/', identityRoutes)
   .route('/', groupRoutes);

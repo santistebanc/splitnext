@@ -52,7 +52,7 @@ export const privacyPolicy: LegalDocument = {
     {
       heading: 'Server logs',
       paragraphs: [
-        'The server writes one log line per request so problems can be found and fixed: the kind of request, its result and timing, any error code, and installation and group ids. Log lines never contain names, descriptions, amounts, invite links, or keys. Our hosting provider also processes your IP address to deliver each request.',
+        'The server writes one log line per request so problems can be found and fixed: the kind of request, its result and timing, any error code, and installation and group ids. When the app hits an error in your browser, it reports the kind of error, where in the code it happened, and the page address without the invite part. Log lines never contain names, descriptions, amounts, invite links, or keys. Our hosting provider also processes your IP address to deliver each request.',
       ],
     },
     {

@@ -418,7 +418,9 @@ the known and new revision and each command's id, type, status, and reason.
 Lines never contain names, tokens, credentials, or request bodies.
 `LOG_REQUESTS` switches them off (tests do); deployed Workers keep them on,
 and Workers Logs (`observability` in `wrangler.jsonc`) retains them. See
-[operations](./operations.md#monitoring).
+[operations](./operations.md#monitoring). Uncaught browser errors
+and rejections are sent to `POST /client-errors` as their type, stack frames
+and path, never their message, and logged as `client_error` lines.
 
 The app's dispatcher keeps the last 100 dispatches and SDK request events from
 the moment it starts, in every build. Devtools show them, and their **Copy
