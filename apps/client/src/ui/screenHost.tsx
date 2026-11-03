@@ -29,12 +29,15 @@ export function useScreenSize(): { width: number; height: number } {
   return useScreenHost()?.size ?? window;
 }
 
-/** Whether the homepage route is showing; a hosted screen has no routes. */
+/** Public pages in the homepage's wide frame rather than the app's column. */
+const publicPages = new Set(['/', '/privacy', '/terms']);
+
+/** Whether a public page is showing; a hosted screen has no routes. */
 export function useHomepage(): boolean {
   const hosted = useScreenHost() !== null;
 
   // A screen is hosted or not for its whole life, so the hook order never changes.
-  return hosted ? false : usePathname() === '/';
+  return hosted ? false : publicPages.has(usePathname());
 }
 
 /** Whether a field of this screen has the keyboard, not one of another device. */

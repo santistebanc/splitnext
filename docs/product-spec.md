@@ -27,7 +27,8 @@ to friends traveling together. Anyone can create a group without a beta access
 gate. Ship the responsive web app, public homepage, and invite join flow first;
 native releases follow. Expense entry and balances are now
 available, together with repayments, cached Activity, safe undo and an
-Activity count.
+Activity count. The homepage links to the privacy policy at `/privacy`, the
+beta terms at `/terms`, and the support email.
 
 Returning visitors reopen their last active group. Creation uses one view with
 group name and the creator's ledger member name,
