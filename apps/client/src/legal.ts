@@ -5,6 +5,9 @@
 
 export const supportEmail = 'support@splitnext.online';
 
+/** The person responsible for Splitnext and the data it keeps. */
+export const operatorName = 'Carlos Santisteban';
+
 export type LegalSection = {
   heading: string;
   paragraphs?: string[];
@@ -24,6 +27,12 @@ export const privacyPolicy: LegalDocument = {
   intro:
     'Splitnext is a free public beta for keeping track of shared costs in small groups. It has no accounts, and it keeps only what a group needs to work.',
   sections: [
+    {
+      heading: 'Who is responsible',
+      paragraphs: [
+        `Splitnext is run by ${operatorName}, who is responsible for the data described here. Contact: ${supportEmail}.`,
+      ],
+    },
     {
       heading: 'What a group stores',
       paragraphs: [
@@ -155,7 +164,9 @@ export const betaTerms: LegalDocument = {
     },
     {
       heading: 'Contact',
-      paragraphs: [`For support, privacy or deletion requests: ${supportEmail}.`],
+      paragraphs: [
+        `Splitnext is run by ${operatorName}. For support, privacy or deletion requests: ${supportEmail}.`,
+      ],
     },
   ],
 };

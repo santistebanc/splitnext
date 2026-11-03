@@ -714,7 +714,9 @@ Expenses and settlements are accepted behavior.
 
 - Each expense records a required description, its amount, its payer, and
   its allocations. It has no expense date; the list shows expenses newest
-  recorded first. Expense entry has no currency choice: new expenses and
+  recorded first. A group with no current expenses or repayments shows no
+  expense list at all: no heading and no empty-state text. Expense entry has
+  no currency choice: new expenses and
   repayments record the ISO 4217 no-currency code XXX, so every amount has
   two decimal places (ADR 0025).
 - Entry starts with the person's you member as payer, when they have one, and
