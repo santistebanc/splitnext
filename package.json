@@ -15,6 +15,7 @@
   "scripts": {
     "dev": "node scripts/check-dev-port.mjs && npm run db:migrate:local && npm run frontend:build && wrangler dev --port 8787 --var ENABLE_DEBUG_INSPECTION:true",
     "deploy": "npm run frontend:build && wrangler deploy",
+    "deploy:staging": "node scripts/deploy.mjs staging",
     "types": "wrangler types",
     "types:check": "wrangler types --check",
     "db:migrate:local": "wrangler d1 migrations apply INDEX --local",
