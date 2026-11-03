@@ -1,5 +1,6 @@
 import { Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { Link, router } from 'expo-router';
+import { supportEmail } from '../legal';
 import { Frame } from '../ui/Frame';
 import { Button, s } from '../ui/components';
 import { useCompactLayout } from '../ui/useVisibleViewport';
@@ -27,9 +28,18 @@ export default function Homepage() {
             <Button onPress={() => router.push('/app')}>Open app →</Button>
           </View>
         </View>
-        <Text style={s.caption}>
-          Beta: groups, invitations, expenses, and repayments.
-        </Text>
+        <View style={{ gap: 6 }}>
+          <Text style={s.caption}>
+            Beta: groups, invitations, expenses, and repayments.
+          </Text>
+          <Text style={s.caption}>
+            <Link href="/privacy" style={s.link}>Privacy</Link>
+            {'  ·  '}
+            <Link href="/terms" style={s.link}>Terms</Link>
+            {'  ·  '}
+            <Link href={`mailto:${supportEmail}`} style={s.link}>{supportEmail}</Link>
+          </Text>
+        </View>
       </View>
     </Frame>
   );

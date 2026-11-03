@@ -203,5 +203,6 @@ state. See [docs/architecture.md](./docs/architecture.md#diagnostics).
 - [Accepted product behavior](./docs/product-spec.md)
 - [Architecture decisions](./docs/adr/)
 - [Agent working agreement](./AGENTS.md)
+- [Support playbook](./docs/support-playbook.md)
 
 The groups list shows your balance. Settle up suggests net transfers and records partial or excess repayments, including offline. Repayments represent money paid outside the app.

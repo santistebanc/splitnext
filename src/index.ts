@@ -17,6 +17,8 @@ export default {
 
     const frontend =
       path === '/' ||
+      path === '/privacy' ||
+      path === '/terms' ||
       path === '/app' ||
       path === '/app/' ||
       path === '/j' ||

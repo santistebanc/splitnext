@@ -85,6 +85,15 @@ describe('Cloudflare foundation', () => {
     expect(await response.text()).toContain('<h1');
   });
 
+  it('renders the privacy policy and beta terms on the Worker', async () => {
+    for (const [path, title] of [['/privacy', 'Privacy policy'], ['/terms', 'Beta terms']]) {
+      const response = await env.APP_RENDERING.fetch(`https://splitnext.test${path}`);
+
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain(title);
+    }
+  });
+
   it('renders the app and arbitrary invite entry pages without sending a token to the server', async () => {
     for (const path of ['/app', '/join/test-group']) {
       const response = await env.APP_RENDERING.fetch(
