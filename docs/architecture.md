@@ -416,7 +416,9 @@ JSON log line per request under that id, echoing it in the response: route,
 status, duration, error code, identity and group ids, and for synchronization
 the known and new revision and each command's id, type, status, and reason.
 Lines never contain names, tokens, credentials, or request bodies.
-`LOG_REQUESTS` switches them off (tests do); deployed Workers keep them on.
+`LOG_REQUESTS` switches them off (tests do); deployed Workers keep them on,
+and Workers Logs (`observability` in `wrangler.jsonc`) retains them. See
+[operations](./operations.md#monitoring).
 
 The app's dispatcher keeps the last 100 dispatches and SDK request events from
 the moment it starts, in every build. Devtools show them, and their **Copy
