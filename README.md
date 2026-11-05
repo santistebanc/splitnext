@@ -1,5 +1,9 @@
 # Splitnext MVP
 
+Run `npm run verify:expense-recovery` for the isolated expense durability slice.
+Its [behavior contract and reproduction guide](docs/agents/expense-recovery.md)
+describe the fault boundaries, evidence and unverified scope.
+
 Splitnext is an offline-first group ledger foundation built on Cloudflare
 Workers, D1, and one SQLite Durable Object per group. The current MVP handles
 groups, invite links, ledger members, expenses, repayments, Activity and safe undo with
