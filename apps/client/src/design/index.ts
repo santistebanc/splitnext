@@ -16,7 +16,7 @@ export { Field, type FieldProps } from './Field';
 
 export { CheckMark, Checkbox, Chip, RadioMark, RadioRow, SegmentedControl, Tabs, ToggleChip, type SegmentedOption, type TabOption } from './controls';
 
-export { Avatar, type AvatarSize } from './Avatar';
+export { Avatar, avatarSizes, type AvatarSize } from './Avatar';
 
 export { initials } from './initials';
 

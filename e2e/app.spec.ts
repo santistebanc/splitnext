@@ -3184,3 +3184,34 @@ test('keeps payer and recipient labels on one line beside long names on a narrow
   await singleLine('Paid to');
   expect(await page.locator('#splitnext-page').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
 });
+
+test('folds a person avatar without jumping their name sideways while scrolling', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 640 });
+  await createGroup(page, 'Person scroll', 'Ana');
+  const name = 'Benjamin Alexander Fitzgerald';
+
+  await addMember(page, name);
+
+  for (let index = 0; index < 12; index++) await addExpense(page, `Dinner ${index}`, '30');
+
+  await person(page, name).click();
+  await motionSettled(page);
+
+  await page.screenshot({ path: test.info().outputPath('person-header-expanded.png') });
+
+  const positions = await page.locator('#splitnext-page').evaluate(async (node) => {
+    const values: number[] = [];
+
+    for (let top = 0; top <= 160; top += 2) {
+      node.scrollTop = top;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      values.push(document.querySelector('h1')!.getBoundingClientRect().x);
+    }
+
+    return values;
+  });
+
+  expect(Math.max(...positions.slice(1).map((x, index) => Math.abs(x - positions[index]!)))).toBeLessThan(8);
+  await expect(heading(page, name)).toHaveCSS('font-size', '18px');
+  await page.screenshot({ path: test.info().outputPath('person-header-compact.png') });
+});
