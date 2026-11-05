@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
-import { Platform, ScrollView, Text, View } from 'react-native';
-import { s } from './components';
+import { Platform, ScrollView, View } from 'react-native';
+import { Row, Tag, Text, colors, layout, sizes } from '../design';
 import { ScrollToTopContext } from './pageScroll';
 import { useHomepage } from './screenHost';
 import {
@@ -11,7 +11,12 @@ import {
 
 // Header reflow must not anchor the scroll position and feed back into its
 // compact progress, especially when the split list just reaches the bottom.
-const scrollStyle = Platform.OS === 'web' ? { ...s.page, overflowAnchor: 'none' } : s.page;
+const page = { flex: 1, backgroundColor: colors.background } as const;
+
+const scrollStyle = Platform.OS === 'web' ? { ...page, overflowAnchor: 'none' } : page;
+
+/** App screens are one narrow column, like the phone app, on every device. */
+const column = { width: '100%', maxWidth: layout.column, alignSelf: 'center', paddingHorizontal: layout.gutter } as const;
 
 type FrameProps = {
   children: ReactNode;
@@ -30,8 +35,6 @@ type FrameProps = {
   footer?: ReactNode;
   /** Whether the footer floats over the content instead of taking its own bar. */
   floatingFooter?: boolean;
-  /** A rule above the pinned footer, for screens whose content scrolls under it. */
-  ruledFooter?: boolean | undefined;
   /** Content offset and the space released by its header. Collapse follows their
    * sum, which stays fixed when header reflow clamps the scroll position.
    * `restored` marks the position a screen opens at rather than a scroll. */
@@ -106,11 +109,11 @@ export function Frame(props: FrameProps) {
 
   return (
     <ScrollToTopContext.Provider value={() => scroll.current?.scrollTo({ y: 0, animated: true })}>
-      <View style={[s.page, visibleHeight !== null && { maxHeight: visibleHeight }]}>
+      <View style={[page, visibleHeight !== null && { maxHeight: visibleHeight }]}>
         {props.status ? <View onLayout={(event) => props.onStatusLayout?.(event.nativeEvent.layout.height)}>{props.status}</View> : null}
         {props.header ? (
           <View
-            style={s.screenHeaderBar}
+            style={{ backgroundColor: colors.background, zIndex: 5 }}
             onLayout={(event) => {
               const height = event.nativeEvent.layout.height;
               const previous = headerSize.current;
@@ -131,10 +134,10 @@ export function Frame(props: FrameProps) {
               props.onScroll?.(y, headerSize.current.full - height);
             }}
           >
-            <View style={s.screenColumn}>{props.header}</View>
+            <View style={column}>{props.header}</View>
           </View>
         ) : null}
-        <View style={s.page}>
+        <View style={page}>
           <ScrollView
             ref={scroll}
             onScroll={(event) => {
@@ -155,14 +158,12 @@ export function Frame(props: FrameProps) {
             contentContainerStyle={{ flexGrow: 1 }}
             keyboardShouldPersistTaps="handled"
           >
-            <View style={[s.wrap, !homepage && s.appWrap, homepage && mobile && s.mobileWrap, floating && { paddingBottom: 104 }]}>
+            <View style={[{ width: '100%', maxWidth: homepage ? layout.page : layout.column, alignSelf: 'center', flexGrow: 1, paddingHorizontal: layout.gutter, paddingBottom: 32 }, floating && { paddingBottom: 104 }]}>
               {homepage ? (
-                <View style={[s.header, mobile && s.mobileHeader]}>
-                  <View style={s.brand}>
-                    <Text style={s.brandText}>splitnext</Text>
-                    <Text style={s.beta}>BETA</Text>
-                  </View>
-                </View>
+                <Row gap={8} paddingY={mobile ? 4 : 12} style={{ minHeight: mobile ? sizes.row : 64 }}>
+                  <Text variant="strong" weight="bold">splitnext</Text>
+                  <Tag>beta</Tag>
+                </Row>
               ) : null}
               {props.children}
             </View>
@@ -172,13 +173,14 @@ export function Frame(props: FrameProps) {
           floating ? (
             <View
               pointerEvents="box-none"
-              style={{ position: 'absolute', left: 0, right: 0, bottom: 28 }}
+              style={{ position: 'absolute', left: 0, right: 0, bottom: 24 }}
             >
-              <View pointerEvents="box-none" style={[s.screenColumn, s.footerInner]}>{props.footer}</View>
+              <View pointerEvents="box-none" style={[column, { gap: 12 }]}>{props.footer}</View>
             </View>
           ) : (
-            <View style={[s.footerBar, props.ruledFooter && s.footerBarRuled]}>
-              <View style={[s.screenColumn, s.footerInner]}>{props.footer}</View>
+            // Above the header, so a drawer opening from the foot can dim the whole screen.
+            <View style={{ zIndex: 6, backgroundColor: colors.background, paddingTop: 12, paddingBottom: 16 }}>
+              <View style={[column, { gap: 12 }]}>{props.footer}</View>
             </View>
           )
         ) : null}

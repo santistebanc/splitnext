@@ -65,8 +65,9 @@ How it fits together, and the rules each part keeps, is in
   and repayments; person details with a balance breakdown, Settle up, rename,
   and remove; and browser Back/Forward support. Forms return to where
   they were opened.
-- A `/components` workbench and in-app devtools, enabled with debug
-  inspection, for previewing components and calling any app action.
+- A design system (`apps/client/src/design/`) every screen is built from,
+  documented in a `/components` catalog, and in-app devtools; both are
+  enabled with debug inspection.
 - One fixed light theme on warm paper with square black controls, locally
   served Instrument Sans and Geist Mono fonts, and morphing screen changes on
   the web. Theme assets are precached with the app shell
@@ -107,7 +108,7 @@ leaves both unresponsive.
 
 - `http://localhost:8787/` is the homepage and `/app` the app.
 - `/app?devtools` opens the in-app development panel; `/components` the
-  component workbench.
+  design system catalog.
 - For fast UI iteration, keep that Worker running and run `npm run app:dev` in
   a second terminal; Expo serves on port 8081 against the API on port 8787, and
   reloads SDK edits in `src/` without a restart.

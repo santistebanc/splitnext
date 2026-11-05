@@ -1,6 +1,6 @@
 import { Component, createRef, type ReactNode } from 'react';
 import type { Text, TextInput, View } from 'react-native';
-import { easeOut } from './theme';
+import { easeOut, scrim } from '../design';
 
 /** What a morph mark attaches to: on the web, React Native's views are elements. */
 type MorphTarget = HTMLElement | View | Text | TextInput | null;
@@ -65,7 +65,6 @@ type Props = { screen: string; depth: number; sheet?: boolean; children: ReactNo
 const sheetDuration = 420;
 
 /** The shade over the screen a sheet covers. */
-const scrim = 'rgba(20, 20, 19, 0.32)';
 
 /**
  * Changes of screen, as the prototype moves them: parts that appear on both

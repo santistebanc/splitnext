@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Outcome } from '../model/actions';
 import { actionGroups, type ActionGroup } from '../model/actions';
 import type { LoggedDispatch, LoggedEvent } from '../model/diagnosticsLog';
-import { Button, colors, s } from '../ui/components';
+import { Button, TextButton, colors, opacities, strokes, textStyle } from '../design';
 import { useActions, useUiState } from '../ui/useActionCall';
 import { useCompactLayout } from '../ui/useVisibleViewport';
 import { ActionForm } from './ActionForm';
@@ -119,9 +119,9 @@ function DevtoolsPanel(props: PanelProps) {
             </Pressable>
           ))}
         </View>
-        <Button quiet label="Close devtools" onPress={props.close}>
+        <TextButton underline={false} label="Close devtools" onPress={props.close} style={{ paddingHorizontal: 14 }}>
           ×
-        </Button>
+        </TextButton>
       </View>
       <ScrollView contentContainerStyle={ds.body}>
         {tab === 'actions' ? (
@@ -326,8 +326,7 @@ function ActionsTab() {
         <View style={s.banner}>
           <Text style={s.body}>{outcome.message}</Text>
           <View style={s.row}>
-            <Button
-              quiet
+            <TextButton
               onPress={() => {
                 if (outcome.requestId)
                   void actions.dispatch(
@@ -339,7 +338,7 @@ function ActionsTab() {
               }}
             >
               Cancel
-            </Button>
+            </TextButton>
             <Button
               disabled={running || !confirmationAvailability?.available}
               onPress={() => {
@@ -417,9 +416,7 @@ function LogTab(props: { log: LoggedDispatch[]; diagnostics: LoggedEvent[]; clea
           Every dispatch, from clicks, devtools, or navigation.
         </Text>
         {props.log.length || props.diagnostics.length ? (
-          <Button quiet onPress={props.clear}>
-            Clear
-          </Button>
+          <TextButton onPress={props.clear}>Clear</TextButton>
         ) : null}
       </View>
       {props.log.map((entry) => (
@@ -534,6 +531,19 @@ function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+/** The app's own text steps and blocks the devtools borrow. */
+const s = StyleSheet.create({
+  caption: { ...textStyle('caption', 'muted') },
+  body: { ...textStyle('body') },
+  heading: { ...textStyle('heading') },
+  label: { ...textStyle('caption', 'muted'), fontWeight: '600' },
+  row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
+  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 },
+  chosen: { borderWidth: strokes.ink, borderColor: colors.ink },
+  dim: { opacity: opacities.disabled },
+  banner: { backgroundColor: colors.tint, paddingVertical: 12, paddingHorizontal: 14, borderLeftWidth: strokes.marker, borderColor: colors.alert, gap: 6 },
+});
+
 const ds = StyleSheet.create({
   launcher: {
     position: 'absolute',
@@ -547,12 +557,12 @@ const ds = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 20,
   },
-  launcherText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
+  launcherText: { ...textStyle('caption', 'inverse'), fontWeight: '600' },
   panel: {
     position: 'absolute',
     zIndex: 20,
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
+    backgroundColor: colors.background,
+    borderColor: colors.rule,
     shadowColor: '#000000',
     shadowOpacity: 0.12,
     shadowRadius: 16,
@@ -573,17 +583,17 @@ const ds = StyleSheet.create({
     justifyContent: 'space-between',
     paddingLeft: 12,
     borderBottomWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.rule,
   },
   tabs: { flexDirection: 'row', gap: 4 },
   tab: { paddingHorizontal: 10, paddingVertical: 12 },
-  tabSelected: { borderBottomWidth: 2, borderColor: colors.online },
+  tabSelected: { borderBottomWidth: 2, borderColor: colors.positive },
   tabText: { color: colors.muted, fontSize: 14, fontWeight: '500' },
   tabTextSelected: { color: colors.ink },
   body: { padding: 12 },
   section: { gap: 10 },
   previewLabel: { color: colors.muted, fontSize: 12, fontWeight: '600' },
-  groupTabs: { flexGrow: 0, borderBottomWidth: 1, borderColor: colors.border },
+  groupTabs: { flexGrow: 0, borderBottomWidth: 1, borderColor: colors.rule },
   groupTabsContent: { gap: 8 },
   groupTab: {
     minHeight: 40,
@@ -592,15 +602,15 @@ const ds = StyleSheet.create({
     borderBottomWidth: 2,
     borderColor: 'transparent',
   },
-  groupTabSelected: { borderColor: colors.online },
+  groupTabSelected: { borderColor: colors.positive },
   groupTabText: { color: colors.muted, fontSize: 13, fontWeight: '500' },
-  groupTabTextSelected: { color: colors.online, fontWeight: '700' },
+  groupTabTextSelected: { color: colors.positive, fontWeight: '700' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   chip: {
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.rule,
     borderRadius: 4,
   },
   unavailable: { opacity: 0.45 },
@@ -613,13 +623,13 @@ const ds = StyleSheet.create({
     borderRadius: 4,
     padding: 10,
   },
-  failed: { color: colors.owes },
-  pending: { color: '#8a5a00' },
-  done: { color: colors.online },
+  failed: { color: colors.danger },
+  pending: { color: colors.danger },
+  done: { color: colors.positive },
   logEntry: {
     gap: 2,
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.rule,
   },
 });

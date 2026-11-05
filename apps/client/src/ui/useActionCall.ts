@@ -12,7 +12,7 @@ import type {
   AppActionName,
   Dispatcher,
 } from '../model/actions';
-import { errorMessage } from './components';
+import { errorMessage } from './errors';
 
 const ActionsContext = createContext<Dispatcher | null>(null);
 

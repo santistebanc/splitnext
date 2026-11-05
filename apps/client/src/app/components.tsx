@@ -1,3 +1,3 @@
-import { Workbench } from '../workbench/Workbench';
+import { Catalog } from '../catalog/Catalog';
 
-export default Workbench;
+export default Catalog;

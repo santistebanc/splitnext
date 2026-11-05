@@ -1,9 +1,34 @@
 import type { ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import { s } from './components';
-import { CloseIcon } from './icons';
+import { Pressable, View, type ViewStyle } from 'react-native';
+import { Row, Text, TextButton, colors, layout, scrim } from '../design';
 import { ScreenModal } from './ScreenModal';
 import { useCompactLayout } from './useVisibleViewport';
+
+/** Fills its parent, for a backdrop behind a dialog. */
+export const backdrop = { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 } as const;
+
+/** The page dimmed under a dialog, which rises from its foot unless `centered`. */
+export function overlay(centered: boolean): ViewStyle {
+  return centered
+    ? { flex: 1, backgroundColor: scrim, justifyContent: 'center', padding: layout.gutter }
+    : { flex: 1, backgroundColor: scrim, justifyContent: 'flex-end' };
+}
+
+/** A dialog's own panel: the column's width, on the page color. */
+export const sheet = {
+  width: '100%',
+  maxWidth: layout.column,
+  alignSelf: 'center',
+  backgroundColor: colors.background,
+  paddingTop: 24,
+  paddingHorizontal: layout.gutter,
+  paddingBottom: 32,
+  gap: 12,
+} as const;
+
+const drawerHeight = '88%';
+
+const popupHeight = '80%';
 
 /**
  * A dialog over the screen: a drawer rising from the bottom on phones, a popup
@@ -17,20 +42,19 @@ export function Drawer(props: { title: string; onClose: () => void; full?: boole
 
   return (
     <ScreenModal onRequestClose={props.onClose}>
-      <View style={[s.overlay, !compact && s.overlayCentered]}>
-        <Pressable accessibilityLabel="Close" style={s.backdrop} onPress={props.onClose} />
-        <View role="dialog" aria-modal aria-label={props.title} style={[s.sheet, s.drawer, !compact && s.popup, props.full && { height: compact ? s.drawer.maxHeight : s.popup.maxHeight }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text accessibilityRole="header" numberOfLines={1} style={[s.drawerTitle, { flex: 1 }]}>{props.title}</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-              onPress={props.onClose}
-              style={({ pressed }) => [s.drawerClose, pressed && s.pressed]}
-            >
-              <CloseIcon size={18} />
-            </Pressable>
-          </View>
+      <View style={overlay(!compact)}>
+        <Pressable accessibilityLabel="Close" style={backdrop} onPress={props.onClose} />
+        <View
+          role="dialog"
+          aria-modal
+          aria-label={props.title}
+          style={[sheet, { maxHeight: drawerHeight, paddingTop: 16 }, !compact && { maxWidth: layout.dialog, maxHeight: popupHeight, paddingBottom: 24 }, props.full && { height: compact ? drawerHeight : popupHeight }]}
+        >
+          {/* The same title row as a drawer rising from the footer. */}
+          <Row gap={8} justify="between">
+            <Text accessibilityRole="header" numberOfLines={1} variant="heading" style={{ flexShrink: 1 }}>{props.title}</Text>
+            <TextButton tone="muted" underline={false} onPress={props.onClose} style={{ paddingLeft: 16 }}>Close</TextButton>
+          </Row>
           {props.children}
         </View>
       </View>

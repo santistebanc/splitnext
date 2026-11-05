@@ -3,7 +3,7 @@ import {
   ScrollViewStyleReset,
   useServerDocumentContext,
 } from 'expo-router/html';
-import { colors } from '../ui/theme';
+import { colors } from '../design';
 
 type DocumentProps = { children: ReactNode };
 
@@ -38,7 +38,7 @@ export default function DocumentRoot(props: DocumentProps) {
               '@font-face{font-family:"Instrument Sans";src:url(/assets/instrument-sans.woff2) format("woff2");font-style:normal;font-weight:400 700;font-display:swap}' +
               '@font-face{font-family:"Geist Mono";src:url(/assets/geist-mono.woff2) format("woff2");font-style:normal;font-weight:400 700;font-display:swap}' +
               `html,body{background:${colors.background};color-scheme:light;-webkit-font-smoothing:antialiased}` +
-              `:focus-visible{outline:3px solid ${colors.action}!important;outline-offset:2px}` +
+              `:focus-visible{outline:3px solid ${colors.ink}!important;outline-offset:2px}` +
               // Fields show focus by their caret over the ink underline, as the design draws them.
               'input:focus-visible,textarea:focus-visible{outline:none!important}',
           }}

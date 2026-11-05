@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { NumericFormat } from 'react-number-format';
 import { formatAmount, minorDigits } from '@splitnext/client';
 import { digitGroupSeparator } from '../model/expenses';
-import { colors, monoFamily } from './theme';
+import { colors, fonts, strokes } from '../design';
 import type { AmountInputProps } from './AmountInput';
 
 /** Typed text as a plain decimal: grouping removed, or an ungrouped decimal comma read as the point. */
@@ -87,9 +87,9 @@ export function AmountInput(props: AmountInputProps) {
       style={{
         flex: 1, minWidth: 0, width: '100%', height: props.height, padding: 0, border: 0,
         boxSizing: 'border-box', background: 'transparent', outline: 'none',
-        color: colors.ink, fontFamily: monoFamily, fontSize: props.fontSize,
+        color: colors.ink, fontFamily: fonts.mono, fontSize: props.fontSize,
         fontWeight: 500, letterSpacing: -0.05 * props.fontSize, textAlign: props.align ?? 'left',
-        ...(props.inline && { textAlign: 'right', borderBottom: `1.5px solid ${colors.ink}`, letterSpacing: 0 }),
+        ...(props.inline && { textAlign: 'right', borderBottom: `${strokes.ink}px solid ${colors.ink}`, letterSpacing: 0 }),
       }}
     />
   );

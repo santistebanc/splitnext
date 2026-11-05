@@ -1,10 +1,9 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { memberSettlements, preferredMember, settlementSuggestions } from '@splitnext/client';
+import { Button, EmptyState, ErrorMessage, Row, Text, rules, sizes } from '../design';
 import { memberName, moneyLabel } from '../model/expenses';
-import { ErrorMessage, FooterButton, colors, s } from './components';
 import { FooterDrawer } from './FooterDrawer';
 import type { MemberListApp } from './MemberList';
-import { fontFamily, monoFamily } from './theme';
 import { useScreenSize } from './screenHost';
 import { useActionCall, useUiState } from './useActionCall';
 
@@ -49,13 +48,14 @@ export function SettleUpFooter(props: { app: MemberListApp }) {
         <>
           <ErrorMessage message={settle.error ?? back.error} />
           {open ? null : (
-            <FooterButton
+            <Button
+             
               label={`Settle up, ${count === 1 ? '1 payment' : `${count} payments`}`}
               disabled={!settle.can('showSettleUp', person ? { memberId: person } : {})}
               onPress={() => { void settle.call('showSettleUp', person ? { memberId: person } : {}); }}
             >
               Settle up
-            </FooterButton>
+            </Button>
           )}
         </>
       )}
@@ -66,8 +66,6 @@ export function SettleUpFooter(props: { app: MemberListApp }) {
     </FooterDrawer>
   );
 }
-
-const nameStyle = { fontFamily, fontSize: 17, lineHeight: 22, fontWeight: '600', color: colors.ink } as const;
 
 /** The plan's payments, each recorded as planned with Record. */
 function SettleUpPayments(props: { app: MemberListApp }) {
@@ -86,33 +84,30 @@ function SettleUpPayments(props: { app: MemberListApp }) {
           const payer = label(entry.from_member_id);
           const payee = label(entry.to_member_id);
           const amount = moneyLabel(entry.amount, entry.currency);
+          const payment = { from: entry.from_member_id, to: entry.to_member_id, amount, currency: entry.currency };
 
           return (
             // Who pays, who is paid, and the amount share a line while they fit and wrap
             // between them when not, a name too long for a line truncating; Record never gives way.
-            <View key={`${entry.currency}:${entry.from_member_id}:${entry.to_member_id}`} style={[{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 }, s.ruled]}>
-              <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 6 }}>
-                <Text numberOfLines={1} style={[nameStyle, { maxWidth: '100%' }]}>{payer}</Text>
-                <Text numberOfLines={1} style={[nameStyle, { maxWidth: '100%' }]}>→ {payee === 'You' ? 'you' : payee}</Text>
-                <Text numberOfLines={1} style={{ maxWidth: '100%', fontFamily: monoFamily, fontSize: 17, lineHeight: 22, fontWeight: '500', color: colors.ink }}>{amount}</Text>
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`${payer} ${payer === 'You' ? 'pay' : 'pays'} ${payee === 'You' ? 'you' : payee} ${moneyLabel(entry.amount, entry.currency)}. Record this payment`}
-                disabled={record.busy || !record.can('recordSettlement', { from: entry.from_member_id, to: entry.to_member_id, amount, currency: entry.currency })}
-                onPress={() => { void record.call('recordSettlement', { from: entry.from_member_id, to: entry.to_member_id, amount, currency: entry.currency }); }}
-                style={({ pressed }) => [{ flexShrink: 0, height: 44, paddingHorizontal: 18, justifyContent: 'center', backgroundColor: colors.action }, pressed && s.pressed]}
+            <Row key={`${entry.currency}:${entry.from_member_id}:${entry.to_member_id}`} gap={12} paddingY={12} style={[{ minHeight: sizes.row }, rules.above]}>
+              <Row fill wrap align="baseline" style={{ columnGap: 8 }}>
+                <Text numberOfLines={1} variant="strong" style={{ maxWidth: '100%' }}>{payer}</Text>
+                <Text numberOfLines={1} variant="strong" style={{ maxWidth: '100%' }}>→ {payee === 'You' ? 'you' : payee}</Text>
+                <Text numberOfLines={1} variant="figure" style={{ maxWidth: '100%' }}>{amount}</Text>
+              </Row>
+              <Button
+                size="compact"
+                label={`${payer} ${payer === 'You' ? 'pay' : 'pays'} ${payee === 'You' ? 'you' : payee} ${moneyLabel(entry.amount, entry.currency)}. Record this payment`}
+                disabled={record.busy || !record.can('recordSettlement', payment)}
+                onPress={() => { void record.call('recordSettlement', payment); }}
+                style={{ flexShrink: 0 }}
               >
-                <Text style={{ fontFamily, fontSize: 15, fontWeight: '600', color: colors.actionInk }}>Record</Text>
-              </Pressable>
-            </View>
+                Record
+              </Button>
+            </Row>
           );
         })}
-        {!payments.length ? (
-          <View style={[{ paddingVertical: 16 }, s.ruled]}>
-            <Text style={{ fontFamily, fontSize: 18, fontWeight: '600', color: colors.settledInk }}>✓ {person ? 'Settled' : 'Everyone is settled up'}</Text>
-          </View>
-        ) : null}
+        {!payments.length ? <EmptyState tone="settled" title={person ? 'Settled' : 'Everyone is settled up'} /> : null}
       </View>
       <ErrorMessage message={record.error} />
     </View>

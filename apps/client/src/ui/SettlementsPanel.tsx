@@ -1,13 +1,14 @@
 import { useEffect, useRef } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { minorDigits, parseAmount, preferredMember, repaymentMembers, settlementSuggestions, type ClientReplicaState } from '@splitnext/client';
+import { Button, ErrorMessage, Stack, Text, between, rules } from '../design';
 import { memberName, moneyLabel } from '../model/expenses';
-import { ErrorMessage, FooterButton, HeaderAction, ScreenHeader, colors, s } from './components';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { EntrySwitch } from './EntrySwitch';
 import { MemberChoice } from './MemberChoice';
 import type { MemberListApp } from './MemberList';
-import { between, useCompactProgress } from './pageScroll';
+import { useCompactProgress } from './pageScroll';
+import { HeaderAction, ScreenHeader } from './ScreenHeader';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 type Snapshot = ClientReplicaState['projected_snapshot'];
@@ -73,7 +74,7 @@ export function SettlementsHeader() {
       <ErrorMessage message={back.error ?? remove.error} />
       {/* No padding below: the header ends right at the amount's underline. */}
       <View>
-        <View style={{ marginTop: between(12, 0, progress), paddingBottom: between(10, 6, progress), borderBottomWidth: 1.5, borderColor: colors.ink, flexDirection: 'row' }}>
+        <View style={{ marginTop: between(12, 0, progress), paddingBottom: between(10, 6, progress), ...rules.inkBelow, flexDirection: 'row' }}>
           <AmountInput inputRef={amount} align="right" value={draft.amount} currency={draft.currency} onChangeText={(value) => {
             void actions.dispatch('changeDraft', { field: 'repayment.amount', value }, { origin: 'ui' });
           }} onSubmitEditing={submit} height={between(60, 36, progress)} fontSize={between(56, 32, progress) * amountFit} />
@@ -90,9 +91,9 @@ export function SettlementsFooter() {
   return (
     <>
       <ErrorMessage message={save.error} />
-      <FooterButton label="Save" busy={save.busy} disabled={!ready} onPress={submit}>
+      <Button label="Save" busy={save.busy} disabled={!ready} onPress={submit}>
         {save.busy ? 'Saving…' : 'Save'}
-      </FooterButton>
+      </Button>
     </>
   );
 }
@@ -112,7 +113,7 @@ export function SettlementsPanel(props: { app: MemberListApp; replica: ClientRep
   const full = owed && parseAmount(draft.amount, draft.currency) === owed.amount;
 
   return (
-    <View style={{ gap: 16, paddingBottom: 24 }}>
+    <Stack gap={16} paddingBottom={24}>
       <View>
         {(['from', 'to'] as const).map((side) => (
           <MemberChoice
@@ -128,14 +129,14 @@ export function SettlementsPanel(props: { app: MemberListApp; replica: ClientRep
           />
         ))}
       </View>
-      <Text style={s.caption}>
+      <Text variant="caption" tone="muted">
         {owed
           ? full
-            ? `Full amount ${personName(snapshot, owed.from_member_id, you)} ${owed.from_member_id === you ? 'owe' : 'owes'}. Paid outside splitnext.`
-            : `${personName(snapshot, owed.from_member_id, you, true)} ${owed.from_member_id === you ? 'owe' : 'owes'} ${moneyLabel(owed.amount, owed.currency)}. Paid outside splitnext.`
+            ? `Full amount ${personName(snapshot, owed.from_member_id, you)} ${owed.from_member_id === you ? 'owe' : 'danger'}. Paid outside splitnext.`
+            : `${personName(snapshot, owed.from_member_id, you, true)} ${owed.from_member_id === you ? 'owe' : 'danger'} ${moneyLabel(owed.amount, owed.currency)}. Paid outside splitnext.`
           : 'Paid outside splitnext.'}
       </Text>
       <ErrorMessage message={action.error} />
-    </View>
+    </Stack>
   );
 }

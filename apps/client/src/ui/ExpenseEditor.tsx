@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
 import { activeMembers, formatAmount, minorDigits, parseAmount, preferredMember } from '@splitnext/client';
+import { Button, Checkbox, ErrorMessage, Field, IconButton, Row, Text, Touchable, YouBadge, between, colors, durations, inputStyle, opacities, rules, sizes, splitHues, strokes, withTransition } from '../design';
 import { entryFromDraft, expenseLabel, memberName, moneyLabel, previewAllocation, type ExpenseDraft, type ExpenseDraftPart } from '../model/expenses';
-import { ErrorMessage, Field, FooterButton, HeaderAction, ScreenHeader, colors, s } from './components';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
-import { between, useCompactProgress } from './pageScroll';
+import { useCompactProgress } from './pageScroll';
 import { EntrySwitch } from './EntrySwitch';
 import { MemberChoice } from './MemberChoice';
+import { HeaderAction, ScreenHeader } from './ScreenHeader';
 import { morph } from './ScreenMorph';
 import { whenLabel } from './relativeTime';
 import type { MemberListApp } from './MemberList';
-import { YouBadge } from './YouBadge';
-import { fontFamily, monoFamily, splitHues, withTransition } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 /** The editor needs presence too, to show who is online among the payers. */
@@ -37,7 +36,7 @@ export function ExpenseEditorHeader(props: ExpenseEditorProps) {
         scrollRule={false}
       />
       {expense ? (
-        <Text testID="expense-timestamp" style={[s.caption, { textAlign: 'left' }]}>
+        <Text testID="expense-timestamp" variant="caption" tone="muted" align="left">
           {expense.updated_at === expense.created_at ? 'Created' : 'Last updated'} {whenLabel(new Date(expense.updated_at))}
         </Text>
       ) : null}
@@ -53,9 +52,9 @@ export function ExpenseEditorFooter() {
   return (
     <>
       <ErrorMessage message={save.error} />
-      <FooterButton label="Save" busy={save.busy} disabled={!save.can('saveExpense')} onPress={() => { void save.call('saveExpense', {}); }}>
+      <Button label="Save" busy={save.busy} disabled={!save.can('saveExpense')} onPress={() => { void save.call('saveExpense', {}); }}>
         {save.busy ? 'Saving…' : 'Save'}
-      </FooterButton>
+      </Button>
     </>
   );
 }
@@ -75,16 +74,9 @@ function splitSummary(draft: ExpenseDraft, preview: Map<string, number>): string
 /** A − or + beside a person's shares, with a full touch target. */
 function ShareStep(props: { sign: '−' | '+'; label: string; disabled: boolean; onPress: () => void }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={props.label}
-      accessibilityState={{ disabled: props.disabled }}
-      disabled={props.disabled}
-      onPress={props.onPress}
-      style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, props.disabled && s.dim]}
-    >
-      <Text style={{ fontFamily: monoFamily, fontSize: 16, color: colors.muted }}>{props.sign}</Text>
-    </Pressable>
+    <IconButton label={props.label} disabled={props.disabled} onPress={props.onPress}>
+      <Text variant="large" tone="muted">{props.sign}</Text>
+    </IconButton>
   );
 }
 
@@ -124,19 +116,19 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
 
   return (
     <View>
-      <View style={withTransition({ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 60, borderBottomWidth: 1, borderColor: colors.rule, opacity: included ? 1 : 0.4 }, 'opacity', 200)}>
-        <View aria-hidden style={{ width: 4, height: 18, backgroundColor: props.hue }} />
-        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text numberOfLines={1} style={[s.name, { flexShrink: 1 }]}>{props.name}</Text>
+      <View style={withTransition({ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: sizes.row, ...rules.below, opacity: included ? 1 : opacities.disabled }, 'opacity', durations.quick)}>
+        <View aria-hidden style={{ width: strokes.marker, height: 20, backgroundColor: props.hue }} />
+        <Row fill gap={8}>
+          <Text numberOfLines={1} variant="strong" style={{ flexShrink: 1 }}>{props.name}</Text>
           {props.you ? <YouBadge /> : null}
-        </View>
-        <View style={{ flexDirection: 'row', marginRight: -10 }}>
-          <View style={{ width: 44 }}>
+        </Row>
+        <View style={{ flexDirection: 'row', marginRight: -12 }}>
+          <View style={{ width: sizes.touch }}>
             {stepping ? (
               <ShareStep sign="−" label={`Decrease share for ${props.name}`} disabled={!edit.can('decreaseExpenseShare', member)} onPress={() => { void edit.call('decreaseExpenseShare', member); }} />
             ) : null}
           </View>
-          <View style={{ width: 44 }}>
+          <View style={{ width: sizes.touch }}>
             {canIncrease ? (
               <ShareStep sign="+" label={`Increase share for ${props.name}`} disabled={!edit.can('increaseExpenseShare', member)} onPress={() => { void edit.call('increaseExpenseShare', member); }} />
             ) : null}
@@ -165,34 +157,28 @@ function ExpenseSplitRow(props: { memberId: string; name: string; you: boolean; 
               />
             </View>
           ) : (
-            <Pressable
+            <Touchable
               accessibilityRole="button"
               accessibilityLabel={`Amount for ${props.name}: ${shown}. Change amount`}
               accessibilityState={{ disabled: !canFix }}
               disabled={!canFix}
               onPress={() => setEditing(true)}
-              style={({ pressed }) => [{ height: 44, justifyContent: 'center' }, pressed && s.pressed]}
+              style={{ height: sizes.touch, justifyContent: 'center' }}
             >
-              <Text numberOfLines={1} style={{ textAlign: 'right', fontFamily: monoFamily, fontSize: 15, fontWeight: '500', color: colors.ink }}>
+              <Text numberOfLines={1} variant="figure" align="right">
                 {shown}
               </Text>
-            </Pressable>
+            </Touchable>
           )}
         </View>
-        <View style={{ width: 44, marginHorizontal: -13 }}>
-          <Pressable
-            accessibilityRole="checkbox"
-            accessibilityLabel={`${props.name} shares this expense`}
-            accessibilityState={{ checked: included, disabled: !canToggle }}
-            aria-checked={included}
+        <View style={{ width: sizes.touch, marginHorizontal: -13 }}>
+          <Checkbox
+            label={`${props.name} shares this expense`}
+            checked={included}
             disabled={!canToggle}
             onPress={() => { void edit.call('toggleExpenseParticipant', member); }}
-            style={({ pressed }) => [{ width: 44, height: 60, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !canToggle && included && s.dim]}
-          >
-            <View style={[s.checkbox, included && { backgroundColor: colors.ink }]}>
-              {included ? <Text style={{ color: colors.actionInk, fontSize: 11, lineHeight: 12 }}>✓</Text> : null}
-            </View>
-          </Pressable>
+            style={{ height: sizes.row }}
+          />
         </View>
       </View>
       <ErrorMessage message={edit.error} />
@@ -229,7 +215,8 @@ export function ExpenseControls() {
     if (save.can('saveExpense')) void save.call('saveExpense', {});
   }
 
-  const descriptionStyle = { fontFamily, fontSize: 17, lineHeight: 24, fontWeight: '400', color: colors.ink } as const;
+  // It wraps onto a second line, so unlike a one-line field it takes a line height.
+  const descriptionStyle = { ...inputStyle('large'), lineHeight: 24 };
   const [descriptionHeight, setDescriptionHeight] = useState(0);
   const [editingDescription, setEditingDescription] = useState(false);
   // Read rather than edited: the cut text shows instead of the field's own.
@@ -244,18 +231,18 @@ export function ExpenseControls() {
   return (
     // No padding below: the header ends right at the description's underline.
     <View>
-      <View style={{ marginTop: between(12, 0, progress), paddingBottom: between(10, 6, progress), borderBottomWidth: 1.5, borderColor: colors.ink, flexDirection: 'row' }}>
+      <View style={{ marginTop: between(12, 0, progress), paddingBottom: between(10, 6, progress), ...rules.inkBelow, flexDirection: 'row' }}>
         <View ref={morph(draft.expenseId ? `eamt-${draft.expenseId}` : null, { unclipped: true })} style={{ flex: 1, minWidth: 0, flexDirection: 'row' }}>
-        <AmountInput
-          inputRef={amount}
-          align="right"
-          value={draft.amount}
-          currency={draft.currency}
-          onChangeText={(value) => change('expense.amount', value)}
-          onSubmitEditing={submit}
-          height={between(60, 36, progress)}
-          fontSize={between(56, 32, progress) * amountFit}
-        />
+          <AmountInput
+            inputRef={amount}
+            align="right"
+            value={draft.amount}
+            currency={draft.currency}
+            onChangeText={(value) => change('expense.amount', value)}
+            onSubmitEditing={submit}
+            height={between(60, 36, progress)}
+            fontSize={between(56, 32, progress) * amountFit}
+          />
         </View>
       </View>
       <View style={{ paddingTop: 8 }}>
@@ -286,18 +273,13 @@ export function ExpenseControls() {
               {draft.description || ' '}
             </Text>
           )}
-          style={[descriptionStyle, { height: Math.max(44, descriptionHeight + 20), paddingHorizontal: 0, paddingVertical: 10, overflow: 'hidden' }, shown && { color: 'transparent' }]}
+          style={[descriptionStyle, { height: Math.max(sizes.touch, descriptionHeight + 20), paddingHorizontal: 0, paddingVertical: 10, overflow: 'hidden' }, shown && { color: 'transparent' }]}
         />
       </View>
     </View>
   );
 }
 
-/**
- * One name to choose as who paid, drawn like their row in the balances: the
- * whole width, tinted when it is you, with their presence, the name and
- * “you”, and a check at the end on the one who paid.
- */
 /** Who paid, opening the names in place, then how it is split. */
 export function ExpenseEditor(props: ExpenseEditorProps) {
   const replica = props.app.snapshot().group;
@@ -343,9 +325,9 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
       />
       <ErrorMessage message={edit.error} />
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingTop: 16, paddingBottom: 4 }}>
-        <Text testID="split-summary" style={{ fontFamily, fontSize: 14, fontWeight: '600', color: draft.parts.length ? colors.muted : colors.owes }}>{splitSummary(draft, preview)}</Text>
-      </View>
+      <Row paddingTop={16} paddingBottom={4} style={{ minHeight: sizes.touch }}>
+        <Text testID="split-summary" variant="caption" weight="semibold" tone={draft.parts.length ? 'muted' : 'danger'}>{splitSummary(draft, preview)}</Text>
+      </Row>
       {/* Each share grows into the room left after the gaps, so the bar always fits. */}
       <View aria-hidden testID="split-bar" style={{ flexDirection: 'row', height: 10, gap: 2, overflow: 'hidden' }}>
         {included.map((memberId) => (
@@ -357,19 +339,19 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
               flexBasis: 0,
               minWidth: 0,
               backgroundColor: hue(memberId),
-            }, 'flex-grow', 450)}
+            }, 'flex-grow', durations.slow)}
           />
         ))}
       </View>
       <View style={{ paddingTop: 8 }}>
-        <Text aria-hidden pointerEvents="none" numberOfLines={1} onLayout={(event) => setAmountWidth(Math.ceil(event.nativeEvent.layout.width))} style={{ position: 'absolute', opacity: 0, fontFamily: monoFamily, fontSize: 15, fontWeight: '500' }}>{widestAmount}</Text>
+        <Text aria-hidden pointerEvents="none" numberOfLines={1} onLayout={(event) => setAmountWidth(Math.ceil(event.nativeEvent.layout.width))} variant="figure" style={{ position: 'absolute', opacity: 0 }}>{widestAmount}</Text>
         {members.map((member) => (
           <ExpenseSplitRow key={member.id} memberId={member.id} name={memberName(snapshot, member.id)} you={member.id === you} hue={hue(member.id)} part={draft.parts.find((part) => part.member_id === member.id)} owed={preview.get(member.id)} currency={draft.currency} hasAmount={hasAmount} sharing={sharing} amountWidth={amountWidth} />
         ))}
       </View>
 
-      {hasAmount && !entry.ok && entry.problem !== 'Describe the expense.' ? <Text style={[s.body, { paddingTop: 12, color: colors.owes, fontWeight: '500' }]}>{entry.problem}</Text> : null}
-      {!activeMembers(snapshot).length ? <Text style={s.caption}>Add a member first.</Text> : null}
+      {hasAmount && !entry.ok && entry.problem !== 'Describe the expense.' ? <Text variant="caption" tone="danger" weight="semibold" style={{ paddingTop: 12 }}>{entry.problem}</Text> : null}
+      {!activeMembers(snapshot).length ? <Text variant="caption" tone="muted">Add a member first.</Text> : null}
     </View>
   );
 }

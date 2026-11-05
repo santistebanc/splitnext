@@ -1,10 +1,10 @@
 import { memberLabel, previewFromSnapshot } from '@splitnext/client';
 import { useEffect } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { View } from 'react-native';
+import { Button, ErrorMessage, Field, Input, Notice, RadioMark, RadioRow, Row, Stack, Tag, Text, TextButton, Touchable, rules, sizes, titleStyle } from '../design';
 import type { AppController } from '../model/controller';
-import { ErrorMessage, Field, FooterButton, Notice, RadioRow, Tag, errorMessage, s, titleStyle } from './components';
+import { errorMessage } from './errors';
 import { useScreenHost } from './screenHost';
-import { colors, fontFamily } from './theme';
 import { useActions, useUiState, type useActionCall } from './useActionCall';
 
 export type JoinGroupApp = Pick<AppController, 'snapshot'>;
@@ -48,13 +48,14 @@ export function JoinGroupFooter(props: JoinGroupProps) {
 
   if (!group)
     return (
-      <FooterButton
+      <Button
+       
         busy={ui.phase === 'checking' || props.previewing.busy}
         disabled={!props.previewing.can('checkInvite', { link: link || props.initialLink })}
         onPress={() => checkLink(props, link)}
       >
         {ui.phase === 'checking' || props.previewing.busy ? 'Checking…' : 'Open link'}
-      </FooterButton>
+      </Button>
     );
 
   const who = chosen === 'new' ? name.trim() || 'someone else' : person ? memberLabel(person.display_name, person.name_ordinal) : null;
@@ -63,7 +64,8 @@ export function JoinGroupFooter(props: JoinGroupProps) {
   return (
     <>
       <ErrorMessage message={props.joining.error} />
-      <FooterButton
+      <Button
+       
         busy={busy}
         disabled={!props.joining.can('submitJoin')}
         onPress={() => {
@@ -71,7 +73,7 @@ export function JoinGroupFooter(props: JoinGroupProps) {
         }}
       >
         {busy ? 'Joining…' : who ? `${props.rejoining ? 'Rejoin' : 'Join'} as ${who}` : props.rejoining ? 'Rejoin group' : 'Join group'}
-      </FooterButton>
+      </Button>
     </>
   );
 }
@@ -90,13 +92,13 @@ function LinkEntry(props: JoinGroupProps) {
   }
 
   return (
-    <View style={{ gap: 36, paddingTop: 8 }}>
-      <View style={{ gap: 10 }}>
+    <Stack gap={32} paddingTop={8}>
+      <Stack gap={12}>
         <Text accessibilityRole="header" style={titleStyle(0)}>{broken ? 'This invite link doesn’t work' : 'Join a group'}</Text>
-        <Text style={{ fontFamily, fontSize: 15, lineHeight: 21, color: colors.muted }}>
+        <Text variant="body" tone="muted">
           {broken ? 'It may have been replaced by someone in the group. Ask them for the current link.' : 'Paste the invite link someone in the group sent you.'}
         </Text>
-      </View>
+      </Stack>
       {error && !broken ? <ErrorMessage message={error} /> : null}
       <Field
         label={broken ? 'Try a different link' : 'Invite link'}
@@ -109,22 +111,21 @@ function LinkEntry(props: JoinGroupProps) {
         returnKeyType="go"
         onSubmitEditing={() => checkLink(props, link)}
         trailing={
-          <Pressable
-            accessibilityRole="button"
+          <Button
+            size="compact"
             onPress={() => {
               // Clipboard reads need permission and a secure page; a refusal leaves the field as it is.
               void Promise.resolve()
                 .then(() => (host ? host.readClipboard() : navigator.clipboard.readText()))
                 .then(setLink, () => undefined);
             }}
-            style={({ pressed }) => [s.fieldButton, pressed && s.pressed]}
           >
-            <Text style={s.fieldButtonText}>Paste</Text>
-          </Pressable>
+            Paste
+          </Button>
         }
       />
-      {!props.app.snapshot().online ? <Text style={s.caption}>You’re offline. Connect to open the link.</Text> : null}
-    </View>
+      {!props.app.snapshot().online ? <Text variant="caption" tone="muted">You’re offline. Connect to open the link.</Text> : null}
+    </Stack>
   );
 }
 
@@ -148,28 +149,23 @@ export function JoinGroup(props: JoinGroupProps) {
   }
 
   return (
-    <View style={{ gap: 8, paddingTop: 8 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Text style={{ flex: 1, fontFamily, fontSize: 14, color: colors.muted }}>{props.rejoining ? 'Welcome back to' : 'You’ve been invited to'}</Text>
+    <Stack gap={8} paddingTop={8}>
+      <Row gap={12}>
+        <Text variant="caption" tone="muted" style={{ flex: 1 }}>{props.rejoining ? 'Welcome back to' : 'You’ve been invited to'}</Text>
         {!props.rejoining ? (
-          <Pressable
-            accessibilityRole="button"
-            disabled={!props.previewing.can('clearInvitePreview')}
-            onPress={() => { void props.previewing.call('clearInvitePreview', {}); }}
-            style={({ pressed }) => [{ height: 44, justifyContent: 'center' }, pressed && s.pressed]}
-          >
-            <Text style={s.rowAction}>Change link</Text>
-          </Pressable>
+          <TextButton size="small" disabled={!props.previewing.can('clearInvitePreview')} onPress={() => { void props.previewing.call('clearInvitePreview', {}); }}>
+            Change link
+          </TextButton>
         ) : null}
-      </View>
-      <View style={{ gap: 10, paddingBottom: 20 }}>
+      </Row>
+      <Stack gap={12} paddingBottom={24}>
         <Text accessibilityRole="header" style={titleStyle(0)}>{group.name}</Text>
-        <Text style={{ fontFamily, fontSize: 15, color: colors.muted }}>
+        <Text variant="body" tone="muted">
           {people.length === 1 ? '1 person' : `${people.length} people`} · Which one are you?
         </Text>
-      </View>
+      </Stack>
 
-      <View accessibilityRole="radiogroup" accessibilityLabel="Names" style={{ borderBottomWidth: 1, borderColor: colors.rule }}>
+      <View accessibilityRole="radiogroup" accessibilityLabel="Names" style={rules.below}>
         {ordered.map((entry) => {
           const label = memberLabel(entry.display_name, entry.name_ordinal);
 
@@ -186,22 +182,23 @@ export function JoinGroup(props: JoinGroupProps) {
             </RadioRow>
           );
         })}
-        <View style={[s.radioRow, { gap: 14 }]}>
-          <Pressable
+        <Row gap={12} style={[{ minHeight: sizes.row }, rules.above]}>
+          <Touchable
             accessibilityRole="radio"
             accessibilityLabel="Someone else"
             accessibilityState={{ checked: chosen === 'new' }}
             aria-checked={chosen === 'new'}
             disabled={!actions.availability('chooseJoinMember', { as: { kind: 'new' } }).available}
+            feedback="none"
             onPress={() => choose({ kind: 'new' })}
-            style={{ width: 44, height: 56, marginHorizontal: -12, alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: sizes.touch, height: sizes.row, marginHorizontal: -12, alignItems: 'center', justifyContent: 'center' }}
           >
-            <View style={[s.radioDot, chosen === 'new' && s.radioDotSelected]} />
-          </Pressable>
-          <TextInput
+            <RadioMark selected={chosen === 'new'} />
+          </Touchable>
+          <Input
             accessibilityLabel="Your name"
             placeholder="Someone else"
-            placeholderTextColor={colors.placeholder}
+            variant="strong"
             value={name}
             editable={actions.availability('changeDraft', { field: 'join.name', value: name }).available}
             onFocus={() => { if (chosen !== 'new') choose({ kind: 'new' }); }}
@@ -209,21 +206,21 @@ export function JoinGroup(props: JoinGroupProps) {
               void actions.dispatch('changeDraft', { field: 'join.name', value }, { origin: 'ui' });
             }}
             maxLength={100}
-            style={{ flex: 1, minWidth: 0, height: 56, padding: 0, fontFamily, fontSize: 17, fontWeight: '500', color: colors.ink }}
+            style={{ flex: 1, minWidth: 0, height: sizes.row, padding: 0 }}
           />
-        </View>
+        </Row>
       </View>
       {person?.in_use ? (
         <Notice
-          tone="warning"
+          tone="info"
           role="status"
           message={`${memberLabel(person.display_name, person.name_ordinal)} is already taken on another device. You can still continue as ${memberLabel(person.display_name, person.name_ordinal)}.`}
         />
       ) : null}
       <ErrorMessage message={props.previewing.error} />
       {!props.app.snapshot().online ? (
-        <Text style={s.caption}>You’re offline. Connect to {props.rejoining ? 'rejoin' : 'join'}.</Text>
+        <Text variant="caption" tone="muted">You’re offline. Connect to {props.rejoining ? 'rejoin' : 'join'}.</Text>
       ) : null}
-    </View>
+    </Stack>
   );
 }

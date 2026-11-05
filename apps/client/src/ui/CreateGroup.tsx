@@ -1,9 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { Pressable, Text, View, type TextInput } from 'react-native';
+import type { TextInput } from 'react-native';
+import { Chip, Field, Row, Stack, durations } from '../design';
 import type { AppController } from '../model/controller';
-import { Field, s } from './components';
 import { useFieldFocused } from './screenHost';
-import { colors, fontFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 export type CreateGroupApp = Pick<AppController, 'snapshot'>;
@@ -22,9 +21,6 @@ export function useSubmitCreate(close?: () => void) {
   return { action, submit };
 }
 
-/** The drawer's fields, smaller than a screen's own. */
-const compact = { height: 44, fontSize: 17 };
-
 /** One form for the group name and the creator's own member name. */
 export function CreateGroup(props: CreateGroupProps) {
   const ui = useUiState();
@@ -42,7 +38,7 @@ export function CreateGroup(props: CreateGroupProps) {
     };
 
     const frame = requestAnimationFrame(focus);
-    const opened = setTimeout(focus, 360);
+    const opened = setTimeout(focus, durations.medium + 60);
 
     return () => {
       cancelAnimationFrame(frame);
@@ -59,7 +55,7 @@ export function CreateGroup(props: CreateGroupProps) {
     .slice(0, 6);
 
   return (
-    <View style={{ gap: 12, paddingTop: 4 }}>
+    <Stack gap={12} paddingTop={4}>
       <Field
         label="Group name"
         inputRef={nameInput}
@@ -74,7 +70,6 @@ export function CreateGroup(props: CreateGroupProps) {
         returnKeyType="next"
         submitBehavior="submit"
         onSubmitEditing={() => personInput.current?.focus()}
-        style={compact}
       />
       <Field
         label="Your name in this group"
@@ -88,25 +83,21 @@ export function CreateGroup(props: CreateGroupProps) {
         maxLength={100}
         returnKeyType="done"
         onSubmitEditing={submit}
-        style={compact}
       />
       {suggestions.length ? (
-        <View role="list" aria-label="Names you use in other groups" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: -4 }}>
+        <Row role="list" aria-label="Names you use in other groups" wrap gap={8} style={{ marginTop: -4 }}>
           {suggestions.map((suggestion) => (
-            <Pressable
+            <Chip
               key={suggestion}
-              accessibilityRole="button"
-              accessibilityLabel={`Use ${suggestion}`}
+              text={suggestion}
+              label={`Use ${suggestion}`}
               onPress={() => {
                 void actions.dispatch('changeDraft', { field: 'create.yourName', value: suggestion }, { origin: 'ui' });
               }}
-              style={({ pressed }) => [{ height: 32, paddingHorizontal: 12, justifyContent: 'center', borderWidth: 1, borderColor: colors.rule }, pressed && s.pressed]}
-            >
-              <Text style={{ fontFamily, fontSize: 14, fontWeight: '500', color: colors.ink }}>{suggestion}</Text>
-            </Pressable>
+            />
           ))}
-        </View>
+        </Row>
       ) : null}
-    </View>
+    </Stack>
   );
 }

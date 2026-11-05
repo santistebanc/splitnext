@@ -1,11 +1,11 @@
 import { useRef, useState, type RefObject } from 'react';
-import { Platform, TextInput, View, type StyleProp, type TextStyle } from 'react-native';
+import { Platform, View, type StyleProp, type TextInput, type TextStyle } from 'react-native';
 import type { ClientReplicaState } from '@splitnext/client';
 import { memberStatus, type ParticipantMarker } from '../model/memberPresentation';
 import type { AppController } from '../model/controller';
-import { ErrorMessage, colors, errorMessage, s } from './components';
+import { Dot, ErrorMessage, Input, colors, rules, sizes, type FontWeight, type TypeVariant } from '../design';
 import { EditCover } from './EditCover';
-import { fontFamily } from './theme';
+import { errorMessage } from './errors';
 import { useActions } from './useActionCall';
 
 export type { ParticipantMarker } from '../model/memberPresentation';
@@ -18,24 +18,12 @@ export type MemberListApp = Pick<AppController, 'snapshot'> & {
 export type Replica = ClientReplicaState;
 
 /** A member's presence: a filled dot online, a ring offline, a dashed ring when the name is not taken. */
-export function MemberIcon(props: { participants: ParticipantMarker[]; size?: number }) {
+export function MemberIcon(props: { participants: ParticipantMarker[] }) {
   const status = memberStatus(props.participants);
-  const size = props.size ?? 9;
 
-  return (
-    <View
-      aria-hidden
-      style={[
-        s.presenceDot,
-        { width: size, height: size, borderRadius: size / 2 },
-        !props.participants.length
-          ? s.presenceUnclaimed
-          : status === 'online'
-            ? s.presenceOnline
-            : s.presenceOffline,
-      ]}
-    />
-  );
+  if (!props.participants.length) return <Dot color={colors.faint} outline="dashed" />;
+
+  return status === 'online' ? <Dot color={colors.positive} /> : <Dot color={colors.muted} outline="solid" />;
 }
 
 /** "Online · taken on 2 devices", "Offline · taken on 1 device", or "Not taken on any device". */
@@ -60,6 +48,9 @@ export function MemberNameInput(props: {
   /** Takes the typing instead of the shared member-name draft. */
   onChangeText?: ((value: string) => void) | undefined;
   autoFocus?: boolean;
+  /** A step of the type ramp; a name's own by default. */
+  variant?: TypeVariant;
+  weight?: FontWeight;
   style?: StyleProp<TextStyle>;
   /** The field itself, for whatever has to reach it, such as the cover around it. */
   inputRef?: RefObject<TextInput | null>;
@@ -69,8 +60,10 @@ export function MemberNameInput(props: {
   const input = props.inputRef ?? own;
 
   return (
-    <TextInput
+    <Input
       ref={input}
+      variant={props.variant ?? 'strong'}
+      weight={props.weight}
       accessibilityLabel={props.label ?? props.placeholder ?? 'Member name'}
       placeholder={props.placeholder}
       placeholderTextColor={colors.muted}
@@ -82,7 +75,7 @@ export function MemberNameInput(props: {
       }}
       autoFocus={props.autoFocus}
       maxLength={100}
-      style={props.style ?? s.memberNameInput}
+      style={props.style ?? { height: 40, minWidth: 0, paddingHorizontal: 0, ...rules.inkBelow }}
       returnKeyType="done"
       submitBehavior={props.onSubmit ? 'submit' : 'blurAndSubmit'}
       onBlur={props.onSave}
@@ -183,7 +176,7 @@ export function AddPersonRow() {
 
   return (
     <View>
-      <View ref={row} style={[s.ruled, { flexDirection: 'row', alignItems: 'center', minHeight: 52 }]}>
+      <View ref={row} style={[rules.above, { flexDirection: 'row', alignItems: 'center', minHeight: sizes.row }]}>
         <MemberNameInput
           inputRef={input}
           name={text}
@@ -208,7 +201,8 @@ export function AddPersonRow() {
               void actions.dispatch('cancelMemberEdit', {}, { origin: 'ui' });
             }
           }}
-          style={{ flex: 1, minWidth: 0, height: 52, paddingHorizontal: 0, borderWidth: 0, backgroundColor: 'transparent', fontFamily, fontSize: 15, fontWeight: '500', color: colors.ink }}
+          variant="strong"
+          style={{ flex: 1, minWidth: 0, height: sizes.row, paddingHorizontal: 0, borderWidth: 0, backgroundColor: 'transparent' }}
         />
       </View>
       <EditCover open={adding} target={row} onPress={() => input.current?.blur()} />

@@ -1,4 +1,7 @@
 import { createContext, useContext, useSyncExternalStore } from 'react';
+import { between } from '../design/tokens';
+
+export { between };
 
 /**
  * A number read only by the parts that follow it, such as the page's scroll
@@ -102,11 +105,6 @@ export function createCompactProgress() {
 
 /** The current screen's compact progress; outside a screen its top stays full size. */
 export const CompactProgressContext = createContext<Pick<ValueStore, 'get' | 'subscribe'>>(createValueStore());
-
-/** A size between its full and compact values, unrounded so it changes smoothly. */
-export function between(full: number, compact: number, progress: number): number {
-  return full + (compact - full) * progress;
-}
 
 /** How far the screen's fixed top has shrunk: 0 at full size, 1 when compact. */
 export function useCompactProgress(): number {

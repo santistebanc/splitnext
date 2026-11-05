@@ -1,37 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  defaultValues,
-  defineStory,
-  listValue,
-  searchStories,
-} from '../apps/client/src/workbench/stories';
-import {
   fixtureIdentityId,
   scenarioPresence,
   scenarioReplica,
   type MemberListScenario,
 } from '../apps/client/src/workbench/memberListFixture';
-
-const button = defineStory({
-  id: 'button',
-  group: 'Inputs',
-  title: 'Button',
-  description: 'Primary and quiet actions.',
-  controls: {
-    label: { kind: 'text', default: 'Save' },
-    disabled: { kind: 'boolean', default: false },
-  },
-  render: () => null,
-});
-
-const star = defineStory({
-  id: 'presence-star',
-  group: 'Members',
-  title: 'PresenceStar',
-  description: 'Presence marker.',
-  controls: { status: { kind: 'select', options: ['online'], default: 'online' } },
-  render: () => null,
-});
 
 const scenario: MemberListScenario = {
   members: ['Ana', 'Ben', 'Chloe'],
@@ -42,24 +15,7 @@ const scenario: MemberListScenario = {
   connection: 'online',
 };
 
-describe('component workbench', () => {
-  it('searches titles, groups, descriptions, and control names', () => {
-    const stories = [button, star];
-
-    expect(searchStories(stories, '')).toEqual(stories);
-    expect(searchStories(stories, 'members')).toEqual([star]);
-    expect(searchStories(stories, 'INPUTS disabled')).toEqual([button]);
-    expect(searchStories(stories, 'button status')).toEqual([]);
-  });
-
-  it('seeds values from control defaults', () => {
-    expect(defaultValues(button.controls)).toEqual({
-      label: 'Save',
-      disabled: false,
-    });
-    expect(listValue(' Ana, ,Ben ,')).toEqual(['Ana', 'Ben']);
-  });
-
+describe('preview fixtures', () => {
   it('builds a member list scenario with participants and presence', () => {
     const replica = scenarioReplica(scenario);
     const grants = replica.projected_snapshot?.access_grants ?? [];
@@ -77,5 +33,4 @@ describe('component workbench', () => {
       scenarioPresence({ ...scenario, connection: 'offline' }, replica),
     ).toBeNull();
   });
-
 });

@@ -1,18 +1,18 @@
 import { useRef, useState } from 'react';
-import { Pressable, Text, View, type TextInput } from 'react-native';
+import { View, type TextInput } from 'react-native';
 import { memberHasRecords, preferredMember } from '@splitnext/client';
+import { BalanceBar, Button, ErrorMessage, IconButton, ListRow, PencilIcon, Row, Stack, Text, between, figureStyle, rules, sizes, titleStyle } from '../design';
 import { memberBreakdown } from '../model/breakdown';
 import { balanceRows, memberName } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
-import { BackButton, BalanceBar, Button, ErrorMessage, ListRow, ScreenHeader, balanceColor, colors, s, signedFigure, titleStyle } from './components';
+import { balanceColor, signedFigure } from './balance';
 import { EditCover } from './EditCover';
 import { ActivityLink } from './GroupView';
 import { TitleField } from './TitleField';
 import { repaymentTitle } from './ExpenseList';
-import { PencilIcon } from './icons';
 import { MemberIcon, presenceText, type MemberListApp } from './MemberList';
-import { between, useCompactProgress } from './pageScroll';
-import { fontFamily, monoFamily } from './theme';
+import { useCompactProgress } from './pageScroll';
+import { BackButton, ScreenHeader } from './ScreenHeader';
 import { morph } from './ScreenMorph';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
@@ -33,15 +33,15 @@ function largestBalance(snapshot: Parameters<typeof balanceRows>[0] | undefined)
 /** A balance as a large figure over its bar, with what it means beside it. */
 export function BalanceFigure(props: { amount: number; currency: string; max: number; label: string; size: number; bar: number; morph?: string | null; barMorph?: string | null }) {
   return (
-    <View style={{ gap: 10 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
-        <Text style={[s.caption, { fontSize: 15 }]}>{props.label}</Text>
-        <Text ref={morph(props.morph, { unclipped: true })} numberOfLines={1} style={{ fontFamily: monoFamily, fontSize: props.size, lineHeight: props.size, fontWeight: '500', letterSpacing: -0.03 * props.size, color: balanceColor(props.amount) }}>
+    <Stack gap={12}>
+      <Row gap={12} align="end" justify="between">
+        <Text variant="body" tone="muted">{props.label}</Text>
+        <Text ref={morph(props.morph, { unclipped: true })} numberOfLines={1} color={balanceColor(props.amount)} style={figureStyle(props.size)}>
           {signedFigure(props.amount, props.currency)}
         </Text>
-      </View>
-      <BalanceBar track amount={props.amount} max={props.max} height={props.bar} morph={props.barMorph} />
-    </View>
+      </Row>
+      <BalanceBar track amount={props.amount} max={props.max} height={props.bar} stripRef={morph(props.barMorph, { stretch: true })} />
+    </Stack>
   );
 }
 
@@ -89,7 +89,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
         start={<BackButton label={`Back to ${backTo}`} text={backTo} disabled={!back.can('closePanel')} onPress={() => { void back.call('closePanel', {}); }} />}
         end={<ActivityLink app={props.app} />}
         heading={(
-          <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Row fill gap={12}>
             {renaming ? (
               <TitleField
                 inputRef={nameField}
@@ -101,39 +101,33 @@ export function PersonHeader(props: { app: MemberListApp }) {
                 onBlur={finishRename}
                 // What follows the name: you and a gap, then a gap and the pencil, 44 wide with 12 past the edge.
                 inset={(isYou ? youWidth + 10 : 0) + 10 + 32}
-                style={{ ...titleStyle(progress), paddingBottom: 4, borderBottomWidth: 1.5, borderColor: colors.ink }}
+                style={{ ...titleStyle(progress), paddingBottom: 4, ...rules.inkBelow }}
               />
             ) : (
               <>
                 <Text ref={morph(replica && memberId ? `pname-${replica.group_id}-${memberId}` : null)} accessibilityRole="header" numberOfLines={2} style={[titleStyle(progress), { flexShrink: 1 }]}>{name}</Text>
-                {isYou ? <Text onLayout={(event) => setYouWidth(event.nativeEvent.layout.width)} style={{ fontFamily, fontSize: 15, fontWeight: '500', color: colors.muted }}>you</Text> : null}
+                {isYou ? <Text onLayout={(event) => setYouWidth(event.nativeEvent.layout.width)} variant="body" tone="muted">you</Text> : null}
                 {active && memberId && progress <= 0.5 ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Rename ${name}`}
-                    disabled={!edit.can('beginEditMember', { memberId })}
-                    onPress={() => { void edit.call('beginEditMember', { memberId }); }}
-                    style={({ pressed }) => [{ marginLeft: 'auto', marginRight: -12, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: Math.max(0, 1 - 2 * progress) }, pressed && s.pressed, !edit.can('beginEditMember', { memberId }) && s.dim]}
-                  >
-                    <PencilIcon size={18} color={colors.ink} />
-                  </Pressable>
+                  <IconButton label={`Rename ${name}`} disabled={!edit.can('beginEditMember', { memberId })} onPress={() => { void edit.call('beginEditMember', { memberId }); }} style={{ marginLeft: 'auto', marginRight: -12, opacity: Math.max(0, 1 - 2 * progress) }}>
+                    <PencilIcon size={18} />
+                  </IconButton>
                 ) : null}
               </>
             )}
-          </View>
+          </Row>
         )}
         // The header ends at the balance bar's edge.
         flush
         below={(
-          <View style={{ gap: 6 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: between(8, 2, progress) }}>
-              <MemberIcon participants={participants} size={6} />
-              <Text style={[s.caption, { flexShrink: 1 }]}>{active ? presenceText(participants) : 'Removed · still in balances until settled'}</Text>
-            </View>
+          <Stack gap={8}>
+            <Row gap={8} style={{ paddingTop: between(8, 2, progress) }}>
+              <MemberIcon participants={participants} />
+              <Text variant="caption" tone="muted" style={{ flexShrink: 1 }}>{active ? presenceText(participants) : 'Removed · still in balances until settled'}</Text>
+            </Row>
             <View style={{ paddingTop: between(18, 8, progress) }}>
               <BalanceFigure amount={first?.amount ?? 0} currency={first?.currency ?? 'XXX'} max={largestBalance(snapshot)} label={label} size={between(30, 20, progress)} bar={between(12, 8, progress)} morph={replica && memberId && first ? (isYou ? `gamt-${replica.group_id}-${first.currency}` : `pamt-${replica.group_id}-${memberId}-${first.currency}`) : null} barMorph={replica && memberId && first ? (isYou ? `gbar-${replica.group_id}-${first.currency}` : `pbar-${replica.group_id}-${memberId}-${first.currency}`) : null} />
             </View>
-          </View>
+          </Stack>
         )}
       />
       <EditCover open={renaming} target={nameField} onPress={() => nameField.current?.blur()} />
@@ -169,15 +163,15 @@ export function PersonDetails(props: { app: MemberListApp }) {
   const hasRecords = memberHasRecords(snapshot, member.id);
 
   return (
-    <View style={{ gap: 22, paddingTop: 12, paddingBottom: 12 }}>
+    <Stack gap={24} paddingY={12}>
       {active ? (
         hasRecords || isYou ? null : (
-          <Button secondary label={`Remove ${name}`} disabled={!remove.can('removeMember', { memberId: member.id })} onPress={() => { void remove.call('removeMember', { memberId: member.id }); }}>
+          <Button variant="secondary" label={`Remove ${name}`} disabled={!remove.can('removeMember', { memberId: member.id })} onPress={() => { void remove.call('removeMember', { memberId: member.id }); }}>
             Remove
           </Button>
         )
       ) : (
-        <Button secondary label={`Restore ${name}`} disabled={!restore.can('restoreMember', { memberId: member.id })} onPress={() => { void restore.call('restoreMember', { memberId: member.id }); }}>
+        <Button variant="secondary" label={`Restore ${name}`} disabled={!restore.can('restoreMember', { memberId: member.id })} onPress={() => { void restore.call('restoreMember', { memberId: member.id }); }}>
           Restore
         </Button>
       )}
@@ -198,21 +192,21 @@ export function PersonDetails(props: { app: MemberListApp }) {
                   else void open.call('showSettlement', { settlementId: row.id });
                 }}
               >
-                <View style={{ flex: 1, minWidth: 0, gap: 4, alignItems: 'flex-start' }}>
-                  <Text ref={morph(row.kind === 'expense' ? `etitle-${row.id}` : null)} numberOfLines={2} style={[s.name, { maxWidth: '100%', lineHeight: 20 }]}>{title}</Text>
-                  <Text numberOfLines={1} style={[s.rowCaption, { maxWidth: '100%' }]}>{row.detail}</Text>
-                </View>
-                <Text ref={morph(row.kind === 'expense' ? `eamt-${row.id}` : null, { unclipped: true })} numberOfLines={1} style={[s.amount, { color: balanceColor(row.amount) }]}>{signedFigure(row.amount, group.currency)}</Text>
+                <Stack fill gap={4} align="start">
+                  <Text ref={morph(row.kind === 'expense' ? `etitle-${row.id}` : null)} numberOfLines={2} variant="strong" style={{ maxWidth: '100%' }}>{title}</Text>
+                  <Text numberOfLines={1} variant="caption" tone="muted" style={{ maxWidth: '100%' }}>{row.detail}</Text>
+                </Stack>
+                <Text ref={morph(row.kind === 'expense' ? `eamt-${row.id}` : null, { unclipped: true })} numberOfLines={1} variant="figure" color={balanceColor(row.amount)}>{signedFigure(row.amount, group.currency)}</Text>
               </ListRow>
             );
           })}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, borderTopWidth: 1.5, borderColor: colors.ink }}>
-            <Text style={{ flex: 1, fontFamily, fontSize: 15, fontWeight: '600', color: colors.ink }}>Balance</Text>
-            <Text numberOfLines={1} style={[s.amount, { color: balanceColor(group.total) }]}>{signedFigure(group.total, group.currency)}</Text>
-          </View>
+          <Row gap={12} style={[{ minHeight: sizes.row }, rules.inkAbove]}>
+            <Text variant="strong" style={{ flex: 1 }}>Balance</Text>
+            <Text numberOfLines={1} variant="figure" color={balanceColor(group.total)}>{signedFigure(group.total, group.currency)}</Text>
+          </Row>
         </View>
       ))}
       <ErrorMessage message={open.error} />
-    </View>
+    </Stack>
   );
 }
