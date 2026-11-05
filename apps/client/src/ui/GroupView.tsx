@@ -213,9 +213,8 @@ function YourBalance(props: { replica: Replica }) {
           style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: sizes.touch }}
         >
           <MemberAvatar replica={props.replica} memberId={you.id} size="small" />
-          <Text variant="body" weight="semibold" numberOfLines={1} style={{ flexShrink: 1 }}>{name}</Text>
+          <Text variant="body" weight="semibold" numberOfLines={2} style={{ flex: 1, minWidth: 0 }}>{name}</Text>
           <YouBadge />
-          <Text variant="caption" tone="muted">· No expenses yet</Text>
         </Touchable>
         <ErrorMessage message={open.error} />
       </View>

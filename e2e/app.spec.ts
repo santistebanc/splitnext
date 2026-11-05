@@ -245,6 +245,12 @@ async function showTab(page: Page, name: 'People' | 'Expenses'): Promise<void> {
   await expect(tab).toHaveAttribute('aria-selected', 'true');
 }
 
+/** Geometry checks compare settled screens; motion tests sample the movement separately. */
+async function motionSettled(page: Page): Promise<void> {
+  await expect(page.locator('[data-copied-page]')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => document.getAnimations().filter((animation) => animation.playState === 'running' || animation.pending).length)).toBe(0);
+}
+
 /** Unfolds an expense's split while it is equal between everyone, to change it person by person. */
 async function openSplit(page: Page): Promise<void> {
   const folded = button(page, /^Split equally between everyone, .*Change split$/);
@@ -263,6 +269,7 @@ async function createGroup(page: Page, name: string, you: string): Promise<void>
   await button(page, 'Create group').click();
   await expect(heading(page, name)).toBeVisible();
   await expect(page.getByRole('region', { name: 'Balances' })).toBeVisible();
+  await motionSettled(page);
 }
 
 /**
@@ -276,6 +283,7 @@ async function addMember(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('button', { name: new RegExp(`^${escaped(name)}, .*\\. Show details$`), includeHidden: true })).toBeAttached();
   await field(page, 'Add a person').press('Enter');
   await expect(page.getByTestId('edit-cover')).toHaveCount(0);
+  await motionSettled(page);
 }
 
 /** Adds an expense from the group screen and returns to it. */
@@ -294,6 +302,7 @@ async function addExpense(page: Page, description: string, amount: string, payer
   // A new expense returns to the expenses, where it leads the list; the balances are one tab over.
   await expect(button(page, new RegExp(`^Change ${escaped(description)} · `))).toBeVisible();
   await showTab(page, 'People');
+  await motionSettled(page);
 }
 
 /** Opens a new payment from the group screen: Add expense, then its Payment tab. */
@@ -475,6 +484,7 @@ test('uses one large title on every screen and opens the join field in place', a
   await expect(heading(page, 'Activity')).toHaveCSS('font-size', '32px');
   await button(page, 'Back to Headers').click();
   await button(page, 'Back to groups').click();
+  await motionSettled(page);
   // The groups list shows the mark, about as tall as a title, with the name
   // beside it at title size, instead of a title.
   await expect(page.getByText('Your groups', { exact: true })).toHaveCount(0);
@@ -493,6 +503,7 @@ test('uses one large title on every screen and opens the join field in place', a
   await expect(field(page, 'Group name')).toBeFocused();
   await expect(heading(page, 'Your groups')).toBeVisible();
   await button(page, 'Back to groups').click();
+  await motionSettled(page);
   await expect(page.getByRole('region', { name: 'New group' })).toHaveCount(0);
 
   // Join opens a link field directly under itself, above the mark; a link that
@@ -564,6 +575,7 @@ test('dims the rest while a name or the join link is edited, and a tap there onl
   await expect(cover).toHaveCount(0);
   await button(page, 'Back to Covered').click();
   await button(page, 'Back to groups').click();
+  await motionSettled(page);
 
   // Join with a link: a tap on New group closes the field without opening New group.
   await button(page, 'Join with an invite link').click();
@@ -685,6 +697,7 @@ test('opens a rename where the name already is: full width, the same lines in th
 
   for (const rename of renames) {
     await rename.go();
+    await motionSettled(page);
     const title = heading(page, rename.title);
     const before = await title.evaluate(lines);
     const left = (await title.boundingBox())!.x;
@@ -820,6 +833,7 @@ test('flies a group’s name to the list at its font size, even when it unwraps'
   }), name);
 
   await button(page, 'Back to groups').click();
+  await motionSettled(page);
   // 32px as the title, 20px in the list: it leaves at 20/32 and arrives from 32/20.
   expect(await scales).toEqual([0.625, 1.6]);
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -838,6 +852,7 @@ test('keeps the fixed theme and group-list branding when offline', async ({ page
   await button(page, 'Create group').click();
   await expect(heading(page, 'Paper trip')).toBeVisible();
   await button(page, 'Back to groups').click();
+  await motionSettled(page);
   await expect(heading(page, 'Your groups')).toBeVisible();
   await expect(button(page, 'Copy diagnostics')).toHaveCount(0);
   await expect(button(page, 'Diagnostics copied')).toHaveCount(0);
@@ -880,6 +895,7 @@ test('shows balance summaries offline and keeps people who still owe or are owed
   await addMember(page, 'Ben');
 
   await button(page, 'Back to groups').click();
+  await motionSettled(page);
   await expect(page.getByLabel('settled', { exact: true })).toBeVisible();
   await button(page, 'Open Summaries').click();
   await addExpense(page, 'Dinner', '60', 'Ana');
@@ -888,6 +904,7 @@ test('shows balance summaries offline and keeps people who still owe or are owed
 
   await goOffline(page, context);
   await button(page, 'Back to groups').click();
+  await motionSettled(page);
   await expect(page.getByText('+10.00', { exact: true })).toBeVisible();
   await button(page, 'Open Summaries').click();
   await person(page, 'Ana').click();
@@ -914,6 +931,7 @@ test('shows each balance and your balance on the groups list', async ({ page }) 
   await expect(button(page, 'Ben, −10.00. Show details')).toBeVisible();
 
   await button(page, 'Back to groups').click();
+  await motionSettled(page);
   await expect(page.getByText('+10.00', { exact: true })).toBeVisible();
   // A group's row is its name and your balance; who is in it shows inside.
   await expect(page.getByText('2 people · You’re Ana', { exact: true })).toHaveCount(0);
@@ -937,6 +955,7 @@ test('records, changes, and removes an expense with plain-number balances', asyn
   const save = button(page, 'Save');
 
   await expect(save).toBeDisabled();
+  await motionSettled(page);
   const savePosition = (await save.boundingBox())!;
 
   expect(savePosition.y + savePosition.height).toBeGreaterThan((page.viewportSize()?.height ?? 0) - 60);
@@ -953,6 +972,7 @@ test('records, changes, and removes an expense with plain-number balances', asyn
   await button(page, 'Save').click();
   await expect(button(page, 'Change Dinner · 30.00')).toBeVisible();
   await expect(addButton).toBeVisible();
+  await motionSettled(page);
   expect(await addButton.boundingBox()).toEqual(addPosition);
   await expect(button(page, 'Ana (you), +15.00. Show details')).toBeVisible();
   await showTab(page, 'People');
@@ -961,6 +981,7 @@ test('records, changes, and removes an expense with plain-number balances', asyn
 
   await button(page, 'Change Dinner · 30.00').click();
   await expect(field(page, 'Amount')).not.toBeFocused();
+  await motionSettled(page);
   expect(await save.boundingBox()).toEqual(savePosition);
   const timestamp = page.getByTestId('expense-timestamp');
 
@@ -996,6 +1017,7 @@ test('records, changes, and removes an expense with plain-number balances', asyn
   // The expenses say there are none; Add expense stays where it was.
   await expect(page.getByText('No expenses yet', { exact: true })).toBeVisible();
   await expect(addButton).toBeVisible();
+  await motionSettled(page);
   expect(await addButton.boundingBox()).toEqual(addPosition);
   await expect(button(page, 'Ana (you), no expenses yet. Show details')).toBeVisible();
 
@@ -1719,6 +1741,7 @@ test('keeps offline edits pending and delivers them on reconnect', async ({ page
   await button(page, 'Add expense').click();
   await expect(field(page, 'Amount')).toBeVisible();
   await expect(strip).toHaveText('Offline');
+  await motionSettled(page);
   expect((await strip.boundingBox())!.y).toBe(0);
   await button(page, 'Cancel').click();
   await person(page, 'Ben').click();
@@ -1733,6 +1756,7 @@ test('keeps offline edits pending and delivers them on reconnect', async ({ page
   await expect(page.getByRole('dialog', { name: 'Connection' }).getByText('Offline · 1 change saved here', { exact: true })).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
   await button(page, 'Back to groups').click();
+  await motionSettled(page);
   await expect(button(page, 'Offline · 1 change saved here. Connection details')).toBeVisible();
   await expect(strip).toHaveText('Offline · 1 change saved here');
   await button(page, 'Offline · 1 change saved here. Connection details').click();
@@ -1792,6 +1816,7 @@ test('leaves from the groups list after confirming and rejoins as an existing me
   await createGroup(page, 'Lisbon', 'Ana');
   await addMember(page, 'Ben');
   await button(page, 'Back to groups').click();
+  await motionSettled(page);
   await button(page, 'Leave Lisbon').click();
   await expect(page.getByText('Leave Lisbon on this device? You can rejoin it later.', { exact: true })).toBeVisible();
   await button(page, 'Cancel').click();
@@ -1978,6 +2003,7 @@ test('switches a new entry between expense and payment, keeping what each has', 
 
   // A payment takes the amount and who paid; who was paid starts as you.
   // Switching cross-fades in place rather than dropping the sheet and raising a page.
+  await motionSettled(page);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.evaluate(() => {
     const seen = document.documentElement.dataset;
@@ -2342,7 +2368,8 @@ test('keeps the expense header steady at the bottom of the split list', async ({
     expect(Math.max(...headers) - Math.min(...headers), detail).toBeLessThanOrEqual(1);
     expect(Math.max(...positions) - Math.min(...positions), detail).toBeLessThanOrEqual(1);
     await expect(save).toBeInViewport({ ratio: 1 });
-    expect(await save.boundingBox()).toEqual(savePosition);
+    await motionSettled(page);
+  expect(await save.boundingBox()).toEqual(savePosition);
 
     for (let step = 0; step < 8; step++) await page.mouse.wheel(0, -25);
 
@@ -2384,6 +2411,7 @@ test('shrinks the large title as the page scrolls and grows it back at the top',
 test('morphs between screens and leaves nothing behind', async ({ page }) => {
   await createGroup(page, 'Morphing', 'Ana');
   await button(page, 'Back to groups').click();
+  await motionSettled(page);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 
   const watching = page.evaluate(() => new Promise<{ copies: number; pages: number }[]>((resolve) => {
@@ -2559,7 +2587,7 @@ test('never cuts off the tops or tails of letters in titles and names', async ({
 
   for (const [screen, open] of screens) {
     await open();
-    await page.waitForTimeout(300);
+    await motionSettled(page);
     expect(await clippedText(page), screen).toEqual([]);
   }
 });
@@ -2697,6 +2725,7 @@ test('closes each dropdown on a tap outside it, and still lets that tap act', as
 
   // Joining with a link, and leaving a group, on the groups list.
   await button(page, 'Back to groups').click();
+  await motionSettled(page);
   await button(page, 'Join with an invite link').click();
   await expect(field(page, 'Invite link')).toBeVisible();
   await elsewhere();
@@ -2763,6 +2792,7 @@ test('floats standard field labels without moving the textboxes', async ({ page 
 
   await expect(groupName).toBeFocused();
   await expect(label).toHaveCSS('font-size', '17px');
+  await motionSettled(page);
   const before = (await yourName.boundingBox())!;
   const labelBefore = (await label.boundingBox())!;
 
@@ -2924,6 +2954,7 @@ test('uses a floating label for the expense description and saves with Enter', a
   const label = page.getByText('Description', { exact: true });
 
   await expect(label).toHaveCSS('font-size', '17px');
+  await motionSettled(page);
   const before = (await description.boundingBox())!;
 
   await description.click();
@@ -3005,6 +3036,7 @@ test('opens canonical Activity records and returns, keeping unavailable actions 
   await button(page, 'Open expense: You added Dinner').click();
   await button(page, 'Cancel').click();
   await expect(heading(page, 'Activity')).toBeVisible();
+  await motionSettled(page);
   const title = page.getByText('Dinner', { exact: true });
   await expect(title).toHaveCSS('font-weight', '600');
   await button(page, 'Undo: You added Dinner').click();
@@ -3052,4 +3084,103 @@ test('searches expenses and repayments with accent-insensitive words and persona
   await button(page, 'Search expenses').click();
   await expect(search).toHaveValue('');
   await expect(results.getByRole('button', { name: /^Change / })).toHaveCount(4);
+});
+
+test('keeps tabular balance typography while flying into person details', async ({ page }) => {
+  await createGroup(page, 'Flying balance', 'Ana');
+  await addMember(page, 'Ben');
+  await addExpense(page, 'Dinner', '60');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+  const watching = page.evaluate(() => new Promise<string[]>((resolve) => {
+    const fonts: string[] = [];
+    const start = performance.now();
+
+    (function frame() {
+      for (const node of document.querySelectorAll<HTMLElement>('[data-morph-arriving]')) {
+        if (node.textContent === '30.00') fonts.push(getComputedStyle(node).fontSize);
+      }
+
+      if (performance.now() - start < 800) requestAnimationFrame(frame);
+      else resolve(fonts);
+    })();
+  }));
+
+  await person(page, 'Ben').click();
+  const fonts = await watching;
+
+  expect(fonts.length).toBeGreaterThan(0);
+  expect(new Set(fonts)).toEqual(new Set(['36px']));
+});
+
+test('keeps screen motion within its shared duration and avoids layout animation', async ({ page }) => {
+  await createGroup(page, 'Motion budget', 'Ana');
+  await addMember(page, 'Ben');
+  await addExpense(page, 'Dinner', '60');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+  const measure = async (open: () => Promise<void>) => {
+    const watching = page.evaluate(() => new Promise<{ duration: number; layout: boolean }[]>((resolve) => {
+      const samples: { duration: number; layout: boolean }[] = [];
+      const start = performance.now();
+
+      (function frame() {
+        for (const animation of document.getAnimations()) {
+          const effect = animation.effect;
+
+          if (!(effect instanceof KeyframeEffect)) continue;
+          samples.push({ duration: Number(effect.getTiming().duration), layout: effect.getKeyframes().some((key) => 'width' in key || 'height' in key) });
+        }
+
+        if (performance.now() - start < 800) requestAnimationFrame(frame);
+        else resolve(samples);
+      })();
+    }));
+
+    await open();
+    const samples = await watching;
+
+    expect(samples.length).toBeGreaterThan(0);
+    expect(Math.max(...samples.map((sample) => sample.duration))).toBeLessThanOrEqual(300);
+    expect(samples.some((sample) => sample.layout)).toBe(false);
+  };
+
+  await measure(() => person(page, 'Ben').click());
+  await button(page, 'Back to Motion budget').click();
+  await expect(page.locator('[data-copied-page]')).toHaveCount(0);
+  await measure(() => button(page, 'Add expense').click());
+});
+
+test('keeps the empty preferred-member summary quiet with a long name', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  const name = 'Anastasia Konstantinopoulou';
+
+  await createGroup(page, 'Long names', name);
+  const summary = button(page, `${name} (you), no expenses yet. Show details`);
+
+  await expect(summary).toBeVisible();
+  await expect(summary.getByText('· No expenses yet', { exact: true })).toHaveCount(0);
+  await expect(summary.getByText(name, { exact: true })).toBeVisible();
+});
+
+test('keeps payer and recipient labels on one line beside long names on a narrow phone', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await createGroup(page, 'Narrow choices', 'Anastasia Konstantinopoulou-Smith');
+  await addMember(page, 'Benjamin Alexander Fitzgerald');
+  await button(page, 'Add expense').click();
+  await motionSettled(page);
+
+  const singleLine = async (name: string) => {
+    const label = page.getByText(name, { exact: true });
+    const dimensions = await label.evaluate((node) => ({ height: node.getBoundingClientRect().height, line: parseFloat(getComputedStyle(node).lineHeight) }));
+
+    expect(dimensions.height).toBeLessThanOrEqual(dimensions.line + 1);
+  };
+
+  await singleLine('Paid by');
+  await page.getByRole('radio', { name: 'Payment', exact: true }).click();
+  await motionSettled(page);
+  await singleLine('Paid by');
+  await singleLine('Paid to');
+  expect(await page.locator('#splitnext-page').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
 });

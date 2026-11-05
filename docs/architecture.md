@@ -113,7 +113,10 @@ before React replaces it: every element marked with `morph(key)` (a ref that
 sets `data-morph`), and a copy of the whole screen. After the update, the copy
 fades and slides 28px out over the new screen while the new screen slides in;
 each key on both screens flies from its old box to its new one, crossfading
-the old and new text as it scales, over 560ms. Each flying copy keeps its
+the old and new text as it scales, over the shared 300ms duration. Flying text
+copies retain explicit font longhands, including tabular numerals; Chromium's
+empty font shorthand must never reset their typography. Background boxes
+scale with transforms rather than animating layout dimensions. Each flying copy keeps its
 endpoint layout width so names retain their line breaks and right-aligned
 amounts scale about their right edge and follow a straight path. Depth from
 `AppScreen` picks the direction. With `sheet`, a new expense instead rises over a still copy of
