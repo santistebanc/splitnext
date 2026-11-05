@@ -1,12 +1,12 @@
 import { Component, createRef, type ReactNode } from 'react';
 import type { Text, TextInput, View } from 'react-native';
-import { easeOut, scrim } from '../design';
+import { durations, easeOut, scrim } from '../design';
 
 /** What a morph mark attaches to: on the web, React Native's views are elements. */
 type MorphTarget = HTMLElement | View | Text | TextInput | null;
 
 /** How long a change of screen takes; parts that appear on both screens fly for all of it. */
-const duration = 560;
+const duration = durations.medium;
 
 /** The page's scroll area, from Frame. */
 const pageId = 'splitnext-page';
@@ -17,7 +17,13 @@ const slide = 28;
 type Box = { x: number; y: number; w: number; h: number };
 
 /** `clips`: text cut short with an ellipsis, which must stay cut while it flies. */
-type Part = { box: Box; clone: HTMLElement; background: string; radius: string; border: string; borderWidth: string; color: string; font: string; clips: boolean; whiteSpace: string; textSize: number | null };
+type Part = { box: Box; clone: HTMLElement; background: string; radius: string; border: string; borderWidth: string; color: string; font: ReturnType<typeof fontStyle>; clips: boolean; whiteSpace: string; textSize: number | null };
+
+/** Chromium cannot serialize `font` when tabular numerals are set. Keep the
+ * longhands so a flying copy never resets to the browser's default font. */
+function fontStyle(style: CSSStyleDeclaration) {
+  return { fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, fontStyle: style.fontStyle, lineHeight: style.lineHeight, letterSpacing: style.letterSpacing, fontVariant: style.fontVariant, fontFeatureSettings: style.fontFeatureSettings, fontVariationSettings: style.fontVariationSettings };
+}
 
 /** The font size of an element's own text, or null for one that only holds others. */
 function textSize(element: HTMLElement, style: CSSStyleDeclaration): number | null {
@@ -62,7 +68,7 @@ function copy(element: HTMLElement): HTMLElement {
 type Props = { screen: string; depth: number; sheet?: boolean; children: ReactNode };
 
 /** How long a sheet takes to rise over the screen below, or to fall away from it. */
-const sheetDuration = 420;
+const sheetDuration = durations.medium;
 
 /** The shade over the screen a sheet covers. */
 
@@ -116,7 +122,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
       if (!key || !this.visible(element, box)) return;
       const style = getComputedStyle(element);
 
-      parts.set(key, { box, clone: copy(element), background: style.backgroundColor, radius: style.borderRadius, border: style.borderTopColor, borderWidth: style.borderTopWidth, color: style.color, font: style.font, clips: clipped(style), whiteSpace: style.whiteSpace, textSize: textSize(element, style) });
+      parts.set(key, { box, clone: copy(element), background: style.backgroundColor, radius: style.borderRadius, border: style.borderTopColor, borderWidth: style.borderTopWidth, color: style.color, font: fontStyle(style), clips: clipped(style), whiteSpace: style.whiteSpace, textSize: textSize(element, style) });
     });
 
     return { parts, screen: copy(root), scrolled: root.querySelector(`#${pageId}`)?.scrollTop ?? 0 };
@@ -251,11 +257,11 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
 
       element.style.visibility = 'hidden';
       landed.push(element);
-      box.style.cssText = `position:absolute;left:0;top:0;box-sizing:border-box;border-style:solid;border-width:${from.borderWidth};`;
+      box.style.cssText = `position:absolute;left:0;top:0;width:${a.w}px;height:${a.h}px;transform-origin:0 0;box-sizing:border-box;border-style:solid;border-width:${from.borderWidth};`;
       overlay.appendChild(box);
       animations.push(box.animate([
-        { transform: `translate(${a.x}px,${a.y}px)`, width: `${a.w}px`, height: `${a.h}px`, backgroundColor: from.background, borderRadius: from.radius, borderColor: from.border },
-        { transform: `translate(${to.x}px,${to.y}px)`, width: `${to.w}px`, height: `${to.h}px`, backgroundColor: style.backgroundColor, borderRadius: style.borderRadius, borderColor: style.borderTopColor },
+        { transform: `translate(${a.x}px,${a.y}px) scale(1,1)`, backgroundColor: from.background, borderRadius: from.radius, borderColor: from.border },
+        { transform: `translate(${to.x}px,${to.y}px) scale(${sx},${to.h / a.h})`, backgroundColor: style.backgroundColor, borderRadius: style.borderRadius, borderColor: style.borderTopColor },
       ], { duration, easing: easeOut, fill: 'forwards' }));
 
       // Each copy keeps its endpoint layout while it scales and crossfades.
@@ -270,7 +276,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
       const cut = (clips: boolean) => (unclipped ? { overflow: 'visible', textOverflow: 'clip' } : clips ? { overflow: 'hidden', textOverflow: 'ellipsis' } : {});
       const leaving = from.clone;
 
-      Object.assign(leaving.style, base, cut(from.clips), { transformOrigin: origin, whiteSpace: unclipped ? 'nowrap' : from.whiteSpace, left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px`, color: from.color, font: from.font });
+      Object.assign(leaving.style, base, cut(from.clips), from.font, { transformOrigin: origin, whiteSpace: unclipped ? 'nowrap' : from.whiteSpace, left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px`, color: from.color });
       overlay.appendChild(leaving);
       animations.push(leaving.animate(stretch
         // Fades only once the arriving copy is mostly in, so the bar never
@@ -282,7 +288,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
 
       arriving.dataset.morphArriving = '';
 
-      Object.assign(arriving.style, base, cut(clipped(style)), { transformOrigin: origin, whiteSpace: unclipped ? 'nowrap' : style.whiteSpace, left: `${to.x}px`, top: `${to.y}px`, width: `${to.w}px`, height: `${to.h}px`, color: style.color, font: style.font });
+      Object.assign(arriving.style, base, cut(clipped(style)), fontStyle(style), { transformOrigin: origin, whiteSpace: unclipped ? 'nowrap' : style.whiteSpace, left: `${to.x}px`, top: `${to.y}px`, width: `${to.w}px`, height: `${to.h}px`, color: style.color });
       overlay.appendChild(arriving);
       animations.push(arriving.animate(stretch
         ? [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / sx},${1 / scale})`, opacity: 0 }, { opacity: 1, offset: 0.6 }, { transform: 'none', opacity: 1 }]

@@ -82,7 +82,8 @@ title, and expense names in the list, a breakdown, and the expense editor take
 up to two lines, then end in an ellipsis; the editor shows the whole
 description while it is being edited, and Enter saves it. Avoid repeated explanatory text, duplicate actions, unsupported controls, and rename
 save actions before a name changes. Use precise control labels rather than
-static explanatory paragraphs in app screens. Keep access-recovery
+static explanatory paragraphs in app screens. Payer and recipient labels stay
+on one line; long selected names truncate before squeezing those labels. Keep access-recovery
 details in the product documentation and the current beta scope on the homepage. Keep URL handling
 for public entry points and browser navigation. While offline, or while the
 server cannot be reached, show a thin, neutral strip above the header in

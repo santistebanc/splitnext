@@ -47,9 +47,9 @@ export function MemberChoice(props: MemberChoiceProps) {
         accessibilityState={{ expanded: showing, disabled: Boolean(props.disabled) }}
         disabled={props.disabled}
         onPress={() => setOpen(!open)}
-        style={[{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: sizes.row }, rules.below]}
+        style={[{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, minHeight: sizes.row }, rules.below]}
       >
-        <Text variant="body" tone="muted">{props.label}</Text>
+        <Text variant="body" tone="muted" numberOfLines={1} style={{ flexShrink: 0 }}>{props.label}</Text>
         <Row gap={8} style={{ flexShrink: 1, minWidth: 0 }}>
           {props.value && replica ? <MemberAvatar replica={replica} memberId={props.value} size="small" /> : null}
           <Text variant="strong" numberOfLines={1} style={{ flexShrink: 1 }}>{props.value ? name : 'Choose'}</Text>
