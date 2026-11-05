@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { activeMembers, memberLabel, nameOrdinals, preferredMember, previewFromSnapshot } from '../src/client';
 import { orderedMembers, participantMarkers, memberStatus } from '../apps/client/src/model/memberPresentation';
+import { initials } from '../apps/client/src/design/initials';
 import { scenarioReplica } from '../apps/client/src/workbench/memberListFixture';
 
 function replica() {
@@ -68,5 +69,15 @@ describe('shared member queries and presentation', () => {
     first.status = 'deleted';
     third.status = 'deleted';
     expect(label(second)).toBe('ana');
+  });
+});
+
+describe('avatars', () => {
+  it('takes the first letters of the first two words, hyphenated parts included', () => {
+    expect(initials('Ana')).toBe('A');
+    expect(initials('Léa-Marie Dubois')).toBe('LM');
+    expect(initials('Benedikt Schwarzenberger-Hohenlohe')).toBe('BS');
+    expect(initials('  nguyễn  thị minh ')).toBe('NT');
+    expect(initials('😀 Party')).toBe('😀P');
   });
 });

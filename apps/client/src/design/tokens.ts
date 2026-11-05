@@ -37,6 +37,12 @@ export const colors = {
 
 export type ColorName = keyof typeof colors;
 
+/**
+ * Soft fills behind a person's initials, one per member in the order they
+ * were added, repeating after the last. Initials on them are always ink.
+ */
+export const avatarTints = ['#f6d3b8', '#cfe6c6', '#c9dcf2', '#e4d3f1', '#f3d0d5', '#cde9e6', '#efe3b5', '#d9d6f0'] as const;
+
 /** One color per person in an expense's split bar, in member order. */
 export const splitHues = ['#3db07c', '#549de5', '#a584dc', '#d2833b', '#dd7577', '#00afb8'] as const;
 
@@ -151,8 +157,11 @@ export const strokes = {
   marker: 4,
 } as const;
 
-/** Everything is square; only dots, radio marks, and counts are round. */
-export const radii = { round: 999 } as const;
+/**
+ * Corners stay small: buttons and tabs are barely rounded, chips and pills a
+ * little less, and only avatars, dots, radio marks, and counts are round.
+ */
+export const radii = { control: 8, chip: 6, round: 999 } as const;
 
 export const opacities = {
   /** Anything pressable while it is held down. */
@@ -166,7 +175,7 @@ export const layout = {
   /** App screens: as wide as a phone. */
   column: 480,
   /** Space between the column's edge and its content. */
-  gutter: 24,
+  gutter: 20,
   /** Public pages, such as the homepage. */
   page: 1040,
   /** A public page's readable text. */

@@ -2,7 +2,7 @@ import type { ReactNode, Ref } from 'react';
 import { ActivityIndicator, View, type Insets, type StyleProp, type ViewStyle } from 'react-native';
 import { Touchable } from './layout';
 import { Text, type Tone } from './Text';
-import { colors, opacities, sizes, strokes } from './tokens';
+import { colors, opacities, radii, sizes, strokes } from './tokens';
 
 const buttonSizes = {
   /** On its own or at a screen's foot, where it stretches to the column's width. */
@@ -36,7 +36,7 @@ export type ButtonProps = {
 };
 
 /**
- * A square action in one of two sizes: a black block for the main one,
+ * A barely rounded action in one of two sizes: a black block for the main one,
  * outlined for the second. Without text it is a square around its icon.
  */
 export function Button(props: ButtonProps) {
@@ -56,7 +56,7 @@ export function Button(props: ButtonProps) {
       onPress={props.onPress}
       hitSlop={props.hitSlop ?? (compact ? (sizes.touch - sizes.compact) / 2 : undefined)}
       style={[
-        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: size.height },
+        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: size.height, borderRadius: compact ? radii.chip : radii.control },
         props.children ? { paddingHorizontal: size.paddingX, minWidth: sizes.touch } : { width: size.height },
         primary ? { backgroundColor: idle ? colors.rule : colors.ink } : { borderWidth: strokes.ink, borderColor: colors.ink },
         props.grow ? { flex: 1 } : null,

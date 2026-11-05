@@ -14,7 +14,11 @@ export { Button, TextButton, type ButtonProps, type ButtonSize, type TextButtonP
 
 export { Field, type FieldProps } from './Field';
 
-export { CheckMark, Checkbox, Chip, RadioMark, RadioRow, SegmentedControl, type SegmentedOption } from './controls';
+export { CheckMark, Checkbox, Chip, RadioMark, RadioRow, SegmentedControl, Tabs, ToggleChip, type SegmentedOption, type TabOption } from './controls';
+
+export { Avatar, type AvatarSize } from './Avatar';
+
+export { initials } from './initials';
 
 export { CountBadge, Dot, EmptyState, ErrorMessage, Notice, Skeleton, Tag, YouBadge } from './feedback';
 

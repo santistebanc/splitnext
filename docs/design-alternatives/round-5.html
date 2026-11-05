@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Splitnext: Ledger, calmer (round 5)</title>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e9e7e2; font-family: Inter, system-ui, sans-serif; color: #1a1917; padding: 40px 32px 80px; }
+  .intro { max-width: 1560px; margin: 0 auto 24px; }
+  .intro h1 { font-size: 32px; letter-spacing: -1px; }
+  .intro p { color: #5c5b56; margin-top: 8px; max-width: 860px; line-height: 1.5; }
+  .rules { max-width: 1560px; margin: 0 auto 32px; display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 6px 40px; font-size: 13.5px; line-height: 1.45; color: #3e3d39; }
+  .rules div { padding: 8px 0; border-top: 1px solid #d6d3cc; }
+  .rules b { display: block; color: #1a1917; font-size: 13px; margin-bottom: 2px; }
+  .lvl { max-width: 1560px; margin: 0 auto 10px; font: 600 12px Inter; color: #8b8a83; letter-spacing: .6px; text-transform: uppercase; }
+  .row { max-width: 1560px; margin: 0 auto 40px; display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .shot { flex: none; }
+  .cap { font-size: 12px; color: #6d6c66; margin-top: 10px; text-align: center; max-width: 360px; }
+  .phone { width: 360px; height: 760px; border-radius: 44px; padding: 10px; background: #1b1b1a; box-shadow: 0 30px 60px -30px rgba(0,0,0,.4); }
+  .screen { width: 100%; height: 100%; border-radius: 34px; overflow: hidden; position: relative; display: flex; flex-direction: column; background: #f7f4ee; color: #1d1b18; font-family: Figtree, sans-serif; }
+  .status { height: 38px; flex: none; display: flex; justify-content: space-between; align-items: center; padding: 0 26px; font: 600 13px Inter, sans-serif; }
+  .body { flex: 1; position: relative; overflow: hidden; }
+  svg.i { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; flex: none; }
+  svg.i.s { width: 16px; height: 16px; }
+  .tn { font-variant-numeric: tabular-nums; }
+  .r { margin-left: auto; }
+  .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .c2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; min-width: 0; }
+  .grow { flex: 1; min-width: 0; }
+  .nowrap { white-space: nowrap; flex: none; }
+
+  .mu { color: #8a857c; }
+  .ord { color: #8a857c; font-weight: 500; }
+  .owe { color: #c4512a; } .back { color: #23804f; }
+  .hdr { display: flex; align-items: center; gap: 20px; height: 44px; padding: 0 20px; color: #6b665e; font-size: 15px; font-weight: 500; }
+  .hdr .bk { display: flex; align-items: center; gap: 2px; min-width: 0; }
+  h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.9px; padding: 2px 20px 0; line-height: 1.1; }
+  .av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #1d1b18; flex: none; position: relative; }
+  .plus { position: absolute; right: -6px; bottom: -4px; font-size: 9px; font-weight: 800; background: #1d1b18; color: #f7f4ee; border-radius: 6px; padding: 1px 4px; border: 1.5px solid #f7f4ee; }
+  .av.sm { width: 22px; height: 22px; font-size: 10px; }
+  .av.lg { width: 56px; height: 56px; font-size: 21px; }
+  .av .on { position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-radius: 50%; background: #3db07c; border: 2px solid #f7f4ee; }
+  .av.lg .on { width: 14px; height: 14px; }
+  .stack { display: flex; } .stack .av { border: 2px solid #f7f4ee; margin-left: -8px; } .stack .av:first-child { margin-left: 0; }
+  .me-block { display: flex; align-items: flex-end; gap: 12px; padding: 14px 20px 0; }
+  .me-block .k { font-size: 14px; font-weight: 600; color: #8a857c; }
+  .big { font-size: 38px; font-weight: 800; letter-spacing: -1.3px; line-height: 1.05; }
+  .pill { height: 38px; padding: 0 14px; border-radius: 6px; background: #1d1b18; color: #f7f4ee; display: flex; align-items: center; font-weight: 700; font-size: 14px; flex: none; margin-bottom: 2px; }
+  .pill.ghost { background: rgba(29,27,24,.07); color: #1d1b18; }
+  .tabs { display: flex; gap: 22px; padding: 18px 20px 0; font-size: 15px; font-weight: 700; color: #a7a196; border-bottom: 1px solid rgba(29,27,24,.1); white-space: nowrap; }
+  .tabs span { padding-bottom: 9px; } .tabs .on { color: #1d1b18; box-shadow: inset 0 -2px #1d1b18; }
+  .tabs small { font-weight: 600; font-size: 12px; margin-left: 4px; }
+  .li { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 7px 20px; font-size: 15.5px; font-weight: 600; line-height: 1.25; }
+  .li + .li { border-top: 1px solid rgba(29,27,24,.06); }
+  .li.dim { opacity: .42; }
+  .li .sub { display: block; font-size: 13px; font-weight: 500; color: #8a857c; margin-top: 1px; }
+  .li .v { flex: none; text-align: right; }
+  .li .v small { display: block; font-size: 12.5px; font-weight: 600; margin-top: 1px; }
+  .chev { color: #b9b3a8; flex: none; }
+  .more { display: flex; align-items: center; gap: 12px; padding: 12px 20px; font-size: 14.5px; font-weight: 600; color: #6b665e; border-top: 1px solid rgba(29,27,24,.06); }
+  .month { padding: 14px 20px 4px; font-size: 12px; font-weight: 700; color: #8a857c; }
+  .btn { height: 50px; border-radius: 8px; background: #1d1b18; color: #f7f4ee; display: grid; place-items: center; font-weight: 700; font-size: 16px; }
+  .foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px 20px 24px; background: linear-gradient(transparent, #f7f4ee 32%); }
+  .amt { font-size: 52px; font-weight: 800; letter-spacing: -2px; line-height: 1; padding: 18px 20px 0; }
+  .amt .cur { font-size: 16px; font-weight: 700; color: #8a857c; letter-spacing: 0; margin-right: 6px; }
+  .desc { font-size: 19px; font-weight: 600; padding: 12px 20px 0; line-height: 1.3; overflow-wrap: anywhere; }
+  .desc.ph { color: #b9b3a8; }
+  .opt { display: flex; align-items: center; gap: 12px; padding: 0 20px; min-height: 52px; font-size: 15.5px; font-weight: 600; border-top: 1px solid rgba(29,27,24,.07); }
+  .opt .k { color: #8a857c; font-weight: 500; width: 66px; flex: none; }
+  .modes { display: flex; gap: 6px; padding: 10px 20px 6px; }
+  .modes span { flex: 1; height: 34px; border-radius: 6px; display: grid; place-items: center; background: rgba(29,27,24,.06); font-weight: 700; font-size: 13.5px; color: #6b665e; }
+  .modes span.on { background: #1d1b18; color: #f7f4ee; }
+  .step { display: flex; align-items: center; gap: 10px; color: #8a857c; font-weight: 600; flex: none; }
+  .step b { color: #1d1b18; width: 12px; text-align: center; }
+  .check { position: absolute; left: 0; right: 0; bottom: 0; background: #f7f4ee; border-top: 1px solid rgba(29,27,24,.12); padding: 12px 20px 26px; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; }
+  .rec { font-size: 13.5px; font-weight: 700; padding: 7px 10px; border-radius: 6px; background: rgba(29,27,24,.07); flex: none; }
+  .kv { display: flex; align-items: center; gap: 12px; padding: 9px 20px; font-size: 15px; font-weight: 600; }
+  .lbl { padding: 18px 20px 4px; font-size: 12px; font-weight: 700; color: #8a857c; display: flex; gap: 6px; align-items: center; }
+  .meta { padding: 16px 20px; font-size: 12.5px; color: #8a857c; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="intro">
+  <h1>Ledger, calmer</h1>
+  <p>Round four held up against long names, but every row said everything at once. This round applies <b>progressive disclosure</b>: each level answers one question and leaves detail to the next tap. Data and stress cases are the same as before: 14 people, long names, two members called Ana, two payers, an uneven split.</p>
+</div>
+<div class="rules">
+  <div><b>One question per level</b>Group: “where do I stand?” Expense list: “what happened?” Expense: “how was it split?” Each level shows only its own answer, and the rest is one tap deeper.</div>
+  <div><b>You first, everyone else after</b>Your balance and your next step lead the group. The full plan to settle everyone, and who else is settled, fold away until asked for.</div>
+  <div><b>Recognition, not reading</b>Payers become a coloured initial instead of a name, and a green dot shows who is online. Expenses that leave you out are dimmed rather than labelled “not in it”.</div>
+  <div><b>Defaults over choices</b>A new expense opens with the common case: paid by you, split equally between everyone. Shares, amounts and the per-person list only appear once you change the split.</div>
+  <div><b>One figure per row</b>Rows carry a name and one amount. Your share sits under an expense’s amount only when it is not zero. Bars, split types and counts move to the levels where they help.</div>
+  <div><b>Fewer words in the chrome</b>Invite, add a person and Activity become header icons. Search hides behind an icon until you need it. There are two tabs, not three, and Settle up becomes an action beside your balance.</div>
+</div>
+
+<div class="lvl">Level 1 · where do I stand</div>
+<div class="row" id="l1"></div>
+<div class="lvl">Level 2 · what happened</div>
+<div class="row" id="l2"></div>
+<div class="lvl">Level 3 · only when you ask</div>
+<div class="row" id="l3"></div>
+
+<script>
+const I = {
+  back: '<svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+  bell: '<svg class="i" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1112 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 004 0"/></svg>',
+  invite: '<svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M18 8v6M15 11h6"/></svg>',
+  search: '<svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>',
+  edit: '<svg class="i" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  chev: '<svg class="i s chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
+  down: '<svg class="i s chev" viewBox="0 0 24 24"><path d="M5 9l7 7 7-7"/></svg>',
+  check: '<svg class="i s" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>',
+  more: '<svg class="i" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>',
+};
+const P = [
+  ['Ana', -799.10, 'you', 1], ['Benedikt Schwarzenberger-Hohenlohe', 4640.80, '', 1], ['Cy', -2466.60], ['Nguyễn Thị Minh Khai', -1375.10],
+  ['Christopher-Alexander Wilhelmsen', 2124.00, '', 1], ['Fay', 0], ['Siddharth Ramakrishnan', -582.00], ['Hana Yamamoto-Kowalski', -1903.50, '', 1],
+  ['Ivo', 887.50], ['Joanna', 0], ['Kai', -311.00], ['Léa-Marie Dubois', 156.00], ['Mo', -371.00], ['Ana', 0, 'ord2'],
+].map(([n, b, tag, on], k) => ({ n, b, k, on, you: tag === 'you', ord: tag === 'ord2' ? 2 : 0 }));
+const by = (n) => P.find((p) => p.n.startsWith(n) && !p.ord);
+const SOFT = (k) => `hsl(${(k * 47 + 20) % 360} 70% 86%)`;
+const f = (v) => Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const s = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + f(v);
+const cls = (v) => (v < 0 ? 'owe' : v > 0 ? 'back' : 'mu');
+const name = (p) => p.you ? 'You' : `${p.n}${p.ord ? ` <span class="ord">(${p.ord})</span>` : ''}`;
+const ini = (p) => p.n.split(/[\s-]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+const av = (p, size = '', dot = true) => `<span class="av ${size}" style="background:${SOFT(p.k)}">${ini(p)}${dot && p.on ? '<span class="on"></span>' : ''}</span>`;
+const GROUP = 'Interrail summer 2026 with the Lisbon crew and cousins';
+const EXP = [
+  { m: 'November', d: 'Ferienwohnung in Dubrovnik inkl. Endreinigung und Kurtaxe', p: ['Benedikt', 'Christopher'], a: 12600, you: -1050 },
+  { m: 'November', d: 'Groceries', p: ['Cy'], a: 57.25, you: -14.31 },
+  { m: 'November', d: 'Night train Vienna → Venice (couchettes, two 6-berth compartments)', p: ['Ana'], a: 6840, you: 6351.43 },
+  { m: 'November', d: 'Dinner 🍝', p: ['Hana'], a: 3126, you: -594.40 },
+  { m: 'November', d: 'Taxi', p: ['Kai'], a: 24.5, you: 0 },
+  { m: 'November', d: 'MuseumsQuartier Kombiticket für alle Ausstellungen', p: ['Ivo'], a: 1620, you: -180 },
+  { m: 'October', d: 'Bike rental', p: ['Léa'], a: 1400, you: -200 },
+  { m: 'October', d: 'Ferry to Hvar', p: ['Christopher'], a: 4200, you: -300 },
+];
+const NIGHTS = [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2, 0];
+
+const status = '<div class="status"><span>9:41</span><span>▂▄▆ ▮</span></div>';
+const phone = (inner, cap) => `<div class="shot"><div class="phone"><div class="screen">${status}<div class="body">${inner}</div></div></div><div class="cap">${cap}</div></div>`;
+const hdr = (back, icons = [I.invite, I.bell]) => `<div class="hdr"><span class="bk grow">${I.back}<span class="ell">${back}</span></span>${icons.join('')}</div>`;
+const payer = (e) => e.p.length > 1 ? `<span class="stack">${e.p.map((n) => av(by(n), 'sm', false)).join('')}</span>` : av(by(e.p[0]), '', false);
+const erow = (e) => `<div class="li ${e.you ? '' : 'dim'}"><span style="width:30px;display:flex;justify-content:center;flex:none">${av(by(e.p[0]), '', false).replace('</span>', '').replace(/<\/span>$/, '')}${e.p.length > 1 ? `<span class="plus">+${e.p.length - 1}</span>` : ''}</span></span><span class="grow c2">${e.d}</span><span class="v tn">${f(e.a)}${e.you ? `<small class="${cls(e.you)}">${s(e.you)}</small>` : ''}</span></div>`;
+
+const others = P.filter((p) => !p.you && p.b !== 0).sort((a, b) => a.b - b.b);
+
+const L1 = [
+  [() => `<div class="hdr"><span style="font-weight:800;color:#1d1b18;font-size:17px">splitnext</span><span class="r">Join</span></div>
+    <h1>Groups</h1><div style="height:10px"></div>
+    ${[[GROUP, -799.10, [0, 1, 2]], ['Flat 3B', 42.10, [3, 4]], ['Wohngemeinschaft Kastanienallee 12, Hinterhaus 3. OG links', 1240.75, [5, 6, 7]], ['Ski', 0, [8, 9]], ['Hochzeit von Maximilian & Anna-Katharina — Junggesellenabschied, Polterabend und Feier', -12480.55, [10, 11, 12]]].map(([n, b, ks]) => `<div class="li" style="min-height:62px"><span class="grow c2" style="font-size:17px;font-weight:700">${n}</span><span class="v tn ${cls(b)}">${b ? s(b) : I.check}</span></div>`).join('')}
+    <div class="foot"><div class="btn">New group</div></div>`, 'Groups: a name and your balance; a tick means settled'],
+  [() => `${hdr('Groups')}<h1 class="c2">${GROUP}</h1>
+    <div class="me-block"><div class="grow"><div class="k">You owe</div><div class="big tn owe">799.10</div></div><span class="pill">Settle up</span></div>
+    <div class="tabs"><span class="on">People<small>14</small></span><span>Expenses<small>126</small></span></div>
+    ${others.slice(0, 9).map((p) => `<div class="li">${av(p)}<span class="grow ell">${name(p)}</span><span class="v tn ${cls(p.b)}">${s(p.b)}</span></div>`).join('')}
+    <div class="more"><span class="stack">${P.filter((p) => !p.you && p.b === 0).map((p) => av(p, 'sm', false)).join('')}</span>3 settled${I.down}</div>
+    <div class="foot"><div class="btn">Add expense</div></div>`, 'Group: your balance and next step first, then everyone else'],
+  [() => `<div class="hdr"><span>Cancel</span><span class="r" style="font-weight:700;color:#1d1b18">Save</span></div>
+    <div class="amt tn"><span class="cur">EUR</span>0.00</div>
+    <div class="desc ph">What was it for?</div>
+    <div style="height:22px"></div>
+    <div class="opt"><span class="k">Paid by</span>${av(P[0], '', false)}<span class="grow">You</span>${I.chev}</div>
+    <div class="opt"><span class="k">Split</span><span class="grow ell">Equally, all 14</span>${I.chev}</div>
+    <div class="foot"><div class="btn" style="background:#dddbd3;color:#8a857c">Save</div></div>`, 'New expense: the common case is the default, two rows'],
+];
+const L2 = [
+  [() => { let last = ''; return `${hdr(GROUP, [I.search, I.bell])}
+    <div class="tabs" style="padding-top:6px"><span>People<small>14</small></span><span class="on">Expenses<small>126</small></span></div>
+    ${EXP.map((e) => { const h = e.m !== last ? `<div class="month">${e.m}</div>` : ''; last = e.m; return h + erow(e); }).join('')}
+    <div class="foot"><div class="btn">Add expense</div></div>`; }, 'Expenses: payer as an initial, your share only when you have one'],
+  [() => `${hdr(GROUP, [I.edit, I.more])}
+    <div style="padding:4px 20px 0" class="c2"><span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;line-height:1.2">Ferienwohnung in Dubrovnik inkl. Endreinigung und Kurtaxe</span></div>
+    <div style="display:flex;align-items:baseline;padding:10px 20px 0"><span class="big tn">12,600.00</span><span class="r mu" style="font-size:14px;font-weight:600">Thu 5 Nov</span></div>
+    <div class="me-block" style="padding-top:8px"><span class="k">Your share</span><span class="r tn owe" style="font-weight:700;font-size:17px">1,050.00</span></div>
+    <div class="lbl">Paid by</div>
+    ${[['Benedikt', 8000], ['Christopher', 4600]].map(([n, v]) => `<div class="kv">${av(by(n), '', false)}<span class="grow ell">${by(n).n}</span><span class="tn">${f(v)}</span></div>`).join('')}
+    <div class="lbl">Split by nights · 13 of 14</div>
+    ${P.slice(1, 6).map((p, k) => `<div class="kv">${av(p, '', false)}<span class="grow ell">${name(p)}</span><span class="mu tn" style="font-weight:500;margin-right:10px">3</span><span class="tn">1,050.00</span></div>`).join('')}
+    <div class="more">8 more${I.down}</div>`, 'One expense: here, and only here, the full split'],
+  [() => `${hdr(GROUP, [I.edit])}
+    <div style="display:flex;align-items:center;gap:14px;padding:6px 20px 0">${av(by('Benedikt'), 'lg')}<span class="c2" style="font-size:24px;font-weight:800;letter-spacing:-0.6px;line-height:1.15">Benedikt Schwarzenberger-Hohenlohe</span></div>
+    <div class="me-block" style="padding-top:22px"><div class="grow"><div class="k">Gets back</div><div class="big tn back">4,640.80</div></div></div>
+    <div class="lbl" style="padding-top:22px">You pay Benedikt</div>
+    <div class="li"><span class="grow tn" style="font-size:20px;font-weight:800">270.70</span><span class="pill">Record</span></div>
+    <div style="height:14px"></div>
+    <div class="more">41 expenses with Benedikt${I.chev}</div>
+    <div class="more">Payments to Benedikt from 2 others${I.chev}</div>`, 'Person: their balance and what is yours to do'],
+];
+const L3 = [
+  [() => `<div class="hdr"><span>Cancel</span><span class="r" style="font-weight:700;color:#1d1b18">Save</span></div>
+    <div class="amt tn" style="font-size:44px;padding-top:6px"><span class="cur">EUR</span>12,600.00</div>
+    <div class="desc c2" style="font-size:17px">Ferienwohnung in Dubrovnik inkl. Endreinigung und Kurtaxe</div>
+    <div style="height:12px"></div>
+    <div class="opt"><span class="k">Paid by</span><span class="stack">${av(by('Benedikt'), '', false)}${av(by('Christopher'), '', false)}</span><span class="grow ell">2 people</span>${I.chev}</div>
+    <div class="modes"><span>Equal</span><span class="on">Shares</span><span>Exact</span><span>%</span></div>
+    ${P.map((p, k) => { const n = NIGHTS[k]; return `<div class="li ${n ? '' : 'dim'}" style="min-height:38px;padding:4px 20px">${av(p, 'sm', false)}<span class="grow ell">${name(p)}</span>${n ? `<span class="step">−<b>${n}</b>+</span>` : ''}<span class="v tn" style="width:72px">${n ? f(n * 350) : ''}</span></div>`; }).join('')}
+    <div class="check"><span class="back">${I.check}</span><span class="grow">All assigned</span><span class="mu tn">36 shares</span></div>`, 'Changing the split: the per-person list appears only now'],
+  [() => `${hdr(GROUP, [])}<h1>Settle up</h1>
+    <div class="lbl" style="padding-top:16px">Yours</div>
+    ${[['Benedikt', 270.70], ['Christopher', 528.40]].map(([n, v]) => `<div class="li">${av(by(n))}<span class="grow ell">${by(n).n}</span><span class="v tn">${f(v)}</span><span class="rec">Record</span></div>`).join('')}
+    <div style="height:10px"></div>
+    <div class="more">Everyone else’s 8 payments${I.down}</div>`, 'Settle up: your two payments; the other eight stay folded'],
+  [() => `${hdr(GROUP, [I.search, I.bell])}
+    <div class="tabs" style="padding-top:6px"><span>People<small>14</small></span><span class="on">Expenses<small>126</small></span></div>
+    <div style="display:flex;align-items:center;gap:10px;margin:12px 20px 0;height:40px;border-bottom:1.5px solid #1d1b18;font-size:15.5px;font-weight:600">${I.search}dinner<span class="r mu" style="font-weight:500">Cancel</span></div>
+    <div style="display:flex;gap:6px;padding:10px 20px 4px">${['Involves you', 'Paid by you', 'Person'].map((t, k) => `<span style="white-space:nowrap;flex:none;padding:6px 10px;border-radius:6px;font-size:13px;font-weight:600;${k === 0 ? 'background:#1d1b18;color:#f7f4ee' : 'background:rgba(29,27,24,.06)'}">${t}</span>`).join('')}</div>
+    ${[{ d: 'Dinner 🍝', p: ['Hana'], a: 3126, you: -594.40 }, { d: 'Dinner in Split, the place by the harbour with the long queue', p: ['Benedikt'], a: 2684, you: -223.60 }, { d: 'Pizza night', p: ['Ana'], a: 960, you: 720 }, { d: 'Dinner at Konoba Matejuška', p: ['Christopher'], a: 3412.50, you: -243.80 }].map(erow).join('')}
+    <div class="more" style="justify-content:space-between">4 results<span class="tn owe">−341.80</span></div>`, 'Search: filters appear only while searching'],
+];
+document.getElementById('l1').innerHTML = L1.map(([fn, c]) => phone(fn(), c)).join('');
+document.getElementById('l2').innerHTML = L2.map(([fn, c]) => phone(fn(), c)).join('');
+document.getElementById('l3').innerHTML = L3.map(([fn, c]) => phone(fn(), c)).join('');
+</script>
+</body>
+</html>

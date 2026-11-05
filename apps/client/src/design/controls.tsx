@@ -114,3 +114,50 @@ export function Chip(props: { text: string; label?: string | undefined; onPress:
     </Touchable>
   );
 }
+
+export type TabOption<Value extends string> = { value: Value; text: string; count?: number | undefined };
+
+/**
+ * Sections of one screen side by side, the chosen one underlined in ink over
+ * a hairline running the column's width. A count after a name is quiet.
+ */
+export function Tabs<Value extends string>(props: { label: string; options: readonly TabOption<Value>[]; value: Value; onChange: (value: Value) => void; style?: StyleProp<ViewStyle> | undefined }) {
+  return (
+    <View role="tablist" aria-label={props.label} style={[{ flexDirection: 'row', gap: 24, borderBottomWidth: strokes.hairline, borderColor: colors.rule }, props.style]}>
+      {props.options.map((option) => {
+        const selected = option.value === props.value;
+
+        return (
+          <Touchable
+            key={option.value}
+            role="tab"
+            aria-selected={selected}
+            accessibilityLabel={option.count === undefined ? option.text : `${option.text}, ${option.count}`}
+            onPress={() => { if (!selected) props.onChange(option.value); }}
+            style={[{ minHeight: sizes.touch, flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: -strokes.hairline, borderBottomWidth: strokes.focus, borderColor: selected ? colors.ink : 'transparent' }]}
+          >
+            <Text numberOfLines={1} variant="strong" weight="bold" tone={selected ? 'ink' : 'faint'}>{option.text}</Text>
+            {option.count === undefined ? null : <Text variant="meta" weight="semibold" tone={selected ? 'muted' : 'faint'}>{option.count}</Text>}
+          </Touchable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** A filter that is on or off, filled with ink while on. */
+export function ToggleChip(props: { text: string; selected: boolean; onPress: () => void; label?: string | undefined }) {
+  return (
+    <Touchable
+      accessibilityRole="button"
+      accessibilityLabel={props.label ?? props.text}
+      accessibilityState={{ selected: props.selected }}
+      aria-pressed={props.selected}
+      onPress={props.onPress}
+      hitSlop={(sizes.touch - sizes.compact) / 2}
+      style={{ height: sizes.compact, paddingHorizontal: 12, justifyContent: 'center', borderRadius: radii.chip, backgroundColor: props.selected ? colors.ink : colors.tint }}
+    >
+      <Text numberOfLines={1} variant="caption" weight="semibold" tone={props.selected ? 'inverse' : 'ink'}>{props.text}</Text>
+    </Touchable>
+  );
+}

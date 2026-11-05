@@ -60,14 +60,14 @@ at `/app`.
 knows nothing about groups or money; `ui/` composes it into screens.
 
 - **Tokens** (`design/tokens.ts`): one fixed light palette named by role —
-  near-black ink on warm paper, hairline rules instead of cards, square black
-  main actions, green for money someone gets back and orange for money someone
+  near-black ink on warm paper, hairline rules instead of cards, barely rounded
+  black main actions, green for money someone gets back and orange for money someone
   owes (each as an ink figure and a lighter bar), and a brighter orange for
   counts and marks that need attention; `splitHues` for each person in an
   expense's split; the type ramp (`typeScale`, Instrument Sans for text and
   Geist Mono for figures); a 2-point spacing scale (`space`); control
   `sizes`, line `strokes`, `opacities`, column `layout` widths, `radii`
-  (square except dots and counts), and `durations` with one easing.
+  (8px controls, 6px chips, round avatars, dots and counts), `avatarTints`, and `durations` with one easing.
   Nothing casts a shadow: a header shows a hairline once content scrolls under it.
 - **Primitives**: `Text` (a type step in a tone; nested text inherits),
   `Input`, `Stack` and `Row` (gaps and padding only from `space`),
