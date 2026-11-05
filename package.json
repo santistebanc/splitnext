@@ -37,7 +37,8 @@
     "lab": "node lab/server.mjs",
     "lab:cli": "node lab/cli.mjs",
     "lab:test": "node --test lab/test.mjs",
-    "lab:acceptance": "node lab/acceptance.mjs"
+    "lab:acceptance": "node lab/acceptance.mjs",
+    "verify:expense-recovery": "node lab/expense-recovery.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.1.9",

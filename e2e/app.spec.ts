@@ -3,6 +3,13 @@ import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { once } from 'node:events';
 
+test('expense recovery verifies durable saves, lost responses and failed persistence', async () => {
+  test.setTimeout(600_000);
+  const result = await promisify(execFile)(process.execPath, ['lab/expense-recovery.mjs'], { timeout: 580_000 });
+
+  expect(result.stdout).toContain('Expense recovery passed:');
+});
+
 test('device lab runs the real two-device offline and recovery acceptance scenario', async () => {
   test.setTimeout(400_000);
   const result = await promisify(execFile)(process.execPath, ['lab/acceptance.mjs'], { timeout: 380_000 });
