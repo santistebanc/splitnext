@@ -176,12 +176,16 @@ continue to govern identity, invitations, member removal, money, and sync.
 Use one fixed light theme: near-black ink (`#141413`) on warm paper
 (`#F6F5F1`), muted text `#5C5B56`, and hairline rules `#DDDBD3`. Body text and
 titles use Instrument Sans; amounts and invite links use Geist Mono. Actions
-are square: the main one is a black block with paper text, grey (`#DDDBD3`)
-while it cannot be pressed; secondary ones are outlined in ink; minor ones
+are barely rounded (8px, 6px for compact ones and chips): the main one is a
+black block with paper text, grey (`#DDDBD3`) while it cannot be pressed; secondary ones are outlined in ink; minor ones
 are underlined text. Green figures and bars (`#00683D`, `#3DB07C`) mean
 someone gets money back, orange (`#9C3A11`, `#DF7752`) means someone owes
 it, and a brighter orange (`#CF6139`) marks the Activity count, new Activity
-entries, and changes waiting for review. Do not add theme settings,
+entries, and changes waiting for review. Each person appears as an avatar:
+up to two initials, ink on one of eight soft tints chosen by their place in
+the group, so they keep one colour everywhere, with a green dot while a device
+that took their name is online. Surfaces stay flat: rows run the column's
+width, separated by hairlines, never boxed inside one another. Do not add theme settings,
 light/dark switching, or system appearance switching.
 
 ### Screens and navigation

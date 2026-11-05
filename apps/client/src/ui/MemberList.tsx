@@ -1,9 +1,9 @@
 import { useRef, useState, type RefObject } from 'react';
 import { Platform, View, type StyleProp, type TextInput, type TextStyle } from 'react-native';
 import type { ClientReplicaState } from '@splitnext/client';
-import { memberStatus, type ParticipantMarker } from '../model/memberPresentation';
+import { memberStatus, memberTint, participantMarkers, type ParticipantMarker } from '../model/memberPresentation';
 import type { AppController } from '../model/controller';
-import { Dot, ErrorMessage, Input, colors, rules, sizes, type FontWeight, type TypeVariant } from '../design';
+import { Avatar, Dot, ErrorMessage, Input, colors, rules, sizes, type AvatarSize, type FontWeight, type TypeVariant } from '../design';
 import { EditCover } from './EditCover';
 import { errorMessage } from './errors';
 import { useActions } from './useActionCall';
@@ -24,6 +24,21 @@ export function MemberIcon(props: { participants: ParticipantMarker[] }) {
   if (!props.participants.length) return <Dot color={colors.faint} outline="dashed" />;
 
   return status === 'online' ? <Dot color={colors.positive} /> : <Dot color={colors.muted} outline="solid" />;
+}
+
+/**
+ * A member's avatar: their initials on their tint, with a dot while a device
+ * that took their name is online. Pass the app to show presence; without it,
+ * as in an expense's payer, the avatar only identifies the person.
+ */
+export function MemberAvatar(props: { replica: Replica; memberId: string; size?: AvatarSize | undefined; app?: MemberListApp | undefined }) {
+  const snapshot = props.replica.projected_snapshot;
+  const member = snapshot?.members.find((entry) => entry.id === props.memberId);
+  const state = props.app?.snapshot();
+  const markers = props.app && state ? participantMarkers(props.replica, props.memberId, props.app.client.presence(props.replica.group_id), state.online && state.reachable) : [];
+  const online = markers.length > 0 && memberStatus(markers) === 'online';
+
+  return <Avatar name={member?.display_name ?? '?'} tint={memberTint(snapshot, props.memberId)} size={props.size} online={online} />;
 }
 
 /** "Online · taken on 2 devices", "Offline · taken on 1 device", or "Not taken on any device". */

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import {
-  ArrowRightIcon, BalanceBar, Button, CheckMark, Checkbox, Chip, CloseIcon, CountBadge, Divider, Dot, EmptyState, ErrorMessage, Field, IconButton, Input,
+  ArrowRightIcon, Avatar, BalanceBar, Button, CheckMark, Checkbox, Chip, CloseIcon, CountBadge, Divider, Dot, EmptyState, ErrorMessage, Field, IconButton, Input,
   ListRow, Notice, PencilIcon, RadioMark, RadioRow, Row, SectionHeading, SegmentedControl, Skeleton, Stack, Tag, Text, TextButton, Touchable,
-  YouBadge, colors, rules, sizes,
+  Tabs, ToggleChip, YouBadge, colors, rules, sizes,
 } from '../design';
 import { Example, Gallery, Props, Specimen, Usage, type DocPage } from './doc';
 
@@ -353,6 +353,46 @@ function MarksPage() {
   );
 }
 
+function AvatarPage() {
+  return (
+    <Stack gap={32}>
+      <Usage code={'<Avatar name="Léa-Marie Dubois" tint={3} online />'} />
+      <Example title="Sizes and tints" note="Two initials at most; each person keeps the tint of their place in the group. The dot marks someone online.">
+        <Gallery>
+          <Specimen name="small" width={80}><Avatar name="Cy" tint={2} size="small" /></Specimen>
+          <Specimen name="regular" width={80}><Avatar name="Benedikt Schwarzenberger-Hohenlohe" tint={1} /></Specimen>
+          <Specimen name="online" width={80}><Avatar name="Nguyễn Thị Minh Khai" tint={4} online /></Specimen>
+          <Specimen name="large" width={100}><Avatar name="Léa-Marie Dubois" tint={3} size="large" online /></Specimen>
+        </Gallery>
+      </Example>
+      <Props rows={[
+        ['Avatar: name, tint, size?, online?', "size: 'small' | 'regular' | 'large'", 'Initials on a soft fill; hidden from assistive technology beside the name it stands for.'],
+      ]} />
+    </Stack>
+  );
+}
+
+function TabsPage() {
+  const [tab, setTab] = useState<'people' | 'expenses'>('people');
+  const [mine, setMine] = useState(true);
+
+  return (
+    <Stack gap={32}>
+      <Usage code={"<Tabs label=\"Group\" value={tab} onChange={setTab} options={[{ value: 'people', text: 'People', count: 14 }, { value: 'expenses', text: 'Expenses', count: 126 }]} />"} />
+      <Example title="Tabs">
+        <Tabs label="Group" value={tab} onChange={setTab} options={[{ value: 'people', text: 'People', count: 14 }, { value: 'expenses', text: 'Expenses', count: 126 }]} />
+      </Example>
+      <Example title="ToggleChip" note="A filter, filled while on.">
+        <Row gap={8}><ToggleChip text="Involves you" selected={mine} onPress={() => setMine(!mine)} /><ToggleChip text="Paid by you" selected={false} onPress={() => undefined} /></Row>
+      </Example>
+      <Props rows={[
+        ['Tabs: label, options, value, onChange', '{ value, text, count? }[]', 'Sections of one screen; the chosen one is underlined.'],
+        ['ToggleChip: text, selected, onPress, label?', 'boolean', 'A filter that is on or off.'],
+      ]} />
+    </Stack>
+  );
+}
+
 function StructurePage() {
   const { note, press } = usePresses();
 
@@ -444,6 +484,8 @@ export const componentPages: DocPage[] = [
   { id: 'choices', section: 'Components', title: 'Choices', summary: 'Radio rows, checkboxes, segmented controls, and chips.', source: 'design/controls.tsx', render: () => <ChoicesPage /> },
   { id: 'feedback', section: 'Components', title: 'Notices and empty states', summary: 'Messages, failures, empty lists, and loading.', source: 'design/feedback.tsx', render: () => <FeedbackPage /> },
   { id: 'marks', section: 'Components', title: 'Tags, badges, and dots', summary: 'Small marks beside names and icons.', source: 'design/feedback.tsx', render: () => <MarksPage /> },
+  { id: 'avatar', section: 'Components', title: 'Avatar', summary: 'A person as initials on their tint, with an online dot.', source: 'design/Avatar.tsx', render: () => <AvatarPage /> },
+  { id: 'tabs', section: 'Components', title: 'Tabs and filters', summary: 'Sections of one screen, and filters that are on or off.', source: 'design/controls.tsx', render: () => <TabsPage /> },
   { id: 'structure', section: 'Components', title: 'Rows and rules', summary: 'List rows, section headings, and the rules between them.', source: 'design/structure.tsx', render: () => <StructurePage /> },
   { id: 'balance-bar', section: 'Components', title: 'BalanceBar', summary: 'A balance as two halves meeting at an ink line.', source: 'design/structure.tsx', render: () => <BalanceBarPage /> },
 ];

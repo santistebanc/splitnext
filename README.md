@@ -68,7 +68,7 @@ How it fits together, and the rules each part keeps, is in
 - A design system (`apps/client/src/design/`) every screen is built from,
   documented in a `/components` catalog, and in-app devtools; both are
   enabled with debug inspection.
-- One fixed light theme on warm paper with square black controls, locally
+- One fixed light theme on warm paper with barely rounded black controls, locally
   served Instrument Sans and Geist Mono fonts, and morphing screen changes on
   the web. Theme assets are precached with the app shell
   for offline reloads; changing a theme asset invalidates that cache.
