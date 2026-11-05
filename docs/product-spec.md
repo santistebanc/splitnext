@@ -38,11 +38,10 @@ installation, saved in localStorage. The default stays editable and survives
 reloads and leaving groups. Creating, joining, selecting a different member,
 or renaming the current preferred member updates this local default.
 Use the same default in the name field when joining or rejoining as someone new.
-After creation, open the group screen. Its balances end with an inline Add a
-person row, and Invite people under the group's name opens the invite link in
-place, so adding names and inviting can happen in either order. The groups
-list shows each locally stored group's people count and the member this
-installation uses. The invite link shows in the monospaced face, without
+After creation, open the group screen. Its People tab ends with an inline Add a
+person row, and Invite people, an icon in the header, opens the invite link in
+place under the group's name, so adding names and inviting can happen in either
+order. The groups list shows each group's name and your balance in it. The invite link shows in the monospaced face, without
 https://, on one line that never wraps, smaller where it would not fit, in one
 row between an ink rule and a hairline: a Share icon on its
 left where the device can share, and a Regenerate icon on its right. Tapping the
@@ -54,15 +53,17 @@ confirmation in the same place, explaining that it creates a new link and the
 old link will stop working while everyone already in the group keeps their
 access, with Cancel and Regenerate. Creating a link does not imply anyone has joined.
 
-Follow the agreed prototype (`Splitnext Prototype.dc.html`): ink on warm
-paper, square black actions, hairline-ruled rows instead of cards, and large
-titles. Every screen's title is 32px and shrinks to 18px as the page scrolls
+Follow the agreed prototype (`docs/design-alternatives/round-5.html`, “Ledger,
+calmer”): ink on warm paper, barely rounded black actions, flat full-width
+rows ruled by hairlines instead of cards, large titles, and progressive
+disclosure, each screen answering one question and leaving detail to the next
+tap. Every screen's title is 32px and shrinks to 18px as the page scrolls
 under the header, with a hairline appearing below the header. Fields are bare
 text over an ink underline and show focus by their caret. Changing screens
 moves as the prototype does: parts shown on both screens fly from one place to
 the other and change shape on the way (a group's name becomes its title, a
-person's row becomes their page, and a balance bar stretches
-into its new shape, such as from a person's row to the bar on their page),
+person's row becomes their page, and a balance figure flies from a row to
+the page it opens),
 while the rest fades and slides 28px, forward when going deeper and back when
 returning. Add expense opens the new expense as a full-screen sheet that
 rises over the group screen, which stays put and dims; Cancel or Save drops
@@ -71,11 +72,11 @@ and who paid, grow down into place and shrink away when closed. A tap outside
 an open dropdown (who paid, the invite link, or a leave confirmation) closes
 it, and still reaches whatever was tapped; its own button still toggles it.
 Scrolling downward closes the invite-link dropdown; other dropdowns stay open
-while scrolling. Balances follow the invite controls with a compact gap in
+while scrolling. Where you stand follows the invite link with a compact gap in
 both the open and closed states. Renaming the group or a member, adding a person,
 and the join field instead dim everything else as behind a drawer: a tap on the dimmed part
-ends the edit (saving a name) and reaches nothing under it. Balance bars
-ease to their new width. Reduced motion shows every change at once.
+ends the edit (saving a name) and reaches nothing under it. The split bar's
+shares ease to their new width. Reduced motion shows every change at once.
 Long group names, a group's title, names in the balances and a person's
 title, and expense names in the list, a breakdown, and the expense editor take
 up to two lines, then end in an ellipsis; the editor shows the whole
@@ -95,38 +96,39 @@ Keep rejected/superseded changes for review as described below. Add expense is
 the primary group action and does not require invitation acceptance. See
 [the app plan](./app-product-plan.md) for product direction.
 
-The balances list everyone in the group with their balance, you
-first on a tinted row with a quiet "you" label, then everyone else from most
-negative to most positive balance (owing first, then settled, then owed), then people in no
-current expense or repayment yet, and a last + Add a person row. Typing a name there and pressing
+Where you stand leads the group screen, under its name: You owe, You get back
+or You're settled over your balance as a large bold figure, with Settle up
+beside it while a payment of the group's plan involves you; tapping the figure
+opens your details. Before any expense or repayment names you, a quiet line
+with your avatar, your name and "you" opens your details instead. It folds away
+as the page scrolls.
+
+The People tab lists everyone else with their balance, from most negative to
+most positive (owing first, then owed), then people in no current expense or
+repayment yet. Each row is your avatar-sized initials, the name on up to two
+lines, and the signed figure; there are no balance bars, the figure's colour
+says which way it goes. People who are settled fold into one line, their
+avatars and N settled, which shows them when tapped. A last + Add a person row
+follows. Typing a name there and pressing
 Enter or Done adds the person without a confirm step and clears the field,
 which keeps focus so the next name can follow; leaving the field also adds
 what was typed, and Enter on an empty field finishes. An empty draft is
 discarded, and a failed add keeps the draft
-with inline feedback. Each row shows the name, the balance as a bar growing
-from a central ink line (orange to the left for what they owe, green to the
-right for what they get back, scaled to the largest balance), and the signed
-figure. Show a settled zero, such as 0.00, when the person has current
-records; leave the bar and figure blank only when no current expense or
-repayment names them. Someone other than you whom no expense or repayment has
-ever named, removed ones included, has an X at the end of their row that removes them at once,
-like Remove in their details, without opening them.
-A presence marker beside each name shows a filled green dot when at least one
-identity selecting the name is connected, a ring when they are known to be
-disconnected, and a dashed ring when no identity selects the name. Person
+with inline feedback. Removing someone happens from their details only.
+The avatar of someone online carries a green dot when at least one
+identity selecting the name is connected. Person
 details spell it out, such as Online · taken on 2 devices or Not taken on any
 device. This follows current preferred-member choices, not a permanent
 ownership or historical attendance record. Multiple tabs for one identity count
 once.
 
-Tapping a person opens their details: back to the group, their name large with
-"you" when it is you, a pencil that edits the name in place (committing on
+Tapping a person opens their details: back to the group, their avatar and
+their name large with "you" when it is you, a pencil that edits the name in place (committing on
 leaving the field or Enter; an empty name restores the saved name). Below the
 name: their presence. There is no way to make someone else you from their
 details: changing who you are on this device means leaving the group and
 rejoining as that member, who may already be taken on another device. Then their
-balance as a large
-figure over its bar, labelled Owes, Gets back, Settled for a numeric zero, or
+balance as a large bold figure, labelled Owes, Gets back, Settled for a numeric zero, or
 No expenses yet when no current expense or repayment names them. Settle up is
 pinned at the foot while they are in a payment of the group's plan. The
 outlined Remove appears only while no expense or repayment has named them,
@@ -135,9 +137,10 @@ and say nothing about it. Your own member never offers Remove, in their
 details or their row. Remove is immediate, without a confirmation. A toast names the person, without Undo, and
 Activity can restore them later. A hidden member who has a
 balance again, such as from an offline change, stays in the balances marked
-removed, with Restore in their details. Below, the details list every current
-expense and repayment behind the balance, one row each, newest first, and end
-with a Balance row under an ink rule; the rows add up exactly to it.
+removed, with Restore in their details. Below, the details count and list every current
+expense and repayment behind the balance, one row each with its title and what
+it did to the balance, newest first, and end with a Balance row under an ink
+rule; the rows add up exactly to it.
 
 Every app screen is a page on every device: a header with a text back action
 named after where it goes (such as ‹ Groups) or Cancel, actions at its end such
@@ -198,10 +201,9 @@ in ink with paper lines, with splitnext beside it at title size, where other
 screens have their large title: as tall and shrinking the same way as the page
 scrolls, with no Your groups title. Join with a link opens a compact link field with an arrow button (Open) directly under
 that row, above the mark; a link that is not an invite says so there, and a
-valid one opens the join screen. Each group is a ruled row with its name, your balance (settled when
-zero, choose who you are when unassigned), your balance as a bar scaled to
-your largest balance across groups, the people count with You're and the
-member name, and a bin that asks in place before leaving the group on this
+valid one opens the join screen. Each group is a ruled row with its name on up
+to two lines, your balance (a green tick when settled, choose who you are when
+unassigned), changes waiting or needing review when there are any, and a bin that asks in place before leaving the group on this
 device. Show N groups you left lists them with Rejoin, and New group is
 pinned at the foot. New group does not leave the list: it opens a drawer
 upward from the button, just tall enough for New group with Cancel and two
@@ -217,14 +219,33 @@ ruled row per name (Taken when another device has it) and a last row whose
 name is typed in place as someone new; Join as the chosen name is pinned at
 the foot.
 
-A group opens on one screen, without tabs. Its header has ‹ Groups and
-Activity (with a count of new changes and changes to review), then the group's
-name with a pencil that renames it in place, then the people count and
-Invite people, which opens the invite link in place. Below, the page is one
-scroll area: everyone's balance, then expenses and recorded repayments newest
-first, each opening its editor. Add expense is pinned at the foot, including
-before the first expense and after the last one is removed. An unassigned
-installation is asked to tap its name in the balances.
+A group opens on one screen with two tabs. Its header has ‹ Groups, Search
+while the expenses show, Invite people and Activity (with a count of new
+changes and changes to review), then the group's name with a pencil that
+renames it in place, then where you stand, then the People and Expenses tabs,
+each with its count. People shows the balances; Expenses shows expenses and
+recorded repayments newest first under the month each falls in (with the year
+outside the current one), each opening its editor. An expense row is the
+payer's avatar, what it was for on up to two lines, its amount, and under it
+what it did to your balance when that is not nothing; a row that names you
+neither as a payer nor in the split is faded. Saving a new expense, or recording a
+repayment, switches to Expenses, where it leads the list. Add expense is pinned at the foot,
+including before the first expense and after the last one is removed. An
+unassigned installation is asked to tap its name in the balances.
+
+Search opens a field under the tabs with Involves you and Paid by you filters,
+which show only while searching. It finds every word typed in what an expense
+was for, or in a repayment's sentence, ignoring case and accents, and ends the
+results with their count and what they come to for you. Cancel, or Search
+again, closes it and shows everything; opening a group starts on People with
+no search.
+
+Settle up beside your balance opens the group's settle-up page: the payments
+of the plan that involve you first, each naming the other person with You pay
+or Pays you, its amount and Record, then everyone else's payments folded into
+one line that shows them, each From → To. When nothing is owed it says
+Everyone is settled up. Record always records the plain amount, never the
+grouped figure shown.
 
 Tapping a person opens their details (see above), and their Settle up opens a
 drawer upward from the button, like New group, while the details dim. It has
@@ -266,10 +287,12 @@ keystroke. Keep the caret usable for insertion, replacement, and deletion.
 Reject ambiguous or over-precise pasted amounts. Paid by opens the names in
 place, each drawn like its row in the balances: full width, tinted when it is
 you, with the presence marker, the name and "you", and a check on the one who
-paid. Then the split: its caption (28.20
-each for an equal split, or 5 people for a custom one), a bar of each person's
-share in their colour, and one row per person,
-their colour, the name with "you", − and + side by side for their shares,
+paid. Then the split. While it is equal between everyone, it folds into one row,
+Split · Equally with its caption (28.20 each), which unfolds it when tapped;
+an expense split any other way opens unfolded. Unfolded, it shows its caption
+(28.20 each for an equal split, or 5 people for a custom one), a bar of each
+person's share in their avatar's tint, and one row per person,
+their avatar, the name with "you", − and + side by side for their shares,
 their amount, and at the end a checkbox for whether they share it, which
 always stays. − shows once they have more than one share or a fixed amount
 and takes a share away; on a fixed amount it leaves them out. + shows

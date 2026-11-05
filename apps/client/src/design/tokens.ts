@@ -119,6 +119,15 @@ export function titleStyle(progress: number) {
   return { color: colors.ink, fontFamily: fonts.body, fontSize: size, lineHeight: size * 1.2, fontWeight: '700', letterSpacing: -0.03 * size } as const;
 }
 
+/**
+ * A balance large enough to lead a screen, such as where you stand in a
+ * group: bold text figures of even width, which read better than monospaced
+ * ones at this size.
+ */
+export function balanceStyle(size: number) {
+  return { fontFamily: fonts.body, fontSize: size, lineHeight: size * 1.15, fontWeight: '700' as const, letterSpacing: -0.035 * size, fontVariant: ['tabular-nums' as const] };
+}
+
 /** A large amount at any size, tracked tighter as it grows. */
 export function figureStyle(size: number) {
   return { fontFamily: fonts.mono, fontSize: size, lineHeight: size, fontWeight: '500', letterSpacing: -0.03 * size } as const;

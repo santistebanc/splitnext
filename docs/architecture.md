@@ -62,7 +62,7 @@ knows nothing about groups or money; `ui/` composes it into screens.
 - **Tokens** (`design/tokens.ts`): one fixed light palette named by role —
   near-black ink on warm paper, hairline rules instead of cards, barely rounded
   black main actions, green for money someone gets back and orange for money someone
-  owes (each as an ink figure and a lighter bar), and a brighter orange for
+  owes (each as an ink figure, and a lighter fill), and a brighter orange for
   counts and marks that need attention; `splitHues` for each person in an
   expense's split; the type ramp (`typeScale`, Instrument Sans for text and
   Geist Mono for figures); a 2-point spacing scale (`space`); control
@@ -77,7 +77,7 @@ knows nothing about groups or money; `ui/` composes it into screens.
   `Field`, `RadioRow`, `Checkbox`, `SegmentedControl`, `Chip`, `Notice`,
   `ErrorMessage`, `EmptyState`, `Tag`, `YouBadge`, `CountBadge`, `Dot`,
   `Skeleton`, `ListRow`, `SectionHeading`, `Divider` and `rules`,
-  `BalanceBar`, outline icons, and `BrandMark`.
+  `BalanceBar`, `Avatar`, `Tabs`, `ToggleChip`, outline icons, and `BrandMark`.
 
 Screens take every color, size, and duration from tokens and build from these
 components rather than their own copies. App chrome that needs the app's
@@ -128,16 +128,21 @@ up, New group, and Activity with their titles. `Reveal` opens content in place,
 growing it down from nothing and shrinking it away before it unmounts. Both
 skip motion when reduced motion is preferred, and native shows changes at once.
 
-A group has one screen (`home`) without tabs. `GroupHeader` holds ‹ Groups,
-Activity with its count, the group's name with a pencil that renames it in
-place through `renameGroup`. `TitleField` sizes itself from an invisible,
+A group has one screen (`home`) with two tabs, People and Expenses, kept in
+`AppUiState.groupTab` and switched through `showGroupTab`; opening a group
+starts on People and saving a new expense switches to Expenses. `GroupHeader`
+holds ‹ Groups, Search (on Expenses), Invite people and Activity with its
+count as icons, the group's name with a pencil that renames it in place
+through `renameGroup`, then `YourBalance` and the `Tabs`. `TitleField` sizes itself from an invisible,
 in-flow copy of the name, with the editable field laid over it, so opening
 and typing never wait for a second layout to set the height. Invite people
 shows `InvitePanel` in a `Reveal` under the name while the view is `invite`,
-so Back closes it. A downward
+so Back closes it. Search keeps its query and filters in
+`AppUiState.search`, changed through `searchExpenses` and cleared by
+`closeExpenseSearch` or opening a group; `ExpenseList` filters with
+`matchesSearch` and `expenseEffect` from `model/expenses.ts`. A downward
 content scroll also closes it through `Frame.onScrollDown`; restoration and
-header reflow do not. Balances start 12px below the invite control row or the
-expanded link's bottom rule, without extra list padding. `Frame`
+header reflow do not. `Frame`
 holds a thin `SyncStatus` strip above the header across all views while
 offline or unreachable. Tapping it opens a `Drawer` with the connection state,
 locally queued change count, and Retry when online. Reconnecting closes it and
@@ -158,12 +163,16 @@ that screen's saved header collapse along with its scroll offset, so compact
 headers stay compact instead of growing on return. Group and member rename
 pencils fade with compact progress, reaching zero opacity before they leave
 the header at halfway collapse, and fade back in as it expands.
-The group screen's content is `GroupView`: everyone's balance as ruled rows
-with a `BalanceBar` scaled to the largest balance, ending with `AddPersonRow`,
-then `ExpenseList` with expenses and repayments newest first. Tapping a person
-opens `person` (`PersonDetails`), whose Settle up opens `settle`, shown as a `FooterDrawer` rising
-from `SettleUpFooter` over `PersonDetails`, so the view keeps its history
-entry. `FooterDrawer` is the same drawer New group opens from its button. Record there records a planned payment through
+The group screen's content is `GroupView`: on People, everyone else as
+full-width rows of `MemberAvatar`, name and figure, settled people folded
+behind `setBalancesExpanded`, ending with `AddPersonRow`; on Expenses,
+`ExpenseList` with expenses and repayments newest first under month
+headings, each led by its payer's avatar and faded when it leaves you out.
+`YourBalance`'s Settle up opens `settle` without a person, a page of its own
+(`SettleUpPlan`): your payments of the plan, then everyone else's folded.
+Tapping a person opens `person` (`PersonDetails`), whose Settle up opens
+`settle` for them, shown as a `FooterDrawer` rising from `SettleUpFooter`
+over `PersonDetails`, so the view keeps its history entry. `FooterDrawer` is the same drawer New group opens from its button. Record there records a planned payment through
 `recordSettlement` at once. Other payments are new entries on the Payment
 tab of Add expense, the repayment form (`settlements`).
 `AppUiState.trail` records the views a page was opened from, so Back, Cancel,
@@ -196,8 +205,8 @@ key.
 - The invite link shows between two rules with Copy link, native sharing when
   supported, and Regenerate side by side, which regenerates the invitation
   after confirming, in the same place, that the old link will stop working.
-- The groups list shows each group as a ruled row with your balance and bar,
-  the people count and who you are, and a bin that asks in place before
+- The groups list shows each group as a ruled row with its name, your balance
+  (a tick when settled), and a bin that asks in place before
   leaving; left groups list with Rejoin. Offline captions name the blocked
   action. When joining or rejoining, names already taken by a current
   participant are marked Taken.
@@ -209,18 +218,19 @@ key.
   caused them; background sync errors appear at the top of the page. Every
   control except a text field has a visible keyboard focus outline; fields
   show focus by their caret.
-- The balances list everyone with a balance or still active, you first, and
-  end with an Add a person field that adds on blur without confirm/cancel
-  controls. They show a numeric zero when a person with current records is
-  settled; people without current records keep a blank amount and bar.
-  Person details show the balance large over its bar with Owes, Gets back,
+- The balances list everyone else with a balance or still active, settled
+  people folded into one line, and end with an Add a person field that adds on
+  blur without confirm/cancel controls; your own balance leads the screen in
+  `YourBalance`. People without current records keep a blank amount.
+  Person details show their avatar and the balance large with Owes, Gets back,
   Settled, or No expenses yet. They rename inline and remove someone else
   immediately. Which member is you changes only by leaving the group and
   rejoining as them; the client has no action for `preference.set`, which the
   server still accepts from older queued commands.
   `memberBreakdown` in `model/breakdown.ts` lists the expenses and repayments
-  behind a balance, adding up exactly to it. Presence markers show online,
-  offline, or unused; multiple tabs count once.
+  behind a balance, adding up exactly to it. An avatar's green dot shows
+  someone online; person details spell out online, offline, or unused;
+  multiple tabs count once.
 - Forms are pages with keyboard-aware scrolling on every device. Member
   editing is allowed on the group screen and in person details.
 - Settle up shows the payments in `planTransfers` (`src/domain/settlements.ts`)
@@ -238,8 +248,9 @@ key.
   The expense editor has Cancel and Delete in the header and Save in the
   shared pinned footer, a large amount and description that shrink as the
   split scrolls, Paid by opening the names in
-  place as `PayerRow`s drawn like the balances' rows, presence included, a bar of each person's
-  share, and one row per person with − and + side by side for whole shares (−
+  place, then the split, folded into one Split · Equally row while it is equal
+  between everyone and otherwise a bar of each person's share in their avatar
+  tint, and one row per person with − and + side by side for whole shares (−
   only above one share or on a fixed amount), an amount that can be fixed in
   place, and a checkbox at the end.
   `ExpenseDraft.parts` retains each person's whole shares or typed fixed amount

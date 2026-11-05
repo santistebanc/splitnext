@@ -123,14 +123,15 @@ export type TabOption<Value extends string> = { value: Value; text: string; coun
  */
 export function Tabs<Value extends string>(props: { label: string; options: readonly TabOption<Value>[]; value: Value; onChange: (value: Value) => void; style?: StyleProp<ViewStyle> | undefined }) {
   return (
-    <View role="tablist" aria-label={props.label} style={[{ flexDirection: 'row', gap: 24, borderBottomWidth: strokes.hairline, borderColor: colors.rule }, props.style]}>
+    <View role="tablist" accessibilityRole="tablist" aria-label={props.label} style={[{ flexDirection: 'row', gap: 24, borderBottomWidth: strokes.hairline, borderColor: colors.rule }, props.style]}>
       {props.options.map((option) => {
         const selected = option.value === props.value;
 
         return (
           <Touchable
             key={option.value}
-            role="tab"
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
             aria-selected={selected}
             accessibilityLabel={option.count === undefined ? option.text : `${option.text}, ${option.count}`}
             onPress={() => { if (!selected) props.onChange(option.value); }}

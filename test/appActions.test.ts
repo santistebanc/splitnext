@@ -878,7 +878,7 @@ describe('app actions', () => {
     stop();
   });
 
-  it('lists everyone in the balances once a person is added, but not after a rename', async () => {
+  it('keeps settled people folded when adding or renaming a member', async () => {
     const { host, calls } = createHost();
     const actions = createDispatcher(host);
 
@@ -891,7 +891,7 @@ describe('app actions', () => {
     await actions.dispatch('changeDraft', { field: 'member.name', value: 'Cy' });
     expect(await actions.dispatch('saveMemberEdit', {})).toMatchObject({ status: 'done' });
     expect(calls).toContain('member.create Cy');
-    expect(actions.state().ui.balancesExpanded).toBe(true);
+    expect(actions.state().ui.balancesExpanded).toBe(false);
   });
 
   it('retains failed drafts and discards cancelled member edits without saving', async () => {

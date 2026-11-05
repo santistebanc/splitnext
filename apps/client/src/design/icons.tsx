@@ -256,3 +256,14 @@ export function SearchIcon(props: IconProps) {
     </Outline>
   );
 }
+
+/** A person with a plus: inviting people to the group. */
+export function InviteIcon(props: IconProps) {
+  return (
+    <Outline {...props} fallback={22}>
+      <Circle cx={9} cy={8} r={3.5} />
+      <Path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+      <Path d="M18 8v6M15 11h6" />
+    </Outline>
+  );
+}

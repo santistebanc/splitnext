@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { View, type TextInput } from 'react-native';
 import { parseInviteLink, type ClientGroupSummary } from '@splitnext/client';
-import { ArrowRightIcon, BalanceBar, BrandMark, Button, Divider, EmptyState, ErrorMessage, Field, IconButton, ListRow, Notice, Row, Stack, Text, TextButton, Touchable, TrashIcon, between, colors, rules, sizes, titleStyle } from '../design';
+import { ArrowRightIcon, BrandMark, CheckIcon, Button, Divider, EmptyState, ErrorMessage, Field, IconButton, ListRow, Notice, Row, Stack, Text, TextButton, Touchable, TrashIcon, between, colors, layout, rules, sizes, titleStyle } from '../design';
 import { Confirmation } from './ConfirmSheet';
 import type { AppController } from '../model/controller';
 import { balanceColor, signedFigure } from './balance';
@@ -172,7 +172,7 @@ function GroupBalance(props: { group: ClientGroupSummary }) {
 
   if (balances === undefined) return <Text variant="figure" tone="muted">—</Text>;
 
-  if (!balances.length) return <Text variant="figure" tone="muted">settled</Text>;
+  if (!balances.length) return <View accessibilityLabel="settled"><CheckIcon size={18} color={colors.owed} /></View>;
 
   return (
     <Stack gap={8} align="end">
@@ -183,7 +183,7 @@ function GroupBalance(props: { group: ClientGroupSummary }) {
   );
 }
 
-/** Your groups as ruled rows with your balance as a bar, then the groups you left. */
+/** Your groups as ruled rows with your balance in each, then the groups you left. */
 export function GroupsView(props: GroupsViewProps) {
   const state = props.app.snapshot();
   const showLeft = useUiState().showLeftGroups;
@@ -196,11 +196,6 @@ export function GroupsView(props: GroupsViewProps) {
   const action = useActionCall();
   const active = state.groups.filter((group) => group.status === 'active');
   const left = state.groups.filter((group) => group.status === 'left');
-  const firstBalance = (group: ClientGroupSummary) => (group.stored_locally ? group.you_balances?.[0]?.amount ?? 0 : 0);
-  const firstCurrency = (group: ClientGroupSummary) => (group.stored_locally ? group.you_balances?.[0]?.currency : undefined);
-  // Your bar flies to your row on the group screen.
-  const barMorph = (group: ClientGroupSummary) => (firstCurrency(group) ? `gbar-${group.group_id}-${firstCurrency(group)}` : null);
-  const max = Math.max(1, ...active.map((group) => Math.abs(firstBalance(group))));
 
   function open(group: ClientGroupSummary): void {
     setTarget(group.group_id);
@@ -219,8 +214,6 @@ export function GroupsView(props: GroupsViewProps) {
   }
 
   function row(group: ClientGroupSummary) {
-    const people = group.member_count === null ? null : group.member_count === 1 ? '1 person' : `${group.member_count} people`;
-    const meta = [people, group.you_name ? `You’re ${group.you_name}` : null].filter(Boolean).join(' · ');
     const review = state.reviewGroups.includes(group.group_id);
 
     return (
@@ -231,12 +224,15 @@ export function GroupsView(props: GroupsViewProps) {
           disabled={action.busy}
           feedback="tint"
           onPress={() => open(group)}
-          style={[{ gap: 12, paddingVertical: 16 }, rules.above]}
+          style={[{ paddingVertical: 14, marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter }, rules.above]}
         >
           <Row gap={12} justify="between">
-            <Stack fill align="start">
+            <Stack fill gap={2} align="start">
               <Text ref={morph(`gname-${group.group_id}`)} numberOfLines={2} variant="headline" style={{ maxWidth: '100%' }}>{group.name}</Text>
+              {group.pending_commands ? <Text variant="caption" tone="muted">{group.pending_commands === 1 ? '1 change waiting' : `${group.pending_commands} changes waiting`}</Text> : null}
+              {review ? <Text variant="caption" tone="danger" weight="semibold">A change needs review</Text> : null}
             </Stack>
+            <GroupBalance group={group} />
             <IconButton
               ref={leaving === group.group_id ? leaveToggle : undefined}
               label={`Leave ${group.name}`}
@@ -245,15 +241,6 @@ export function GroupsView(props: GroupsViewProps) {
             >
               <TrashIcon size={18} color={colors.muted} />
             </IconButton>
-          </Row>
-          <BalanceBar track amount={firstBalance(group)} max={max} stripRef={morph(barMorph(group), { stretch: true })} />
-          <Row justify="between" style={{ minHeight: 20 }}>
-            <Stack fill gap={2}>
-              <Text numberOfLines={1} variant="caption" tone="muted">{meta || ' '}</Text>
-              {group.pending_commands ? <Text variant="caption" tone="muted">{group.pending_commands === 1 ? '1 change waiting' : `${group.pending_commands} changes waiting`}</Text> : null}
-              {review ? <Text variant="caption" tone="danger" weight="semibold">A change needs review</Text> : null}
-            </Stack>
-            <GroupBalance group={group} />
           </Row>
         </Touchable>
         <Reveal toggle={leaveToggle} onOutsidePress={() => setLeaving(null)}>

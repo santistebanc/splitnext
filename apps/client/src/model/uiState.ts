@@ -35,6 +35,14 @@ export function isGroupView(view: ViewName): view is GroupView {
 
 export type DraftField = (typeof draftFields)[number];
 
+export const groupTabs = ['people', 'expenses'] as const;
+
+export type GroupTab = (typeof groupTabs)[number];
+
+export type ExpenseSearch = { open: boolean; query: string; involvesYou: boolean; paidByYou: boolean };
+
+export const closedSearch: ExpenseSearch = { open: false, query: '', involvesYou: false, paidByYou: false };
+
 export type MemberEdit = {
   memberId: string | null;
   name: string;
@@ -55,8 +63,12 @@ type UiContext = {
   trail: GroupView[];
   /** The member whose details or settle-up plan is open. */
   person: string | null;
-  /** Whether the balances panel above the expenses is expanded. */
+  /** Whether the group's settled people are shown, or folded into one line. */
   balancesExpanded: boolean;
+  /** Which of the group screen's tabs is open: everyone's balances, or expenses and repayments. */
+  groupTab: GroupTab;
+  /** Searching the group's expenses and repayments: open, what to look for, and the filters on. */
+  search: ExpenseSearch;
   /** The last Activity sequence marked seen in each group on this installation. */
   activitySeen: Record<string, number>;
   removal: Removal | null;
@@ -137,6 +149,8 @@ export class AppUiState {
       trail: [],
       person: null,
       balancesExpanded: false,
+      groupTab: 'people',
+      search: closedSearch,
       activitySeen: seenStorage?.read() ?? {},
       removal: null,
       navigation: { revision: 0, mode: 'replace' },
@@ -177,7 +191,7 @@ export class AppUiState {
 
   update(
     patch: Partial<
-      Pick<UiContext, 'showLeftGroups' | 'copiedInviteId' | 'balancesExpanded' | 'removal'>
+      Pick<UiContext, 'showLeftGroups' | 'copiedInviteId' | 'balancesExpanded' | 'groupTab' | 'search' | 'removal'>
     >,
   ): void {
     this.patch(patch);

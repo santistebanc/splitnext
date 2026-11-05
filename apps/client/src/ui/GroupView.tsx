@@ -1,15 +1,14 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type RefObject } from 'react';
 import { View, type TextInput } from 'react-native';
-import { groupNameSchema, memberHasRecords, preferredMember, repaymentMembers } from '@splitnext/client';
-import { BalanceBar, BellIcon, Button, CloseIcon, CountBadge, ErrorMessage, IconButton, PencilIcon, Row, Stack, Tag, Text, TextButton, Touchable, YouBadge, between, colors, layout, rules, sizes, titleStyle } from '../design';
+import { groupNameSchema, preferredMember, repaymentMembers } from '@splitnext/client';
+import { BellIcon, Button, ChevronDownIcon, ChevronUpIcon, CountBadge, ErrorMessage, IconButton, Input, InviteIcon, PencilIcon, Row, SearchIcon, Stack, Tabs, Tag, Text, TextButton, ToggleChip, Touchable, YouBadge, between, colors, balanceStyle, layout, radii, rules, sizes, titleStyle } from '../design';
 import { attentionCount } from '../model/activity';
 import { hasRecords } from '../model/breakdown';
-import { balanceRows, memberName, moneyLabel } from '../model/expenses';
-import { participantMarkers } from '../model/memberPresentation';
+import { balanceRows, currentExpenses, memberName, moneyLabel } from '../model/expenses';
 import { balanceColor, signedFigure } from './balance';
 import { ExpenseList } from './ExpenseList';
 import { InvitePanel } from './InvitePanel';
-import { AddPersonRow, MemberIcon, type MemberListApp, type Replica } from './MemberList';
+import { AddPersonRow, MemberAvatar, type MemberListApp, type Replica } from './MemberList';
 import { useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
 import { EditCover } from './EditCover';
@@ -111,14 +110,152 @@ function GroupName(props: { name: string; groupId: string }) {
   );
 }
 
+/** Invite people: an icon at the header's end that opens the invite link under the title. */
+function InviteToggle(props: { toggle: RefObject<View | null> }) {
+  const invite = useActionCall();
+  const inviting = useUiState().view === 'invite';
+
+  return (
+    <IconButton
+      ref={props.toggle}
+      label="Invite people"
+      aria-expanded={inviting}
+      disabled={!invite.can(inviting ? 'closePanel' : 'showInvite', {})}
+      onPress={() => { void invite.call(inviting ? 'closePanel' : 'showInvite', {}); }}
+    >
+      <InviteIcon size={22} />
+    </IconButton>
+  );
+}
+
+/** Search, at the header's end while the expenses show: it opens a field under the tabs. */
+function SearchToggle() {
+  const actions = useActions();
+  const ui = useUiState();
+
+  if (ui.groupTab !== 'expenses') return null;
+
+  return (
+    <IconButton
+      label={ui.search.open ? 'Stop searching' : 'Search expenses'}
+      aria-expanded={ui.search.open}
+      onPress={() => { void actions.dispatch(ui.search.open ? 'closeExpenseSearch' : 'searchExpenses', {}, { origin: 'ui' }); }}
+    >
+      <SearchIcon size={22} />
+    </IconButton>
+  );
+}
+
+/** What to look for among the expenses, and the filters, which show only while searching. */
+function SearchBar() {
+  const actions = useActions();
+  const search = useUiState().search;
+  const run = (input: { query?: string; involvesYou?: boolean; paidByYou?: boolean }) => { void actions.dispatch('searchExpenses', input, { origin: 'ui' }); };
+
+  return (
+    <Stack gap={8} paddingTop={12}>
+      <Row gap={8} style={{ minHeight: sizes.touch, ...rules.inkBelow }}>
+        <SearchIcon size={18} color={colors.muted} />
+        <Input
+          accessibilityLabel="Search expenses"
+          placeholder="Search expenses"
+          autoFocus
+          value={search.query}
+          onChangeText={(query) => run({ query })}
+          maxLength={100}
+          returnKeyType="search"
+          style={{ flex: 1, minWidth: 0, height: sizes.touch, paddingHorizontal: 0 }}
+        />
+        <TextButton underline={false} tone="muted" onPress={() => { void actions.dispatch('closeExpenseSearch', {}, { origin: 'ui' }); }} style={{ paddingLeft: 12 }}>Cancel</TextButton>
+      </Row>
+      <Row gap={8}>
+        <ToggleChip text="Involves you" selected={search.involvesYou} onPress={() => run({ involvesYou: !search.involvesYou })} />
+        <ToggleChip text="Paid by you" selected={search.paidByYou} onPress={() => run({ paidByYou: !search.paidByYou })} />
+      </Row>
+    </Stack>
+  );
+}
+
+/** What a balance means for you, as the line above its figure. */
+function yourStanding(amount: number | undefined): string {
+  if (!amount) return 'You’re settled';
+
+  return amount < 0 ? 'You owe' : 'You get back';
+}
+
 /**
- * The group screen's fixed top: back to the groups and Activity, the group's
- * name, and how many people with Invite people, which opens the link in place.
+ * Where you stand, first on the group: what you owe or get back, large, with
+ * Settle up beside it while a payment of the plan involves you. Tapping the
+ * figure opens your details. It folds away as the page scrolls.
+ */
+function YourBalance(props: { replica: Replica }) {
+  const progress = useCompactProgress();
+  const open = useActionCall();
+  const settle = useActionCall();
+  const snapshot = props.replica.projected_snapshot;
+  const you = preferredMember(snapshot, props.replica.session?.identity.id);
+
+  if (!you || !snapshot) return null;
+  const balances = balancesByMember(props.replica).get(you.id) ?? [];
+  const name = memberName(snapshot, you.id);
+  const amounts = balances.map((entry) => signedFigure(entry.amount, entry.currency));
+  const folded = progress > 0.5;
+
+  // Until an expense names you, a quiet line still opens your details, such as to rename yourself.
+  if (!hasRecords(snapshot, you.id))
+    return (
+      <View aria-hidden={folded} style={{ height: between(sizes.touch, 0, progress), opacity: 1 - progress, overflow: 'hidden', pointerEvents: folded ? 'none' : 'auto' }}>
+        <Touchable
+          accessibilityRole="button"
+          accessibilityLabel={`${name} (you), no expenses yet. Show details`}
+          disabled={!open.can('showPerson', { memberId: you.id })}
+          onPress={() => { void open.call('showPerson', { memberId: you.id }); }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: sizes.touch }}
+        >
+          <MemberAvatar replica={props.replica} memberId={you.id} size="small" />
+          <Text variant="body" weight="semibold" numberOfLines={1} style={{ flexShrink: 1 }}>{name}</Text>
+          <YouBadge />
+          <Text variant="caption" tone="muted">· No expenses yet</Text>
+        </Touchable>
+        <ErrorMessage message={open.error} />
+      </View>
+    );
+
+  return (
+    <View aria-hidden={folded} style={{ height: between(balances.length > 1 ? 120 : 78, 0, progress), opacity: 1 - progress, overflow: 'hidden', pointerEvents: folded ? 'none' : 'auto' }}>
+      <Row gap={12} align="end" style={{ paddingTop: 8 }}>
+        <Touchable
+          accessibilityRole="button"
+          accessibilityLabel={`${name} (you), ${amounts.join(', ') || 'settled'}. Show details`}
+          disabled={!open.can('showPerson', { memberId: you.id })}
+          onPress={() => { void open.call('showPerson', { memberId: you.id }); }}
+          style={{ flex: 1, minWidth: 0 }}
+        >
+          <Text variant="caption" weight="semibold" tone="muted">{yourStanding(balances[0]?.amount)}</Text>
+          {balances.map((entry) => (
+            <Text key={entry.currency} ref={morph(`gamt-${props.replica.group_id}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} color={balanceColor(entry.amount)} style={balanceStyle(36)}>
+              {moneyLabel(Math.abs(entry.amount), entry.currency)}
+            </Text>
+          ))}
+        </Touchable>
+        {settle.can('showSettleUp', { memberId: you.id }) ? (
+          <Button size="compact" label="Settle up" onPress={() => { void settle.call('showSettleUp', {}); }} style={{ marginBottom: 2 }}>
+            Settle up
+          </Button>
+        ) : null}
+      </Row>
+      <ErrorMessage message={open.error ?? settle.error} />
+    </View>
+  );
+}
+
+/**
+ * The group screen's fixed top: back to the groups, Invite people and
+ * Activity, the group's name, where you stand, and the People and Expenses
+ * tabs. Invite people opens the link in place under the name.
  */
 export function GroupHeader(props: { app: MemberListApp }) {
   const actions = useActions();
-  const progress = useCompactProgress();
-  const invite = useActionCall();
   const inviteToggle = useRef<View>(null);
   const ui = useUiState();
   const replica = props.app.snapshot().group;
@@ -126,31 +263,18 @@ export function GroupHeader(props: { app: MemberListApp }) {
   const name = snapshot?.group.name ?? '';
   const open = Boolean(replica && !replica.hidden);
   const inviting = ui.view === 'invite';
-  const people = (snapshot?.members ?? []).filter((member) => member.status === 'active').length;
+  const people = repaymentMembers(snapshot).length;
+  const entries = currentExpenses(snapshot).length + (snapshot?.settlements ?? []).filter((entry) => entry.status === 'active').length;
 
   return (
     <ScreenHeader
       start={<BackButton label="Back to groups" disabled={!actions.availability('showGroups', {}).available} onPress={() => { void actions.dispatch('showGroups', {}, { origin: 'ui' }); }} />}
-      end={open ? <ActivityLink app={props.app} /> : undefined}
+      end={open ? <><SearchToggle /><InviteToggle toggle={inviteToggle} /><ActivityLink app={props.app} /></> : undefined}
       heading={open && replica ? <GroupName name={name} groupId={replica.group_id} /> : undefined}
       title={open ? undefined : name}
-      below={open ? (
+      flush={open}
+      below={open && replica ? (
         <View>
-          {/* Folds away as the page scrolls, for more room, unless the invite is open under it. */}
-          {/* Mostly folded, it is out of reach rather than a sliver under the title. */}
-          <Row gap={16} aria-hidden={!inviting && progress > 0.5} style={{ height: inviting ? sizes.touch : between(sizes.touch, 0, progress), opacity: inviting ? 1 : 1 - progress, overflow: 'hidden', pointerEvents: !inviting && progress > 0.5 ? 'none' : 'auto' }}>
-            <Text variant="caption" tone="muted">{people === 1 ? '1 person' : `${people} people`}</Text>
-            <TextButton
-              ref={inviteToggle}
-              size="small"
-              expanded={inviting}
-              disabled={!invite.can(inviting ? 'closePanel' : 'showInvite', {})}
-              onPress={() => { void invite.call(inviting ? 'closePanel' : 'showInvite', {}); }}
-              style={{ height: sizes.touch, paddingHorizontal: 12, marginLeft: -12 }}
-            >
-              Invite people
-            </TextButton>
-          </Row>
           <Reveal
             toggle={inviteToggle}
             // A tap elsewhere may open another view; it acts first, and the
@@ -159,9 +283,17 @@ export function GroupHeader(props: { app: MemberListApp }) {
               if (actions.ui.snapshot().view === 'invite') void actions.dispatch('closePanel', {}, { origin: 'ui' });
             }, 0)}
           >
-            {inviting ? <InvitePanel app={props.app} /> : null}
+            {inviting ? <View style={{ paddingTop: 8 }}><InvitePanel app={props.app} /></View> : null}
           </Reveal>
-          <ErrorMessage message={invite.error} />
+          <YourBalance replica={replica} />
+          <Tabs
+            label="Group"
+            value={ui.groupTab}
+            onChange={(tab) => { void actions.dispatch('showGroupTab', { tab }, { origin: 'ui' }); }}
+            options={[{ value: 'people', text: 'People', count: people }, { value: 'expenses', text: 'Expenses', count: entries }]}
+            style={{ marginTop: 8, marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter }}
+          />
+          {ui.groupTab === 'expenses' && ui.search.open ? <SearchBar /> : null}
         </View>
       ) : undefined}
     />
@@ -180,12 +312,11 @@ function balancesByMember(replica: Replica): Map<string, { currency: string; amo
 }
 
 /**
- * You first, then everyone from most negative to most positive balance:
- * people who owe on top, then settled people, then those owed most, and last
- * the people in no expense or repayment yet. Ties keep the order people were
- * added.
+ * Everyone from most negative to most positive balance: people who owe on
+ * top, then settled people, then those owed most, and last the people in no
+ * expense or repayment yet. Ties keep the order people were added.
  */
-function orderedMembers<Member extends { id: string }>(members: readonly Member[], owing: Map<string, { amount: number }[]>, you: string | undefined, recorded: (memberId: string) => boolean): Member[] {
+function orderedMembers<Member extends { id: string }>(members: readonly Member[], owing: Map<string, { amount: number }[]>, recorded: (memberId: string) => boolean): Member[] {
   const balance = (memberId: string) => {
     const amounts = (owing.get(memberId) ?? []).map((entry) => entry.amount);
 
@@ -193,112 +324,104 @@ function orderedMembers<Member extends { id: string }>(members: readonly Member[
   };
 
   return members.toSorted((left, right) =>
-    Number(right.id === you) - Number(left.id === you) ||
     Number(recorded(right.id)) - Number(recorded(left.id)) ||
     balance(left.id) - balance(right.id));
 }
 
-/**
- * One person: presence, name, their balance as a bar, and the figure, in a
- * column as wide as the group's widest figure so every bar's centre lines up.
- */
-function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: string; removed: boolean; you: boolean; balances: { currency: string; amount: number }[]; recorded: boolean; max: number; figureWidth: number }) {
+/** A row running to the column's edges, so its pressed tint does too. */
+const fullRow = { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: sizes.touch + 6, paddingVertical: 6, marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter } as const;
+
+/** One person: their avatar, their name, and their balance, which opens their details. */
+function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: string; removed: boolean; balances: { currency: string; amount: number }[]; recorded: boolean }) {
   const open = useActionCall();
-  const remove = useActionCall();
-  // As in their details: only someone no expense or repayment has named, removed ones included.
-  const snapshot = props.replica.projected_snapshot;
-  // You never take yourself out from your own row.
-  const removable = !props.you && !props.removed && snapshot !== null && !memberHasRecords(snapshot, props.memberId);
   const name = memberName(props.replica.projected_snapshot, props.memberId);
-  const state = props.app.snapshot();
-  const participants = participantMarkers(props.replica, props.memberId, props.app.client.presence(props.replica.group_id), state.online && state.reachable);
   const amounts = props.balances.map((entry) => signedFigure(entry.amount, entry.currency));
-  const first = props.balances[0]?.amount ?? 0;
-  const currency = props.balances[0]?.currency;
-  // The bar flies to the person's page, and yours also to the groups list.
-  const bar = currency ? (props.you ? `gbar-${props.replica.group_id}-${currency}` : `pbar-${props.replica.group_id}-${props.memberId}-${currency}`) : null;
 
   return (
     <View>
-      {/* The row runs to the screen's edges, so your tint does too. */}
-      <View style={[{ flexDirection: 'row', alignItems: 'stretch', marginHorizontal: -layout.gutter }, rules.above, props.you && { backgroundColor: colors.tint }]}>
-        <Touchable
-          feedback="tint"
-          accessibilityRole="button"
-          accessibilityLabel={`${name}${props.you ? ' (you)' : ''}${props.removed ? ', removed' : ''}, ${amounts.join(', ') || (props.recorded ? 'settled' : 'no expenses yet')}. Show details`}
-          disabled={!open.can('showPerson', { memberId: props.memberId })}
-          onPress={() => { void open.call('showPerson', { memberId: props.memberId }); }}
-          style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', minHeight: sizes.row, paddingLeft: layout.gutter, paddingRight: removable ? 0 : layout.gutter, gap: 8 }}
-        >
-          <Row gap={8} style={{ width: '34%', minWidth: 0 }}>
-            <MemberIcon participants={participants} />
-            <Text ref={morph(`pname-${props.replica.group_id}-${props.memberId}`)} numberOfLines={2} variant="strong" style={{ flexShrink: 1 }}>{name}</Text>
-            {props.you ? <YouBadge /> : null}
-            {props.removed ? <Tag>removed</Tag> : null}
-          </Row>
-          <View style={{ flex: 1, alignSelf: 'stretch' }}>
-            {props.recorded ? <BalanceBar amount={first} max={props.max} stripRef={morph(bar, { stretch: true })} /> : null}
-          </View>
-          <Stack gap={8} align="end" style={{ width: props.figureWidth }}>
-            {props.balances.map((entry) => (
-              <Text key={entry.currency} ref={morph(props.you ? `gamt-${props.replica.group_id}-${entry.currency}` : `pamt-${props.replica.group_id}-${props.memberId}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} variant="figure" color={balanceColor(entry.amount)}>
-                {signedFigure(entry.amount, entry.currency)}
-              </Text>
-            ))}
-          </Stack>
-        </Touchable>
-        {/* Someone no expense or repayment has named can go straight from here. */}
-        {removable ? (
-          <IconButton label={`Remove ${name}`} disabled={!remove.can('removeMember', { memberId: props.memberId })} onPress={() => { void remove.call('removeMember', { memberId: props.memberId }); }} style={{ height: 'auto', marginRight: 10 }}>
-            <CloseIcon size={16} color={colors.muted} />
-          </IconButton>
-        ) : null}
-      </View>
-      <ErrorMessage message={open.error ?? remove.error} />
+      <Touchable
+        feedback="tint"
+        accessibilityRole="button"
+        accessibilityLabel={`${name}${props.removed ? ', removed' : ''}, ${amounts.join(', ') || (props.recorded ? 'settled' : 'no expenses yet')}. Show details`}
+        disabled={!open.can('showPerson', { memberId: props.memberId })}
+        onPress={() => { void open.call('showPerson', { memberId: props.memberId }); }}
+        style={[fullRow, rules.above]}
+      >
+        <MemberAvatar replica={props.replica} memberId={props.memberId} app={props.app} />
+        <Row gap={8} fill>
+          <Text ref={morph(`pname-${props.replica.group_id}-${props.memberId}`)} numberOfLines={2} variant="strong" style={{ flexShrink: 1 }}>{name}</Text>
+          {props.removed ? <Tag>removed</Tag> : null}
+        </Row>
+        <Stack gap={4} align="end" style={{ flexShrink: 0 }}>
+          {props.balances.map((entry) => (
+            <Text key={entry.currency} ref={morph(`pamt-${props.replica.group_id}-${props.memberId}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} variant="figure" color={balanceColor(entry.amount)}>
+              {signedFigure(entry.amount, entry.currency)}
+            </Text>
+          ))}
+        </Stack>
+      </Touchable>
+      <ErrorMessage message={open.error} />
     </View>
   );
 }
 
-/** Everyone in the group with their balance, and a last row to add a person. */
+/**
+ * Everyone else with their balance, then the people who are settled folded
+ * into one line that shows them, and a last row to add a person.
+ */
 function People(props: { app: MemberListApp; replica: Replica }) {
+  const actions = useActions();
+  const ui = useUiState();
   const snapshot = props.replica.projected_snapshot;
   const you = preferredMember(snapshot, props.replica.session?.identity.id);
   const owing = balancesByMember(props.replica);
   const recorded = (memberId: string) => hasRecords(snapshot, memberId);
   // Removed people stay while they owe or are owed.
-  const members = orderedMembers(repaymentMembers(snapshot), owing, you?.id, recorded);
-  const max = Math.max(0, ...[...owing.values()].map((entries) => Math.abs(entries[0]?.amount ?? 0)));
-  // A monospaced figure takes about 0.6 of its 15px size per character.
-  const longest = Math.max(0, ...[...owing.values()].flatMap((entries) => entries.map((entry) => signedFigure(entry.amount, entry.currency).length)));
-  const figureWidth = Math.max(84, Math.ceil(longest * 9.2));
+  const members = orderedMembers(repaymentMembers(snapshot).filter((member) => member.id !== you?.id), owing, recorded);
+  const settled = (memberId: string) => recorded(memberId) && (owing.get(memberId) ?? []).every((entry) => entry.amount === 0);
+  const open = members.filter((member) => !settled(member.id));
+  const square = members.filter((member) => settled(member.id));
+
+  const row =(member: (typeof members)[number]) => (
+    <PersonRow key={member.id} app={props.app} replica={props.replica} memberId={member.id} removed={member.status !== 'active'} balances={owing.get(member.id) ?? []} recorded={recorded(member.id)} />
+  );
 
   return (
     <View role="region" aria-label="Balances">
-      {members.map((member) => (
-        <PersonRow
-          key={member.id}
-          app={props.app}
-          replica={props.replica}
-          memberId={member.id}
-          removed={member.status !== 'active'}
-          you={member.id === you?.id}
-          balances={owing.get(member.id) ?? []}
-          recorded={recorded(member.id)}
-          figureWidth={figureWidth}
-          max={max}
-        />
-      ))}
+      {open.map(row)}
+      {square.length ? (
+        <Touchable
+          feedback="tint"
+          accessibilityRole="button"
+          accessibilityLabel={`${square.length} settled: ${square.map((member) => memberName(snapshot, member.id)).join(', ')}`}
+          aria-expanded={ui.balancesExpanded}
+          onPress={() => { void actions.dispatch('setBalancesExpanded', { expanded: !ui.balancesExpanded }, { origin: 'ui' }); }}
+          style={[fullRow, rules.above]}
+        >
+          <Row style={{ minWidth: 30 }}>
+            {square.slice(0, 3).map((member, index) => (
+              <View key={member.id} style={{ marginLeft: index ? -8 : 0, borderRadius: radii.round, borderWidth: 2, borderColor: colors.background }}>
+                <MemberAvatar replica={props.replica} memberId={member.id} size="small" />
+              </View>
+            ))}
+          </Row>
+          <Text variant="body" weight="semibold" tone="muted" style={{ flex: 1 }}>{square.length} settled</Text>
+          {ui.balancesExpanded ? <ChevronUpIcon size={16} color={colors.faint} /> : <ChevronDownIcon size={16} color={colors.faint} />}
+        </Touchable>
+      ) : null}
+      {ui.balancesExpanded ? square.map(row) : null}
       <AddPersonRow />
     </View>
   );
 }
 
 /**
- * The group screen's content, one scrolling page: everyone's balance, then
+ * The group screen's content under its tabs: everyone's balance, or the
  * expenses and repayments; or rejoining a group left here.
  */
 export function GroupView(props: GroupViewProps) {
   const action = useActionCall();
+  const ui = useUiState();
   const replica = props.app.snapshot().group;
   const snapshot = replica?.projected_snapshot;
 
@@ -315,10 +438,5 @@ export function GroupView(props: GroupViewProps) {
       </Stack>
     );
 
-  return (
-    <Stack gap={32}>
-      <People app={props.app} replica={replica} />
-      <ExpenseList replica={replica} />
-    </Stack>
-  );
+  return ui.groupTab === 'expenses' ? <ExpenseList replica={replica} /> : <People app={props.app} replica={replica} />;
 }

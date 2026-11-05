@@ -64,10 +64,12 @@ export const ledgerActions = {
       return input.from !== input.to && members.some((member) => member.id === input.from) && members.some((member) => member.id === input.to) && (parseAmount(input.amount, input.currency ?? noCurrency) ?? 0) > 0
         ? null : unavailable('invalid_input', 'Choose two different members and a positive amount.');
     },
-    run: async (host, input) => {
+    run: async (host, input, ui) => {
       const currency = input.currency ?? noCurrency;
 
       await host.submit({ type: 'settlement.record', payload: { from_member_id: input.from, to_member_id: input.to, currency, amount: parseAmount(input.amount, currency) ?? 0 } });
+      // Like a new expense, the repayment then leads the group's expenses.
+      ui.update({ groupTab: 'expenses' });
     },
   }),
   saveMemberEdit: defineAction({
@@ -93,10 +95,6 @@ export const ledgerActions = {
       const name = edit.name.trim();
 
       if (name && !edit.memberId) {
-        // Everyone shows, so the person just added is in the list rather than behind Show all. The
-        // list opens first: the person appears before the save settles, and a list too long but not
-        // yet open would hide the Add a person line for a moment, losing the next name being typed.
-        ui.update({ balancesExpanded: true });
         await host.submit({ type: 'member.create', payload: { display_name: name } });
       } else if (name && name !== edit.expectedName && edit.memberId)
         await host.submit({
@@ -257,6 +255,9 @@ export const ledgerActions = {
             payload: { ...result.entry, expense_id: draft.expenseId, expected_version: draft.expectedVersion },
           })
         : host.submit({ type: 'expense.record', payload: result.entry }));
+
+      // A new expense returns to the expenses, where it now leads the list.
+      if (!draft.expenseId) ui.update({ groupTab: 'expenses' });
     },
   }),
   recordExpense: defineAction({

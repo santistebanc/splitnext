@@ -3,7 +3,7 @@ import { Platform, View, type StyleProp, type TextInput, type TextStyle } from '
 import type { ClientReplicaState } from '@splitnext/client';
 import { memberStatus, memberTint, participantMarkers, type ParticipantMarker } from '../model/memberPresentation';
 import type { AppController } from '../model/controller';
-import { Avatar, Dot, ErrorMessage, Input, colors, rules, sizes, type AvatarSize, type FontWeight, type TypeVariant } from '../design';
+import { Avatar, Dot, ErrorMessage, Input, colors, layout, rules, sizes, type AvatarSize, type FontWeight, type TypeVariant } from '../design';
 import { EditCover } from './EditCover';
 import { errorMessage } from './errors';
 import { useActions } from './useActionCall';
@@ -191,7 +191,8 @@ export function AddPersonRow() {
 
   return (
     <View>
-      <View ref={row} style={[rules.above, { flexDirection: 'row', alignItems: 'center', minHeight: sizes.row }]}>
+      {/* The row runs to the column's edges, like the people above it. */}
+      <View ref={row} style={[rules.above, { flexDirection: 'row', alignItems: 'center', minHeight: sizes.row, marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter }]}>
         <MemberNameInput
           inputRef={input}
           name={text}
