@@ -1,15 +1,20 @@
-# Splitnext MVP
+# Splitnext
 
-Splitnext is an offline-first group ledger foundation built on Cloudflare
-Workers, D1, and one SQLite Durable Object per group. The current MVP handles
-groups, invite links, ledger members, expenses, repayments, Activity and safe undo with
-offline synchronization and realtime revision announcements.
+Splitnext is an offline-first app for sharing expenses with a group. See who
+owes what, split expenses equally, by shares or by exact amounts, and record
+repayments. Changes apply immediately, stay on the device while offline, and
+sync across devices when connected. Activity keeps the history, with safe undo.
+
+[Try the staging app](https://splitnext-api-staging.santistebanc94.workers.dev/app).
+The web client uses React Native with Expo; the backend runs on Cloudflare
+Workers, D1, and one SQLite Durable Object per group.
 
 <p>
-  <img src="docs/screenshots/group.png" alt="A group's balances and expenses" width="200">
-  <img src="docs/screenshots/expense.png" alt="Recording an expense split by shares" width="200">
-  <img src="docs/screenshots/person.png" alt="One person's balance and the expenses behind it" width="200">
-  <img src="docs/screenshots/settle.png" alt="The settle-up plan with the fewest payments" width="200">
+  <img src="docs/screenshots/group.png" alt="Lisbon trip: the People tab with each person's balance" width="160">
+  <img src="docs/screenshots/expenses.png" alt="The group's Expenses tab with payer and amount for each expense" width="160">
+  <img src="docs/screenshots/expense.png" alt="An apartment expense split into unequal shares" width="160">
+  <img src="docs/screenshots/person.png" alt="Ana's balance and the expenses behind it" width="160">
+  <img src="docs/screenshots/settle.png" alt="The group's settle-up plan with the fewest payments" width="160">
 </p>
 
 How it fits together, and the rules each part keeps, is in
@@ -75,7 +80,7 @@ How it fits together, and the rules each part keeps, is in
   the web. Theme assets are precached with the app shell
   for offline reloads; changing a theme asset invalidates that cache.
 - Amounts are plain numbers with two decimals, never shown with a currency,
-  and shown with their digits grouped in threes, such as 1 234.50.
+  and shown with their digits grouped in threes, such as 1,234.50.
   Expenses and repayments record the no-currency code XXX, and the ledger keeps
   any older real-currency records separate; see
   [ADR 0025](./docs/adr/0025-deal-in-plain-numbers-without-currency.md).
@@ -117,8 +122,18 @@ leaves both unresponsive.
 - To try several devices by hand, open `/app` in separate browser profiles or
   a private window; tabs in one profile share an installation.
 
-Remote deployment has not been performed. `wrangler.jsonc` still contains a
-placeholder D1 database id.
+## Staging
+
+The current web app is deployed at
+[splitnext-api-staging.santistebanc94.workers.dev/app](https://splitnext-api-staging.santistebanc94.workers.dev/app).
+
+`npm run deploy:staging` builds the client, applies pending migrations to the
+separate staging D1 database, and deploys the staging Worker. It requires a clean
+checkout and Cloudflare credentials. `/health` reports the deployed Git revision;
+`/ready` checks D1 and the group Durable Object.
+
+The staging environment is configured in `wrangler.jsonc`. The default
+production environment still has a placeholder D1 database id and is not deployed.
 
 ## Checks
 
@@ -133,7 +148,7 @@ tests. The Worker tests load the bundle the dry run writes to
 run.
 
 `npm run check:fast` runs everything except the app build and the browser
-tests, against the last app build, in about a minute. The pre-push hook runs
+tests, against the last app build. The pre-push hook runs
 it; when Git for Windows pushes a checkout inside WSL, the hook runs the checks
 inside that distribution. Skip it once with `git push --no-verify`.
 `.github/workflows/check.yml` runs the full `npm run check` on a fresh checkout
@@ -208,5 +223,3 @@ state. See [docs/architecture.md](./docs/architecture.md#diagnostics).
 - [Agent working agreement](./AGENTS.md)
 - [Operations: monitoring, backups, release checklist](./docs/operations.md)
 - [Support playbook](./docs/support-playbook.md)
-
-The groups list shows your balance. Settle up suggests net transfers and records partial or excess repayments, including offline. Repayments represent money paid outside the app.
