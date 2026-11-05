@@ -5,8 +5,10 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as delay } from 'node:timers/promises';
-import { expect } from '@playwright/test';
+import { expect as playwrightExpect } from '@playwright/test';
 import { Lab } from './runtime.mjs';
+
+const expect = playwrightExpect.configure({ timeout: 15000 });
 
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -342,7 +344,9 @@ try {
   negative('zero checks', { checkpoints: [] });
   negative('skipped critical check', { checkpoints: required.slice(1) });
   negative('wrong store', { groupId: 'another-group' });
-  negative('stale build', { assets: {} });
+  const staleAssets = { ...actualAssets, [Object.keys(actualAssets)[0]]: hash('deliberately stale asset') };
+
+  negative('stale build', { assets: staleAssets });
   negative('unexpected network', { unexpected: ['https://example.invalid'] });
 
   const attempts = delivered.flatMap((request) => request.commands ?? [])
@@ -361,6 +365,14 @@ try {
   console.log(`Expense recovery passed: ${root}`);
 } catch (error) {
   evidence.error = String(error.stack ?? error);
+
+  for (const [id, device] of lab.devices) {
+    if (!device.page) continue;
+
+    await device.page.screenshot({ path: path.join(root, `failure-${id}.png`), timeout: 5000 }).catch(() => undefined);
+    await device.page.content().then((html) => writeFile(path.join(root, `failure-${id}.html`), html)).catch(() => undefined);
+  }
+
   throw error;
 } finally {
   try { await lab.close(); } catch (error) {
