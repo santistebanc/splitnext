@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Splitnext: Ledger with real-world content (round 4)</title>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e9e7e2; font-family: Inter, system-ui, sans-serif; color: #1a1917; padding: 40px 32px 80px; }
+  .intro { max-width: 1560px; margin: 0 auto 28px; }
+  .intro h1 { font-size: 32px; letter-spacing: -1px; }
+  .intro p { color: #5c5b56; margin-top: 8px; max-width: 860px; line-height: 1.5; }
+  .rules { max-width: 1560px; margin: 0 auto 32px; display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 6px 40px; font-size: 13.5px; line-height: 1.45; color: #3e3d39; }
+  .rules div { padding: 8px 0; border-top: 1px solid #d6d3cc; }
+  .rules b { display: block; color: #1a1917; font-size: 13px; margin-bottom: 2px; }
+  .row { max-width: 1560px; margin: 0 auto 40px; display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .shot { flex: none; }
+  .cap { font-size: 12px; color: #6d6c66; margin-top: 10px; text-align: center; max-width: 360px; }
+  .phone { width: 360px; height: 760px; border-radius: 44px; padding: 10px; background: #1b1b1a; box-shadow: 0 30px 60px -30px rgba(0,0,0,.4); }
+  .phone.narrow { width: 340px; height: 660px; border-radius: 36px; }
+  .phone.narrow .screen { border-radius: 28px; }
+  .screen { width: 100%; height: 100%; border-radius: 34px; overflow: hidden; position: relative; display: flex; flex-direction: column; }
+  .status { height: 38px; flex: none; display: flex; justify-content: space-between; align-items: center; padding: 0 26px; font: 600 13px Inter, sans-serif; }
+  .body { flex: 1; position: relative; overflow: hidden; }
+  svg.i { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; flex: none; }
+  svg.i.s { width: 16px; height: 16px; }
+  .tn { font-variant-numeric: tabular-nums; }
+  .r { margin-left: auto; }
+  .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .c2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; min-width: 0; }
+  .grow { flex: 1; min-width: 0; }
+  .nowrap { white-space: nowrap; flex: none; }
+
+  .f .screen { background: #f7f4ee; color: #1d1b18; font-family: Figtree, sans-serif; }
+  .f .mu { color: #8a857c; }
+  .f .ord { color: #8a857c; font-weight: 500; }
+  .f .owe { color: #c4512a; } .f .back { color: #23804f; }
+  .f .hdr { display: flex; align-items: center; gap: 18px; height: 44px; padding: 0 20px; color: #6b665e; font-size: 15px; font-weight: 500; }
+  .f .hdr .bk { display: flex; align-items: center; gap: 2px; min-width: 0; }
+  .f h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.9px; padding: 2px 20px 0; line-height: 1.1; }
+  .f .tabs { display: flex; gap: 20px; padding: 14px 20px 0; font-size: 15px; font-weight: 700; color: #a7a196; border-bottom: 1px solid rgba(29,27,24,.1); white-space: nowrap; }
+  .f .tabs span { padding-bottom: 9px; } .f .tabs .on { color: #1d1b18; box-shadow: inset 0 -2px #1d1b18; }
+  .f .tabs small { font-weight: 600; font-size: 12px; margin-left: 4px; }
+  .f .brow { position: relative; display: flex; align-items: center; gap: 12px; min-height: 36px; padding: 7px 20px; font-size: 15px; font-weight: 600; line-height: 1.25; }
+  .f .brow + .brow { border-top: 1px solid rgba(29,27,24,.06); }
+  .f .brow .fill { position: absolute; bottom: 0; height: 3px; }
+  .f .brow .axis { position: absolute; bottom: 0; height: 7px; left: 50%; width: 1px; background: rgba(29,27,24,.35); }
+  .f .brow.big { min-height: 8px; }
+  .f .brow.big .fill { height: 8px; } .f .brow.big .axis { height: 14px; }
+  .f .brow > span { position: relative; }
+  .f .brow.me { font-weight: 800; }
+  .f .note { padding: 10px 20px; font-size: 13px; color: #8a857c; line-height: 1.4; }
+  .f .note b { color: #1d1b18; font-weight: 600; }
+  .f .lbl { padding: 16px 20px 6px; font-size: 12px; font-weight: 700; color: #8a857c; display: flex; }
+  .f .search { margin: 12px 20px 0; display: flex; align-items: center; gap: 8px; height: 40px; border-bottom: 1.5px solid #1d1b18; color: #8a857c; font-size: 15px; }
+  .f .chips { display: flex; gap: 6px; padding: 10px 20px 0; overflow: hidden; }
+  .f .chip { flex: none; padding: 6px 10px; border-radius: 6px; font-size: 13px; font-weight: 600; background: rgba(29,27,24,.06); }
+  .f .chip.on { background: #1d1b18; color: #f7f4ee; }
+  .f .month { display: flex; align-items: baseline; padding: 12px 20px 6px; background: #efebe3; font-size: 13px; font-weight: 700; }
+  .f .month .mu { font-weight: 500; margin-left: 8px; }
+  .f .erow { display: flex; align-items: flex-start; padding: 8px 20px; gap: 12px; }
+  .f .erow + .erow { border-top: 1px solid rgba(29,27,24,.06); }
+  .f .erow .t { font-size: 15px; font-weight: 600; line-height: 1.25; }
+  .f .erow .s { font-size: 12.5px; color: #8a857c; margin-top: 2px; display: flex; min-width: 0; }
+  .f .erow .v { text-align: right; font-size: 15px; font-weight: 600; flex: none; line-height: 1.25; }
+  .f .erow .v small { display: block; font-size: 12px; font-weight: 600; margin-top: 2px; }
+  .f .btn { height: 50px; border-radius: 8px; background: #1d1b18; color: #f7f4ee; display: grid; place-items: center; font-weight: 700; font-size: 16px; }
+  .f .foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px 20px 24px; background: linear-gradient(transparent, #f7f4ee 32%); }
+  .f .seg { display: flex; margin: 0 20px; border-bottom: 1px solid rgba(29,27,24,.1); font-size: 14px; font-weight: 700; color: #a7a196; gap: 18px; white-space: nowrap; }
+  .f .seg span { padding-bottom: 8px; } .f .seg .on { color: #1d1b18; box-shadow: inset 0 -2px #1d1b18; }
+  .f .srow { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 5px 20px; font-size: 15px; font-weight: 600; line-height: 1.25; }
+  .f .srow.off { color: #b9b3a8; font-weight: 500; }
+  .f .srow .st { width: 62px; flex: none; display: flex; justify-content: space-between; color: #8a857c; font-weight: 600; }
+  .f .srow .st b { color: #1d1b18; }
+  .f .srow .v { width: 76px; flex: none; text-align: right; }
+  .f .sum { position: absolute; left: 0; right: 0; bottom: 0; background: #f7f4ee; border-top: 1px solid rgba(29,27,24,.12); padding: 10px 20px 24px; font-size: 14px; font-weight: 700; display: flex; gap: 10px; }
+  .f .tr { display: flex; align-items: center; gap: 12px; padding: 8px 20px; font-size: 15px; font-weight: 600; line-height: 1.25; }
+  .f .tr + .tr { border-top: 1px solid rgba(29,27,24,.06); }
+  .f .tr .to { font-weight: 500; color: #6b665e; font-size: 14px; display: flex; gap: 4px; min-width: 0; }
+  .f .tr.mine { background: rgba(196,81,42,.08); }
+  .f .rec { font-size: 13px; text-decoration: underline; text-underline-offset: 3px; flex: none; }
+  .f .grp { display: flex; align-items: flex-start; gap: 12px; padding: 12px 20px; }
+  .f .grp + .grp { border-top: 1px solid rgba(29,27,24,.07); }
+  .f .grp .t { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; line-height: 1.22; }
+  .f .grp .s { font-size: 13px; color: #8a857c; margin-top: 2px; }
+  .f .grp .v { flex: none; font-size: 15px; font-weight: 600; padding-top: 2px; }
+  .f .amt { font-size: 40px; font-weight: 800; letter-spacing: -1.4px; line-height: 1; }
+  .f .cur { font-size: 15px; font-weight: 700; color: #8a857c; letter-spacing: 0; margin-right: 6px; }
+  .f .desc { font-size: 18px; font-weight: 600; line-height: 1.3; padding: 10px 20px 0; overflow-wrap: anywhere; }
+  .f .desc .caret { display: inline-block; width: 2px; height: 20px; background: #1d1b18; vertical-align: -3px; margin-left: 1px; }
+  .f .hint { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 700; color: #8a857c; letter-spacing: .3px; }
+</style>
+</head>
+<body>
+<div class="intro">
+  <h1>Ledger, with realistic content</h1>
+  <p>Round three’s F, redrawn with no convenient data. Names run to three words or use hyphens and diacritics, two members are both called Ana, groups and expenses have long names, amounts reach five figures, and the group still has 14 people and 126 expenses. The last screen is a 320px phone. These rules decide where every long thing goes:</p>
+</div>
+<div class="rules">
+  <div><b>Amounts never shrink or truncate</b>Figures sit in a column sized to their content, and text gives way to them. A big amount in the editor gets its own line, never sharing one with a description.</div>
+  <div><b>Names wrap to two lines, then end in “…”</b>This applies to members, groups, expenses and the screen title. A long name makes its row taller, while its bar and amount stay aligned.</div>
+  <div><b>Only secondary text is cut to one line</b>Who paid and the split each keep a fixed slot: the payer’s name gets cut first, so “· 13 of 14” always stays visible.</div>
+  <div><b>Several names are summed up, not listed</b>“Benedikt S.-H. and Christopher-Alexander” becomes “Benedikt Schwarzenberger-H… +1”. The full list is in the expense itself.</div>
+  <div><b>Two names in one row get two lines</b>In Settle up, the payer goes on the first line and “→ recipient” on the second, so neither name has to shrink to fit beside the other.</div>
+  <div><b>Duplicate names get a muted ordinal</b>The second Ana shows as “Ana (2)”, as CONTEXT.md describes. You always show as “You”, so your own name never takes a row’s width.</div>
+  <div><b>Back links shrink and actions stay put</b>“‹ Interrail summer 2026 with…” ends in “…” before any header icon moves. Tabs never wrap; their counts are small figures.</div>
+  <div><b>Bars sit under the text, never behind it</b>Each balance bar is a 3px strip along the foot of its row, growing from a centre tick. A name of any length can cross the middle without a line running through it.</div>
+  <div><b>Pinned parts stay one line</b>The Add expense button, the assigned-total footer and the tabs keep a fixed height, so the space for the list is predictable.</div>
+</div>
+<div class="row f" id="f"></div>
+
+<script>
+const I = {
+  back: '<svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+  bell: '<svg class="i" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1112 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 004 0"/></svg>',
+  share: '<svg class="i" viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 13v7h14v-7"/></svg>',
+  search: '<svg class="i s" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>',
+  edit: '<svg class="i" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+};
+const P = [
+  ['Ana', -799.10, 'you'], ['Benedikt Schwarzenberger-Hohenlohe', 4640.80], ['Cy', -2466.60], ['Nguyễn Thị Minh Khai', -1375.10],
+  ['Christopher-Alexander Wilhelmsen', 2124.00], ['Fay', 0], ['Siddharth Ramakrishnan', -582.00], ['Hana Yamamoto-Kowalski', -1903.50],
+  ['Ivo', 887.50], ['Joanna', 0], ['Kai', -311.00], ['Léa-Marie Dubois', 156.00], ['Mo', -371.00], ['Ana', 0, 'ord2'],
+].map(([n, b, tag]) => ({ n, b, you: tag === 'you', ord: tag === 'ord2' ? 2 : 0 }));
+const MAX = 4640.80;
+const f = (v) => Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const s = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + f(v);
+const cls = (v) => (v < 0 ? 'owe' : v > 0 ? 'back' : 'mu');
+const pct = (v) => Math.abs(v) / MAX * 50;
+const label = (p) => p.you ? 'You' : `${p.n}${p.ord ? ` <span class="ord">(${p.ord})</span>` : ''}`;
+const fill = (v, a = 0.75) => { const w = `calc((100% - 40px) * ${pct(v) / 100})`; return v < 0 ? `right:50%;width:${w};background:rgba(196,81,42,${a})` : `left:50%;width:${w};background:rgba(35,128,79,${a})`; };
+const me = P[0];
+const owing = P.filter((p) => !p.you && p.b !== 0).sort((a, b) => a.b - b.b);
+const settled = P.filter((p) => p.b === 0);
+const GROUP = 'Interrail summer 2026 with the Lisbon crew and cousins';
+const EXP = [
+  { m: 'November', d: 'Ferienwohnung in Dubrovnik inkl. Endreinigung und Kurtaxe', p: 'Benedikt Schwarzenberger-Hohenlohe', more: 1, w: '13 of 14', a: 12600, you: -1050 },
+  { m: 'November', d: 'Groceries', p: 'Cy', w: '4 people', a: 57.25, you: -14.31 },
+  { m: 'November', d: 'Night train Vienna → Venice (couchettes, two 6-berth compartments)', p: 'You', w: 'everyone', a: 6840, you: 6351.43 },
+  { m: 'November', d: 'Dinner 🍝', p: 'Hana Yamamoto-Kowalski', w: '9 · by item', a: 3126, you: -594.40 },
+  { m: 'November', d: 'Taxi', p: 'Kai', w: '3 people', a: 24.5, you: 0 },
+  { m: 'November', d: 'MuseumsQuartier Kombiticket für alle Ausstellungen', p: 'Ivo', w: '9 people', a: 1620, you: -180 },
+  { m: 'October', d: 'Bike rental', p: 'Léa-Marie Dubois', w: '7 people', a: 1400, you: -200 },
+];
+const MONTHS = { November: [12, 26128.50], October: [61, 39124.00] };
+const NIGHTS = [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2, 0];
+const PAID = [['Benedikt Schwarzenberger-Hohenlohe', 8000], ['Christopher-Alexander Wilhelmsen', 4600]];
+const PLAN = [
+  ['You', 'Benedikt Schwarzenberger-Hohenlohe', 270.70], ['You', 'Christopher-Alexander Wilhelmsen', 528.40],
+  ['Cy', 'Benedikt Schwarzenberger-Hohenlohe', 2466.60], ['Hana Yamamoto-Kowalski', 'Benedikt Schwarzenberger-Hohenlohe', 1903.50],
+  ['Nguyễn Thị Minh Khai', 'Christopher-Alexander Wilhelmsen', 1375.10], ['Siddharth Ramakrishnan', 'Ivo', 582.00],
+  ['Mo', 'Christopher-Alexander Wilhelmsen', 220.50], ['Mo', 'Ivo', 150.50], ['Kai', 'Ivo', 155.00], ['Kai', 'Léa-Marie Dubois', 156.00],
+];
+
+const status = '<div class="status"><span>9:41</span><span>▂▄▆ ▮</span></div>';
+const phone = (inner, cap, narrow) => `<div class="shot"><div class="phone ${narrow ? 'narrow' : ''}"><div class="screen">${status}<div class="body">${inner}</div></div></div><div class="cap">${cap}</div></div>`;
+const hdr = (back, icons = [I.share, I.bell]) => `<div class="hdr"><span class="bk grow">${I.back}<span class="ell">${back}</span></span>${icons.join('')}</div>`;
+const tabs = (on) => `<div class="tabs">${[['Balances', ''], ['Expenses', 126], ['Settle up', 10]].map(([t, n]) => `<span class="${t === on ? 'on' : ''}">${t}${n ? `<small>${n}</small>` : ''}</span>`).join('')}</div>`;
+const brow = (p) => `<div class="brow ${p.you ? 'me' : ''}"><div class="fill" style="${fill(p.b)}"></div><div class="axis"></div><span class="grow c2">${label(p)}</span><span class="tn nowrap ${cls(p.b)}">${s(p.b)}</span></div>`;
+
+const screens = [
+  [() => `<div class="hdr"><span style="font-weight:800;color:#1d1b18;font-size:17px">splitnext</span><span class="r">Join</span></div>
+    <h1>Groups</h1><div style="height:8px"></div>
+    ${[[GROUP, 14, -799.10], ['Flat 3B', 3, 42.10], ['Wohngemeinschaft Kastanienallee 12, Hinterhaus 3. OG links', 5, 1240.75], ['Ski', 6, 0], ['Hochzeit von Maximilian & Anna-Katharina — Junggesellenabschied, Polterabend und Feier', 23, -12480.55]].map(([n, c, b]) => `<div class="grp"><div class="grow"><div class="t c2">${n}</div><div class="s">${c} people</div></div><span class="v tn ${cls(b)}">${b ? s(b) : '0.00'}</span></div>`).join('')}
+    <div class="foot"><div class="btn">New group</div></div>`, 'Groups: long names wrap twice, amounts keep their column'],
+  [() => `${hdr('Groups')}<h1 class="c2">${GROUP}</h1>${tabs('Balances')}
+    ${brow(me)}${owing.map(brow).join('')}
+    <div class="note"><b>Fay, Joanna, Ana <span class="ord">(2)</span></b> are settled · + Add a person</div>
+    <div class="foot"><div class="btn">Add expense</div></div>`, 'Balances: long names make rows taller, bars stay aligned'],
+  [() => { let last = ''; return `${hdr(GROUP)}${tabs('Expenses')}
+    <div class="search">${I.search} Search</div>
+    <div class="chips"><span class="chip on">Involves you</span><span class="chip">Paid by you</span><span class="chip">Person ▾</span><span class="chip">Month ▾</span></div>
+    <div style="height:8px"></div>
+    ${EXP.map((e) => { const h = e.m !== last ? `<div class="month">${e.m}<span class="mu">${MONTHS[e.m][0]}</span><span class="r tn">${f(MONTHS[e.m][1])}</span></div>` : ''; last = e.m; return h + `<div class="erow"><div class="grow"><div class="t c2">${e.d}</div><div class="s"><span class="ell">${e.p}</span><span class="nowrap">${e.more ? `&nbsp;+${e.more}` : ''}&nbsp;· ${e.w}</span></div></div><div class="v tn">${f(e.a)}<small class="${cls(e.you)}">${e.you ? s(e.you) : 'not in it'}</small></div></div>`; }).join('')}
+    <div class="foot"><div class="btn">Add expense</div></div>`; }, 'Expenses: titles wrap twice, payer cut before the split count'],
+  [() => `<div class="hdr"><span>Cancel</span><span class="r" style="font-weight:700;color:#1d1b18">Save</span></div>
+    <div style="padding:4px 20px 0;display:flex;align-items:baseline"><span class="cur">EUR</span><span class="amt tn">12,600.00</span></div>
+    <div class="desc">Ferienwohnung in Dubrovnik inkl. Endreinigung und Kurtaxe<span class="caret"></span></div>
+    <div class="lbl" style="padding-top:12px">Paid by<span class="r" style="color:#1d1b18">+ payer</span></div>
+    ${PAID.map(([n, v]) => `<div class="srow" style="min-height:30px"><span class="grow ell">${n}</span><span class="v tn">${f(v)}</span></div>`).join('')}
+    <div class="seg" style="margin-top:10px"><span>Equal</span><span class="on">Shares</span><span>Amounts</span><span>%</span></div>
+    <div style="height:4px"></div>
+    ${P.map((p, k) => { const n = NIGHTS[k]; return `<div class="srow ${n ? '' : 'off'}"><span class="grow c2">${label(p)}</span><span class="st">${n ? `<span>−</span><b>${n}</b><span>+</span>` : '<span style="margin:auto">—</span>'}</span><span class="v tn">${n ? f(n * 350) : 'out'}</span></div>`; }).join('')}
+    <div class="sum"><span class="ell">13 people · 36 shares</span><span class="r back tn nowrap">12,600.00 ✓</span></div>`, 'Editor: amount on its own line, every name wraps'],
+  [() => `${hdr(GROUP)}${tabs('Settle up')}
+    <div class="lbl">Yours</div>
+    ${PLAN.filter((t) => t[0] === 'You').map(([a, b, v]) => `<div class="tr mine"><div class="grow"><div>You pay</div><div class="to"><span>→</span><span class="ell">${b}</span></div></div><span class="tn nowrap">${f(v)}</span><span class="rec">Record</span></div>`).join('')}
+    <div class="lbl">Everyone else · 8</div>
+    ${PLAN.filter((t) => t[0] !== 'You').map(([a, b, v]) => `<div class="tr"><div class="grow"><div class="ell">${a}</div><div class="to"><span>→</span><span class="ell">${b}</span></div></div><span class="tn nowrap">${f(v)}</span><span class="rec mu">Record</span></div>`).join('')}`, 'Settle up: payer and recipient each get a line'],
+  [() => `${hdr(GROUP, [I.edit])}
+    <h1 class="c2">Benedikt Schwarzenberger-Hohenlohe</h1>
+    <div class="note" style="padding-top:4px">Online · taken on 2 devices</div>
+    <div style="display:flex;align-items:baseline;gap:12px;padding:12px 20px 8px"><span class="mu" style="font-size:15px;font-weight:600">Gets back</span><span class="r tn back amt">+4,640.80</span></div>
+    <div class="brow big"><div class="fill" style="${fill(4640.8, 0.85)}"></div><div class="axis"></div></div>
+    <div class="lbl">To settle</div>
+    ${PLAN.filter((t) => t[1].startsWith('Benedikt')).map(([a, b, v]) => `<div class="tr"><span class="grow ell">${a === 'You' ? 'You' : a}</span><span class="tn nowrap">${f(v)}</span><span class="rec">Record</span></div>`).join('')}
+    <div class="lbl">Balance · 41 expenses</div>
+    ${[['Ferienwohnung in Dubrovnik inkl. Endreinigung und Kurtaxe', 6950], ['Night train Vienna → Venice (couchettes, two 6-berth compartments)', -488.57], ['Dinner 🍝', -463.70], ['MuseumsQuartier Kombiticket für alle Ausstellungen', -180]].map(([d, v]) => `<div class="erow"><span class="grow t c2" style="font-weight:500">${d}</span><span class="v tn ${cls(v)}">${s(v)}</span></div>`).join('')}`, 'Person: a two-line title, Record next to each payment'],
+  [() => `${hdr('Groups')}<h1 class="c2" style="font-size:24px">${GROUP}</h1>${tabs('Balances')}
+    ${brow(me)}${owing.slice(0, 8).map(brow).join('')}
+    <div class="foot"><div class="btn">Add expense</div></div>`, '320px phone: same rules, the title steps down to 24px', true],
+];
+document.getElementById('f').innerHTML = screens.map(([fn, cap, n]) => phone(fn(), cap, n)).join('');
+</script>
+</body>
+</html>

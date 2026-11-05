@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Splitnext: five designs that scale (round 3)</title>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Inter:wght@400;500;600;700&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e9e7e2; font-family: Inter, system-ui, sans-serif; color: #1a1917; padding: 40px 32px 80px; }
+  .intro { max-width: 1560px; margin: 0 auto 40px; }
+  .intro h1 { font-size: 32px; letter-spacing: -1px; }
+  .intro p { color: #5c5b56; margin-top: 8px; max-width: 820px; line-height: 1.5; }
+  .intro ul { color: #5c5b56; margin: 10px 0 0 18px; line-height: 1.6; font-size: 14px; }
+  section.dir { max-width: 1560px; margin: 0 auto 64px; }
+  .dir-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .dir-head .n { font: 600 13px 'Geist Mono', monospace; color: #8b8a83; }
+  .dir-head h2 { font-size: 24px; letter-spacing: -0.5px; }
+  .dir-desc { color: #5c5b56; font-size: 14px; line-height: 1.5; max-width: 900px; margin-bottom: 20px; }
+  .row { display: flex; gap: 28px; overflow-x: auto; padding-bottom: 12px; }
+  .shot { flex: none; }
+  .cap { font-size: 12px; color: #6d6c66; margin-top: 10px; text-align: center; max-width: 360px; }
+  .phone { width: 360px; height: 760px; border-radius: 44px; padding: 10px; background: #1b1b1a; box-shadow: 0 30px 60px -30px rgba(0,0,0,.4); }
+  .screen { width: 100%; height: 100%; border-radius: 34px; overflow: hidden; position: relative; display: flex; flex-direction: column; }
+  .status { height: 38px; flex: none; display: flex; justify-content: space-between; align-items: center; padding: 0 26px; font: 600 13px Inter, sans-serif; }
+  .body { flex: 1; position: relative; overflow: hidden; }
+  svg.i { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
+  svg.i.s { width: 16px; height: 16px; }
+  .tn { font-variant-numeric: tabular-nums; }
+  .hdr { display: flex; justify-content: space-between; align-items: center; height: 44px; padding: 0 20px; }
+  .hdr .acts { display: flex; gap: 18px; }
+  .foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 20px 26px; }
+  .r { margin-left: auto; }
+  .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+  /* ============ F. LEDGER ============ */
+  .f .screen { background: #f7f4ee; color: #1d1b18; font-family: Figtree, sans-serif; }
+  .f .mu { color: #8a857c; }
+  .f .owe { color: #c4512a; } .f .back { color: #23804f; }
+  .f .hdr { color: #6b665e; font-size: 15px; font-weight: 500; }
+  .f h1 { font-size: 30px; font-weight: 800; letter-spacing: -1px; padding: 2px 20px 0; line-height: 1.05; }
+  .f .meta { padding: 4px 20px 0; font-size: 13px; color: #8a857c; }
+  .f .tabs { display: flex; gap: 20px; padding: 14px 20px 0; font-size: 15px; font-weight: 700; color: #a7a196; border-bottom: 1px solid rgba(29,27,24,.1); }
+  .f .tabs span { padding-bottom: 9px; } .f .tabs .on { color: #1d1b18; box-shadow: inset 0 -2px #1d1b18; }
+  .f .tabs small { font-weight: 600; font-size: 12px; margin-left: 4px; }
+  .f .brow { position: relative; display: flex; align-items: center; height: 36px; padding: 0 20px; font-size: 15px; font-weight: 600; }
+  .f .brow + .brow { border-top: 1px solid rgba(29,27,24,.06); }
+  .f .brow .fill { position: absolute; top: 0; bottom: 0; }
+  .f .brow .axis { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: rgba(29,27,24,.3); }
+  .f .brow > span { position: relative; }
+  .f .brow.me { font-weight: 800; }
+  .f .note { padding: 10px 20px; font-size: 13px; color: #8a857c; }
+  .f .note b { color: #1d1b18; font-weight: 600; }
+  .f .lbl { padding: 16px 20px 6px; font-size: 12px; font-weight: 700; color: #8a857c; display: flex; }
+  .f .search { margin: 12px 20px 0; display: flex; align-items: center; gap: 8px; height: 40px; border-bottom: 1.5px solid #1d1b18; color: #8a857c; font-size: 15px; }
+  .f .chips { display: flex; gap: 6px; padding: 10px 20px 0; overflow: hidden; }
+  .f .chip { flex: none; padding: 6px 10px; border-radius: 6px; font-size: 13px; font-weight: 600; background: rgba(29,27,24,.06); }
+  .f .chip.on { background: #1d1b18; color: #f7f4ee; }
+  .f .month { display: flex; align-items: baseline; padding: 14px 20px 6px; background: #efebe3; font-size: 13px; font-weight: 700; }
+  .f .month .mu { font-weight: 500; margin-left: 8px; }
+  .f .erow { display: flex; align-items: flex-start; padding: 8px 20px; gap: 10px; }
+  .f .erow + .erow { border-top: 1px solid rgba(29,27,24,.06); }
+  .f .erow .t { font-size: 15px; font-weight: 600; }
+  .f .erow .s { font-size: 12.5px; color: #8a857c; margin-top: 1px; }
+  .f .erow .v { margin-left: auto; text-align: right; font-size: 15px; font-weight: 600; flex: none; }
+  .f .erow .v small { display: block; font-size: 12px; font-weight: 600; }
+  .f .btn { height: 50px; border-radius: 8px; background: #1d1b18; color: #f7f4ee; display: grid; place-items: center; font-weight: 700; font-size: 16px; }
+  .f .seg { display: flex; margin: 0 20px; border-bottom: 1px solid rgba(29,27,24,.1); font-size: 14px; font-weight: 700; color: #a7a196; gap: 18px; }
+  .f .seg span { padding-bottom: 8px; } .f .seg .on { color: #1d1b18; box-shadow: inset 0 -2px #1d1b18; }
+  .f .srow { display: flex; align-items: center; height: 33px; padding: 0 20px; font-size: 15px; font-weight: 600; }
+  .f .srow.off { color: #b9b3a8; font-weight: 500; }
+  .f .srow .st { margin-left: auto; width: 74px; display: flex; justify-content: space-between; color: #8a857c; font-weight: 600; }
+  .f .srow .st b { color: #1d1b18; }
+  .f .srow .v { width: 70px; text-align: right; }
+  .f .sum { position: absolute; left: 0; right: 0; bottom: 0; background: #f7f4ee; border-top: 1px solid rgba(29,27,24,.12); padding: 10px 20px 26px; }
+  .f .tr { display: flex; align-items: center; height: 40px; padding: 0 20px; font-size: 15px; font-weight: 600; }
+  .f .tr + .tr { border-top: 1px solid rgba(29,27,24,.06); }
+  .f .tr.mine { background: rgba(196,81,42,.08); }
+  .f .rec { font-size: 13px; text-decoration: underline; text-underline-offset: 3px; margin-left: 14px; }
+
+  /* ============ G. LENS ============ */
+  .g .screen { background: #fdfdfc; color: #191a1f; font-family: 'Plus Jakarta Sans', sans-serif; }
+  .g .mu { color: #8b8d96; }
+  .g .owe { color: #d0492b; } .g .back { color: #138a5a; }
+  .g .hdr { color: #8b8d96; font-size: 15px; font-weight: 500; }
+  .g h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.8px; padding: 0 20px; }
+  .g .strip { display: flex; gap: 4px; padding: 12px 0 0 14px; overflow: hidden; }
+  .g .p { text-align: center; width: 56px; flex: none; }
+  .g .c { width: 40px; height: 40px; border-radius: 50%; margin: 0 auto; display: grid; place-items: center; font-weight: 800; font-size: 15px; position: relative; }
+  .g .c.sel::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid #191a1f; }
+  .g .p .n { font-size: 12px; font-weight: 600; margin-top: 6px; }
+  .g .p .v { font-size: 11px; font-weight: 700; }
+  .g .p.dim { opacity: .35; }
+  .g .lensbar { display: flex; align-items: center; gap: 10px; margin: 14px 20px 0; padding: 10px 12px; background: #f2f2f4; border-radius: 8px; font-size: 13px; }
+  .g .lensbar b { font-size: 15px; }
+  .g .day { position: relative; display: flex; padding: 12px 20px 4px; font-size: 12px; font-weight: 700; color: #a3a5ad; border-top: 1px solid #ececef; margin-top: 4px; }
+  .g .erow { display: flex; align-items: center; gap: 10px; padding: 7px 20px; }
+  .g .who { display: flex; align-items: center; flex: none; width: 46px; }
+  .g .who i { width: 12px; height: 12px; border-radius: 50%; display: block; margin-right: -4px; border: 1.5px solid #fdfdfc; }
+  .g .who em { font-style: normal; font-size: 11px; font-weight: 700; color: #8b8d96; margin-left: 8px; }
+  .g .erow .t { font-weight: 700; font-size: 14.5px; }
+  .g .erow .s { font-size: 12.5px; color: #8b8d96; }
+  .g .erow .v { margin-left: auto; text-align: right; font-weight: 700; font-size: 14.5px; flex: none; }
+  .g .erow .v small { display: block; font-size: 11.5px; font-weight: 700; }
+  .g .btn { height: 50px; border-radius: 8px; background: #191a1f; color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 16px; }
+  .g .foot { background: linear-gradient(transparent, #fdfdfc 30%); padding-top: 26px; }
+  .g .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px 0; padding: 6px 12px 0; }
+  .g .grid .p { width: auto; }
+  .g .grid .c { width: 36px; height: 36px; font-size: 13px; }
+  .g .grid .p .v { font-size: 10.5px; color: #191a1f; }
+  .g .grid .p.off .c { background: #f1f1f3 !important; color: #b9bbc2; }
+  .g .grid .p.off .n, .g .grid .p.off .v { color: #b9bbc2; }
+  .g .grid .p.lock .v { text-decoration: underline; }
+  .g .lbl { padding: 16px 20px 2px; font-size: 12px; font-weight: 700; color: #a3a5ad; display: flex; }
+  .g .item { display: flex; align-items: center; gap: 10px; padding: 9px 20px; border-top: 1px solid #ececef; }
+  .g .item .t { font-weight: 700; font-size: 14.5px; }
+  .g .item .faces { display: flex; margin-top: 4px; }
+  .g .item .faces i { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid #fdfdfc; margin-left: -5px; font-style: normal; font-size: 9px; font-weight: 800; display: grid; place-items: center; }
+  .g .item .faces i:first-child { margin-left: 0; }
+  .g .item .v { margin-left: auto; font-weight: 700; }
+
+  /* ============ H. JOURNAL ============ */
+  .h .screen { background: #fbf8f2; color: #2a2622; font-family: Inter, sans-serif; }
+  .h .serif { font-family: Fraunces, serif; }
+  .h .mu { color: #958c80; }
+  .h .owe { color: #b5502c; } .h .back { color: #48785a; }
+  .h .hdr { color: #958c80; font-size: 15px; }
+  .h h1 { font-family: Fraunces, serif; font-weight: 600; font-size: 32px; letter-spacing: -0.6px; padding: 0 22px; line-height: 1.05; }
+  .h .lede { font-family: Fraunces, serif; font-size: 20px; line-height: 1.35; padding: 8px 22px 0; }
+  .h .swarm { position: relative; height: 70px; margin: 14px 22px 0; }
+  .h .swarm .ax { position: absolute; left: 0; right: 0; top: 34px; height: 1px; background: #d9d1c4; }
+  .h .swarm .z { position: absolute; top: 26px; height: 17px; width: 1px; background: #2a2622; }
+  .h .swarm .d { position: absolute; width: 9px; height: 9px; border-radius: 50%; transform: translate(-50%, -50%); }
+  .h .swarm .lab { position: absolute; transform: translateX(-50%); font-size: 11px; white-space: nowrap; text-align: center; line-height: 1.25; }
+  .h .swarm .lab b { display: block; font-size: 12px; font-weight: 600; color: #2a2622; }
+  .h .sec { font-family: Fraunces, serif; font-style: italic; font-size: 15px; color: #958c80; padding: 18px 22px 4px; display: flex; }
+  .h .sec .r { font-style: normal; font-family: Inter; font-size: 13px; color: #2a2622; text-decoration: underline; text-underline-offset: 3px; }
+  .h .line { display: flex; align-items: baseline; padding: 7px 22px; font-size: 15.5px; }
+  .h .line .s { color: #958c80; font-size: 13px; margin-left: 8px; }
+  .h .line .v { margin-left: auto; }
+  .h .link { font-size: 14px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; margin-left: 14px; }
+  .h .mon { display: flex; align-items: baseline; padding: 13px 22px; border-top: 1px solid #ece5d9; }
+  .h .mon .t { font-family: Fraunces, serif; font-size: 21px; }
+  .h .mon .s { font-size: 13px; color: #958c80; margin-left: 10px; }
+  .h .mon .v { margin-left: auto; font-size: 15px; }
+  .h .btn { height: 50px; border-radius: 6px; background: #2a2622; color: #fbf8f2; display: grid; place-items: center; font-weight: 600; font-size: 16px; }
+  .h .foot { background: linear-gradient(transparent, #fbf8f2 30%); padding-top: 26px; }
+  .h .madlib { font-family: Fraunces, serif; font-size: 23px; line-height: 1.5; padding: 14px 22px 0; letter-spacing: -0.2px; }
+  .h .tok { border-bottom: 1.5px solid #2a2622; }
+  .h .tok.num { font-family: Inter; font-weight: 600; letter-spacing: -0.5px; }
+  .h .tbl { display: grid; grid-template-columns: 1fr 48px 80px 80px; padding: 0 22px; font-size: 14px; }
+  .h .tbl > span { padding: 5px 0; border-bottom: 1px solid #f0eadf; }
+  .h .tbl .hd { font-size: 11px; color: #958c80; text-transform: uppercase; letter-spacing: .6px; }
+  .h .tbl .n { text-align: right; }
+  .h .tbl .off { color: #c2b8a8; }
+  .h .grp { padding: 4px 22px 2px; display: flex; align-items: baseline; font-family: Fraunces, serif; font-size: 17px; }
+  .h .names { padding: 2px 22px 8px; font-size: 14.5px; line-height: 1.7; }
+  .h .names span { white-space: nowrap; margin-right: 14px; }
+
+  /* ============ I. TABLE ============ */
+  .i .screen { background: #fff; color: #16181c; font-family: Inter, sans-serif; }
+  .i .mono { font-family: 'Geist Mono', monospace; font-size: 13px; }
+  .i .mu { color: #8a8f98; }
+  .i .owe { color: #c8442a; } .i .back { color: #127d52; }
+  .i .hdr { color: #5c626b; font-size: 15px; }
+  .i h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.6px; padding: 0 16px; }
+  .i .meta { font-size: 13px; color: #8a8f98; padding: 2px 16px 0; }
+  .i .tabs { display: flex; gap: 18px; padding: 12px 16px 0; font-size: 14px; font-weight: 600; color: #a0a5ad; border-bottom: 1px solid #e6e8eb; }
+  .i .tabs span { padding-bottom: 8px; } .i .tabs .on { color: #16181c; box-shadow: inset 0 -2px #16181c; }
+  .i table { width: 100%; border-collapse: collapse; }
+  .i th { font-size: 11px; font-weight: 600; color: #8a8f98; text-align: right; padding: 8px 6px 6px; border-bottom: 1px solid #e6e8eb; white-space: nowrap; }
+  .i th:first-child, .i td:first-child { text-align: left; padding-left: 16px; }
+  .i th:last-child, .i td:last-child { padding-right: 16px; }
+  .i th.sort { color: #16181c; }
+  .i td { font-size: 14px; padding: 0 6px; height: 31px; border-bottom: 1px solid #f1f2f4; text-align: right; white-space: nowrap; }
+  .i td.mono { font-size: 13px; }
+  .i tr.me td { background: #f5f6f8; font-weight: 600; }
+  .i tr.tot td { border-top: 1.5px solid #16181c; border-bottom: 0; font-weight: 600; height: 36px; }
+  .i td.off { color: #c4c8ce; }
+  .i .inp { display: inline-block; min-width: 58px; padding: 2px 4px; border-bottom: 1px solid #d8dbe0; }
+  .i .inp.f { border-bottom: 2px solid #16181c; background: #fffbe6; }
+  .i .btn { height: 46px; border-radius: 6px; background: #16181c; color: #fff; display: grid; place-items: center; font-weight: 600; font-size: 15px; }
+  .i .foot { padding: 10px 16px 24px; background: #fff; border-top: 1px solid #e6e8eb; }
+  .i .chipsel { display: inline-flex; gap: 0; border: 1px solid #d8dbe0; border-radius: 6px; overflow: hidden; font-size: 12px; font-weight: 600; }
+  .i .chipsel span { padding: 4px 8px; color: #5c626b; } .i .chipsel .on { background: #16181c; color: #fff; }
+  .i .kv { display: flex; padding: 8px 16px; font-size: 14px; border-bottom: 1px solid #f1f2f4; }
+  .i .kv .k { color: #8a8f98; width: 90px; flex: none; }
+  .i .ok { font-size: 12px; font-weight: 600; color: #127d52; }
+
+  /* ============ J. NIGHT ============ */
+  .j .screen { background: #111214; color: #ececec; font-family: Geist, Inter, sans-serif; }
+  .j .status { color: #ececec; }
+  .j .mono { font-family: 'Geist Mono', monospace; }
+  .j .mu { color: #7c7f86; }
+  .j .owe { color: #ff8a6b; } .j .back { color: #5fd3a0; }
+  .j .hdr { color: #9a9da4; font-size: 15px; }
+  .j h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.9px; padding: 0 20px; }
+  .j .sumline { padding: 4px 20px 0; font-size: 14px; color: #9a9da4; }
+  .j .hist { display: flex; align-items: stretch; height: 116px; margin: 16px 20px 0; gap: 3px; position: relative; }
+  .j .hist::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: #3a3c42; }
+  .j .hist div { flex: 1; position: relative; }
+  .j .hist b { position: absolute; left: 0; right: 0; border-radius: 1px; }
+  .j .hist .me b { outline: 1.5px solid #ececec; outline-offset: 1px; }
+  .j .histlab { display: flex; gap: 3px; margin: 6px 20px 0; font-size: 9.5px; color: #7c7f86; }
+  .j .histlab span { flex: 1; text-align: center; overflow: hidden; }
+  .j .histlab .me { color: #ececec; }
+  .j .lbl { padding: 18px 20px 6px; font-size: 12px; color: #7c7f86; display: flex; }
+  .j .lrow { display: flex; align-items: center; padding: 8px 20px; font-size: 15px; }
+  .j .lrow + .lrow { border-top: 1px solid #1f2125; }
+  .j .lrow .s { color: #7c7f86; font-size: 13px; margin-left: 8px; }
+  .j .lrow .v { margin-left: auto; font-family: 'Geist Mono', monospace; font-size: 14px; text-align: right; }
+  .j .lrow .v small { display: block; font-size: 11.5px; }
+  .j .cmd { position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 14px 24px; background: #111214; border-top: 1px solid #1f2125; display: flex; gap: 8px; }
+  .j .cmd .q { flex: 1; height: 44px; border-radius: 8px; background: #1c1e22; display: flex; align-items: center; gap: 8px; padding: 0 12px; color: #7c7f86; font-size: 15px; }
+  .j .cmd .q .tok { background: #2c2f35; color: #ececec; padding: 3px 7px; border-radius: 5px; font-size: 13px; }
+  .j .cmd .add { width: 44px; height: 44px; border-radius: 8px; background: #ececec; color: #111214; display: grid; place-items: center; }
+  .j .res { padding: 12px 20px 2px; font-size: 13px; color: #9a9da4; display: flex; }
+  .j .keys { position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(4,1fr); border-top: 1px solid #1f2125; padding-bottom: 16px; background: #111214; }
+  .j .keys span { height: 46px; display: grid; place-items: center; font: 400 19px 'Geist Mono', monospace; }
+  .j .keys span.k2 { font: 500 13px Geist, sans-serif; color: #9a9da4; }
+  .j .keys span.go { background: #5fd3a0; color: #111214; font: 600 15px Geist; margin: 4px; border-radius: 8px; }
+  .j .prow { display: flex; align-items: center; padding: 0 20px; height: 34px; font-size: 14.5px; }
+  .j .prow .v { margin-left: auto; font-family: 'Geist Mono', monospace; font-size: 14px; }
+  .j .prow.focus { background: #1c1e22; }
+  .j .prow.focus .v { color: #ececec; border-bottom: 2px solid #5fd3a0; }
+  .j .prow.auto .v { color: #7c7f86; }
+  .j .meter { margin: 10px 20px 0; height: 4px; background: #1f2125; display: flex; gap: 2px; }
+  .j .tr { display: flex; align-items: center; padding: 9px 20px; font-size: 15px; }
+  .j .tr + .tr { border-top: 1px solid #1f2125; }
+  .j .tr .v { margin-left: auto; font-family: 'Geist Mono', monospace; margin-right: 14px; }
+  .j .tr .go { font-size: 13px; font-weight: 600; color: #5fd3a0; }
+</style>
+</head>
+<body>
+<div class="intro">
+  <h1>Splitnext: five designs that hold up</h1>
+  <p>Third round. Each direction is drawn against the hard cases instead of a tidy four-person trip:</p>
+  <ul>
+    <li>a 14-person group, <i>Interrail 2026</i>, with 126 expenses over three months</li>
+    <li>an expense two people paid, split unevenly across 13 of the 14 (a hostel split by nights)</li>
+    <li>an itemized dinner bill, and a settle-up plan of 10 payments</li>
+  </ul>
+  <p>It keeps the round-two rules: flat, full width, small corners, no repeated text.</p>
+</div>
+<div id="root"></div>
+<script>
+const I = {
+  back: '<svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+  bell: '<svg class="i" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1112 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 004 0"/></svg>',
+  share: '<svg class="i" viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 13v7h14v-7"/></svg>',
+  search: '<svg class="i s" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>',
+  plus: '<svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  x: '<svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  edit: '<svg class="i" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  more: '<svg class="i" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>',
+};
+// 14 people; balances sum to zero.
+const PEOPLE = [
+  ['Ana', -79.91], ['Ben', 464.08], ['Cy', -246.66], ['Dana', -137.51], ['Eli', 212.40], ['Fay', 0], ['Gus', -58.20],
+  ['Hana', -190.35], ['Ivo', 88.75], ['Jo', 0], ['Kai', -31.10], ['Lea', 15.60], ['Mo', -37.10], ['Noor', 0],
+].map(([n, b], k) => ({ n, b, k, you: n === 'Ana', paid: 0 }));
+const HUE = (k) => `hsl(${(k * 47 + 20) % 360} 62% 55%)`;
+const SOFT = (k) => `hsl(${(k * 47 + 20) % 360} 75% 88%)`;
+const byN = Object.fromEntries(PEOPLE.map((p) => [p.n, p]));
+const MAX = 464.08;
+const f = (v) => Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const s = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + f(v);
+const cls = (v) => (v < 0 ? 'owe' : v > 0 ? 'back' : 'mu');
+const pct = (v) => Math.abs(v) / MAX * 50;
+const me = PEOPLE[0];
+const others = PEOPLE.slice(1).filter((p) => p.b !== 0).sort((a, b) => a.b - b.b);
+const settled = PEOPLE.filter((p) => p.b === 0);
+const sortedAll = [...PEOPLE].sort((a, b) => a.b - b.b);
+
+// Long expense list (first rows of November, then October).
+const EXP = [
+  { m: 'November', d: 'Hostel Vienna', p: 'Ben, Eli', a: 1260, w: '13 of 14 · by nights', you: -105, ppl: 13, day: 'Thu 5' },
+  { m: 'November', d: 'Groceries', p: 'Cy', a: 57.25, w: '4 people', you: -14.31, ppl: 4, day: 'Thu 5' },
+  { m: 'November', d: 'Night train to Venice', p: 'You', a: 684, w: 'everyone', you: 635.14, ppl: 14, day: 'Wed 4' },
+  { m: 'November', d: 'Dinner at Plachutta', p: 'Hana', a: 312.60, w: '9 people · itemized', you: -59.44, ppl: 9, day: 'Tue 3' },
+  { m: 'November', d: 'Museum tickets', p: 'Ivo', a: 162, w: '9 people', you: -18, ppl: 9, day: 'Tue 3' },
+  { m: 'November', d: 'Taxi to station', p: 'Kai', a: 24.50, w: '3 people', you: 0, ppl: 3, day: 'Mon 2' },
+  { m: 'October', d: 'Bike rental', p: 'Lea', a: 140, w: '7 people', you: -20, ppl: 7, day: 'Sat 31' },
+  { m: 'October', d: 'Ferry to Hvar', p: 'Eli', a: 420, w: 'everyone', you: -30, ppl: 14, day: 'Fri 30' },
+];
+const MONTHS = { November: [12, 2612.85], October: [61, 3912.40], September: [53, 2104.75] };
+// Hostel Vienna: 1,260.00 paid by Ben 800 + Eli 460, 35.00 a night.
+const NIGHTS = { Ana: 3, Ben: 3, Cy: 3, Dana: 3, Eli: 3, Fay: 3, Gus: 3, Hana: 3, Ivo: 3, Jo: 3, Kai: 2, Lea: 2, Mo: 2, Noor: 0 };
+const PAID = { Ben: 800, Eli: 460 };
+// Settle plan, 10 payments.
+const PLAN = [['Ana', 'Ben', 27.07], ['Ana', 'Eli', 52.84], ['Cy', 'Ben', 246.66], ['Hana', 'Ben', 190.35], ['Dana', 'Eli', 137.51], ['Gus', 'Ivo', 58.20], ['Mo', 'Eli', 22.05], ['Mo', 'Ivo', 15.05], ['Kai', 'Ivo', 15.50], ['Kai', 'Lea', 15.60]];
+const nm = (n) => (n === 'Ana' ? 'You' : n);
+
+const status = '<div class="status"><span>9:41</span><span>▂▄▆ ▮</span></div>';
+const phone = (inner, cap) => `<div class="shot"><div class="phone"><div class="screen">${status}<div class="body">${inner}</div></div></div><div class="cap">${cap}</div></div>`;
+const fade = (bg) => `<div style="position:absolute;left:0;right:0;bottom:0;height:60px;background:linear-gradient(transparent,${bg})"></div>`;
+
+/* ---------- F. Ledger ---------- */
+const F = {
+  name: 'Ledger',
+  desc: 'Round two’s Pigment, made for volume. Balance rows shrink to 36px so 14 people fit on one screen, and everyone who is settled collapses into a single line. Balances and Expenses become tabs, so neither list pushes the other off screen. The expense list searches, filters with one tap, and keeps the month header with its total pinned while you scroll. The editor switches between Equal, Shares, Amounts and % while a pinned footer counts what is left to assign. With two payers, both names and amounts show on one line.',
+  fill: (v, a = 0.15) => v < 0 ? `right:50%;width:${pct(v)}%;background:rgba(196,81,42,${a})` : `left:50%;width:${pct(v)}%;background:rgba(35,128,79,${a})`,
+  group() {
+    const row = (p) => `<div class="brow ${p.you ? 'me' : ''}"><div class="fill" style="${F.fill(p.b)}"></div><div class="axis"></div><span>${p.you ? 'You' : p.n}</span><span class="r tn ${cls(p.b)}">${s(p.b)}</span></div>`;
+    return `<div class="hdr"><span>${I.back} Groups</span><span class="acts">${I.share}${I.bell}</span></div>
+    <h1>Interrail 2026</h1>
+    <div class="tabs"><span class="on">Balances</span><span>Expenses<small>126</small></span><span>Settle up<small>10</small></span></div>
+    ${row(me)}${others.map(row).join('')}
+    <div class="note"><b>Fay, Jo, Noor</b> are settled · + Add a person</div>
+    <div class="foot"><div class="btn">Add expense</div></div>`;
+  },
+  list() {
+    let last = '';
+    const rows = EXP.map((e) => { const h = e.m !== last ? `<div class="month">${e.m}<span class="mu">${MONTHS[e.m][0]} expenses</span><span class="r tn">${f(MONTHS[e.m][1])}</span></div>` : ''; last = e.m; return h + `<div class="erow"><div class="ell"><div class="t ell">${e.d}</div><div class="s ell">${e.p} paid · ${e.w}</div></div><div class="v tn">${f(e.a)}<small class="${cls(e.you)}">${e.you ? s(e.you) : 'not in it'}</small></div></div>`; }).join('');
+    return `<div class="hdr"><span>${I.back} Groups</span><span class="acts">${I.share}${I.bell}</span></div>
+    <div class="tabs" style="padding-top:4px"><span>Balances</span><span class="on">Expenses<small>126</small></span><span>Settle up<small>10</small></span></div>
+    <div class="search">${I.search} Search 126 expenses</div>
+    <div class="chips"><span class="chip on">Involves you</span><span class="chip">Paid by you</span><span class="chip">Person ▾</span><span class="chip">Month ▾</span></div>
+    <div style="height:8px"></div>${rows}
+    <div class="foot" style="background:linear-gradient(transparent,#f7f4ee 30%);padding-top:28px"><div class="btn">Add expense</div></div>`;
+  },
+  editor() {
+    const rows = PEOPLE.map((p) => { const n = NIGHTS[p.n]; return `<div class="srow ${n ? '' : 'off'}">${p.you ? 'You' : p.n}<span class="st">${n ? `<span>−</span><b>${n}</b><span>+</span>` : '<span style="margin:auto">—</span>'}</span><span class="v tn">${n ? f(n * 35) : 'out'}</span></div>`; }).join('');
+    return `<div class="hdr"><span>Cancel</span><span style="font-weight:700;color:#1d1b18">Save</span></div>
+    <div style="display:flex;align-items:baseline;padding:0 20px"><span style="font-size:20px;font-weight:700">Hostel Vienna</span><span class="r tn" style="font-size:30px;font-weight:800;letter-spacing:-1px">1,260.00</span></div>
+    <div class="lbl" style="padding-top:10px">Paid by<span class="r" style="color:#1d1b18;font-size:14px">Ben 800.00 · Eli 460.00 ›</span></div>
+    <div class="seg" style="margin-top:8px"><span>Equal</span><span class="on">Shares</span><span>Amounts</span><span>%</span><span class="r mu" style="font-weight:600">Nights</span></div>
+    <div style="height:4px"></div>${rows}
+    <div class="sum"><div style="display:flex;font-size:14px;font-weight:700"><span>13 people · 36 nights</span><span class="r back tn">1,260.00 assigned ✓</span></div></div>`;
+  },
+  plan() {
+    return `<div class="hdr"><span>${I.back} Groups</span><span class="acts">${I.share}${I.bell}</span></div>
+    <div class="tabs" style="padding-top:4px"><span>Balances</span><span>Expenses<small>126</small></span><span class="on">Settle up<small>10</small></span></div>
+    <div class="lbl">Yours</div>
+    ${PLAN.filter((t) => t[0] === 'Ana').map(([a, b, v]) => `<div class="tr mine">You pay ${b}<span class="r tn">${f(v)}</span><span class="rec">Record</span></div>`).join('')}
+    <div class="lbl">Everyone else · 8</div>
+    ${PLAN.filter((t) => t[0] !== 'Ana').map(([a, b, v]) => `<div class="tr">${a} <span class="mu" style="margin:0 6px">→</span> ${b}<span class="r tn">${f(v)}</span><span class="rec mu">Record</span></div>`).join('')}
+    <div class="note">The fewest payments that settle every balance.</div>`;
+  },
+};
+
+/* ---------- G. Lens ---------- */
+const G = {
+  name: 'Lens',
+  desc: 'Round two’s face strip becomes a filter. Faces scroll sideways however many people there are, with you first and everyone sorted by balance. Tap a face to see the whole group through that person: their balance, only the expenses that touch them, and their share of each. Coloured dots show who an expense covers without listing names. The editor lays the faces out in a grid, so 14 people fit without scrolling; tap a face to leave someone out, or tap an amount to fix it. An itemized bill gives each line its own set of faces.',
+  strip(sel) {
+    return `<div class="strip" style="${sel ? 'margin-left:-488px' : ''}">${[me, ...PEOPLE.slice(1).sort((a, b) => a.b - b.b)].map((p) => `<div class="p ${sel && sel !== p.n ? 'dim' : ''}"><div class="c ${sel === p.n || (!sel && p.you) ? 'sel' : ''}" style="background:${SOFT(p.k)}">${p.n[0]}</div><div class="n">${nm(p.n)}</div><div class="v tn ${cls(p.b)}">${p.b ? s(p.b).replace('.00', '') : '0'}</div></div>`).join('')}</div>`;
+  },
+  dots(n) { return `<span class="who">${PEOPLE.slice(0, Math.min(n, 3)).map((p) => `<i style="background:${HUE(p.k)}"></i>`).join('')}<em>${n === 14 ? 'all' : n}</em></span>`; },
+  group() {
+    let last = '';
+    const rows = EXP.slice(0, 6).map((e) => { const h = e.day !== last ? `<div class="day">${e.day} Nov</div>` : ''; last = e.day; return h + `<div class="erow">${G.dots(e.ppl)}<div class="ell"><div class="t ell">${e.d}</div><div class="s ell">${e.p} paid</div></div><span class="v tn">${f(e.a)}<small class="${cls(e.you)}">${e.you ? s(e.you) : '—'}</small></span></div>`; }).join('');
+    return `<div class="hdr"><span>${I.back}</span><span class="acts">${I.search}${I.share}${I.bell}</span></div>
+    <h1>Interrail 2026</h1>${G.strip()}
+    <div style="height:10px"></div>${rows}
+    <div class="foot"><div class="btn">Add expense</div></div>`;
+  },
+  lens() {
+    const ben = EXP.filter((e) => e.d !== 'Groceries' && e.d !== 'Taxi to station');
+    const share = { 'Hostel Vienna': 695, 'Night train to Venice': -48.86, 'Dinner at Plachutta': -46.37, 'Museum tickets': -18, 'Bike rental': -20, 'Ferry to Hvar': -30 };
+    let run = 464.08;
+    return `<div class="hdr"><span>${I.back}</span><span class="acts">${I.search}${I.share}${I.bell}</span></div>
+    <h1>Interrail 2026</h1>${G.strip('Ben')}
+    <div class="lensbar"><div><b>Ben</b> gets back <b class="back tn">464.08</b><div class="mu">in 41 of 126 expenses</div></div><span class="r" style="font-weight:700">Settle ›</span><span>${I.x}</span></div>
+    <div style="height:6px"></div>
+    ${ben.map((e) => { const v = share[e.d]; const line = `<div class="erow">${G.dots(e.ppl)}<div class="ell"><div class="t ell">${e.d}</div><div class="s ell">${e.p === 'Ben, Eli' ? 'Ben paid 800 of ' + f(e.a) : e.p + ' paid ' + f(e.a)}</div></div><span class="v tn ${cls(v)}">${s(v)}<small class="mu tn">${f(run)}</small></span></div>`; run -= v; return line; }).join('')}`;
+  },
+  editor() {
+    return `<div class="hdr"><span>${I.x}</span><span style="color:#191a1f;font-weight:700">Save</span></div>
+    <div style="display:flex;align-items:baseline;padding:0 20px"><span style="font-size:19px;font-weight:700">Hostel Vienna</span><span class="r tn" style="font-size:30px;font-weight:800;letter-spacing:-1px">1,260.00</span></div>
+    <div class="lbl">Paid by</div>
+    <div style="display:flex;gap:16px;padding:6px 20px 0;font-size:14px;font-weight:700">${['Ben', 'Eli'].map((n) => `<span style="display:flex;align-items:center;gap:8px"><span class="c sel" style="width:30px;height:30px;font-size:12px;background:${SOFT(byN[n].k)}">${n[0]}</span>${n} <span class="tn">${f(PAID[n])}</span></span>`).join('')}<span class="mu" style="align-self:center;white-space:nowrap">+ payer</span></div>
+    <div class="lbl">Split by nights<span class="r" style="color:#191a1f">Equal · <u>Nights</u> · Amounts</span></div>
+    <div class="grid">${PEOPLE.map((p) => { const n = NIGHTS[p.n]; return `<div class="p ${n ? '' : 'off'}"><div class="c" style="background:${SOFT(p.k)}">${p.n[0]}</div><div class="n">${nm(p.n)}</div><div class="v tn">${n ? `${n}× · ${n * 35}` : 'out'}</div></div>`; }).join('')}</div>
+    <div class="lbl" style="padding-top:20px">Per night<span class="r tn" style="color:#191a1f">35.00 × 36 nights</span></div>
+    <div class="lbl" style="padding-top:4px">Assigned<span class="r back tn">1,260.00 of 1,260.00</span></div>
+    <div class="foot" style="padding-top:8px"><div class="mu" style="font-size:12.5px;text-align:center;margin-bottom:10px">Tap a face to leave someone out · hold to set their amount</div></div>`;
+  },
+  items() {
+    const IT = [['Tafelspitz ×4', 132.00, ['Ana', 'Ben', 'Cy', 'Dana']], ['Schnitzel ×3', 62.70, ['Eli', 'Fay', 'Gus']], ['Wine, 2 bottles', 78.00, ['Ana', 'Ben', 'Cy', 'Dana', 'Eli', 'Hana', 'Ivo']], ['Desserts', 24.90, ['Ana', 'Hana']], ['Tip', 15.00, ['all']]];
+    return `<div class="hdr"><span>${I.x}</span><span style="color:#191a1f;font-weight:700">Save</span></div>
+    <div style="display:flex;align-items:baseline;padding:0 20px"><span style="font-size:19px;font-weight:700">Dinner at Plachutta</span><span class="r tn" style="font-size:26px;font-weight:800;letter-spacing:-1px">312.60</span></div>
+    <div class="lbl">Hana paid · split <span style="color:#191a1f;margin-left:4px">by item</span><span class="r">9 people</span></div>
+    ${IT.map(([t, v, who]) => `<div class="item"><div><div class="t">${t}</div><div class="faces">${who[0] === 'all' ? '<span class="mu" style="font-size:12.5px">in proportion to each bill</span>' : who.map((n) => `<i style="background:${SOFT(byN[n].k)}">${n[0]}</i>`).join('')}</div></div><span class="v tn">${f(v)}</span></div>`).join('')}
+    <div class="item mu" style="font-weight:600">+ Add item</div>
+    <div class="lbl" style="padding-top:18px">Each pays</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px 0;padding:4px 20px;font-size:13.5px">${[['You', 59.44], ['Ben', 46.37], ['Cy', 46.37], ['Dana', 46.37], ['Eli', 33.66], ['Fay', 21.95], ['Gus', 21.95], ['Hana', 24.78], ['Ivo', 11.71]].map(([n, v]) => `<span><b style="font-weight:700">${n}</b> <span class="tn mu">${v.toFixed(2)}</span></span>`).join('')}</div>`;
+  },
+};
+
+/* ---------- H. Journal ---------- */
+const H = {
+  name: 'Journal',
+  desc: 'Round two’s Journal, made to scale by summarizing. The group page puts first what matters to you: one sentence, the payments that are yours to make, and a dot plot that shows the spread of any number of people while labelling only you and the extremes. Older expenses fold into one line per month. Everyone’s balances fit as wrapped names under three plain headings. The fill-in-the-sentence editor still reads naturally for two payers and an uneven split, with a quiet table under it to check the numbers.',
+  group() {
+    const lo = -246.66, hi = 464.08, x = (v) => (v - lo) / (hi - lo) * 100;
+    const stack = {};
+    const dots = PEOPLE.map((p) => { const bx = Math.round(x(p.b) / 3); stack[bx] = (stack[bx] || 0) + 1; const yy = 34 + (stack[bx] % 2 ? -1 : 1) * Math.floor(stack[bx] / 2) * 11; return `<span class="d" style="left:${x(p.b)}%;top:${yy}px;background:${p.b < 0 ? '#b5502c' : p.b > 0 ? '#48785a' : '#c2b8a8'};${p.you ? 'outline:2px solid #2a2622;outline-offset:1.5px' : ''}"></span>`; }).join('');
+    return `<div class="hdr"><span>${I.back} Groups</span><span class="acts">${I.share}${I.bell}</span></div>
+    <h1>Interrail 2026</h1>
+    <p class="lede">You owe <span class="owe">€79.91</span>. Fourteen of you have spent €8,630.00 over three months.</p>
+    <div class="sec">Yours to pay</div>
+    ${PLAN.filter((t) => t[0] === 'Ana').map(([, b, v]) => `<div class="line">${b}<span class="v tn">${f(v)}</span><span class="link">Record</span></div>`).join('')}
+    <div class="sec">Everyone<span class="r">All balances</span></div>
+    <div class="swarm"><div class="ax"></div><div class="z" style="left:${x(0)}%"></div>${dots}
+      <div class="lab" style="left:${x(-246.66) + 4}%;top:50px"><b>Cy</b><span class="owe">−246.66</span></div>
+      <div class="lab" style="left:${x(-79.91)}%;top:-6px"><b>You</b></div>
+      <div class="lab" style="left:${x(464.08) - 5}%;top:50px"><b>Ben</b><span class="back">+464.08</span></div></div>
+    <div class="sec" style="padding-top:26px">This week</div>
+    ${EXP.slice(0, 3).map((e) => `<div class="line"><span class="ell">${e.d}</span><span class="s">${e.p}</span><span class="v tn">${f(e.a)}</span></div>`).join('')}
+    <div class="mon"><span class="t">November</span><span class="s">9 more</span><span class="v tn">2,612.85</span></div>
+    <div class="mon"><span class="t">October</span><span class="s">61</span><span class="v tn">3,912.40</span></div>
+    <div class="foot"><div class="btn">Add expense</div></div>`;
+  },
+  balances() {
+    const grp = (title, list, c) => `<div class="sec" style="font-size:16px">${title}<span class="r" style="text-decoration:none;color:#958c80">${list.length}</span></div><div class="names">${list.map((p) => `<span>${nm(p.n)} <span class="tn ${c}">${p.b ? f(p.b) : ''}</span></span>`).join(' ')}</div>`;
+    return `<div class="hdr"><span>${I.back} Interrail 2026</span><span></span></div>
+    <h1>Balances</h1>
+    ${grp('Owe', PEOPLE.filter((p) => p.b < 0).sort((a, b) => a.b - b.b), 'owe')}
+    ${grp('Get back', PEOPLE.filter((p) => p.b > 0).sort((a, b) => b.b - a.b), 'back')}
+    ${grp('Settled', settled, '')}
+    <div class="sec" style="font-size:16px;padding-top:24px">To settle everyone<span class="r" style="text-decoration:none;color:#958c80">10</span></div>
+    ${PLAN.slice(2, 8).map(([a, b, v]) => `<div class="line" style="font-size:14.5px;padding:5px 22px">${a} → ${b}<span class="v tn">${f(v)}</span></div>`).join('')}
+    <div class="line mu" style="font-size:14px">4 more</div>
+    <div class="foot" style="padding-top:20px"><div class="btn" style="background:transparent;color:#2a2622;box-shadow:inset 0 0 0 1.5px #2a2622">Add a person</div></div>`;
+  },
+  editor() {
+    return `<div class="hdr"><span>Cancel</span><span style="color:#2a2622;font-weight:600">Save</span></div>
+    <p class="madlib"><span class="tok">Ben</span> and <span class="tok">Eli</span> paid <span class="tok num">1,260.00</span> for <span class="tok">Hostel Vienna</span>, split <span class="tok">by nights</span> between <span class="tok">everyone but Noor</span>.</p>
+    <div style="height:14px"></div>
+    <div class="tbl"><span class="hd">Person</span><span class="hd n">Nights</span><span class="hd n">Paid</span><span class="hd n">Share</span>
+    ${PEOPLE.map((p) => { const n = NIGHTS[p.n]; const o = n ? '' : 'off'; return `<span class="${o}">${nm(p.n)}</span><span class="n tn ${o}">${n || '—'}</span><span class="n tn ${o}">${PAID[p.n] ? f(PAID[p.n]) : ''}</span><span class="n tn ${o}">${n ? f(n * 35) : '—'}</span>`; }).join('')}
+    <span style="font-weight:600;border:0">Total</span><span class="n tn" style="border:0;font-weight:600">36</span><span class="n tn" style="border:0;font-weight:600">1,260.00</span><span class="n tn back" style="border:0;font-weight:600">1,260.00</span></div>`;
+  },
+  months() {
+    return `<div class="hdr"><span>${I.back} Interrail 2026</span><span>${I.search}</span></div>
+    <h1>Expenses</h1>
+    <p class="lede" style="font-size:17px">126 expenses, €8,630.00. Your share is €1,184.20.</p>
+    <div class="mon" style="margin-top:14px"><span class="t">November</span><span class="s">12</span><span class="v tn">2,612.85</span></div>
+    ${EXP.filter((e) => e.m === 'November').map((e) => `<div class="line" style="padding:6px 22px"><span class="ell">${e.d}</span><span class="s">${e.p}</span><span class="v tn">${f(e.a)}</span></div>`).join('')}
+    <div class="line mu" style="font-size:14px">6 more in November</div>
+    <div class="mon"><span class="t">October</span><span class="s">61</span><span class="v tn">3,912.40</span></div>
+    <div class="mon"><span class="t">September</span><span class="s">53</span><span class="v tn">2,104.75</span></div>
+    <div class="foot"><div class="btn">Add expense</div></div>`;
+  },
+};
+
+/* ---------- I. Table ---------- */
+const T = {
+  name: 'Table',
+  desc: 'Takes complicated splits head on. Every list is a dense, sortable table with a total row, so 14 people or 126 expenses are just more rows, not a new layout. The editor is one table with a Paid column and an Owes column. Several payers, exact amounts, shares, percentages and people left out all become cell values, and the footer checks that both columns add up to the total. Restrained Inter with monospaced figures, and 31px rows.',
+  group() {
+    const paid = { Ana: 948.20, Ben: 1612.00, Cy: 402.50, Dana: 515.30, Eli: 1288.60, Fay: 640.00, Gus: 560.40, Hana: 412.75, Ivo: 812.30, Jo: 590.00, Kai: 245.85, Lea: 333.00, Mo: 112.20, Noor: 156.90 };
+    return `<div class="hdr"><span>${I.back} Groups</span><span class="acts">${I.share}${I.bell}</span></div>
+    <h1>Interrail 2026</h1><div class="meta">14 people · 126 expenses · €8,630.00</div>
+    <div class="tabs"><span class="on">People</span><span>Expenses</span><span>Settle up</span></div>
+    <table><tr><th>Name</th><th>Paid</th><th>Share</th><th class="sort">Balance ↑</th></tr>
+    ${[me, ...PEOPLE.slice(1).sort((a, b) => a.b - b.b)].map((p) => `<tr class="${p.you ? 'me' : ''}"><td>${nm(p.n)}</td><td class="mono">${f(paid[p.n])}</td><td class="mono">${f(paid[p.n] - p.b)}</td><td class="mono ${cls(p.b)}">${s(p.b)}</td></tr>`).join('')}
+    </table>
+    <div class="foot"><div class="btn">Add expense</div></div>`;
+  },
+  list() {
+    let last = '';
+    return `<div class="hdr"><span>${I.back} Groups</span><span class="acts">${I.search}${I.bell}</span></div>
+    <div class="tabs" style="padding-top:2px"><span>People</span><span class="on">Expenses</span><span>Settle up</span><span class="r" style="font-weight:500">Filter</span></div>
+    <table><tr><th>Expense</th><th>Paid by</th><th>Amount</th><th class="sort">You</th></tr>
+    ${EXP.map((e) => { const h = e.m !== last ? `<tr><td colspan="4" style="height:28px;font-size:12px;font-weight:600;color:#5c626b;background:#f7f8f9">${e.m} · ${MONTHS[e.m][0]} <span style="float:right" class="mono">${f(MONTHS[e.m][1])}</span></td></tr>` : ''; last = e.m; return h + `<tr><td style="max-width:118px;overflow:hidden;text-overflow:ellipsis">${e.d}</td><td style="color:#5c626b;font-size:13px">${e.p}</td><td class="mono">${f(e.a)}</td><td class="mono ${cls(e.you)}">${e.you ? s(e.you) : '—'}</td></tr>`; }).join('')}
+    <tr><td colspan="4" style="height:28px;font-size:12px;font-weight:600;color:#5c626b;background:#f7f8f9">September · 53 <span style="float:right" class="mono">2,104.75</span></td></tr>
+    </table>
+    <div class="foot"><div class="btn">Add expense</div></div>`;
+  },
+  editor() {
+    return `<div class="hdr"><span>Cancel</span><span style="font-weight:600;color:#16181c">Save</span></div>
+    <div style="display:flex;align-items:baseline;padding:0 16px"><span style="font-size:19px;font-weight:700">Hostel Vienna</span><span class="r mono" style="font-size:26px;letter-spacing:-1px">1,260.00</span></div>
+    <div style="display:flex;align-items:center;padding:10px 16px 2px;font-size:12px;color:#8a8f98">Owes by<span class="r chipsel"><span>Equal</span><span class="on">Shares</span><span>Amount</span><span>%</span></span></div>
+    <table><tr><th>Person</th><th>Paid</th><th>Shares</th><th>Owes</th></tr>
+    ${PEOPLE.map((p) => { const n = NIGHTS[p.n]; return `<tr><td class="${n ? '' : 'off'}">${nm(p.n)}</td><td class="mono"><span class="inp ${p.n === 'Eli' ? 'f' : ''}">${PAID[p.n] ? f(PAID[p.n]) : ''}</span></td><td class="mono ${n ? '' : 'off'}">${n || '0'}</td><td class="mono ${n ? '' : 'off'}">${n ? f(n * 35) : '—'}</td></tr>`; }).join('')}
+    <tr class="tot"><td>Total</td><td class="mono">1,260.00</td><td class="mono">36</td><td class="mono">1,260.00</td></tr></table>
+    <div style="padding:2px 16px" class="ok">✓ Paid and owed both match 1,260.00</div>`;
+  },
+  detail() {
+    return `<div class="hdr"><span>${I.back} Expenses</span><span class="acts">${I.edit}${I.more}</span></div>
+    <h1>Dinner at Plachutta</h1><div class="meta">Tue 3 Nov · added by Hana · edited by You</div>
+    <div class="kv" style="margin-top:12px;border-top:1px solid #f1f2f4"><span class="k">Amount</span><span class="mono" style="font-size:14px">312.60</span></div>
+    <div class="kv"><span class="k">Paid by</span>Hana</div>
+    <div class="kv"><span class="k">Split</span>By item · 9 people</div>
+    <table style="margin-top:6px"><tr><th>Item</th><th>Who</th><th>Amount</th></tr>
+    ${[['Tafelspitz ×4', 'Ana, Ben, Cy, Dana', 132], ['Schnitzel ×3', 'Eli, Fay, Gus', 62.7], ['Wine', '7 people', 78], ['Desserts', 'Ana, Hana', 24.9], ['Tip 5%', 'everyone', 15]].map(([a, b, c]) => `<tr><td>${a}</td><td style="font-size:12.5px;color:#5c626b;max-width:120px;overflow:hidden;text-overflow:ellipsis">${b}</td><td class="mono">${f(c)}</td></tr>`).join('')}
+    <tr class="tot"><td>Total</td><td></td><td class="mono">312.60</td></tr></table>
+    <table style="margin-top:8px"><tr><th>Person</th><th>Owes</th><th>Person</th><th>Owes</th></tr>
+    ${[['You', 59.44, 'Fay', 21.95], ['Ben', 46.37, 'Gus', 21.95], ['Cy', 46.37, 'Hana', 24.78], ['Dana', 46.37, 'Ivo', 11.71], ['Eli', 33.66, '', '']].map(([a, b, c, d]) => `<tr><td>${a}</td><td class="mono">${b.toFixed(2)}</td><td style="text-align:left;padding-left:18px">${c}</td><td class="mono">${d ? d.toFixed(2) : ''}</td></tr>`).join('')}</table>`;
+  },
+};
+
+/* ---------- J. Night ---------- */
+const J = {
+  name: 'Night console',
+  desc: 'Round two’s Night ledger, built around search. One histogram column per person, sorted, shows the whole group’s balances in 116px whether there are 4 people or 40; tap a column for a name. A single bar at the foot searches and adds, and accepts tokens like paid:Ben or month:Oct, so long histories stay one query away. In the editor the number pad types into whichever person is selected, everyone else shares what is left, and a meter shows how much is assigned.',
+  group() {
+    return `<div class="hdr"><span>${I.back} Groups</span><span class="acts">${I.share}${I.bell}</span></div>
+    <h1>Interrail 2026</h1>
+    <div class="sumline">You owe <span class="owe mono">79.91</span> · <u style="color:#ececec;text-underline-offset:3px">Settle up</u></div>
+    <div class="hist">${sortedAll.map((p) => `<div class="${p.you ? 'me' : ''}"><b style="${p.b < 0 ? `top:50%;height:${pct(p.b)}%;background:#ff8a6b` : p.b > 0 ? `bottom:50%;height:${pct(p.b)}%;background:#5fd3a0` : 'top:calc(50% - 1px);height:3px;background:#55585f'}"></b></div>`).join('')}</div>
+    <div class="histlab">${sortedAll.map((p) => `<span class="${p.you ? 'me' : ''}">${p.you ? 'You' : p.n.slice(0, 3)}</span>`).join('')}</div>
+    <div class="lbl">Latest<span class="r">126</span></div>
+    ${EXP.slice(0, 5).map((e) => `<div class="lrow"><span class="ell">${e.d}</span><span class="s">${e.p}</span><span class="v">${f(e.a)}<small class="${cls(e.you)}">${e.you ? s(e.you) : '—'}</small></span></div>`).join('')}
+    <div class="cmd"><div class="q">${I.search} Search or add…</div><div class="add">${I.plus}</div></div>`;
+  },
+  search() {
+    const R = [['Dinner at Plachutta', 'Hana', 312.60, -59.44, 'Nov 3'], ['Dinner in Split', 'Ben', 268.40, -22.36, 'Oct 28'], ['Pizza night', 'You', 96.00, 72.00, 'Oct 22'], ['Dinner at Konoba', 'Eli', 341.25, -24.38, 'Oct 14'], ['Dinner Ljubljana', 'Ben', 187.90, -15.66, 'Oct 9'], ['Dinner by the lake', 'Ivo', 120.00, 0, 'Sep 30'], ['Dinner, first night', 'Ben', 402.00, -28.71, 'Sep 12']];
+    return `<div class="hdr"><span>${I.back} Interrail 2026</span><span></span></div>
+    <div class="res"><span>7 results</span><span class="r mono">1,728.15 · you <span class="owe">−78.55</span></span></div>
+    ${R.map(([d, p, a, y, w]) => `<div class="lrow"><div class="ell"><div class="ell">${d}</div><div class="s" style="margin:0">${p} · ${w}</div></div><span class="v">${f(a)}<small class="${cls(y)}">${y ? s(y) : '—'}</small></span></div>`).join('')}
+    <div class="lbl" style="padding-top:16px">Try</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;padding:0 20px">${['paid:you', 'with:Hana', 'month:oct', 'over:100', 'removed'].map((t) => `<span style="background:#1c1e22;padding:5px 9px;border-radius:5px;font-size:13px" class="mono">${t}</span>`).join('')}</div>
+    <div class="cmd"><div class="q">${I.search}<span style="color:#ececec">dinner</span><span class="tok">paid:not-you</span></div><div class="add">${I.x}</div></div>`;
+  },
+  editor() {
+    const fixed = { Ana: 120, Ben: 150 };
+    const rest = (1260 - 270) / 11;
+    return `<div class="hdr"><span>Cancel</span><span style="font-size:14px"><b style="color:#ececec">Expense</b> · Payment</span><span class="back" style="font-weight:600">Save</span></div>
+    <div style="display:flex;align-items:baseline;padding:0 20px"><span style="font-size:18px">Hostel Vienna</span><span class="r mono" style="font-size:28px;letter-spacing:-1px">1,260.00</span></div>
+    <div class="lbl" style="padding-top:10px">Paid by<span class="r" style="color:#ececec">Ben 800.00 · Eli 460.00</span></div>
+    <div class="meter"><b style="flex:270;background:#5fd3a0"></b><b style="flex:990;background:#3a5b4d"></b></div>
+    <div class="lbl" style="padding-top:6px">2 set · 11 share the rest · Noor out<span class="r">Amounts</span></div>
+    ${PEOPLE.slice(0, 13).map((p) => `<div class="prow ${p.n === 'Ben' ? 'focus' : fixed[p.n] ? '' : 'auto'}">${nm(p.n)}<span class="v">${fixed[p.n] ? f(fixed[p.n]) + (p.n === 'Ben' ? '' : '') : f(rest)}</span></div>`).join('')}
+    <div class="keys">${['1', '2', '3', 'Split', '4', '5', '6', '%', '7', '8', '9', '⌫', '.', '0', '00', 'Next'].map((k) => `<span class="${k === 'Next' ? 'go' : isNaN(k) && k !== '.' && k !== '⌫' ? 'k2' : ''}">${k}</span>`).join('')}</div>`;
+  },
+  plan() {
+    return `<div class="hdr"><span>${I.back} Interrail 2026</span><span></span></div>
+    <h1>Settle up</h1>
+    <div class="sumline">10 payments settle all 14 balances</div>
+    <div class="lbl">Yours</div>
+    ${PLAN.filter((t) => t[0] === 'Ana').map(([, b, v]) => `<div class="tr">You → ${b}<span class="v owe">${f(v)}</span><span class="go">Record</span></div>`).join('')}
+    <div class="lbl">Others</div>
+    ${PLAN.filter((t) => t[0] !== 'Ana').map(([a, b, v]) => `<div class="tr" style="padding:7px 20px;font-size:14.5px">${a} → ${b}<span class="v">${f(v)}</span><span class="go" style="color:#7c7f86">Record</span></div>`).join('')}`;
+  },
+};
+
+const D = [
+  ['f', F, [['group', 'Group: 14 people, settled ones folded into one line'], ['list', 'Expenses: search, filters, pinned months'], ['editor', 'Hostel split by nights, two payers'], ['plan', 'Settle up: your payments first']]],
+  ['g', G, [['group', 'Group: face strip scrolls; dots show who is in each'], ['lens', 'Lens on Ben: his 41 expenses, share and running balance'], ['editor', 'Hostel: 14 faces in a grid, two payers'], ['items', 'Itemized dinner: each line its own people']]],
+  ['h', H, [['group', 'Group: your payments, spread of 14, months folded'], ['balances', 'Everyone: grouped names instead of 14 rows'], ['editor', 'Sentence editor with a checking table'], ['months', 'Expenses folded by month']]],
+  ['i', T, [['group', 'People table: paid, share, balance'], ['list', 'Expenses table with month subtotals'], ['editor', 'Paid and Owes columns, both checked'], ['detail', 'Expense detail: items and who owes']]],
+  ['j', J, [['group', 'A histogram fits any group size'], ['search', 'Search with tokens and a running total'], ['editor', 'Pad types into the selected person'], ['plan', 'Settle up: 10 payments']]],
+];
+document.getElementById('root').innerHTML = D.map(([k, t, screens], i) => `
+  <section class="dir ${k}" id="${k}">
+    <div class="dir-head"><span class="n">${String.fromCharCode(70 + i)}</span><h2>${t.name}</h2></div>
+    <p class="dir-desc">${t.desc}</p>
+    <div class="row">${screens.map(([fn, cap]) => phone(t[fn](), cap)).join('')}</div>
+  </section>`).join('');
+</script>
+</body>
+</html>
