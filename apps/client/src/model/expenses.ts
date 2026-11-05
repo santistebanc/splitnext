@@ -255,3 +255,33 @@ export function balanceRows(snapshot: Snapshot): { currency: string; rows: Balan
       }),
     }));
 }
+
+/**
+ * What an expense does to one person's balance: what they paid less what
+ * they owe for it; null when it names them neither as a payer nor in the split.
+ */
+export function expenseEffect(expense: Pick<Expense, 'paid' | 'allocations'>, memberId: string | undefined): number | null {
+  if (!memberId) return null;
+  const paid = expense.paid.filter((entry) => entry.member_id === memberId);
+  const owed = expense.allocations.filter((entry) => entry.member_id === memberId);
+
+  if (!paid.length && !owed.length) return null;
+
+  return paid.reduce((sum, entry) => sum + entry.amount, 0) - owed.reduce((sum, entry) => sum + entry.amount, 0);
+}
+
+/** The month a record falls in on this device, as a list heading: “November”, or “November 2025” outside the current year. */
+export function monthHeading(at: string, now: Date = new Date()): string {
+  const date = new Date(at);
+  const month = date.toLocaleString('en-US', { month: 'long' });
+
+  return date.getFullYear() === now.getFullYear() ? month : `${month} ${date.getFullYear()}`;
+}
+
+/** A search's words found in a text, ignoring case and accents, so “cafe” finds “Café”. */
+export function matchesSearch(text: string, query: string): boolean {
+  const plain = (value: string) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase();
+  const haystack = plain(text);
+
+  return plain(query).split(/\s+/u).filter(Boolean).every((word) => haystack.includes(word));
+}

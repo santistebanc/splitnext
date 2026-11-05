@@ -237,6 +237,22 @@ function clippedText(page: Page): Promise<string[]> {
   });
 }
 
+/** Opens one of the group screen's tabs, People or Expenses, unless it is already open. */
+async function showTab(page: Page, name: 'People' | 'Expenses'): Promise<void> {
+  const tab = page.getByRole('tab', { name: new RegExp(`^${name}\\b`) });
+
+  if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click();
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+}
+
+/** Unfolds an expense's split while it is equal between everyone, to change it person by person. */
+async function openSplit(page: Page): Promise<void> {
+  const folded = button(page, /^Split equally between everyone, .*Change split$/);
+
+  if (await folded.count()) await folded.click();
+  await expect(folded).toHaveCount(0);
+}
+
 /** Creates a group from the groups list and lands on its group screen. */
 async function createGroup(page: Page, name: string, you: string): Promise<void> {
   await page.goto('/app');
@@ -254,6 +270,7 @@ async function createGroup(page: Page, name: string, you: string): Promise<void>
  * the emptied field, so the rest of the screen is no longer dimmed behind it.
  */
 async function addMember(page: Page, name: string): Promise<void> {
+  await showTab(page, 'People');
   await field(page, 'Add a person').fill(name);
   await field(page, 'Add a person').press('Enter');
   await expect(page.getByRole('button', { name: new RegExp(`^${escaped(name)}, .*\\. Show details$`), includeHidden: true })).toBeAttached();
@@ -274,7 +291,9 @@ async function addExpense(page: Page, description: string, amount: string, payer
 
   await field(page, 'Description').fill(description);
   await button(page, 'Save').click();
+  // A new expense returns to the expenses, where it leads the list; the balances are one tab over.
   await expect(button(page, new RegExp(`^Change ${escaped(description)} · `))).toBeVisible();
+  await showTab(page, 'People');
 }
 
 /** Opens a new payment from the group screen: Add expense, then its Payment tab. */
@@ -358,24 +377,24 @@ test('creates a group, adds people inline, and manages a person from their detai
   await expect(page.getByTestId('toast')).toHaveCount(0);
 });
 
-test('keeps balances close to the invite controls, open or closed', async ({ page }) => {
+test('opens the invite link right under the group name, with the tabs close below it', async ({ page }) => {
   await createGroup(page, 'Invite spacing', 'Ana');
 
   for (const width of [320, 1100]) {
     await page.setViewportSize({ width, height: 650 });
-    const balances = page.getByRole('region', { name: 'Balances' });
     const invite = button(page, 'Invite people');
-    const toggle = (await invite.boundingBox())!;
-    const closed = (await balances.boundingBox())!;
+    const title = (await heading(page, 'Invite spacing').boundingBox())!;
 
-    expect(closed.y - toggle.y - toggle.height).toBeLessThanOrEqual(12);
     await invite.click();
     const panel = page.getByRole('region', { name: 'Invite people' });
     const line = (await panel.getByRole('button', { name: 'Copy link' }).locator('..').boundingBox())!;
-    const expanded = (await balances.boundingBox())!;
+    const tabs = (await page.getByRole('tablist', { name: 'Group' }).boundingBox())!;
 
-    expect(expanded.y - line.y - line.height).toBeLessThanOrEqual(12);
+    expect(line.y - title.y - title.height).toBeLessThanOrEqual(24);
+    // Only the quiet line for you sits between the link and the tabs.
+    expect(tabs.y - line.y - line.height).toBeLessThanOrEqual(80);
     await invite.click();
+    await expect(panel).toHaveCount(0);
   }
 });
 
@@ -385,6 +404,8 @@ test('collapses the invite dropdown when scrolling down', async ({ page }) => {
 
   for (let index = 0; index < 8; index++) await addExpense(page, `Item ${index}`, '20');
 
+  // The expenses are long enough to scroll.
+  await showTab(page, 'Expenses');
   await button(page, 'Invite people').click();
   const panel = page.getByRole('region', { name: 'Invite people' });
 
@@ -402,37 +423,35 @@ test('collapses the invite dropdown when scrolling down', async ({ page }) => {
   await expect(panel).toBeVisible();
 });
 
-test('removes someone no expense names with the X on their row', async ({ page }) => {
+test('removes someone no expense names from their details, never from the balances', async ({ page }) => {
   await createGroup(page, 'Rows', 'Ana');
   await addMember(page, 'Ben');
   await addMember(page, 'Cy');
 
-  // Before any expense, everyone else has the X; afterwards only Cy, whom it leaves out.
-  // You never have one, in your row or your details.
-  await expect(button(page, 'Remove Ana')).toHaveCount(0);
-  await person(page, 'Ana').click();
+  // Rows in the balances only open people; you never have Remove, in the balances or your details.
+  await expect(button(page, /^Remove /)).toHaveCount(0);
+  await button(page, 'Ana (you), no expenses yet. Show details').click();
   await expect(heading(page, 'Ana')).toBeVisible();
   await expect(button(page, 'Remove Ana')).toHaveCount(0);
   await button(page, 'Back to Rows').click();
-  await expect(button(page, 'Remove Ben')).toBeVisible();
   await button(page, 'Add expense').click();
   await field(page, 'Amount').fill('20');
   await field(page, 'Description').fill('Lunch');
+  await openSplit(page);
   await page.getByRole('checkbox', { name: 'Cy shares this expense' }).click();
   await button(page, 'Save').click();
-  await expect(button(page, 'Remove Ana')).toHaveCount(0);
+  await showTab(page, 'People');
+
+  // Ben is in the lunch, so his details offer no Remove; Cy, left out of it, can still go.
+  await person(page, 'Ben').click();
+  await expect(heading(page, 'Ben')).toBeVisible();
   await expect(button(page, 'Remove Ben')).toHaveCount(0);
-
-  // The X sits at the end of Cy's row and removes Cy at once, without opening the details.
-  const row = (await person(page, 'Cy').boundingBox())!;
-  const x = (await button(page, 'Remove Cy').boundingBox())!;
-
-  expect(x.x).toBeGreaterThanOrEqual(row.x + row.width - 1);
-  expect(Math.abs(x.y + x.height / 2 - (row.y + row.height / 2))).toBeLessThanOrEqual(1);
+  await button(page, 'Back to Rows').click();
+  await person(page, 'Cy').click();
   await button(page, 'Remove Cy').click();
-  await expect(person(page, 'Cy')).toHaveCount(0);
   await expect(page.getByTestId('toast')).toHaveText('Cy removed.');
   await expect(heading(page, 'Rows')).toBeVisible();
+  await expect(person(page, 'Cy')).toHaveCount(0);
 });
 
 test('uses one large title on every screen and opens the join field in place', async ({ page }) => {
@@ -691,7 +710,8 @@ test('opens a rename where the name already is: full width, the same lines in th
     });
 
     expect(box.x).toBeCloseTo(left, 0);
-    expect(box.x + box.width).toBeCloseTo(390 - 24, 0);
+    // The column's gutter is 20px.
+    expect(box.x + box.width).toBeCloseTo(390 - 20, 0);
     // The first line breaks where the title's did; the title ends its second line with an ellipsis.
     expect(after[0]).toBe(before[0]);
     expect(after[1]?.split('–')[0]).toBe(before[1]?.split('–')[0]);
@@ -711,7 +731,7 @@ test('opens a rename where the name already is: full width, the same lines in th
   await expect(heading(page, 'Ana')).toBeVisible();
 });
 
-test('hides the rename pencil as the header compacts, and ends a person’s header at their bar', async ({ page }) => {
+test('hides the rename pencil as the header compacts', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 520 });
   await createGroup(page, 'Pencils', 'Ana');
   await addMember(page, 'Ben');
@@ -719,8 +739,15 @@ test('hides the rename pencil as the header compacts, and ends a person’s head
   for (const amount of ['10', '20', '30', '40', '50', '60', '70', '80']) await addExpense(page, `Meal ${amount}`, amount);
   const scroller = page.locator('#splitnext-page');
 
+  // The expenses are long enough to scroll the group's header compact.
+  await showTab(page, 'Expenses');
+
   for (const pencil of ['Rename group', 'Rename Ben']) {
-    if (pencil === 'Rename Ben') await person(page, 'Ben').click();
+    if (pencil === 'Rename Ben') {
+      await showTab(page, 'People');
+      await person(page, 'Ben').click();
+    }
+
     await expect(button(page, pencil)).toBeVisible();
     await expect(button(page, pencil)).toHaveCSS('opacity', '1');
     await scroller.evaluate((node) => { node.scrollTop = 20; });
@@ -732,22 +759,6 @@ test('hides the rename pencil as the header compacts, and ends a person’s head
     await expect(button(page, pencil)).toBeVisible();
     await expect(button(page, pencil)).toHaveCSS('opacity', '1');
   }
-
-  // A person's header ends right at the bottom of their balance bar, at rest and compact.
-  const gap = () => page.evaluate(() => {
-    const bar = document.querySelector('[data-morph^="pbar-"]');
-    const content = document.getElementById('splitnext-page');
-    let header = bar;
-
-    while (header && content && !header.parentElement?.contains(content)) header = header.parentElement;
-
-    return header && bar ? Math.round(header.getBoundingClientRect().bottom - bar.getBoundingClientRect().bottom) : null;
-  });
-
-  expect(await gap()).toBe(0);
-  await scroller.evaluate((node) => { node.scrollTop = 300; });
-  await expect(button(page, 'Rename Ben')).toHaveCount(0);
-  await expect.poll(gap).toBe(0);
 });
 
 test('keeps the Activity bell on a person’s page, beside a long Back', async ({ page }, testInfo) => {
@@ -869,7 +880,7 @@ test('shows balance summaries offline and keeps people who still owe or are owed
   await addMember(page, 'Ben');
 
   await button(page, 'Back to groups').click();
-  await expect(page.getByText('settled', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('settled', { exact: true })).toBeVisible();
   await button(page, 'Open Summaries').click();
   await addExpense(page, 'Dinner', '60', 'Ana');
   await addExpense(page, 'Tickets', '40', 'Ben');
@@ -887,7 +898,7 @@ test('shows balance summaries offline and keeps people who still owe or are owed
   await button(page, 'Back to Summaries').click();
 });
 
-test('shows each balance as a bar and your balance on the groups list', async ({ page }) => {
+test('shows each balance and your balance on the groups list', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Bars', 'Ana');
   await addMember(page, 'Ben');
@@ -904,7 +915,8 @@ test('shows each balance as a bar and your balance on the groups list', async ({
 
   await button(page, 'Back to groups').click();
   await expect(page.getByText('+10.00', { exact: true })).toBeVisible();
-  await expect(page.getByText('2 people · You’re Ana', { exact: true })).toBeVisible();
+  // A group's row is its name and your balance; who is in it shows inside.
+  await expect(page.getByText('2 people · You’re Ana', { exact: true })).toHaveCount(0);
 });
 
 test('records, changes, and removes an expense with plain-number balances', async ({ page }) => {
@@ -943,7 +955,9 @@ test('records, changes, and removes an expense with plain-number balances', asyn
   await expect(addButton).toBeVisible();
   expect(await addButton.boundingBox()).toEqual(addPosition);
   await expect(button(page, 'Ana (you), +15.00. Show details')).toBeVisible();
+  await showTab(page, 'People');
   await expect(button(page, 'Ben, −15.00. Show details')).toBeVisible();
+  await showTab(page, 'Expenses');
 
   await button(page, 'Change Dinner · 30.00').click();
   await expect(field(page, 'Amount')).not.toBeFocused();
@@ -967,6 +981,7 @@ test('records, changes, and removes an expense with plain-number balances', asyn
   await expect(button(page, 'Change Dinner · 40.00')).toBeVisible();
 
   // An expense names Ben, so he cannot be removed.
+  await showTab(page, 'People');
   await person(page, 'Ben').click();
   await expect(button(page, 'Remove Ben')).toHaveCount(0);
   await expect(page.getByText(/^Settle up first/)).toHaveCount(0);
@@ -974,16 +989,19 @@ test('records, changes, and removes an expense with plain-number balances', asyn
 
   // Deleting happens from the expense's own screen, which returns to the group.
   await page.reload();
+  await showTab(page, 'Expenses');
   await button(page, 'Change Dinner · 40.00').click();
   await expect(timestamp).toHaveText(/^Last updated (just now|\d+m ago)$/);
   await button(page, 'Delete Dinner · 40.00').click();
-  await expect(page.getByText('No expenses yet', { exact: true })).toHaveCount(0);
+  // The expenses say there are none; Add expense stays where it was.
+  await expect(page.getByText('No expenses yet', { exact: true })).toBeVisible();
   await expect(addButton).toBeVisible();
   expect(await addButton.boundingBox()).toEqual(addPosition);
   await expect(button(page, 'Ana (you), no expenses yet. Show details')).toBeVisible();
 
   // Settled again, Ben still stays: the removed expense names him, and only
   // someone no expense or repayment names can be removed.
+  await showTab(page, 'People');
   await person(page, 'Ben').click();
   await expect(button(page, 'Remove Ben')).toHaveCount(0);
   await expect(button(page, 'Hide Ben')).toHaveCount(0);
@@ -1056,10 +1074,13 @@ test('groups the digits of large amounts in threes, as typed and as shown', asyn
 
   await amount.fill('4321');
   await field(page, 'Description').fill('Flights');
+  await openSplit(page);
   await expect(button(page, `Amount for Ana: ${grouped('2 160.50')}. Change amount`)).toBeVisible();
   await button(page, 'Save').click();
   await expect(button(page, `Change Flights · ${grouped('4 321.00')}`)).toBeVisible();
+  // What the expense does to you shows under it; Ben's balance is with everyone's.
   await expect(page.getByText(grouped('+2 160.50'), { exact: true })).toBeVisible();
+  await showTab(page, 'People');
   await expect(page.getByText(grouped('−2 160.50'), { exact: true })).toBeVisible();
 });
 
@@ -1071,6 +1092,7 @@ test('fits the split bar within the page however many people share the expense',
 
   await button(page, 'Add expense').click();
   await field(page, 'Amount').fill('1765.25');
+  await openSplit(page);
   await button(page, 'Increase share for Ana').click();
   const bar = page.getByTestId('split-bar');
 
@@ -1100,6 +1122,7 @@ test('keeps split rows aligned without an amount, then shows each share', async 
   // Without an amount, each row shows only its checkbox.
   for (const amount of ['', '0', '0.00']) {
     await field(page, 'Amount').fill(amount);
+    await openSplit(page);
     await expect(button(page, /^Amount for /)).toHaveCount(0);
     await expect(button(page, /^(Increase|Decrease) share for /)).toHaveCount(0);
     await expect(page.getByRole('checkbox')).toHaveCount(3);
@@ -1148,6 +1171,7 @@ test('aligns split controls in columns for weighted, fixed, and excluded people'
   await addMember(page, 'Cy');
   await button(page, 'Add expense').click();
   await field(page, 'Amount').fill('100');
+  await openSplit(page);
   await button(page, 'Increase share for Ana').click();
   await button(page, /^Amount for Cy:/).click();
   await field(page, 'Amount for Cy').fill('10');
@@ -1202,6 +1226,7 @@ test('mixes fixed amounts and weighted shares, preserves them offline, and clear
   await field(page, 'Amount').fill('100');
 
   await field(page, 'Description').fill('Mixed dinner');
+  await openSplit(page);
   await expect(button(page, 'Decrease share for Ana')).toHaveCount(0);
   await expect(page.getByRole('checkbox', { name: 'Ana shares this expense' })).toBeChecked();
   await button(page, 'Increase share for Ana').click();
@@ -1298,8 +1323,9 @@ test('explains a balance and settles it with the fewest payments', async ({ page
   await expect(page.getByText('Owes', { exact: true })).toBeVisible();
   await expect(button(page, 'Dinner, −30.00')).toBeVisible();
   await expect(button(page, 'Taxi, +20.00')).toBeVisible();
-  // The balance card and the breakdown's Balance row show the same total.
-  await expect(page.getByText('−10.00', { exact: true })).toHaveCount(2);
+  // The large figure, under Owes, and the breakdown's Balance row show the same total.
+  await expect(page.getByText('10.00', { exact: true })).toHaveCount(1);
+  await expect(page.getByText('−10.00', { exact: true })).toHaveCount(1);
 
   // Ben pays Ana directly; Cy's debt is a separate payment Ben is not part of.
   await button(page, 'Settle up, 1 payment').click();
@@ -1317,6 +1343,7 @@ test('explains a balance and settles it with the fewest payments', async ({ page
   await button(page, 'Back to Ben').click();
   await button(page, 'Back to Settle').click();
   await addPayment(page, 'Ben', 'Ana', '4');
+  await showTab(page, 'People');
   await person(page, 'Ben').click();
   await button(page, 'Settle up, 1 payment').click();
   await expect(button(page, 'Ben pays you 6.00. Record this payment')).toBeVisible();
@@ -1327,19 +1354,25 @@ test('explains a balance and settles it with the fewest payments', async ({ page
   await button(page, 'Back to Ben').click();
   await expect(button(page, /^Settle up/)).toHaveCount(0);
   await button(page, 'Back to Settle').click();
+  await showTab(page, 'Expenses');
   await expect(button(page, 'Change repayment: Ben paid you back 4.00')).toBeVisible();
+  await showTab(page, 'People');
+
+  // Settled, Ben folds into one line with anyone else settled, which shows them.
+  await expect(button(page, 'Ben, 0.00. Show details')).toHaveCount(0);
+  await button(page, '1 settled: Ben').click();
   await expect(button(page, 'Ben, 0.00. Show details')).toBeVisible();
   await expect(person(page, 'Ben').getByText('0.00', { exact: true })).toBeVisible();
 
-  // Settled people sort before people in no expense yet.
+  // People in no expense yet stay listed; settled people follow, folded or shown.
   await addMember(page, 'Dee');
   expect(await page.getByRole('button', { name: /Show details$/ }).evaluateAll((rows) => rows.map((row) => row.getAttribute('aria-label')))).toEqual([
     expect.stringMatching(/^Ana \(you\), /),
     expect.stringMatching(/^Cy, /),
-    'Ben, 0.00. Show details',
     'Dee, no expenses yet. Show details',
+    'Ben, 0.00. Show details',
   ]);
-  await expect(person(page, 'Dee')).toHaveText('Dee');
+  await expect(person(page, 'Dee').getByText('Dee', { exact: true })).toBeVisible();
   await person(page, 'Dee').click();
   await expect(page.getByText('No expenses yet', { exact: true })).toBeVisible();
   await button(page, 'Back to Settle').click();
@@ -1508,9 +1541,10 @@ test('opens views at the top and restores context on returning or browsing histo
   await page.setViewportSize({ width: 390, height: 640 });
   await createGroup(page, 'Scroll navigation', 'Ana');
 
-  for (const name of ['Ben', 'Cy', 'Dana', 'Eli', 'Fran', 'Gus']) await addMember(page, name);
+  // Enough people for the People tab to scroll.
+  for (const name of ['Ben', 'Cy', 'Dana', 'Eli', 'Fran', 'Gus', 'Hal', 'Ida', 'Jo', 'Kai', 'Lu', 'Mo']) await addMember(page, name);
 
-  for (let index = 0; index < 8; index++) await addExpense(page, `Thing ${index}`, '70');
+  for (let index = 0; index < 12; index++) await addExpense(page, `Thing ${index}`, '70');
 
   const scroller = page.locator('#splitnext-page');
   const position = () => scroller.evaluate((node) => node.scrollTop);
@@ -1518,6 +1552,7 @@ test('opens views at the top and restores context on returning or browsing histo
 
   await scroller.evaluate((node) => { node.scrollTop = 160; });
   await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '18px');
+  await person(page, 'Gus').scrollIntoViewIfNeeded();
   const groupPosition = await position();
 
   await person(page, 'Gus').click();
@@ -1546,8 +1581,8 @@ test('opens views at the top and restores context on returning or browsing histo
   await button(page, 'Back to Scroll navigation').click();
   await expect.poll(position).toBeCloseTo(groupPosition, 0);
 
-  // Scrolled, the people line has folded away with Invite people, out of reach; at the top it opens the link in place.
-  await expect(button(page, 'Invite people')).toHaveCount(0);
+  // Invite people stays in the header however far the page scrolls; at the top it opens the link in place.
+  await expect(button(page, 'Invite people')).toBeVisible();
   await scroller.evaluate((node) => { node.scrollTop = 0; });
   await atTop();
   await button(page, 'Invite people').click();
@@ -1571,6 +1606,7 @@ test('opens views at the top and restores context on returning or browsing histo
   await button(page, 'Add expense').click();
   await atTop();
   await field(page, 'Amount').evaluate((input) => input.blur());
+  await openSplit(page);
   await scroller.evaluate((node) => { node.scrollTop = 250; });
   await expect(field(page, 'Amount')).toHaveCSS('height', '36px');
   await button(page, 'Cancel').click();
@@ -1578,8 +1614,10 @@ test('opens views at the top and restores context on returning or browsing histo
   await atTop();
   await expect(field(page, 'Amount')).toHaveCSS('height', '60px');
   await button(page, 'Cancel').click();
+  await showTab(page, 'Expenses');
   await button(page, 'Change Thing 7 · 70.00').click();
   await atTop();
+  await openSplit(page);
   await scroller.evaluate((node) => { node.scrollTop = 250; });
   await expect(field(page, 'Amount')).toHaveCSS('height', '36px');
   await button(page, 'Cancel').click();
@@ -1813,6 +1851,7 @@ test('records planned and other repayments offline', async ({ page, context }) =
   await page.setViewportSize({ width: 390, height: 844 });
   await goOffline(page, context);
   await addPayment(page, 'Benjamin Alexander', 'Ana', '10');
+  await showTab(page, 'People');
   await person(page, 'Benjamin Alexander').click();
   await button(page, 'Settle up, 1 payment').click();
   await expect(button(page, 'Benjamin Alexander pays you 20.00. Record this payment')).toBeVisible();
@@ -1825,10 +1864,12 @@ test('records planned and other repayments offline', async ({ page, context }) =
   await expect(button(page, /^Change repayment:/)).toHaveCount(0);
   await button(page, 'Cancel').click();
   await addPayment(page, 'Benjamin Alexander', 'Ana', '5');
+  await showTab(page, 'People');
   await person(page, 'Benjamin Alexander').click();
   await button(page, 'Settle up, 1 payment').click();
   await expect(button(page, 'Benjamin Alexander pays you 15.00. Record this payment')).toBeVisible();
   await page.reload();
+  await showTab(page, 'Expenses');
   await expect(button(page, 'Change repayment: Benjamin Alexander paid you back 10.00')).toBeVisible();
   await expect(button(page, 'Change repayment: Benjamin Alexander paid you back 5.00')).toBeVisible();
   await goOnline(page, context);
@@ -2011,7 +2052,9 @@ test('edits and removes a repayment offline', async ({ page, context }, testInfo
   await field(page, 'Amount').fill('15');
   await button(page, 'Save').click();
   await expect(button(page, 'Change repayment: Ben paid you back 15.00')).toBeVisible();
+  await showTab(page, 'People');
   await expect(button(page, 'Ben, +3.00. Show details')).toBeVisible();
+  await showTab(page, 'Expenses');
   await button(page, 'Change repayment: Ben paid you back 15.00').click();
   const remove = button(page, 'Delete');
   const save = button(page, 'Save');
@@ -2029,6 +2072,7 @@ test('edits and removes a repayment offline', async ({ page, context }, testInfo
   await remove.click();
   await expect(heading(page, 'Repayment changes')).toBeVisible();
   await expect(button(page, /^Change repayment:/)).toHaveCount(0);
+  await showTab(page, 'People');
   await expect(button(page, 'Ben, −12.00. Show details')).toBeVisible();
 });
 
@@ -2091,6 +2135,7 @@ test('reads Activity offline and restores a removed expense', async ({ page, con
   await createGroup(page, 'History', 'Ana');
   await addMember(page, 'Ben');
   await addExpense(page, 'Dinner', '24');
+  await showTab(page, 'Expenses');
   await button(page, 'Change Dinner · 24.00').click();
   await button(page, 'Delete Dinner · 24.00').click();
   await bell(page).click();
@@ -2105,6 +2150,7 @@ test('reads Activity offline and restores a removed expense', async ({ page, con
   await expect(page.getByText('You removed Dinner', { exact: true })).toBeVisible();
   await button(page, 'Restore expense').click();
   await button(page, 'Back to History').click();
+  await showTab(page, 'Expenses');
   await expect(button(page, 'Change Dinner · 24.00')).toBeVisible();
 });
 
@@ -2129,6 +2175,7 @@ test('undoes a money change and then reverses that undo through Activity', async
   await button(page, 'Restore repayment').click();
   await expect(page.getByText('You restored a repayment', { exact: true })).toBeVisible();
   await button(page, 'Back to Money undo').click();
+  await showTab(page, 'Expenses');
   await expect(button(page, 'Change repayment: Ben paid you back 12.00')).toBeVisible();
 });
 
@@ -2183,6 +2230,7 @@ test('counts balance changes from others on the bell and tags every new Activity
   await expect(heading(visitor, 'Shared')).toBeVisible();
   await addExpense(visitor, 'Fresh dinner', '20');
 
+  await showTab(page, 'Expenses');
   await expect(button(page, 'Change Fresh dinner · 20.00')).toBeVisible();
   // Joining is new Activity, but only the expense moves balances and counts on the bell.
   await expect(bell(page)).toHaveAccessibleName('Activity: 1 new update');
@@ -2308,10 +2356,12 @@ test('shrinks the large title as the page scrolls and grows it back at the top',
 
   for (const name of ['Ben', 'Cy', 'Dana', 'Eli', 'Fran']) await addMember(page, name);
 
-  for (const name of ['Cabin', 'Train', 'Groceries', 'Boat', 'Lunch', 'Taxi']) await addExpense(page, name, '60');
+  for (const name of ['Cabin', 'Train', 'Groceries', 'Boat', 'Lunch', 'Taxi', 'Dinner', 'Coffee', 'Tickets', 'Hotel', 'Breakfast', 'Snacks']) await addExpense(page, name, '60');
 
   const scroller = page.locator('#splitnext-page');
   const title = heading(page, 'Long trip');
+
+  await showTab(page, 'Expenses');
 
   await scroller.evaluate((node) => { node.scrollTop = 0; });
   await expect(title).toHaveCSS('font-size', '32px');
@@ -2366,6 +2416,7 @@ test('keeps a scrolled group still beneath the opening expense sheet', async ({ 
 
   const scroller = page.locator('#splitnext-page');
 
+  await showTab(page, 'Expenses');
   await scroller.evaluate((node) => { node.scrollTop = node.scrollHeight; });
   await expect(heading(page, 'Still underneath')).toHaveCSS('font-size', '18px');
   await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -2425,6 +2476,7 @@ test('keeps a focused split amount visible when the keyboard reduces the page', 
 
   await button(page, 'Add expense').click();
   await field(page, 'Amount').fill('70');
+  await openSplit(page);
   await button(page, /^Amount for Gus:/).click();
   const amount = field(page, 'Amount for Gus');
 
@@ -2500,7 +2552,7 @@ test('never cuts off the tops or tails of letters in titles and names', async ({
     ['person', () => person(page, 'Jaqy Gypsy').click()],
     ['settle up', () => button(page, /^Settle up/).click()],
     ['activity', async () => { await page.goBack(); await page.goBack(); await bell(page).click(); }],
-    ['expense form', async () => { await button(page, /^Back to /).click(); await button(page, /^Change Groceries jqyp/).click(); }],
+    ['expense form', async () => { await button(page, /^Back to /).click(); await showTab(page, 'Expenses'); await button(page, /^Change Groceries jqyp/).click(); }],
     ['groups list', async () => { await button(page, 'Cancel').click(); await button(page, 'Back to groups').click(); }],
     ['new group', () => button(page, 'New group').click()],
   ];
@@ -2613,7 +2665,7 @@ test('closes each dropdown on a tap outside it, and still lets that tap act', as
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Outside', 'Ana');
   await addMember(page, 'Ben');
-  const elsewhere = () => page.mouse.click(200, 120);
+  const elsewhere = () => page.mouse.click(200, 500);
 
   // Who paid: open, tap away, gone; its own button still toggles it.
   await button(page, 'Add expense').click();
@@ -2793,6 +2845,7 @@ test('moves the expense amount straight from its row to the editor', async ({ pa
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Straight amounts', 'Ana');
   await addExpense(page, 'Dinner', '1234.56');
+  await showTab(page, 'Expenses');
   const source = (await page.locator('[data-morph^="eamt-"]').boundingBox())!;
 
   await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -2896,9 +2949,11 @@ test('collapses a two-line group title without a sudden header jump', async ({ p
   await page.setViewportSize({ width: 320, height: 640 });
   await createGroup(page, 'A long summer holiday', 'Ana');
 
-  for (const title of ['Train', 'Lunch', 'Dinner', 'Boat', 'Hotel', 'Taxi']) await addExpense(page, title, '20');
+  for (const title of ['Train', 'Lunch', 'Dinner', 'Boat', 'Hotel', 'Taxi', 'Coffee', 'Tickets', 'Breakfast', 'Snacks', 'Groceries', 'Cabin']) await addExpense(page, title, '20');
   const scroller = page.locator('#splitnext-page');
   const title = heading(page, 'A long summer holiday');
+
+  await showTab(page, 'Expenses');
 
   await scroller.evaluate((node) => { node.scrollTop = 0; });
   await expect(title).toHaveCSS('font-size', '32px');
@@ -2960,4 +3015,41 @@ test('opens canonical Activity records and returns, keeping unavailable actions 
   await expect(button(page, 'Open repayment: You recorded a repayment')).toHaveCount(0);
   await expect(button(page, 'Open repayment: You removed a repayment')).toHaveCount(0);
   await expect(button(page, 'Restore repayment')).toBeVisible();
+});
+
+
+test('searches expenses and repayments with accent-insensitive words and personal filters', async ({ page }) => {
+  await createGroup(page, 'Searchable trip', 'Ana');
+  await addMember(page, 'Ben');
+  await addExpense(page, 'Caf\u00e9 breakfast', '12');
+  await addExpense(page, 'Caf\u00e9 lunch', '6', 'Ben');
+  await addExpense(page, 'Taxi', '10');
+  await addPayment(page, 'Ben', 'Ana', '2');
+  await showTab(page, 'Expenses');
+  await button(page, 'Search expenses').click();
+  const search = field(page, 'Search expenses');
+  const results = page.getByRole('list', { name: 'Expenses', exact: true });
+
+  await search.fill('CAFE');
+  await expect(results.getByRole('button', { name: /^Change / })).toHaveCount(2);
+  await expect(results.getByText('2 results', { exact: true })).toBeVisible();
+  await expect(results.getByText('+3.00', { exact: true })).toBeVisible();
+  await search.fill('breakfast cafe');
+  await expect(results.getByRole('button', { name: /^Change / })).toHaveCount(1);
+  await search.fill('not recorded');
+  await expect(page.getByText('Nothing matches', { exact: true })).toBeVisible();
+  await search.fill('');
+  await button(page, 'Paid by you').click();
+  await expect(results.getByRole('button', { name: /^Change / })).toHaveCount(2);
+  await expect(results.getByText('+11.00', { exact: true })).toBeVisible();
+  await button(page, 'Paid by you').click();
+  await button(page, 'Involves you').click();
+  await expect(results.getByRole('button', { name: /^Change / })).toHaveCount(4);
+  // The result total includes the repayment's effect as well as the expenses.
+  await expect(results.getByText('4 results', { exact: true }).locator('..').getByText('+6.00', { exact: true })).toBeVisible();
+  await button(page, 'Cancel').click();
+  await expect(search).toHaveCount(0);
+  await button(page, 'Search expenses').click();
+  await expect(search).toHaveValue('');
+  await expect(results.getByRole('button', { name: /^Change / })).toHaveCount(4);
 });

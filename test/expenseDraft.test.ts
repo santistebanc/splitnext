@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { allocate, type AllocationPart, type Expense } from '../src/client';
-import { canExcludeExpensePart, decreaseExpenseShare, draftForExpense, entryFromDraft, fixExpenseAmount, groupDigits, increaseExpenseShare, moneyLabel, noCurrency, previewAllocation, type ExpenseDraft } from '../apps/client/src/model/expenses';
+import { canExcludeExpensePart, decreaseExpenseShare, draftForExpense, expenseEffect, matchesSearch, monthHeading, entryFromDraft, fixExpenseAmount, groupDigits, increaseExpenseShare, moneyLabel, noCurrency, previewAllocation, type ExpenseDraft } from '../apps/client/src/model/expenses';
 import { scenarioReplica } from '../apps/client/src/workbench/memberListFixture';
 
 const replica = scenarioReplica({ members: ['Ana', 'Ben', 'Cy'], you: 'Ana', others: [], presence: 'realtime', othersOnline: false, connection: 'online' });
@@ -133,5 +133,32 @@ describe('amounts as people read them', () => {
     };
 
     expect(draftForExpense(snapshot, expense, noCurrency).amount).toBe('1234567.89');
+  });
+});
+
+describe('expense rows', () => {
+  const expense = { paid: [{ member_id: 'ana', amount: 9000 }], allocations: [{ member_id: 'ana', amount: 3000 }, { member_id: 'ben', amount: 3000 }, { member_id: 'cy', amount: 3000 }] };
+
+  it('says what an expense does to someone, and nothing for someone it leaves out', () => {
+    expect(expenseEffect(expense, 'ana')).toBe(6000);
+    expect(expenseEffect(expense, 'ben')).toBe(-3000);
+    expect(expenseEffect(expense, 'dana')).toBeNull();
+    expect(expenseEffect(expense, undefined)).toBeNull();
+  });
+
+  it('names the month, with its year only outside the current one', () => {
+    const now = new Date(2026, 10, 15);
+
+    expect(monthHeading(new Date(2026, 10, 5, 12).toISOString(), now)).toBe('November');
+    expect(monthHeading(new Date(2025, 0, 20, 12).toISOString(), now)).toBe('January 2025');
+  });
+});
+
+describe('expense search', () => {
+  it('finds every word of a search, whatever its case or accents', () => {
+    expect(matchesSearch('Café Central', 'cafe')).toBe(true);
+    expect(matchesSearch('Dinner at Plachutta', 'plachutta dinner')).toBe(true);
+    expect(matchesSearch('Dinner at Plachutta', 'lunch')).toBe(false);
+    expect(matchesSearch('Groceries', '  ')).toBe(true);
   });
 });

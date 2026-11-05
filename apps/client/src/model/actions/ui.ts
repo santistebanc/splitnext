@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { formatAmount, formatInviteLink, repaymentMembers, settlementSuggestions } from '@splitnext/client';
 import { newActivity } from '../activity';
 import { canExcludeExpensePart, decreaseExpenseShare, fixExpenseAmount, increaseExpenseShare, noCurrency } from '../expenses';
-import { draftFields, groupViews, personFits, viewFits, viewNames } from '../uiState';
+import { closedSearch, draftFields, groupTabs, groupViews, personFits, viewFits, viewNames } from '../uiState';
 import { workflowGuard, type WorkflowIntent } from '../workflow';
 import { requireSettlement, unavailable, editorLock, navigationLock, defineAction, openSnapshot, requireExpense, requireOpenable, requireMember, requireNotice, requireJoin, joinMembers, requireConfirmation, requireInvite, memberResource, noticeResources, empty, choice, type ActionHost, type ActionPlatform } from './define';
 
@@ -32,8 +32,27 @@ export const uiActions = {
     },
     run: async (host, input, ui) => ui.show('settle', 'push', { person: input.memberId ?? null }),
   }),
+  showGroupTab: defineAction({
+    group: 'UI', description: 'Switch the group screen between everyone’s balances and the expenses and repayments.',
+    input: z.object({ tab: z.enum(groupTabs) }), example: { tab: 'expenses' }, requires: ['openGroup'],
+    run: async (host, input, ui) => ui.update({ groupTab: input.tab }),
+  }),
+  searchExpenses: defineAction({
+    group: 'UI', description: 'Search the group’s expenses and repayments by what they were for, optionally only those involving you or paid by you; it opens the expenses.',
+    input: z.object({ query: z.string().max(100).optional(), involvesYou: z.boolean().optional(), paidByYou: z.boolean().optional() }), example: { query: 'dinner' }, requires: ['openGroup'],
+    run: async (host, input, ui) => {
+      const search = ui.snapshot().search;
+
+      ui.update({ groupTab: 'expenses', search: { open: true, query: input.query ?? search.query, involvesYou: input.involvesYou ?? search.involvesYou, paidByYou: input.paidByYou ?? search.paidByYou } });
+    },
+  }),
+  closeExpenseSearch: defineAction({
+    group: 'UI', description: 'Stop searching and show every expense and repayment again.', input: empty, example: {}, requires: ['openGroup'],
+    unavailable: ({ ui }) => (ui.search.open ? null : unavailable('search_not_open', 'No search is open.')),
+    run: async (host, input, ui) => ui.update({ search: closedSearch }),
+  }),
   setBalancesExpanded: defineAction({
-    group: 'UI', description: 'Show everyone in the balances, or only as many as leave room for the first expenses.', input: z.object({ expanded: z.boolean() }), example: { expanded: false }, requires: ['openGroup'],
+    group: 'UI', description: 'Show the group’s settled people in the balances, or fold them into one line.', input: z.object({ expanded: z.boolean() }), example: { expanded: false }, requires: ['openGroup'],
     run: async (host, input, ui) => ui.update({ balancesExpanded: input.expanded }),
   }),
   markActivitySeen: defineAction({
@@ -511,7 +530,7 @@ export const uiActions = {
 
       if (host.snapshot().group?.hidden) ui.showJoin('', true);
       else {
-        ui.update({ balancesExpanded: false });
+        ui.update({ balancesExpanded: false, groupTab: 'people', search: closedSearch });
         ui.show('home');
       }
     },

@@ -61,9 +61,11 @@ How it fits together, and the rules each part keeps, is in
   screens are
   described in [docs/architecture.md](./docs/architecture.md#the-web-app) and
   specified in [docs/product-spec.md](./docs/product-spec.md).
-- One group screen with everyone's balance as ruled rows above the expenses
-  and repayments; person details with a balance breakdown, Settle up, rename,
-  and remove; and browser Back/Forward support. Forms return to where
+- One group screen led by where you stand and Settle up, with People and
+  Expenses tabs: everyone's balance beside their avatar, settled people folded
+  away, and expenses and repayments by month with expense search; a settle-up
+  page with your payments first; person details with a balance breakdown,
+  Settle up, rename, and remove; and browser Back/Forward support. Forms return to where
   they were opened.
 - A design system (`apps/client/src/design/`) every screen is built from,
   documented in a `/components` catalog, and in-app devtools; both are

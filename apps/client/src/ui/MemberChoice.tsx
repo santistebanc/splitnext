@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { View } from 'react-native';
 import { RadioRow, Row, Text, Touchable, YouBadge, durations, rules, sizes, strokes, withTransition } from '../design';
 import { memberName } from '../model/expenses';
-import type { MemberListApp } from './MemberList';
+import { MemberAvatar, type MemberListApp } from './MemberList';
 import { Reveal } from './Reveal';
 
 export type MemberChoiceProps = {
@@ -33,7 +33,8 @@ function MemberChoiceRow(props: { app: MemberListApp; memberId: string; you: boo
 export function MemberChoice(props: MemberChoiceProps) {
   const [open, setOpen] = useState(false);
   const toggle = useRef<View>(null);
-  const snapshot = props.app.snapshot().group?.projected_snapshot;
+  const replica = props.app.snapshot().group;
+  const snapshot = replica?.projected_snapshot;
   const name = props.value ? memberName(snapshot, props.value) : '';
   const showing = open && !props.disabled;
 
@@ -49,8 +50,9 @@ export function MemberChoice(props: MemberChoiceProps) {
         style={[{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: sizes.row }, rules.below]}
       >
         <Text variant="body" tone="muted">{props.label}</Text>
-        <Row gap={8}>
-          <Text variant="strong">{props.value ? name : 'Choose'}</Text>
+        <Row gap={8} style={{ flexShrink: 1, minWidth: 0 }}>
+          {props.value && replica ? <MemberAvatar replica={replica} memberId={props.value} size="small" /> : null}
+          <Text variant="strong" numberOfLines={1} style={{ flexShrink: 1 }}>{props.value ? name : 'Choose'}</Text>
           <Text variant="caption" tone="muted" style={withTransition({ transform: [{ rotate: showing ? '180deg' : '0deg' }] }, 'transform', durations.medium)}>▾</Text>
         </Row>
       </Touchable>

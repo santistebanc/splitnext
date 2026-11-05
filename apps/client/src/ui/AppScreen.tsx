@@ -12,7 +12,7 @@ import { ExpenseControls, ExpenseEditor, ExpenseEditorFooter, ExpenseEditorHeade
 import { AddExpenseButton } from './ExpenseList';
 import { ActivityHeader, ActivityPanel } from './ActivityPanel';
 import { PersonDetails, PersonHeader } from './PersonView';
-import { SettleUpFooter } from './SettleUp';
+import { SettleUpFooter, SettleUpPlan } from './SettleUp';
 import { GroupSettings, GroupSettingsFooter } from './GroupSettings';
 import { GroupsFooter, GroupsHeader, GroupsView } from './GroupsView';
 import { Toast } from './Toast';
@@ -206,9 +206,9 @@ function ReadyApp(props: AppProps) {
 
   useEffect(() => substrate.observe?.(app, actions), [app, actions, substrate]);
   useActivityFeed(app, state);
-  // Settle up is a drawer rising from the person's footer.
-  const settling = ui.view === 'settle';
-  const view = settling ? (ui.person ? 'person' : 'home') : ui.view;
+  // A person's Settle up is a drawer rising from their footer; the group's is a page of its own.
+  const settling = ui.view === 'settle' && Boolean(ui.person);
+  const view = settling ? 'person' : ui.view;
   const initialLink = ui.join.link;
 
   const action = useAction();
@@ -334,6 +334,11 @@ function ReadyApp(props: AppProps) {
         return { header: <SettlementsHeader />, body: <SettlementsPanel app={app} replica={group} />, footer: <SettlementsFooter /> };
       case 'person':
         return { header: <PersonHeader app={app} />, body: <PersonDetails app={app} />, footer: <SettleUpFooter app={app} /> };
+      case 'settle':
+        return {
+          header: <ScreenHeader title="Settle up" start={<BackButton label="Back to group" disabled={!actions.availability('closePanel', {}).available} onPress={() => dispatch('closePanel')} />} />,
+          body: <SettleUpPlan app={app} />,
+        };
       case 'activity':
         return { header: <ActivityHeader app={app} />, body: <ActivityPanel replica={group} /> };
       case 'settings':

@@ -54,6 +54,6 @@ export function memberStatus(participants: ParticipantMarker[]): ParticipantMark
 }
 
 /** A member's place in the group, in the order people were added, which picks their avatar tint. */
-export function memberTint(snapshot: ClientReplicaState['projected_snapshot'], memberId: string): number {
+export function memberTint(snapshot: ClientReplicaState['projected_snapshot'] | undefined, memberId: string): number {
   return Math.max(0, snapshot?.members.findIndex((member) => member.id === memberId) ?? 0);
 }
