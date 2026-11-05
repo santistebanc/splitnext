@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Splitnext: five alternative designs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Nunito:wght@500;700;800;900&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;700&family=Fraunces:opsz,wght@9..144,500;9..144,700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e7e5df; font-family: Inter, system-ui, sans-serif; color: #141413; padding: 40px 32px 80px; }
+  .intro { max-width: 1560px; margin: 0 auto 40px; }
+  .intro h1 { font-size: 34px; letter-spacing: -1px; }
+  .intro p { color: #5c5b56; margin-top: 8px; max-width: 760px; line-height: 1.5; }
+  .nav { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+  .nav a { font-size: 13px; color: #141413; text-decoration: none; border: 1px solid #141413; padding: 6px 12px; }
+  section.dir { max-width: 1560px; margin: 0 auto 72px; }
+  .dir-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 6px; }
+  .dir-head .n { font: 700 14px 'JetBrains Mono', monospace; color: #8b8a83; }
+  .dir-head h2 { font-size: 26px; letter-spacing: -0.6px; }
+  .dir-desc { color: #5c5b56; font-size: 14px; line-height: 1.5; max-width: 900px; margin-bottom: 8px; }
+  .swatches { display: flex; gap: 6px; margin-bottom: 20px; }
+  .swatches i { width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); display: block; }
+  .row { display: flex; gap: 28px; overflow-x: auto; padding-bottom: 12px; }
+  .shot { flex: none; }
+  .shot .cap { font-size: 12px; color: #5c5b56; margin-top: 10px; text-align: center; letter-spacing: .2px; }
+  .phone { width: 360px; height: 760px; border-radius: 44px; padding: 10px; background: #1b1b1a; box-shadow: 0 30px 60px -30px rgba(0,0,0,.45); }
+  .screen { width: 100%; height: 100%; border-radius: 34px; overflow: hidden; position: relative; display: flex; flex-direction: column; }
+  .status { height: 40px; flex: none; display: flex; justify-content: space-between; align-items: center; padding: 0 26px; font: 600 13px Inter, sans-serif; }
+  .scroll { flex: 1; overflow: hidden; position: relative; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ============ 1. MIDNIGHT ============ */
+  .t1 .screen { background: #0e1014; color: #eef0f3; font-family: Inter, sans-serif; }
+  .t1 .status { color: #eef0f3; }
+  .t1 .top { display: flex; justify-content: space-between; align-items: center; padding: 8px 20px 0; color: #8d93a0; font-size: 14px; }
+  .t1 .ic { width: 36px; height: 36px; border-radius: 12px; background: #1a1d24; display: grid; place-items: center; color: #cfd3da; font-size: 15px; }
+  .t1 h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.8px; padding: 14px 20px 4px; }
+  .t1 .sub { color: #8d93a0; font-size: 13px; padding: 0 20px; }
+  .t1 .hero { margin: 16px 16px 0; padding: 18px; border-radius: 22px; background: linear-gradient(145deg, #1d2230, #161922); border: 1px solid #262b36; }
+  .t1 .hero .lbl { font-size: 12px; color: #8d93a0; text-transform: uppercase; letter-spacing: 1px; }
+  .t1 .hero .big { font: 600 38px 'JetBrains Mono', monospace; letter-spacing: -1.5px; margin-top: 6px; }
+  .t1 .neg { color: #ff8a7a; } .t1 .pos { color: #c6f36b; }
+  .t1 .chips { display: flex; gap: 8px; margin-top: 14px; }
+  .t1 .chip { font-size: 12px; padding: 7px 12px; border-radius: 99px; background: #262b36; color: #cfd3da; }
+  .t1 .chip.lime { background: #c6f36b; color: #0e1014; font-weight: 600; }
+  .t1 .sec { display: flex; justify-content: space-between; padding: 20px 20px 8px; font-size: 13px; color: #8d93a0; }
+  .t1 .card { margin: 0 16px; border-radius: 20px; background: #161922; border: 1px solid #22262f; }
+  .t1 .li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid #22262f; }
+  .t1 .li:last-child { border-bottom: 0; }
+  .t1 .av { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: #0e1014; flex: none; position: relative; }
+  .t1 .av .dot { position: absolute; right: -2px; bottom: -2px; width: 10px; height: 10px; border-radius: 50%; background: #c6f36b; border: 2px solid #161922; }
+  .t1 .grow { flex: 1; min-width: 0; }
+  .t1 .nm { font-weight: 600; font-size: 15px; }
+  .t1 .mt { font-size: 12px; color: #8d93a0; margin-top: 2px; }
+  .t1 .amt { font: 500 15px 'JetBrains Mono', monospace; }
+  .t1 .minibar { height: 4px; border-radius: 4px; background: #262b36; margin-top: 6px; position: relative; overflow: hidden; }
+  .t1 .minibar b { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
+  .t1 .fab { position: absolute; right: 20px; bottom: 26px; height: 56px; padding: 0 22px; border-radius: 18px; background: #c6f36b; color: #0e1014; font-weight: 700; display: flex; align-items: center; gap: 8px; box-shadow: 0 10px 30px -8px rgba(198,243,107,.5); }
+  .t1 .seg { display: flex; background: #1a1d24; border-radius: 14px; padding: 4px; margin: 6px 20px 0; }
+  .t1 .seg span { flex: 1; text-align: center; padding: 9px; border-radius: 10px; font-size: 13px; color: #8d93a0; font-weight: 600; }
+  .t1 .seg span.on { background: #2a2f3b; color: #eef0f3; }
+  .t1 .keypad { position: absolute; left: 0; right: 0; bottom: 0; background: #14171d; padding: 10px 14px 22px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .t1 .keypad span { height: 44px; border-radius: 12px; background: #1d2129; display: grid; place-items: center; font: 500 18px 'JetBrains Mono', monospace; }
+  .t1 .keypad span.go { background: #c6f36b; color: #0e1014; font: 700 15px Inter, sans-serif; }
+  .t1 .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 99px; background: #1a1d24; font-size: 13px; }
+  .t1 .pill .av { width: 24px; height: 24px; border-radius: 8px; font-size: 11px; }
+  .t1 .settle { margin: 0 16px; padding: 14px; border-radius: 18px; background: #161922; border: 1px solid #22262f; display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .t1 .btn-s { padding: 9px 14px; border-radius: 12px; background: #c6f36b; color: #0e1014; font-weight: 700; font-size: 13px; }
+  .t1 .gcard { margin: 0 16px 10px; padding: 16px; border-radius: 22px; background: #161922; border: 1px solid #22262f; }
+  .t1 .stack { display: flex; }
+  .t1 .stack .av { width: 26px; height: 26px; border-radius: 9px; font-size: 11px; margin-right: -6px; border: 2px solid #161922; }
+
+  /* ============ 2. POSTCARD ============ */
+  .t2 .screen { background: #fff3df; color: #1d1a16; font-family: Nunito, ui-rounded, sans-serif; }
+  .t2 .top { display: flex; justify-content: space-between; align-items: center; padding: 6px 18px 0; font-weight: 800; font-size: 15px; }
+  .t2 .ic { width: 40px; height: 40px; border-radius: 50%; border: 2.5px solid #1d1a16; background: #fff; display: grid; place-items: center; box-shadow: 2px 2px 0 #1d1a16; font-weight: 900; }
+  .t2 h1 { font-size: 36px; font-weight: 900; letter-spacing: -1px; padding: 12px 20px 0; line-height: 1.05; }
+  .t2 .sticker { border: 2.5px solid #1d1a16; border-radius: 22px; box-shadow: 4px 4px 0 #1d1a16; background: #fff; }
+  .t2 .hero { margin: 16px 18px 0; padding: 16px; background: #ffd84d; }
+  .t2 .hero .lbl { font-weight: 800; font-size: 14px; }
+  .t2 .hero .big { font-size: 40px; font-weight: 900; letter-spacing: -1px; }
+  .t2 .av { width: 42px; height: 42px; border-radius: 50%; border: 2.5px solid #1d1a16; display: grid; place-items: center; font-weight: 900; font-size: 17px; flex: none; }
+  .t2 .people { display: flex; gap: 10px; padding: 16px 18px 0; overflow: hidden; }
+  .t2 .person { width: 74px; flex: none; text-align: center; }
+  .t2 .person .av { width: 58px; height: 58px; margin: 0 auto; font-size: 22px; box-shadow: 3px 3px 0 #1d1a16; }
+  .t2 .person .nm { font-weight: 800; font-size: 14px; margin-top: 6px; }
+  .t2 .person .amt { font-weight: 900; font-size: 13px; }
+  .t2 .neg { color: #e0452b; } .t2 .pos { color: #129a63; }
+  .t2 .tag { display: inline-block; font-size: 11px; font-weight: 900; padding: 2px 8px; border-radius: 99px; border: 2px solid #1d1a16; background: #fff; }
+  .t2 .sec { font-weight: 900; font-size: 18px; padding: 20px 20px 10px; display: flex; justify-content: space-between; align-items: center; }
+  .t2 .exp { margin: 0 18px 10px; padding: 12px 14px; display: flex; gap: 12px; align-items: center; }
+  .t2 .emoji { width: 44px; height: 44px; border-radius: 14px; border: 2.5px solid #1d1a16; display: grid; place-items: center; font-size: 22px; flex: none; }
+  .t2 .grow { flex: 1; min-width: 0; }
+  .t2 .nm { font-weight: 800; font-size: 16px; }
+  .t2 .mt { font-size: 13px; color: #6d655a; font-weight: 700; }
+  .t2 .big-btn { position: absolute; left: 18px; right: 18px; bottom: 24px; height: 60px; border-radius: 20px; background: #ff6f91; border: 2.5px solid #1d1a16; box-shadow: 4px 4px 0 #1d1a16; display: grid; place-items: center; font-weight: 900; font-size: 19px; color: #1d1a16; }
+  .t2 .amount-card { margin: 14px 18px 0; padding: 20px 16px; text-align: center; background: #8fd3ff; }
+  .t2 .amount-card .big { font-size: 56px; font-weight: 900; letter-spacing: -2px; }
+  .t2 .field { margin: 12px 18px 0; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; font-weight: 800; }
+  .t2 .field .k { color: #6d655a; font-size: 13px; }
+  .t2 .split { display: flex; height: 22px; border: 2.5px solid #1d1a16; border-radius: 99px; overflow: hidden; margin: 14px 18px 4px; }
+  .t2 .split b { display: block; border-right: 2.5px solid #1d1a16; }
+  .t2 .split b:last-child { border-right: 0; }
+  .t2 .who { display: flex; align-items: center; gap: 10px; padding: 8px 20px; }
+  .t2 .who .av { width: 34px; height: 34px; font-size: 14px; }
+  .t2 .check { width: 26px; height: 26px; border-radius: 8px; border: 2.5px solid #1d1a16; background: #1d1a16; color: #fff; display: grid; place-items: center; font-size: 14px; font-weight: 900; }
+  .t2 .ppill { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; border: 2px solid #1d1a16; font-weight: 900; background: #fff; }
+  .t2 .gcard { margin: 0 18px 14px; padding: 16px; position: relative; }
+  .t2 .stamp { position: absolute; right: 14px; top: -12px; transform: rotate(6deg); }
+
+  /* ============ 3. SWISS ============ */
+  .t3 .screen { background: #fafafa; color: #111; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+  .t3 .top { display: flex; justify-content: space-between; padding: 6px 20px 0; font-size: 13px; font-weight: 500; }
+  .t3 .red { color: #e3271c; }
+  .t3 .bigtitle { font-size: 52px; font-weight: 700; letter-spacing: -2.4px; line-height: .92; padding: 22px 20px 0; }
+  .t3 .meta { display: grid; grid-template-columns: 1fr 1fr 1fr; border-top: 2px solid #111; margin: 18px 20px 0; padding-top: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; }
+  .t3 .meta b { display: block; font-size: 15px; letter-spacing: 0; text-transform: none; margin-top: 2px; }
+  .t3 .label { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; font-weight: 700; padding: 22px 20px 6px; display: flex; justify-content: space-between; }
+  .t3 .grid-row { display: grid; grid-template-columns: 26px 1fr 96px 74px; align-items: center; padding: 0 20px; height: 46px; border-top: 1px solid #111; font-size: 15px; }
+  .t3 .grid-row .i { font-size: 11px; color: #888; }
+  .t3 .grid-row .a { text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .t3 .bar { height: 10px; position: relative; }
+  .t3 .bar::before { content: ''; position: absolute; left: 50%; top: -4px; bottom: -4px; width: 1px; background: #111; }
+  .t3 .bar b { position: absolute; top: 0; bottom: 0; }
+  .t3 .neg { color: #e3271c; }
+  .t3 .bottom { position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: 1fr 1fr; height: 72px; }
+  .t3 .bottom span { display: flex; align-items: center; padding: 0 20px; font-weight: 700; font-size: 15px; }
+  .t3 .bottom .k { background: #111; color: #fff; } .t3 .bottom .r { background: #e3271c; color: #fff; justify-content: space-between; }
+  .t3 .amt-xl { font-size: 92px; font-weight: 700; letter-spacing: -5px; line-height: .9; padding: 16px 20px 0; font-variant-numeric: tabular-nums; }
+  .t3 .tabs { display: flex; gap: 18px; padding: 10px 20px 0; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; }
+  .t3 .tabs span { color: #aaa; } .t3 .tabs span.on { color: #111; border-bottom: 3px solid #e3271c; padding-bottom: 4px; }
+  .t3 .kv { display: grid; grid-template-columns: 90px 1fr; padding: 12px 20px; border-top: 1px solid #111; font-size: 15px; }
+  .t3 .kv .k { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; padding-top: 3px; }
+  .t3 .gi { padding: 16px 20px; border-top: 2px solid #111; display: grid; grid-template-columns: 34px 1fr auto; align-items: start; }
+  .t3 .gi .ix { font-size: 13px; font-weight: 700; color: #e3271c; }
+  .t3 .gi .nm { font-size: 26px; font-weight: 700; letter-spacing: -1px; line-height: 1; }
+  .t3 .gi .mt { font-size: 12px; color: #666; margin-top: 6px; }
+
+  /* ============ 4. RECEIPT ============ */
+  .t4 .screen { background: #d9d6cf; color: #222; font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+  .t4 .status { color: #222; }
+  .t4 .paper { margin: 6px 14px 0; background: #fffef8; padding: 20px 18px 22px; position: relative; box-shadow: 0 6px 18px -10px rgba(0,0,0,.4); }
+  .t4 .paper::after { content: ''; position: absolute; left: 0; right: 0; bottom: -10px; height: 10px; background: linear-gradient(-45deg, transparent 6px, #fffef8 0) 0 0/12px 10px, linear-gradient(45deg, transparent 6px, #fffef8 0) 0 0/12px 10px; background-repeat: repeat-x; }
+  .t4 .ctr { text-align: center; }
+  .t4 .brand { font-weight: 700; font-size: 18px; letter-spacing: 4px; }
+  .t4 .small { font-size: 11px; color: #666; }
+  .t4 .dash { border-top: 1.5px dashed #999; margin: 12px 0; }
+  .t4 .ln { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; gap: 8px; }
+  .t4 .ln .d { flex: 1; overflow: hidden; white-space: nowrap; }
+  .t4 .ln .d::after { content: ' ...................................................'; color: #bbb; }
+  .t4 .total { display: flex; justify-content: space-between; font-weight: 700; font-size: 16px; padding: 4px 0; }
+  .t4 .neg { color: #b33a1b; } .t4 .pos { color: #1f6b43; }
+  .t4 .tbar { font-size: 11px; letter-spacing: -1px; color: #b33a1b; }
+  .t4 .tbar.p { color: #1f6b43; }
+  .t4 .barcode { height: 34px; margin-top: 12px; background: repeating-linear-gradient(90deg, #222 0 2px, transparent 2px 4px, #222 4px 5px, transparent 5px 8px, #222 8px 11px, transparent 11px 12px); }
+  .t4 .foot { position: absolute; left: 14px; right: 14px; bottom: 22px; height: 52px; background: #222; color: #fffef8; display: grid; place-items: center; font-weight: 700; letter-spacing: 2px; font-size: 14px; }
+  .t4 .stamp { display: table; margin: 10px auto 0; border: 3px solid #b33a1b; color: #b33a1b; font-weight: 700; padding: 4px 10px; transform: rotate(-12deg); letter-spacing: 2px; font-size: 14px; opacity: .85; }
+  .t4 .stamp.g { border-color: #1f6b43; color: #1f6b43; }
+  .t4 .tick { display: inline-block; width: 34px; }
+  .t4 .rcpt { margin: 0 14px 16px; background: #fffef8; padding: 12px 14px; box-shadow: 0 4px 12px -8px rgba(0,0,0,.4); }
+
+  /* ============ 5. NATIVE GLASS ============ */
+  .t5 .screen { background: #f2f2f7; color: #000; font-family: -apple-system, 'SF Pro Text', Inter, system-ui, sans-serif; }
+  .t5 .nav { display: flex; justify-content: space-between; padding: 4px 16px 0; color: #007aff; font-size: 16px; }
+  .t5 h1 { font-size: 33px; font-weight: 800; letter-spacing: -0.5px; padding: 4px 16px 2px; }
+  .t5 .sub { color: #8e8e93; font-size: 14px; padding: 0 16px; }
+  .t5 .glass { margin: 14px 16px 0; padding: 16px; border-radius: 22px; background: linear-gradient(135deg, #5b8cff, #7e5bff 60%, #c25bff); color: #fff; position: relative; overflow: hidden; }
+  .t5 .glass::after { content: ''; position: absolute; width: 180px; height: 180px; border-radius: 50%; background: rgba(255,255,255,.18); right: -50px; top: -70px; }
+  .t5 .glass .lbl { font-size: 13px; opacity: .85; }
+  .t5 .glass .big { font-size: 36px; font-weight: 700; letter-spacing: -0.5px; }
+  .t5 .hdr { font-size: 13px; color: #6d6d72; text-transform: uppercase; padding: 22px 32px 6px; }
+  .t5 .list { margin: 0 16px; background: #fff; border-radius: 14px; overflow: hidden; }
+  .t5 .cell { display: flex; align-items: center; gap: 12px; padding: 10px 14px; position: relative; }
+  .t5 .cell + .cell::before { content: ''; position: absolute; top: 0; right: 0; left: 62px; border-top: .5px solid #c6c6c8; }
+  .t5 .av { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 600; font-size: 15px; flex: none; }
+  .t5 .grow { flex: 1; min-width: 0; }
+  .t5 .nm { font-size: 16px; }
+  .t5 .mt { font-size: 13px; color: #8e8e93; }
+  .t5 .neg { color: #ff3b30; } .t5 .pos { color: #34c759; }
+  .t5 .chev { color: #c4c4c6; font-size: 18px; }
+  .t5 .tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 78px; background: rgba(249,249,249,.88); backdrop-filter: blur(20px); border-top: .5px solid #c6c6c8; display: flex; justify-content: space-around; padding-top: 8px; font-size: 10px; color: #8e8e93; }
+  .t5 .tabbar span { text-align: center; } .t5 .tabbar span i { display: block; font-style: normal; font-size: 22px; margin-bottom: 2px; }
+  .t5 .tabbar .on { color: #007aff; }
+  .t5 .tabbar .plus { width: 52px; height: 52px; border-radius: 50%; background: #007aff; color: #fff; display: grid; place-items: center; font-size: 28px; margin-top: -18px; box-shadow: 0 6px 16px -4px rgba(0,122,255,.6); }
+  .t5 .sheet { position: absolute; left: 0; right: 0; top: 54px; bottom: 0; background: #f2f2f7; border-radius: 14px 14px 0 0; box-shadow: 0 -4px 30px rgba(0,0,0,.25); }
+  .t5 .grab { width: 36px; height: 5px; border-radius: 3px; background: #c7c7cc; margin: 7px auto 0; }
+  .t5 .segc { display: flex; margin: 12px 16px 0; background: #e3e3e8; border-radius: 9px; padding: 2px; font-size: 13px; font-weight: 600; }
+  .t5 .segc span { flex: 1; text-align: center; padding: 6px; border-radius: 7px; }
+  .t5 .segc span.on { background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+  .t5 .amount { text-align: center; font-size: 56px; font-weight: 700; letter-spacing: -1px; padding: 18px 0 4px; }
+  .t5 .amount small { font-size: 28px; color: #8e8e93; }
+  .t5 .tog { width: 46px; height: 28px; border-radius: 99px; background: #34c759; position: relative; flex: none; }
+  .t5 .tog::after { content: ''; position: absolute; right: 2px; top: 2px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.2); }
+  .t5 .btn { margin: 0 16px; height: 50px; border-radius: 14px; background: #007aff; color: #fff; font-weight: 600; font-size: 17px; display: grid; place-items: center; }
+  .t5 .ring { width: 150px; height: 150px; margin: 14px auto 0; border-radius: 50%; background: conic-gradient(#34c759 0 62%, #e5e5ea 0); display: grid; place-items: center; }
+  .t5 .ring > div { width: 122px; height: 122px; border-radius: 50%; background: #f2f2f7; display: grid; place-items: center; text-align: center; }
+  .t5 .small-btn { padding: 6px 14px; border-radius: 99px; background: #e5f0ff; color: #007aff; font-weight: 600; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="intro">
+  <h1>Splitnext: five alternative designs</h1>
+  <p>Each direction redraws the same four screens with the same data: the groups list, a group's balances and expenses, adding an expense, and a person's details with Settle up. The current design (ink on warm paper, hairline rows, square black actions) is the baseline they move away from.</p>
+  <div class="nav"><a href="#d1">1 · Midnight</a><a href="#d2">2 · Postcard</a><a href="#d3">3 · Swiss</a><a href="#d4">4 · Receipt</a><a href="#d5">5 · Native glass</a></div>
+</div>
+<div id="root"></div>
+
+<script>
+const people = [
+  { n: 'Ana', you: true, b: -79.91, c: '#ffb86b', on: true },
+  { n: 'Cy', b: -246.66, c: '#9ad1ff' },
+  { n: 'Dana', b: -137.51, c: '#e2a6ff' },
+  { n: 'Ben', b: 464.08, c: '#c6f36b' },
+];
+const expenses = [
+  { d: 'Groceries', p: 'Cy', a: 57.25, e: '🛒', when: 'Today', ben: -14.32, why: 'share 1 of 4' },
+  { d: 'Train to Sintra', p: 'Dana', a: 38.40, e: '🚆', when: 'Yesterday', ben: -9.60, why: 'share 1 of 4' },
+  { d: 'Apartment', p: 'Ben', a: 640.00, e: '🏠', when: 'Mon 2 Nov', ben: 512.00, why: 'own share 128.00' },
+  { d: 'Dinner at Taberna', p: 'You', a: 96.00, e: '🍷', when: 'Sun 1 Nov', ben: -24.00, why: 'share 1 of 4' },
+];
+const groups = [
+  { n: 'Lisbon trip', ppl: 4, you: 'Ana', b: -79.91, e: '🌊' },
+  { n: 'Flat 3B', ppl: 3, you: 'Ana', b: 42.10, e: '🏡' },
+  { n: 'Ski weekend', ppl: 5, you: 'Ana', b: 0, e: '🎿' },
+];
+const split = [['Ana', 128], ['Ben', 128], ['Cy', 256], ['Dana', 128]];
+const settles = [['Dana', 137.51], ['Cy', 246.66], ['You', 79.91]];
+const hues = ['#3db07c', '#549de5', '#a584dc', '#d2833b'];
+const max = 464.08;
+const f = (v) => Math.abs(v).toFixed(2);
+const s = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + f(v);
+const sorted = [people[0], ...people.slice(1).sort((a, b) => a.b - b.b)];
+const status = '<div class="status"><span>9:41</span><span>●●● ▮</span></div>';
+const phone = (inner, cap) => `<div class="shot"><div class="phone"><div class="screen">${status}<div class="scroll">${inner}</div></div></div><div class="cap">${cap}</div></div>`;
+
+/* ---------- 1. Midnight ---------- */
+const t1 = {
+  name: 'Midnight', desc: 'Dark, calm, and card-based for evenings out. One lime accent marks money coming back and the main action; coral marks money owed. Your own position leads every screen, people get colour-coded initials, and a floating action stays under the thumb.',
+  sw: ['#0e1014', '#161922', '#c6f36b', '#ff8a7a', '#eef0f3'],
+  av: (p, size = '') => `<div class="av" style="background:${p.c}">${p.n[0]}${p.on ? '<span class="dot"></span>' : ''}</div>`,
+  groups() {
+    return `<div class="top"><span style="font-weight:700;color:#eef0f3;font-size:16px">splitnext</span><span class="ic">⚙</span></div>
+    <h1>Your groups</h1><div class="sub">Across 3 groups</div>
+    <div class="hero" style="margin-bottom:18px"><div class="lbl">Net, all groups</div><div class="big neg">−37.81</div>
+    <div class="chips"><span class="chip">You owe 79.91</span><span class="chip">Owed 42.10</span></div></div>
+    ${groups.map((g) => `<div class="gcard"><div style="display:flex;justify-content:space-between;align-items:center"><div><div class="nm" style="font-size:17px">${g.n}</div><div class="mt">${g.ppl} people · you're ${g.you}</div></div>
+      <div style="text-align:right"><div class="amt ${g.b < 0 ? 'neg' : g.b > 0 ? 'pos' : ''}">${g.b ? s(g.b) : 'settled'}</div></div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px"><div class="stack">${people.slice(0, Math.min(4, g.ppl)).map((p) => `<div class="av" style="background:${p.c}">${p.n[0]}</div>`).join('')}</div><span class="mt">${g.b < 0 ? 'Settle up ›' : 'Open ›'}</span></div></div>`).join('')}
+    <div class="fab">＋ New group</div>`;
+  },
+  group() {
+    return `<div class="top"><span>‹ Groups</span><span style="display:flex;gap:8px"><span class="ic">🔔</span><span class="ic">⤴</span></span></div>
+    <h1>Lisbon trip</h1><div class="sub">4 people · €831.65 spent</div>
+    <div class="hero"><div class="lbl">You owe</div><div class="big neg">79.91</div><div class="chips"><span class="chip lime">Settle up</span><span class="chip">Invite people</span></div></div>
+    <div class="sec"><span>Balances</span><span>+ Add person</span></div>
+    <div class="card">${sorted.map((p) => `<div class="li">${t1.av(p)}<div class="grow"><div class="nm">${p.n}${p.you ? ' <span class="mt">· you</span>' : ''}</div>
+      <div class="minibar"><b class="${p.b < 0 ? 'neg' : ''}" style="${p.b < 0 ? `right:50%;width:${Math.abs(p.b) / max * 50}%;background:#ff8a7a` : `left:50%;width:${p.b / max * 50}%;background:#c6f36b`}"></b></div></div>
+      <div class="amt ${p.b < 0 ? 'neg' : 'pos'}">${s(p.b)}</div></div>`).join('')}</div>
+    <div class="sec"><span>Recent</span><span>See all</span></div>
+    <div class="card">${expenses.slice(0, 2).map((e) => `<div class="li"><div class="ic">${e.e}</div><div class="grow"><div class="nm">${e.d}</div><div class="mt">${e.p} paid · ${e.when}</div></div><div class="amt">${f(e.a)}</div></div>`).join('')}</div>
+    <div class="fab">＋ Add expense</div>`;
+  },
+  add() {
+    return `<div class="top"><span>Cancel</span><span style="color:#eef0f3;font-weight:600">New expense</span><span style="color:#c6f36b;font-weight:600">Save</span></div>
+    <div class="seg"><span class="on">Expense</span><span>Payment</span></div>
+    <div style="text-align:center;padding:18px 0 4px"><div class="mt">EUR</div><div style="font:600 52px 'JetBrains Mono',monospace;letter-spacing:-2px">640.00</div></div>
+    <div style="text-align:center;font-size:17px;font-weight:600">🏠 Apartment</div>
+    <div style="display:flex;justify-content:center;gap:8px;margin-top:14px"><span class="pill">${t1.av(people[3])}Ben paid ▾</span><span class="pill" style="padding-left:12px">Split equally ▾</span></div>
+    <div class="card" style="margin-top:16px">${split.map(([n, a]) => { const p = people.find((x) => x.n === n); return `<div class="li" style="padding:9px 14px">${t1.av({ ...p, on: false })}<div class="grow nm">${n}${p.you ? ' <span class="mt">· you</span>' : ''}</div><span class="mt">${n === 'Cy' ? '×2' : '×1'}</span><div class="amt">${f(a)}</div></div>`; }).join('')}</div>
+    <div class="keypad">${['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'].map((k) => `<span>${k}</span>`).join('')}</div>`;
+  },
+  person() {
+    const ben = people[3];
+    return `<div class="top"><span>‹ Lisbon trip</span><span class="ic">✎</span></div>
+    <div style="display:flex;align-items:center;gap:14px;padding:16px 20px 0"><div class="av" style="background:${ben.c};width:56px;height:56px;border-radius:18px;font-size:22px">B</div><div><div style="font-size:26px;font-weight:700">Ben</div><div class="mt">○ Not taken on any device</div></div></div>
+    <div class="hero"><div class="lbl">Gets back</div><div class="big pos">+464.08</div><div class="minibar" style="height:6px;margin-top:12px"><b style="left:0;width:100%;background:#c6f36b"></b></div></div>
+    <div class="sec"><span>Settle up · 3 payments</span></div>
+    ${settles.map(([n, a]) => { const p = n === 'You' ? people[0] : people.find((x) => x.n === n); return `<div class="settle">${t1.av({ ...p, on: false })}<div class="grow"><div class="nm">${n} → Ben</div><div class="amt pos" style="font-size:14px">${f(a)}</div></div><span class="btn-s">Record</span></div>`; }).join('')}
+    <div class="sec"><span>Behind the balance</span></div>
+    <div class="card">${expenses.slice(0, 2).map((e) => `<div class="li"><div class="ic">${e.e}</div><div class="grow"><div class="nm">${e.d}</div><div class="mt">${e.p} paid ${f(e.a)}</div></div><div class="amt ${e.ben < 0 ? 'neg' : 'pos'}">${s(e.ben)}</div></div>`).join('')}</div>`;
+  },
+};
+
+/* ---------- 2. Postcard ---------- */
+const pc = { Ana: '#ffb86b', Ben: '#7be0a8', Cy: '#8fd3ff', Dana: '#d7b3ff', You: '#ffb86b' };
+const t2 = {
+  name: 'Postcard', desc: 'A playful travel-journal look: chunky rounded type, sticker cards with hard offset shadows, emoji categories, and people as big coloured faces. Built for friends on a trip; money still reads clearly, with green and red figures and bold labels instead of bars.',
+  sw: ['#fff3df', '#ffd84d', '#ff6f91', '#8fd3ff', '#1d1a16'],
+  av: (n) => `<div class="av" style="background:${pc[n]}">${n === 'You' ? 'A' : n[0]}</div>`,
+  groups() {
+    return `<div class="top"><span>splitnext ✈︎</span><span class="ic">☰</span></div>
+    <h1>Where to<br>next, Ana?</h1>
+    <div class="sec">Your groups <span class="tag">3</span></div>
+    ${groups.map((g, i) => `<div class="sticker gcard" style="background:${['#fff', '#fff', '#fff'][i]}">
+      ${g.b === 0 ? '<span class="tag stamp" style="background:#7be0a8">ALL SQUARE ✓</span>' : ''}
+      <div style="display:flex;gap:12px;align-items:center"><div class="emoji" style="background:${['#ffd84d', '#8fd3ff', '#d7b3ff'][i]}">${g.e}</div>
+      <div class="grow"><div class="nm" style="font-size:19px">${g.n}</div><div class="mt">${g.ppl} friends · you're ${g.you}</div></div></div>
+      ${g.b ? `<div style="margin-top:12px;font-weight:800;font-size:15px" class="${g.b < 0 ? 'neg' : 'pos'}">${g.b < 0 ? 'You owe ' : 'You get back '}€${f(g.b)}</div>` : ''}</div>`).join('')}
+    <div class="big-btn">＋ Start a new group</div>`;
+  },
+  group() {
+    return `<div class="top"><span class="ic">‹</span><span style="display:flex;gap:10px"><span class="ic">🔔</span><span class="ic">✎</span></span></div>
+    <h1>Lisbon trip 🌊</h1>
+    <div style="padding:6px 20px 0;font-weight:800;font-size:14px;color:#6d655a">4 friends · <u style="color:#1d1a16">Invite more</u></div>
+    <div class="people">${sorted.map((p) => `<div class="person"><div class="av" style="background:${pc[p.n]}">${p.n[0]}</div><div class="nm">${p.you ? 'You' : p.n}</div><div class="amt ${p.b < 0 ? 'neg' : 'pos'}">${s(p.b)}</div></div>`).join('')}<div class="person"><div class="av" style="background:#fff;border-style:dashed;box-shadow:none">＋</div><div class="nm" style="color:#6d655a">Add</div></div></div>
+    <div class="sticker hero" style="display:flex;justify-content:space-between;align-items:center"><div><div class="lbl">You owe the group</div><div class="big neg" style="color:#1d1a16">€79.91</div></div><span class="tag" style="font-size:13px;padding:6px 12px">Settle up →</span></div>
+    <div class="sec">What we spent <span class="mt">€831.65</span></div>
+    ${expenses.slice(0, 3).map((e, i) => `<div class="sticker exp"><div class="emoji" style="background:${['#ffd84d', '#8fd3ff', '#7be0a8'][i]}">${e.e}</div><div class="grow"><div class="nm">${e.d}</div><div class="mt">${e.p} paid · ${e.when}</div></div><div style="font-weight:900;font-size:17px">€${f(e.a)}</div></div>`).join('')}
+    <div class="big-btn">＋ Add expense</div>`;
+  },
+  add() {
+    return `<div class="top"><span class="ic">✕</span><span style="font-size:17px">New expense</span><span class="ic" style="background:#7be0a8">✓</span></div>
+    <div class="sticker amount-card"><div style="font-weight:800;font-size:14px">How much?</div><div class="big">€640.00</div></div>
+    <div class="sticker field"><span><span class="k">What for</span><br>🏠 Apartment</span><span style="display:flex;gap:6px"><span class="ppill">🏠</span><span class="ppill">🍷</span><span class="ppill">🚆</span></span></div>
+    <div class="sticker field"><span><span class="k">Who paid</span><br>Ben</span>${t2.av('Ben')}</div>
+    <div class="sec" style="padding-bottom:0">Split between <span class="tag">4</span></div>
+    <div class="split">${split.map(([, a], i) => `<b style="flex:${a};background:${pc[split[i][0]]}"></b>`).join('')}</div>
+    ${split.map(([n, a]) => `<div class="who">${t2.av(n)}<div class="grow nm">${n === 'Ana' ? 'You' : n}</div><span class="ppill">−</span><span style="font-weight:900;width:70px;text-align:center">€${f(a)}</span><span class="ppill">＋</span><span class="check">✓</span></div>`).join('')}
+    <div class="big-btn" style="background:#7be0a8">Save expense</div>`;
+  },
+  person() {
+    return `<div class="top"><span class="ic">‹</span><span class="ic">✎</span></div>
+    <div style="text-align:center;padding-top:6px"><div class="av" style="background:${pc.Ben};width:92px;height:92px;margin:0 auto;font-size:38px;box-shadow:4px 4px 0 #1d1a16">B</div>
+    <div style="font-size:32px;font-weight:900;margin-top:10px">Ben</div><span class="tag">not on any device yet</span></div>
+    <div class="sticker hero" style="background:#7be0a8;text-align:center"><div class="lbl">Ben gets back</div><div class="big">€464.08</div></div>
+    <div class="sec">Square up with Ben</div>
+    ${settles.map(([n, a]) => `<div class="sticker exp">${t2.av(n)}<div class="grow"><div class="nm">${n === "You" ? "You pay" : n + " pays"} Ben</div><div class="mt">€${f(a)}</div></div><span class="tag" style="background:#ffd84d;font-size:13px;padding:6px 12px">Paid ✓</span></div>`).join('')}
+    <div class="sec" style="font-size:15px">See how it adds up ↓</div>`;
+  },
+};
+
+/* ---------- 3. Swiss ---------- */
+const t3 = {
+  name: 'Swiss', desc: 'An editorial, grid-first take: Helvetica, oversized numbers, numbered rows on hard black rules, uppercase micro-labels, and a single red that means owing. Everything aligns to the same columns so balances read like a printed table. The split footer bar holds the two main actions.',
+  sw: ['#fafafa', '#111111', '#e3271c', '#888888'],
+  bar: (b) => `<div class="bar"><b style="${b < 0 ? `right:50%;width:${Math.abs(b) / max * 50}%;background:#e3271c` : `left:50%;width:${b / max * 50}%;background:#111`}"></b></div>`,
+  groups() {
+    return `<div class="top"><span>Splitnext</span><span>Ana ●</span></div>
+    <div class="bigtitle">Groups<span class="red">.</span></div>
+    <div class="meta"><span>Groups<b>03</b></span><span>You owe<b class="red">79.91</b></span><span>Owed<b>42.10</b></span></div>
+    <div style="margin-top:28px">${groups.map((g, i) => `<div class="gi"><span class="ix">0${i + 1}</span><div><div class="nm">${g.n}</div><div class="mt">${g.ppl} people — as ${g.you}</div></div><span class="num" style="font-weight:700;font-size:15px;${g.b < 0 ? 'color:#e3271c' : ''}">${g.b ? s(g.b) : '0.00'}</span></div>`).join('')}<div style="border-top:2px solid #111;margin:0 20px"></div></div>
+    <div class="bottom"><span class="k">Join with link</span><span class="r">New group <span>→</span></span></div>`;
+  },
+  group() {
+    return `<div class="top"><span>← Groups</span><span>Activity (2)</span></div>
+    <div class="bigtitle">Lisbon<br>trip<span class="red">.</span></div>
+    <div class="meta"><span>People<b>04</b></span><span>Spent<b>831.65</b></span><span>You<b class="red">−79.91</b></span></div>
+    <div class="label"><span>Balances</span><span class="red">Invite ↗</span></div>
+    ${sorted.map((p, i) => `<div class="grid-row"><span class="i">0${i + 1}</span><span>${p.n}${p.you ? ' <span class="i">(you)</span>' : ''}</span>${t3.bar(p.b)}<span class="a ${p.b < 0 ? 'neg' : ''}">${s(p.b)}</span></div>`).join('')}
+    <div class="label"><span>Expenses</span><span>04</span></div>
+    ${expenses.slice(0, 3).map((e) => `<div class="grid-row" style="grid-template-columns:1fr 80px"><span>${e.d} <span class="i">/ ${e.p}</span></span><span class="a">${f(e.a)}</span></div>`).join('')}
+    <div class="bottom"><span class="k">Settle up</span><span class="r">Add expense <span>+</span></span></div>`;
+  },
+  add() {
+    return `<div class="top"><span>Cancel</span><span class="red" style="font-weight:700">Save</span></div>
+    <div class="tabs"><span class="on">Expense</span><span>Payment</span></div>
+    <div class="amt-xl">640<span style="color:#bbb">.00</span></div>
+    <div style="padding:4px 20px 18px;font-size:11px;text-transform:uppercase;letter-spacing:.8px">EUR · Mon 2 Nov</div>
+    <div class="kv"><span class="k">For</span><span style="font-weight:700">Apartment</span></div>
+    <div class="kv"><span class="k">Paid by</span><span style="font-weight:700">Ben ↓</span></div>
+    <div class="kv" style="border-bottom:0"><span class="k">Split</span><span style="display:flex;height:16px;margin-top:2px">${split.map(([, a], i) => `<b style="flex:${a};background:${i % 2 ? '#111' : '#e3271c'};margin-right:2px"></b>`).join('')}</span></div>
+    ${split.map(([n, a], i) => `<div class="grid-row" style="grid-template-columns:26px 1fr 60px 80px 24px"><span class="i">0${i + 1}</span><span>${n}</span><span class="i" style="text-align:center">− ${n === 'Cy' ? 2 : 1} +</span><span class="a">${f(a)}</span><span style="text-align:right">■</span></div>`).join('')}
+    <div style="border-top:1px solid #111;margin:0 20px"></div>
+    <div class="bottom" style="grid-template-columns:1fr"><span class="k" style="justify-content:space-between">Save expense <span>→</span></span></div>`;
+  },
+  person() {
+    return `<div class="top"><span>← Lisbon trip</span><span>Rename</span></div>
+    <div class="bigtitle">Ben<span class="red">.</span></div>
+    <div style="padding:8px 20px 0;font-size:12px;color:#666">○ Not taken on any device</div>
+    <div class="label" style="padding-top:26px"><span>Gets back</span></div>
+    <div class="amt-xl" style="font-size:64px;letter-spacing:-3px;padding-top:0">+464.08</div>
+    <div style="margin:14px 20px 0;height:12px;display:flex"><b style="flex:1;background:#eee"></b><b style="width:1px;background:#111"></b><b style="flex:1;background:#111"></b></div>
+    <div class="label"><span>Settle up</span><span>03</span></div>
+    ${settles.map(([n, a], i) => `<div class="grid-row" style="grid-template-columns:26px 1fr 80px 70px"><span class="i">0${i + 1}</span><span>${n} → Ben</span><span class="a">${f(a)}</span><span style="text-align:right;font-weight:700;font-size:12px" class="red">RECORD</span></div>`).join('')}
+    <div class="label"><span>Records</span><span>04</span></div>
+    ${expenses.slice(0, 2).map((e) => `<div class="grid-row" style="grid-template-columns:1fr 80px"><span>${e.d}</span><span class="a ${e.ben < 0 ? 'neg' : ''}">${s(e.ben)}</span></div>`).join('')}`;
+  },
+};
+
+/* ---------- 4. Receipt ---------- */
+const t4 = {
+  name: 'Receipt', desc: 'Every screen is a printed till slip: monospace throughout, dotted leaders between names and amounts, dashed tear lines, zig-zag paper edges, and rubber stamps for status (OWES, SETTLED). Balances become text bars, so the ledger feels honest and physical while staying dense.',
+  sw: ['#d9d6cf', '#fffef8', '#222222', '#b33a1b', '#1f6b43'],
+  tb: (b) => { const n = Math.round(Math.abs(b) / max * 10); return `<span class="tbar ${b > 0 ? 'p' : ''}">${b < 0 ? ' '.repeat(10 - n).replace(/ /g, '&nbsp;') + '█'.repeat(n) + '|' + '&nbsp;'.repeat(10) : '&nbsp;'.repeat(10) + '|' + '█'.repeat(n)}</span>`; },
+  groups() {
+    return `<div class="paper"><div class="ctr brand">SPLITNEXT</div><div class="ctr small">YOUR GROUPS · 05 NOV 2026</div><div class="dash"></div>
+    ${groups.map((g, i) => `<div style="padding:6px 0"><div class="ln"><span class="d"><b>#${i + 1} ${g.n.toUpperCase()}</b></span><span class="${g.b < 0 ? 'neg' : g.b > 0 ? 'pos' : ''}">${g.b ? s(g.b) : 'SQ'}</span></div><div class="small">${g.ppl} PEOPLE · AS ${g.you.toUpperCase()}</div></div>`).join('<div class="dash"></div>')}
+    <div class="dash"></div><div class="total"><span>NET</span><span class="neg">−37.81</span></div><div class="dash"></div>
+    <div class="ctr small">*** THANK YOU, ANA ***</div><div class="barcode"></div></div>
+    <div class="foot">[ + NEW GROUP ]</div>`;
+  },
+  group() {
+    return `<div class="paper"><div class="ln small" style="padding:0"><span>‹ GROUPS</span><span>🔔 2</span></div>
+    <div class="ctr brand" style="margin-top:8px">LISBON TRIP</div><div class="ctr small">4 PEOPLE · <u>INVITE</u></div>
+    <div class="stamp">YOU OWE</div><div class="dash"></div><div class="small">BALANCES</div>
+    ${sorted.map((p) => `<div class="ln"><span style="width:62px">${p.n}${p.you ? '*' : ''}</span>${t4.tb(p.b)}<span class="${p.b < 0 ? 'neg' : 'pos'}" style="width:70px;text-align:right">${s(p.b)}</span></div>`).join('')}
+    <div class="small" style="margin-top:4px">* YOU · + ADD A PERSON</div><div class="dash"></div><div class="small">ITEMS</div>
+    ${expenses.map((e) => `<div class="ln"><span class="d">${e.d.toUpperCase()}</span><span>${f(e.a)}</span></div><div class="small" style="margin:-3px 0 4px">&nbsp;&nbsp;PAID BY ${e.p.toUpperCase()} ÷ 4</div>`).join('')}
+    <div class="dash"></div><div class="total"><span>TOTAL</span><span>831.65</span></div></div>
+    <div class="foot">[ + ADD EXPENSE ]</div>`;
+  },
+  add() {
+    return `<div class="paper"><div class="ln small" style="padding:0"><span>CANCEL</span><span><b>[EXPENSE]</b> PAYMENT</span></div>
+    <div class="dash"></div><div class="small">AMOUNT EUR</div><div style="font-size:48px;font-weight:700;letter-spacing:-2px;text-align:right">640.00<span style="animation:none;border-right:3px solid #222;margin-left:2px"></span></div>
+    <div class="dash"></div><div class="ln"><span class="small">FOR</span><span><b>APARTMENT</b></span></div><div class="ln"><span class="small">PAID BY</span><span><b>BEN ▾</b></span></div>
+    <div class="dash"></div><div class="small">SPLIT BETWEEN 4</div>
+    ${split.map(([n, a]) => `<div class="ln"><span><span class="tick">[x]</span>${n.toUpperCase()}</span><span class="small" style="align-self:center">${n === 'Cy' ? '[-] 2 [+]' : '[-] 1 [+]'}</span><span style="width:70px;text-align:right">${f(a)}</span></div>`).join('')}
+    <div class="dash"></div><div class="total"><span>TOTAL</span><span>640.00</span></div><div class="ctr small" style="margin-top:6px">BALANCES ✓ ADDS UP</div></div>
+    <div class="foot">[ PRINT & SAVE ]</div>`;
+  },
+  person() {
+    return `<div class="paper"><div class="ln small" style="padding:0"><span>‹ LISBON TRIP</span><span>✎</span></div>
+    <div class="ctr brand" style="margin-top:8px;font-size:26px">BEN</div><div class="ctr small">○ NOT TAKEN ON ANY DEVICE</div><div class="stamp g">GETS BACK</div>
+    <div class="dash"></div>
+    ${expenses.map((e) => `<div class="ln"><span class="d">${e.d.toUpperCase()}</span><span class="${e.ben < 0 ? 'neg' : 'pos'}">${s(e.ben)}</span></div>`).join('')}
+    <div class="dash"></div><div class="total"><span>BALANCE</span><span class="pos">+464.08</span></div></div>
+    <div class="rcpt" style="margin-top:22px"><div class="small">SETTLE UP — TEAR & RECORD</div><div class="dash" style="margin:8px 0"></div>
+    ${settles.map(([n, a]) => `<div class="ln"><span>${n.toUpperCase()} → BEN</span><span>${f(a)} <b>[REC]</b></span></div>`).join('')}</div>`;
+  },
+};
+
+/* ---------- 5. Native glass ---------- */
+const nc = { Ana: '#ff9f0a', Ben: '#34c759', Cy: '#0a84ff', Dana: '#bf5af2', You: '#ff9f0a' };
+const t5 = {
+  name: 'Native glass', desc: 'Feels like a first-party phone app: system type, inset grouped lists, a gradient summary card, a translucent tab bar with a central add button, and Add expense as a pull-down sheet. Familiar patterns (toggles, segmented controls, chevrons, a progress ring) trade personality for zero learning curve.',
+  sw: ['#f2f2f7', '#ffffff', '#007aff', '#7e5bff', '#34c759', '#ff3b30'],
+  av: (n) => `<div class="av" style="background:${nc[n]}">${n === 'You' ? 'A' : n[0]}</div>`,
+  tab: (on) => `<div class="tabbar"><span class="${on === 0 ? 'on' : ''}"><i>◎</i>Groups</span><span class="${on === 1 ? 'on' : ''}"><i>☰</i>Activity</span><span><div class="plus">+</div></span><span><i>⇄</i>Settle</span><span><i>⚙</i>Settings</span></div>`,
+  groups() {
+    return `<div class="nav"><span>Edit</span><span>Join</span></div><h1>Groups</h1>
+    <div class="glass"><div class="lbl">Overall</div><div class="big">−€37.81</div><div class="lbl" style="margin-top:4px">You owe 79.91 · you're owed 42.10</div></div>
+    <div class="hdr">Active</div><div class="list">${groups.map((g) => `<div class="cell"><div class="av" style="background:#e5e5ea;font-size:18px">${g.e}</div><div class="grow"><div class="nm">${g.n}</div><div class="mt">${g.ppl} people · ${g.you}</div></div><span class="${g.b < 0 ? 'neg' : g.b > 0 ? 'pos' : 'mt'}" style="font-size:15px">${g.b ? s(g.b) : 'Settled'}</span><span class="chev">›</span></div>`).join('')}</div>
+    ${t5.tab(0)}`;
+  },
+  group() {
+    return `<div class="nav"><span>‹ Groups</span><span>Invite</span></div><h1>Lisbon trip</h1><div class="sub">4 people · €831.65 total</div>
+    <div class="glass" style="display:flex;justify-content:space-between;align-items:end"><div><div class="lbl">You owe</div><div class="big">€79.91</div></div><span style="background:rgba(255,255,255,.25);padding:8px 14px;border-radius:99px;font-weight:600;font-size:14px;position:relative;z-index:1">Settle up</span></div>
+    <div class="hdr">Balances</div><div class="list">${sorted.map((p) => `<div class="cell">${t5.av(p.n)}<div class="grow"><div class="nm">${p.n}${p.you ? ' <span class="mt">(You)</span>' : ''}</div></div><span class="${p.b < 0 ? 'neg' : 'pos'}" style="font-size:15px">${s(p.b)}</span><span class="chev">›</span></div>`).join('')}<div class="cell" style="color:#007aff"><div class="av" style="background:#e5f0ff;color:#007aff">+</div>Add Person</div></div>
+    <div class="hdr">Expenses</div><div class="list">${expenses.slice(0, 2).map((e) => `<div class="cell"><div class="av" style="background:#e5e5ea;font-size:17px">${e.e}</div><div class="grow"><div class="nm">${e.d}</div><div class="mt">${e.p} paid</div></div><span style="font-size:15px">€${f(e.a)}</span></div>`).join('')}</div>
+    ${t5.tab(-1)}`;
+  },
+  add() {
+    return `<div style="filter:brightness(.6);transform:scale(.94);transform-origin:top"><div class="nav"><span>‹ Groups</span></div><h1>Lisbon trip</h1></div>
+    <div class="sheet"><div class="grab"></div><div class="nav" style="padding-top:8px"><span>Cancel</span><b style="color:#000">New Expense</b><b>Add</b></div>
+    <div class="segc"><span class="on">Expense</span><span>Payment</span></div>
+    <div class="amount"><small>€</small>640<small>.00</small></div>
+    <div class="list"><div class="cell"><span class="grow mt" style="color:#000">Description</span><span>Apartment</span></div><div class="cell"><span class="grow" style="color:#000">Paid by</span>${t5.av('Ben')}<span>Ben</span><span class="chev">›</span></div><div class="cell"><span class="grow">Split</span><span class="mt">By shares</span><span class="chev">›</span></div></div>
+    <div class="hdr">Split between</div><div class="list">${split.map(([n, a]) => `<div class="cell" style="padding:7px 14px">${t5.av(n)}<div class="grow"><div class="nm">${n}</div><div class="mt">€${f(a)}${n === 'Cy' ? ' · 2 shares' : ''}</div></div><div class="tog"></div></div>`).join('')}</div></div>`;
+  },
+  person() {
+    return `<div class="nav"><span>‹ Lisbon trip</span><span>Edit</span></div>
+    <div style="text-align:center;padding-top:10px">${'<div class="av" style="background:#34c759;width:72px;height:72px;margin:0 auto;font-size:30px">B</div>'}<div style="font-size:26px;font-weight:700;margin-top:8px">Ben</div><div class="mt">Not taken on any device</div></div>
+    <div class="ring"><div><div><div class="mt">Gets back</div><div class="pos" style="font-size:24px;font-weight:700">€464.08</div><div class="mt" style="font-size:11px">of 640.00 paid</div></div></div></div>
+    <div class="hdr">Settle up</div><div class="list">${settles.map(([n, a]) => `<div class="cell">${t5.av(n)}<div class="grow"><div class="nm">${n} → Ben</div><div class="mt">€${f(a)}</div></div><span class="small-btn">Record</span></div>`).join('')}</div>
+    <div class="hdr">History</div><div class="list">${expenses.slice(0, 1).map((e) => `<div class="cell"><div class="av" style="background:#e5e5ea;font-size:17px">${e.e}</div><div class="grow"><div class="nm">${e.d}</div><div class="mt">${e.why}</div></div><span class="${e.ben < 0 ? 'neg' : 'pos'}">${s(e.ben)}</span></div>`).join('')}</div>`;
+  },
+};
+
+const themes = [t1, t2, t3, t4, t5];
+document.getElementById('root').innerHTML = themes.map((t, i) => `
+  <section class="dir t${i + 1}" id="d${i + 1}">
+    <div class="dir-head"><span class="n">0${i + 1}</span><h2>${t.name}</h2></div>
+    <p class="dir-desc">${t.desc}</p>
+    <div class="swatches">${t.sw.map((c) => `<i style="background:${c}"></i>`).join('')}</div>
+    <div class="row">${phone(t.groups(), 'Groups')}${phone(t.group(), 'Group · balances & expenses')}${phone(t.add(), 'Add expense')}${phone(t.person(), 'Person · settle up')}</div>
+  </section>`).join('');
+</script>
+</body>
+</html>

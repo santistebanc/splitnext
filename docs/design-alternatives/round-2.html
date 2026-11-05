@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Splitnext: five flat designs (round 2)</title>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e9e7e2; font-family: Inter, system-ui, sans-serif; color: #1a1917; padding: 40px 32px 80px; }
+  .intro { max-width: 1560px; margin: 0 auto 40px; }
+  .intro h1 { font-size: 32px; letter-spacing: -1px; }
+  .intro p { color: #5c5b56; margin-top: 8px; max-width: 760px; line-height: 1.5; }
+  section.dir { max-width: 1560px; margin: 0 auto 64px; }
+  .dir-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .dir-head .n { font: 600 13px 'Geist Mono', monospace; color: #8b8a83; }
+  .dir-head h2 { font-size: 24px; letter-spacing: -0.5px; }
+  .dir-desc { color: #5c5b56; font-size: 14px; line-height: 1.5; max-width: 900px; margin-bottom: 20px; }
+  .row { display: flex; gap: 28px; overflow-x: auto; padding-bottom: 12px; }
+  .shot { flex: none; }
+  .cap { font-size: 12px; color: #6d6c66; margin-top: 10px; text-align: center; }
+  .phone { width: 360px; height: 760px; border-radius: 44px; padding: 10px; background: #1b1b1a; box-shadow: 0 30px 60px -30px rgba(0,0,0,.4); }
+  .screen { width: 100%; height: 100%; border-radius: 34px; overflow: hidden; position: relative; display: flex; flex-direction: column; }
+  .status { height: 38px; flex: none; display: flex; justify-content: space-between; align-items: center; padding: 0 26px; font: 600 13px Inter, sans-serif; }
+  .body { flex: 1; position: relative; overflow: hidden; }
+  svg.i { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
+  .tn { font-variant-numeric: tabular-nums; }
+  .hdr { display: flex; justify-content: space-between; align-items: center; height: 44px; padding: 0 20px; }
+  .hdr .acts { display: flex; gap: 18px; }
+  .foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 20px 26px; }
+
+  /* ============ A. PIGMENT ============ */
+  .a .screen { background: #f7f4ee; color: #1d1b18; font-family: Figtree, sans-serif; }
+  .a .muted { color: #8a857c; }
+  .a .hdr { color: #6b665e; font-size: 15px; font-weight: 500; }
+  .a h1 { font-size: 32px; font-weight: 800; letter-spacing: -1px; padding: 6px 20px 14px; line-height: 1.05; }
+  .a .owe { color: #c4512a; } .a .back { color: #23804f; }
+  .a .brow { position: relative; display: flex; align-items: center; height: 50px; padding: 0 20px; font-size: 16px; font-weight: 600; }
+  .a .brow + .brow { border-top: 1px solid rgba(29,27,24,.07); }
+  .a .brow .fill { position: absolute; top: 0; bottom: 0; }
+  .a .brow .axis { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: rgba(29,27,24,.35); }
+  .a .brow span { position: relative; }
+  .a .brow .v { margin-left: auto; font-weight: 600; }
+  .a .you { font-size: 12px; font-weight: 500; color: #8a857c; margin-left: 6px; }
+  .a .add { padding: 12px 20px; color: #8a857c; font-size: 15px; font-weight: 500; }
+  .a .day { padding: 18px 20px 4px; font-size: 12px; font-weight: 600; color: #8a857c; letter-spacing: .3px; }
+  .a .erow { display: flex; align-items: baseline; padding: 9px 20px; }
+  .a .erow .t { font-size: 16px; font-weight: 600; }
+  .a .erow .s { font-size: 13px; color: #8a857c; margin-top: 1px; }
+  .a .erow .v { margin-left: auto; font-size: 16px; font-weight: 600; }
+  .a .btn { height: 52px; border-radius: 8px; background: #1d1b18; color: #f7f4ee; display: grid; place-items: center; font-weight: 700; font-size: 16px; }
+  .a .grow { padding: 14px 20px; position: relative; display: flex; align-items: center; }
+  .a .grow + .grow { border-top: 1px solid rgba(29,27,24,.07); }
+  .a .grow .t { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+  .a .grow .s { font-size: 13px; color: #8a857c; margin-top: 2px; }
+  .a .chips { display: flex; gap: 6px; padding: 0 20px; flex-wrap: wrap; }
+  .a .chip { padding: 8px 12px; border-radius: 6px; font-size: 14px; font-weight: 600; background: rgba(29,27,24,.06); }
+  .a .chip.on { background: #1d1b18; color: #f7f4ee; }
+  .a .lbl { padding: 18px 20px 8px; font-size: 12px; font-weight: 600; color: #8a857c; }
+  .a .srow { display: flex; align-items: center; padding: 0 20px; height: 46px; font-size: 16px; font-weight: 600; }
+  .a .srow + .srow { border-top: 1px solid rgba(29,27,24,.07); }
+  .a .step { color: #8a857c; font-weight: 500; margin-left: auto; margin-right: 16px; font-size: 14px; letter-spacing: 2px; }
+  .a .tog { display: flex; gap: 16px; font-size: 15px; font-weight: 600; }
+  .a .tog .on { color: #1d1b18; border-bottom: 2px solid #1d1b18; padding-bottom: 2px; }
+
+  /* ============ B. JOURNAL ============ */
+  .b .screen { background: #fbf8f2; color: #2a2622; font-family: Inter, sans-serif; }
+  .b .serif { font-family: Fraunces, Georgia, serif; }
+  .b .muted { color: #958c80; }
+  .b .owe { color: #b5502c; } .b .back { color: #48785a; }
+  .b .hdr { color: #958c80; font-size: 15px; }
+  .b h1 { font-family: Fraunces, serif; font-weight: 600; font-size: 36px; letter-spacing: -0.8px; padding: 4px 22px 0; line-height: 1.05; }
+  .b .lede { font-family: Fraunces, serif; font-size: 21px; line-height: 1.35; padding: 10px 22px 0; }
+  .b .lede u { text-decoration-thickness: 1px; text-underline-offset: 4px; }
+  .b .link { font-size: 14px; font-weight: 600; color: #2a2622; text-decoration: underline; text-underline-offset: 3px; }
+  .b .line { position: relative; height: 92px; margin: 18px 22px 0; }
+  .b .line .ax { position: absolute; left: 0; right: 0; top: 56px; height: 1px; background: #d9d1c4; }
+  .b .line .zero { position: absolute; left: var(--z); top: 48px; height: 17px; width: 1px; background: #2a2622; }
+  .b .line .pt { position: absolute; top: 0; transform: translateX(-50%); text-align: center; font-size: 12px; white-space: nowrap; }
+  .b .line .pt b { display: block; font-weight: 600; font-size: 13px; color: #2a2622; }
+  .b .line .pt i { display: block; width: 11px; height: 11px; border-radius: 50%; margin: 6px auto 0; }
+  .b .line .pt.lo { top: 52px; } .b .line .pt.lo i { margin: 0 auto 6px; }
+  .b .day { font-family: Fraunces, serif; font-style: italic; font-size: 15px; color: #958c80; padding: 18px 22px 4px; }
+  .b .erow { display: flex; padding: 7px 22px; align-items: baseline; font-size: 16px; }
+  .b .erow .s { color: #958c80; font-size: 13px; margin-left: 8px; }
+  .b .erow .v { margin-left: auto; }
+  .b .foot { display: flex; gap: 12px; align-items: center; background: linear-gradient(transparent, #fbf8f2 30%); padding-top: 30px; }
+  .b .btn { flex: 1; height: 50px; border-radius: 6px; background: #2a2622; color: #fbf8f2; display: grid; place-items: center; font-weight: 600; font-size: 16px; }
+  .b .grp { padding: 16px 22px; display: flex; align-items: baseline; }
+  .b .grp + .grp { border-top: 1px solid #ece5d9; }
+  .b .grp .t { font-family: Fraunces, serif; font-size: 25px; letter-spacing: -0.4px; }
+  .b .grp .s { font-size: 13px; color: #958c80; margin-top: 3px; }
+  .b .grp .v { margin-left: auto; font-size: 16px; }
+  .b .madlib { font-family: Fraunces, serif; font-size: 27px; line-height: 1.5; padding: 22px 22px 0; letter-spacing: -0.3px; }
+  .b .madlib .tok { border-bottom: 1.5px solid #2a2622; padding-bottom: 1px; }
+  .b .madlib .ph { color: #c2b8a8; border-bottom: 1.5px dashed #c2b8a8; }
+  .b .madlib .amt { font-family: Inter, sans-serif; font-weight: 600; letter-spacing: -1px; }
+  .b .brk { display: flex; padding: 8px 22px; font-size: 15px; align-items: center; }
+  .b .brk .v { margin-left: auto; }
+  .b .brk .st { color: #958c80; font-size: 13px; margin-left: 10px; letter-spacing: 1px; }
+  .b .rule { height: 1px; background: #ece5d9; margin: 6px 22px; }
+
+  /* ============ C. FIELD ============ */
+  .c .screen { background: #ffffff; color: #17181a; font-family: Manrope, sans-serif; }
+  .c .field { color: #fff; padding-bottom: 22px; }
+  .c .field .hdr { color: rgba(255,255,255,.85); font-weight: 600; font-size: 15px; }
+  .c .field h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.8px; padding: 2px 20px 0; }
+  .c .field .big { font-size: 46px; font-weight: 700; letter-spacing: -1.6px; padding: 12px 20px 0; line-height: 1; }
+  .c .field .cap2 { font-size: 14px; font-weight: 600; opacity: .85; padding: 0 20px; }
+  .c .field .act { display: inline-block; margin: 14px 20px 0; padding: 8px 14px; border-radius: 6px; background: rgba(255,255,255,.2); font-weight: 700; font-size: 14px; }
+  .c .owe { color: #d84e2a; } .c .back { color: #1c8a55; }
+  .c .prow { display: flex; align-items: center; gap: 12px; padding: 10px 20px; }
+  .c .sq { width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; font-weight: 800; font-size: 13px; color: #fff; flex: none; }
+  .c .prow .n { font-weight: 700; font-size: 15px; width: 64px; }
+  .c .prow .bar { flex: 1; height: 6px; position: relative; }
+  .c .prow .bar::before { content: ''; position: absolute; left: 50%; top: -5px; bottom: -5px; width: 1px; background: #d4d6da; }
+  .c .prow .bar b { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+  .c .prow .v { width: 72px; text-align: right; font-weight: 700; font-size: 15px; }
+  .c .lbl { padding: 18px 20px 6px; font-size: 12px; font-weight: 700; color: #8d9097; text-transform: uppercase; letter-spacing: .8px; display: flex; justify-content: space-between; }
+  .c .erow { display: flex; align-items: center; gap: 12px; padding: 9px 20px; }
+  .c .erow .t { font-weight: 700; font-size: 15px; }
+  .c .erow .s { font-size: 13px; color: #8d9097; }
+  .c .erow .v { margin-left: auto; font-weight: 700; font-size: 15px; }
+  .c .foot { background: #fff; border-top: 1px solid #eceef1; }
+  .c .btn { height: 50px; border-radius: 8px; background: #17181a; color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 16px; }
+  .c .grow { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 1px solid #eceef1; }
+  .c .grow .stripe { width: 4px; align-self: stretch; border-radius: 2px; }
+  .c .grow .t { font-weight: 800; font-size: 19px; letter-spacing: -0.3px; }
+  .c .grow .s { font-size: 13px; color: #8d9097; margin-top: 2px; }
+  .c .grow .v { margin-left: auto; font-weight: 700; }
+  .c .payer { display: flex; gap: 14px; padding: 4px 20px 0; }
+  .c .payer div { text-align: center; font-size: 12px; font-weight: 700; color: #8d9097; }
+  .c .payer .sq { width: 42px; height: 42px; font-size: 16px; margin-bottom: 4px; opacity: .35; }
+  .c .payer .on { color: #17181a; } .c .payer .on .sq { opacity: 1; outline: 2px solid #17181a; outline-offset: 2px; }
+
+  /* ============ D. NIGHT ============ */
+  .d .screen { background: #111214; color: #ececec; font-family: Geist, Inter, sans-serif; }
+  .d .status { color: #ececec; }
+  .d .mono { font-family: 'Geist Mono', monospace; }
+  .d .muted { color: #7c7f86; }
+  .d .owe { color: #ff8a6b; } .d .back { color: #5fd3a0; }
+  .d .hdr { color: #9a9da4; font-size: 15px; }
+  .d h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.9px; padding: 4px 20px 0; }
+  .d .sum { padding: 6px 20px 0; font-size: 15px; color: #9a9da4; }
+  .d .prow { padding: 12px 20px 10px; }
+  .d .prow + .prow { border-top: 1px solid #1f2125; }
+  .d .prow .top { display: flex; font-size: 15px; font-weight: 500; }
+  .d .prow .top .v { margin-left: auto; font-family: 'Geist Mono', monospace; }
+  .d .prow .bar { height: 3px; margin-top: 9px; position: relative; background: #1f2125; }
+  .d .prow .bar::before { content: ''; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: #55585f; }
+  .d .prow .bar b { position: absolute; top: 0; bottom: 0; }
+  .d .lbl { padding: 22px 20px 6px; font-size: 12px; color: #7c7f86; display: flex; justify-content: space-between; }
+  .d .erow { display: flex; padding: 9px 20px; align-items: baseline; font-size: 15px; }
+  .d .erow .s { color: #7c7f86; font-size: 13px; margin-left: 8px; }
+  .d .erow .v { margin-left: auto; font-family: 'Geist Mono', monospace; }
+  .d .nav { position: absolute; left: 0; right: 0; bottom: 0; height: 76px; border-top: 1px solid #1f2125; background: #111214; display: flex; align-items: center; justify-content: space-between; padding: 0 28px 14px; color: #7c7f86; }
+  .d .nav .on { color: #ececec; }
+  .d .nav .plus { height: 44px; padding: 0 18px; border-radius: 8px; background: #ececec; color: #111214; display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 15px; }
+  .d .grow { padding: 14px 20px; display: flex; align-items: baseline; }
+  .d .grow + .grow { border-top: 1px solid #1f2125; }
+  .d .grow .t { font-size: 19px; font-weight: 600; letter-spacing: -0.3px; }
+  .d .grow .s { font-size: 13px; color: #7c7f86; margin-top: 3px; }
+  .d .grow .v { margin-left: auto; font-family: 'Geist Mono', monospace; font-size: 15px; }
+  .d .keys { position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(3,1fr); border-top: 1px solid #1f2125; padding-bottom: 18px; }
+  .d .keys span { height: 52px; display: grid; place-items: center; font: 400 22px 'Geist Mono', monospace; }
+  .d .srow { display: flex; align-items: center; padding: 10px 20px; font-size: 15px; }
+  .d .srow .v { margin-left: auto; font-family: 'Geist Mono', monospace; }
+
+  /* ============ E. STRIP ============ */
+  .e .screen { background: #fdfdfc; color: #191a1f; font-family: 'Plus Jakarta Sans', sans-serif; }
+  .e .muted { color: #8b8d96; }
+  .e .owe { color: #d0492b; } .e .back { color: #138a5a; }
+  .e .hdr { color: #8b8d96; font-size: 15px; font-weight: 500; }
+  .e h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.8px; padding: 2px 20px 0; }
+  .e .strip { display: flex; padding: 16px 20px 0; justify-content: space-between; }
+  .e .p { text-align: center; width: 64px; }
+  .e .p .c { width: 46px; height: 46px; border-radius: 50%; margin: 0 auto; display: grid; place-items: center; font-weight: 800; font-size: 17px; color: #191a1f; position: relative; }
+  .e .p .c.me::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid #191a1f; }
+  .e .p .n { font-size: 13px; font-weight: 600; margin-top: 7px; }
+  .e .p .v { font-size: 12px; font-weight: 700; margin-top: 1px; }
+  .e .tabs { display: flex; gap: 22px; padding: 22px 20px 0; border-bottom: 1px solid #ececef; font-size: 15px; font-weight: 700; color: #a3a5ad; }
+  .e .tabs span { padding-bottom: 10px; }
+  .e .tabs .on { color: #191a1f; box-shadow: inset 0 -2px #191a1f; }
+  .e .day { padding: 16px 20px 2px; font-size: 12px; font-weight: 700; color: #a3a5ad; }
+  .e .erow { display: flex; align-items: center; gap: 12px; padding: 9px 20px; }
+  .e .ico { width: 36px; height: 36px; border-radius: 8px; background: #f1f1f3; display: grid; place-items: center; font-size: 17px; flex: none; }
+  .e .erow .t { font-weight: 700; font-size: 15px; }
+  .e .erow .s { font-size: 13px; color: #8b8d96; }
+  .e .erow .v { margin-left: auto; text-align: right; font-weight: 700; font-size: 15px; }
+  .e .erow .v small { display: block; font-size: 12px; font-weight: 600; }
+  .e .btn { height: 52px; border-radius: 8px; background: #191a1f; color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 16px; }
+  .e .foot { background: linear-gradient(transparent, #fdfdfc 30%); padding-top: 30px; }
+  .e .grow { display: flex; align-items: center; gap: 14px; padding: 14px 20px; }
+  .e .grow + .grow { border-top: 1px solid #ececef; }
+  .e .stack { display: flex; width: 78px; flex: none; }
+  .e .stack i { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fdfdfc; margin-left: -8px; display: grid; place-items: center; font-style: normal; font-size: 10px; font-weight: 800; }
+  .e .stack i:first-child { margin-left: 0; }
+</style>
+</head>
+<body>
+<div class="intro">
+  <h1>Splitnext: five flat designs</h1>
+  <p>Second round, from your feedback: everything sits on one flat surface, rows run the full width, corners stay at 8px or less, there are no cards inside cards, and nothing is labelled twice. Each direction gets its character from type and colour, not from decoration.</p>
+</div>
+<div id="root"></div>
+<script>
+const I = {
+  back: '<svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+  bell: '<svg class="i" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1112 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 004 0"/></svg>',
+  share: '<svg class="i" viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 13v7h14v-7"/></svg>',
+  edit: '<svg class="i" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  plus: '<svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  home: '<svg class="i" viewBox="0 0 24 24"><path d="M4 10l8-6 8 6v10H4z"/></svg>',
+  list: '<svg class="i" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h9"/></svg>',
+  x: '<svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  del: '<svg class="i" viewBox="0 0 24 24"><path d="M9 6h11v12H9l-6-6z"/></svg>',
+};
+const P = [
+  { n: 'Ana', you: true, b: -79.91 },
+  { n: 'Cy', b: -246.66 },
+  { n: 'Dana', b: -137.51 },
+  { n: 'Ben', b: 464.08 },
+];
+const E = [
+  { d: 'Groceries', p: 'Cy', a: 57.25, day: 'Today', e: '🛒', you: -14.31, ben: -14.32 },
+  { d: 'Train to Sintra', p: 'Dana', a: 38.40, day: 'Yesterday', e: '🚆', you: -9.60, ben: -9.60 },
+  { d: 'Apartment', p: 'Ben', a: 640.00, day: 'Mon 2 Nov', e: '🏠', you: -128.00, ben: 512.00 },
+  { d: 'Dinner at Taberna', p: 'You', a: 96.00, day: 'Mon 2 Nov', e: '🍷', you: 72.00, ben: -24.00 },
+];
+const G = [
+  { n: 'Lisbon trip', m: 'Ana, Ben, Cy, Dana', b: -79.91 },
+  { n: 'Flat 3B', m: 'Ana, Jo, Sam', b: 42.10 },
+  { n: 'Ski weekend', m: 'Ana, Kim, Lu, Max, Nia', b: 0 },
+];
+const SPLIT = [['Ana', 1, 128], ['Ben', 1, 128], ['Cy', 2, 256], ['Dana', 1, 128]];
+const SETTLE = [['Dana', 137.51], ['Cy', 246.66], ['You', 79.91]];
+const MAX = 464.08;
+const f = (v) => Math.abs(v).toFixed(2);
+const s = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + f(v);
+const cls = (v) => (v < 0 ? 'owe' : v > 0 ? 'back' : 'muted');
+const ord = [P[0], ...P.slice(1).sort((x, y) => x.b - y.b)];
+const days = (list) => { const out = []; list.forEach((e) => { const g = out.find((d) => d.day === e.day); g ? g.items.push(e) : out.push({ day: e.day, items: [e] }); }); return out; };
+const status = '<div class="status"><span>9:41</span><span>▂▄▆ ▮</span></div>';
+const phone = (inner, cap) => `<div class="shot"><div class="phone"><div class="screen">${status}<div class="body">${inner}</div></div></div><div class="cap">${cap}</div></div>`;
+const pct = (v) => Math.abs(v) / MAX * 50;
+
+/* ---------- A. Pigment ---------- */
+const A = {
+  name: 'Pigment',
+  desc: 'Each row is its own bar. A balance tints the row itself, out from a centre line: terracotta to the left for what someone owes, green to the right for what they get back. That way the chart costs no extra space. Warm paper and Figtree type, one dark action at the foot, and back, Activity and Invite as plain header icons.',
+  fill: (v, a = 0.15) => v < 0 ? `right:50%;width:${pct(v)}%;background:rgba(196,81,42,${a})` : `left:50%;width:${pct(v)}%;background:rgba(35,128,79,${a})`,
+  groups() {
+    return `<div class="hdr"><span style="font-weight:800;color:#1d1b18;font-size:17px">splitnext</span><span>Join</span></div>
+    <h1>Groups</h1>
+    ${G.map((g) => `<div class="grow"><div><div class="t">${g.n}</div><div class="s">${g.m}</div></div><span class="tn ${cls(g.b)}" style="margin-left:auto;font-weight:600;font-size:16px">${g.b ? s(g.b) : '0.00'}</span></div>`).join('')}
+    <div class="foot"><div class="btn">New group</div></div>`;
+  },
+  group() {
+    return `<div class="hdr"><span>${I.back} Groups</span><span class="acts">${I.share}${I.bell}</span></div>
+    <h1>Lisbon trip</h1>
+    ${ord.map((p) => `<div class="brow"><div class="fill" style="${A.fill(p.b)}"></div><div class="axis"></div><span>${p.n}${p.you ? '<span class="you">you</span>' : ''}</span><span class="v tn ${cls(p.b)}">${s(p.b)}</span></div>`).join('')}
+    <div class="add">+ Add a person</div>
+    ${days(E).map((d) => `<div class="day">${d.day}</div>${d.items.map((e) => `<div class="erow"><div><div class="t">${e.d}</div><div class="s">${e.p} paid</div></div><span class="v tn">${f(e.a)}</span></div>`).join('')}`).join('')}
+    <div class="foot" style="background:linear-gradient(transparent,#f7f4ee 30%);padding-top:30px"><div class="btn">Add expense</div></div>`;
+  },
+  add() {
+    return `<div class="hdr"><span>Cancel</span><span class="tog"><span class="on">Expense</span><span class="muted">Payment</span></span><span style="width:46px"></span></div>
+    <div class="tn" style="font-size:64px;font-weight:700;letter-spacing:-2.5px;padding:18px 20px 0;line-height:1">640.00</div>
+    <div style="font-size:20px;font-weight:600;padding:12px 20px 0">Apartment</div>
+    <div class="lbl">Paid by</div>
+    <div class="chips">${['Ana', 'Ben', 'Cy', 'Dana'].map((n) => `<span class="chip ${n === 'Ben' ? 'on' : ''}">${n}</span>`).join('')}</div>
+    <div class="lbl">Split</div>
+    <div style="display:flex;height:4px;gap:2px;margin:0 20px 6px">${SPLIT.map(([, w], i) => `<b style="flex:${w};background:${['#3db07c', '#549de5', '#a584dc', '#d2833b'][i]}"></b>`).join('')}</div>
+    ${SPLIT.map(([n, w, v]) => `<div class="srow">${n}<span class="step">− ${w} +</span><span class="tn">${f(v)}</span></div>`).join('')}
+    <div class="srow muted" style="font-weight:500">+ Someone else</div>
+    <div class="foot"><div class="btn">Save</div></div>`;
+  },
+  person() {
+    return `<div class="hdr"><span>${I.back} Lisbon trip</span><span>${I.edit}</span></div>
+    <h1 style="padding-bottom:4px">Ben</h1>
+    <div class="muted" style="padding:0 20px;font-size:14px">Not on any device</div>
+    <div style="display:flex;align-items:baseline;padding:22px 20px 10px"><span class="muted" style="font-size:15px;font-weight:600">Gets back</span><span class="tn back" style="margin-left:auto;font-size:40px;font-weight:700;letter-spacing:-1.4px">+464.08</span></div>
+    <div class="brow" style="height:10px;padding:0"><div class="fill" style="${A.fill(464.08, 0.85)}"></div><div class="axis"></div></div>
+    <div class="lbl">Settle up</div>
+    ${SETTLE.map(([n, v]) => `<div class="srow">${n}<span class="tn muted" style="margin-left:auto;margin-right:18px;font-weight:500">${f(v)}</span><span style="font-size:14px;text-decoration:underline;text-underline-offset:3px">Record</span></div>`).join('')}
+    <div class="lbl">Balance</div>
+    ${E.map((e) => `<div class="srow" style="height:40px;font-weight:500">${e.d}<span class="tn ${cls(e.ben)}" style="margin-left:auto">${s(e.ben)}</span></div>`).join('')}`;
+  },
+};
+
+/* ---------- B. Journal ---------- */
+const B = {
+  name: 'Journal',
+  desc: 'Reads like a travel notebook. The group opens with one sentence that says where you stand, then a single number line places everyone at once, which takes far less space than four bar rows. Adding an expense means filling in a sentence: “Ben paid 640.00 for Apartment, split…”. Fraunces serif headings over Inter, no boxes, only whitespace and a few hairlines.',
+  zero: 100 * 246.66 / (246.66 + 464.08),
+  groups() {
+    return `<div class="hdr"><span class="serif" style="color:#2a2622;font-size:18px;font-weight:600">splitnext</span><span>Join</span></div>
+    <h1 style="padding-bottom:14px">Your groups</h1>
+    ${G.map((g) => `<div class="grp"><div><div class="t">${g.n}</div><div class="s">${g.m}</div></div><span class="v tn ${cls(g.b)}">${g.b ? s(g.b) : 'settled'}</span></div>`).join('')}
+    <div class="foot"><div class="btn">Start a group</div></div>`;
+  },
+  group() {
+    const pos = (v) => ((v + 246.66) / (246.66 + 464.08)) * 100;
+    const pts = [['Cy', -246.66, 0], ['Dana', -137.51, 1], ['Ana', -79.91, 0], ['Ben', 464.08, 1]];
+    return `<div class="hdr"><span>${I.back}</span><span class="acts">${I.share}${I.bell}</span></div>
+    <h1>Lisbon trip</h1>
+    <p class="lede">You owe <span class="owe">€79.91</span>, all of it to Ben. <span class="link" style="font-family:Inter">Settle up</span></p>
+    <div class="line" style="--z:${B.zero}%"><div class="ax"></div><div class="zero"></div>
+      ${pts.map(([n, v, lo]) => `<div class="pt ${lo ? 'lo' : ''}" style="left:${Math.min(94, Math.max(6, pos(v)))}%">${lo ? `<i style="background:${v < 0 ? '#b5502c' : '#48785a'}"></i>` : ''}<b>${n === 'Ana' ? 'You' : n}</b><span class="tn ${cls(v)}">${s(v)}</span>${lo ? '' : `<i style="background:${v < 0 ? '#b5502c' : '#48785a'}"></i>`}</div>`).join('')}
+    </div>
+    ${days(E).map((d) => `<div class="day">${d.day}</div>${d.items.map((e) => `<div class="erow">${e.d}<span class="s">${e.p}</span><span class="v tn">${f(e.a)}</span></div>`).join('')}`).join('')}
+    <div class="foot"><div class="btn">Add expense</div></div>`;
+  },
+  add() {
+    return `<div class="hdr"><span>Cancel</span><span style="font-size:14px"><b style="color:#2a2622">Expense</b> &nbsp;·&nbsp; Payment</span></div>
+    <p class="madlib"><span class="tok">Ben</span> paid <span class="tok amt tn">640.00</span> for <span class="tok">Apartment</span>, split between <span class="tok">everyone</span>, with Cy counted <span class="tok">twice</span>.</p>
+    <div style="height:22px"></div>
+    ${SPLIT.map(([n, w, v]) => `<div class="brk">${n}${w > 1 ? '<span class="st">×2</span>' : ''}<span class="v tn">${f(v)}</span></div>`).join('')}
+    <div class="rule"></div>
+    <div class="brk muted">Add a date or a note</div>
+    <div class="foot"><div class="btn">Save</div></div>`;
+  },
+  person() {
+    return `<div class="hdr"><span>${I.back} Lisbon trip</span><span>${I.edit}</span></div>
+    <h1>Ben</h1>
+    <p class="lede">Gets back <span class="back">€464.08</span>.<br><span class="muted" style="font-size:16px;font-family:Inter">Not on any device yet.</span></p>
+    <div class="day" style="padding-top:26px">To settle it</div>
+    ${SETTLE.map(([n, v]) => `<div class="erow">${n === "You" ? "You pay" : n + " pays"} <span class="tn" style="margin-left:6px">${f(v)}</span><span class="v link">Record</span></div>`).join('')}
+    <div class="day" style="padding-top:22px">How it adds up</div>
+    ${E.map((e) => `<div class="erow">${e.d}<span class="v tn ${cls(e.ben)}">${s(e.ben)}</span></div>`).join('')}
+    <div class="rule"></div><div class="erow" style="font-weight:600">Balance<span class="v tn back">+464.08</span></div>`;
+  },
+};
+
+/* ---------- C. Field ---------- */
+const HUE = { Ana: '#e98a3c', Ben: '#2f9e6a', Cy: '#4a86d8', Dana: '#9a6bd6', You: '#e98a3c' };
+const C = {
+  name: 'Colour field',
+  desc: 'The top of every screen is a flat band of colour that tells you the state before you read anything: coral when you owe, green when you get back, the payer’s colour while you add an expense. Below the band, everything is white rows with small square initials and slim bars. Manrope type; the band carries the title, so no extra header is needed.',
+  groups() {
+    return `<div class="field" style="background:#17181a"><div class="hdr"><span style="color:#fff;font-weight:800;font-size:17px">splitnext</span><span>Join</span></div>
+    <div class="big tn" style="padding-top:18px">−37.81</div><div class="cap2" style="padding-top:6px">across 3 groups</div></div>
+    ${G.map((g) => `<div class="grow"><span class="stripe" style="background:${g.b < 0 ? '#ef6a45' : g.b > 0 ? '#2f9e6a' : '#d4d6da'}"></span><div><div class="t">${g.n}</div><div class="s">${g.m}</div></div><span class="v tn ${cls(g.b)}">${g.b ? s(g.b) : '0.00'}</span></div>`).join('')}
+    <div class="foot"><div class="btn">New group</div></div>`;
+  },
+  group() {
+    return `<div class="field" style="background:#ef6a45"><div class="hdr"><span>${I.back} Groups</span><span class="acts">${I.share}${I.bell}</span></div>
+    <h1>Lisbon trip</h1><div class="big tn">−79.91</div><div class="cap2" style="padding-top:4px">you owe Ben</div><span class="act">Settle up</span></div>
+    ${ord.map((p) => `<div class="prow"><span class="sq" style="background:${HUE[p.n]}">${p.n[0]}</span><span class="n">${p.you ? 'You' : p.n}</span><span class="bar"><b style="${p.b < 0 ? `right:50%;width:${pct(p.b)}%;background:#ef6a45` : `left:50%;width:${pct(p.b)}%;background:#2f9e6a`}"></b></span><span class="v tn ${cls(p.b)}">${s(p.b)}</span></div>`).join('')}
+    <div class="lbl"><span>Expenses</span><span>831.65</span></div>
+    ${E.slice(0, 3).map((e) => `<div class="erow"><span class="sq" style="background:${HUE[e.p]};width:8px;height:30px;border-radius:2px"></span><div><div class="t">${e.d}</div><div class="s">${e.p} · ${e.day}</div></div><span class="v tn">${f(e.a)}</span></div>`).join('')}
+    <div class="foot"><div class="btn">Add expense</div></div>`;
+  },
+  add() {
+    return `<div class="field" style="background:${HUE.Ben}"><div class="hdr"><span>${I.x}</span><span style="font-size:14px"><b style="color:#fff">Expense</b> · Payment</span><span style="width:20px"></span></div>
+    <div class="big tn" style="font-size:60px;letter-spacing:-2.4px;padding-top:10px">640.00</div><div class="cap2" style="font-size:18px;opacity:1;padding-top:8px">Apartment</div></div>
+    <div class="lbl">Paid by</div>
+    <div class="payer">${['Ana', 'Ben', 'Cy', 'Dana'].map((n) => `<div class="${n === 'Ben' ? 'on' : ''}"><span class="sq" style="background:${HUE[n]}">${n[0]}</span>${n}</div>`).join('')}</div>
+    <div class="lbl">Split</div>
+    ${SPLIT.map(([n, w, v]) => `<div class="prow"><span class="sq" style="background:${HUE[n]}">${n[0]}</span><span class="n">${n}</span><span style="flex:1;text-align:center;color:#8d9097;font-weight:700;letter-spacing:3px">− ${w} +</span><span class="v tn">${f(v)}</span></div>`).join('')}
+    <div class="foot"><div class="btn">Save</div></div>`;
+  },
+  person() {
+    return `<div class="field" style="background:#2f9e6a"><div class="hdr"><span>${I.back} Lisbon trip</span><span>${I.edit}</span></div>
+    <h1>Ben</h1><div class="big tn">+464.08</div><div class="cap2" style="padding-top:4px">gets back · not on any device</div></div>
+    <div class="lbl"><span>Settle up</span></div>
+    ${SETTLE.map(([n, v]) => `<div class="prow"><span class="sq" style="background:${HUE[n]}">${n === 'You' ? 'A' : n[0]}</span><span class="n" style="width:auto">${n}</span><span class="v tn" style="margin-left:auto;width:auto;color:#8d9097;font-weight:600">${f(v)}</span><span style="margin-left:16px;font-weight:800;font-size:14px">Record</span></div>`).join('')}
+    <div class="lbl"><span>Balance</span><span class="back">+464.08</span></div>
+    ${E.map((e) => `<div class="erow" style="padding:8px 20px"><div class="t" style="font-weight:600">${e.d}</div><span class="v tn ${cls(e.ben)}">${s(e.ben)}</span></div>`).join('')}`;
+  },
+};
+
+/* ---------- D. Night ---------- */
+const D = {
+  name: 'Night ledger',
+  desc: 'A dark, flat take with no cards: hairlines only, Geist with monospaced figures, and mint and coral as the only colours. Each balance is a name and figure on one line over a full-width 3px bar. A three-part bottom bar (Groups, Activity, and Add) keeps navigation in one place. Add expense uses a full-width number pad with no key borders.',
+  bar: (v) => `<div class="bar"><b style="${v < 0 ? `right:50%;width:${pct(v)}%;background:#ff8a6b` : `left:50%;width:${pct(v)}%;background:#5fd3a0`}"></b></div>`,
+  nav: (on, label = 'Add expense') => `<div class="nav"><span class="${on === 0 ? 'on' : ''}">${I.home}</span><span class="plus">${I.plus} ${label}</span><span class="${on === 1 ? 'on' : ''}">${I.list}</span></div>`,
+  groups() {
+    return `<div class="hdr"><span style="color:#ececec;font-weight:600">splitnext</span><span>Join</span></div>
+    <h1 style="padding-bottom:12px">Groups</h1>
+    ${G.map((g) => `<div class="grow"><div><div class="t">${g.n}</div><div class="s">${g.m}</div></div><span class="v ${cls(g.b)}">${g.b ? s(g.b) : '0.00'}</span></div>`).join('')}
+    ${D.nav(0, 'New group')}`;
+  },
+  group() {
+    return `<div class="hdr"><span>${I.back} Groups</span><span class="acts">${I.share}${I.edit}</span></div>
+    <h1>Lisbon trip</h1>
+    <div class="sum">You owe <span class="owe mono">79.91</span> · <span style="color:#ececec;text-decoration:underline;text-underline-offset:3px">Settle up</span></div>
+    <div style="height:10px"></div>
+    ${ord.map((p) => `<div class="prow"><div class="top"><span>${p.n}${p.you ? ' <span class="muted" style="font-size:13px">you</span>' : ''}</span><span class="v ${cls(p.b)}">${s(p.b)}</span></div>${D.bar(p.b)}</div>`).join('')}
+    <div class="lbl"><span>Expenses</span><span>+ person</span></div>
+    ${E.map((e) => `<div class="erow">${e.d}<span class="s">${e.p}</span><span class="v">${f(e.a)}</span></div>`).join('')}
+    ${D.nav(-1)}`;
+  },
+  add() {
+    return `<div class="hdr"><span>Cancel</span><span style="font-size:14px"><b style="color:#ececec">Expense</b> · Payment</span><span style="color:#5fd3a0;font-weight:600">Save</span></div>
+    <div class="mono" style="font-size:60px;letter-spacing:-3px;padding:16px 20px 0;line-height:1">640.00</div>
+    <div style="font-size:19px;padding:12px 20px 0">Apartment</div>
+    <div class="srow" style="padding-top:18px"><span class="muted">Paid by</span><span style="margin-left:auto;font-weight:500">Ben ▾</span></div>
+    <div style="display:flex;height:3px;gap:2px;margin:6px 20px 4px">${SPLIT.map(([, w], i) => `<b style="flex:${w};background:${['#5fd3a0', '#7fb6ff', '#c3a0ff', '#ffb36b'][i]}"></b>`).join('')}</div>
+    ${SPLIT.map(([n, w, v]) => `<div class="srow">${n}<span class="muted mono" style="margin-left:auto;margin-right:16px;font-size:13px">− ${w} +</span><span class="mono" style="width:66px;text-align:right">${f(v)}</span></div>`).join('')}
+    <div class="keys">${['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'].map((k) => `<span>${k}</span>`).join('')}</div>`;
+  },
+  person() {
+    return `<div class="hdr"><span>${I.back} Lisbon trip</span><span>${I.edit}</span></div>
+    <h1>Ben</h1><div class="sum">Not on any device</div>
+    <div style="padding:22px 20px 0;display:flex;align-items:baseline"><span class="muted">Gets back</span><span class="mono back" style="margin-left:auto;font-size:38px;letter-spacing:-1.5px">+464.08</span></div>
+    <div class="prow" style="padding-top:0">${D.bar(464.08)}</div>
+    <div class="lbl"><span>Settle up</span></div>
+    ${SETTLE.map(([n, v]) => `<div class="srow">${n} → Ben<span class="v" style="margin-right:16px">${f(v)}</span><span class="back" style="font-size:14px;font-weight:600">Record</span></div>`).join('')}
+    <div class="lbl"><span>Records</span></div>
+    ${E.map((e) => `<div class="erow">${e.d}<span class="v ${cls(e.ben)}">${s(e.ben)}</span></div>`).join('')}`;
+  },
+};
+
+/* ---------- E. Strip ---------- */
+const SOFT = { Ana: '#ffd9b8', Ben: '#c4ecd5', Cy: '#cfe0fb', Dana: '#e6d8fb', You: '#ffd9b8', Jo: '#fbe3a6', Sam: '#cfe0fb', Kim: '#fbd0d6', Lu: '#c4ecd5', Max: '#e6d8fb', Nia: '#ffd9b8' };
+const EE = {
+  name: 'Strip & timeline',
+  desc: 'People are a row of faces across the top, each with a balance; tap a face to open that person. Under them, tabs switch between Expenses, Balances and Activity, so the main screen never has to stack everything at once. Expenses form a day-by-day timeline with your share under each amount. Plus Jakarta Sans and soft pastel initials make it warm without any cards.',
+  groups() {
+    return `<div class="hdr"><span style="color:#191a1f;font-weight:800;font-size:17px">splitnext</span><span>Join</span></div>
+    <h1 style="padding-bottom:10px">Groups</h1>
+    ${G.map((g) => `<div class="grow"><div class="stack">${g.m.split(', ').slice(0, 4).map((n) => `<i style="background:${SOFT[n]}">${n[0]}</i>`).join('')}</div><div><div style="font-weight:800;font-size:17px">${g.n}</div><div class="muted" style="font-size:13px">${g.m.split(', ').length} people</div></div><span class="tn ${cls(g.b)}" style="margin-left:auto;font-weight:700">${g.b ? s(g.b) : '0.00'}</span></div>`).join('')}
+    <div class="foot" style="padding-top:12px"><div class="btn">New group</div></div>`;
+  },
+  group() {
+    return `<div class="hdr"><span>${I.back}</span><span class="acts">${I.share}${I.bell}</span></div>
+    <h1>Lisbon trip</h1>
+    <div class="strip">${ord.map((p) => `<div class="p"><div class="c ${p.you ? 'me' : ''}" style="background:${SOFT[p.n]}">${p.n[0]}</div><div class="n">${p.you ? 'You' : p.n}</div><div class="v tn ${cls(p.b)}">${s(p.b)}</div></div>`).join('')}<div class="p"><div class="c" style="border:1.5px dashed #c4c6cd;color:#8b8d96">+</div><div class="n muted">Add</div></div></div>
+    <div class="tabs"><span class="on">Expenses</span><span>Balances</span><span>Activity</span></div>
+    ${days(E).map((d) => `<div class="day">${d.day}</div>${d.items.map((e) => `<div class="erow"><span class="ico">${e.e}</span><div><div class="t">${e.d}</div><div class="s">${e.p} paid</div></div><span class="v tn">${f(e.a)}<small class="${cls(e.you)}">${s(e.you)}</small></span></div>`).join('')}`).join('')}
+    <div class="foot"><div class="btn">Add expense</div></div>`;
+  },
+  add() {
+    return `<div class="hdr"><span>${I.x}</span><span class="tabs" style="padding:0;border:0;font-size:14px;gap:16px"><span class="on" style="padding-bottom:6px">Expense</span><span style="padding-bottom:6px">Payment</span></span><span style="width:20px"></span></div>
+    <div style="display:flex;align-items:center;gap:12px;padding:18px 20px 0"><span class="ico" style="width:44px;height:44px;font-size:22px">🏠</span><span style="font-size:20px;font-weight:700">Apartment</span></div>
+    <div class="tn" style="font-size:58px;font-weight:800;letter-spacing:-2.4px;padding:14px 20px 0;line-height:1">€640.00</div>
+    <div class="day" style="padding-top:22px">Paid by</div>
+    <div class="strip" style="padding-top:8px;justify-content:flex-start;gap:6px">${['Ana', 'Ben', 'Cy', 'Dana'].map((n) => `<div class="p" style="${n === 'Ben' ? '' : 'opacity:.4'}"><div class="c ${n === 'Ben' ? 'me' : ''}" style="background:${SOFT[n]}">${n[0]}</div><div class="n">${n}</div></div>`).join('')}</div>
+    <div class="day" style="padding-top:18px">For</div>
+    ${SPLIT.map(([n, w, v]) => `<div class="erow" style="padding:7px 20px"><span class="c" style="width:28px;height:28px;border-radius:50%;background:${SOFT[n]};display:grid;place-items:center;font-weight:800;font-size:12px">${n[0]}</span><span class="t">${n}</span><span class="muted" style="margin-left:auto;font-weight:700;letter-spacing:3px">− ${w} +</span><span class="v tn" style="width:74px;margin-left:0">${f(v)}</span></div>`).join('')}
+    <div class="foot"><div class="btn">Save</div></div>`;
+  },
+  person() {
+    return `<div class="hdr"><span>${I.back} Lisbon trip</span><span>${I.edit}</span></div>
+    <div style="display:flex;align-items:center;gap:14px;padding:6px 20px 0"><div class="p" style="width:auto"><div class="c" style="width:56px;height:56px;font-size:22px;background:${SOFT.Ben}">B</div></div><div><div style="font-size:28px;font-weight:800;letter-spacing:-0.8px">Ben</div><div class="muted" style="font-size:13px">Not on any device</div></div></div>
+    <div class="tn back" style="font-size:44px;font-weight:800;letter-spacing:-1.6px;padding:22px 20px 0">+464.08</div>
+    <div class="muted" style="padding:0 20px;font-size:14px">gets back</div>
+    <div class="tabs"><span class="on">Settle up</span><span>Expenses</span></div>
+    ${SETTLE.map(([n, v]) => `<div class="erow"><span class="c" style="width:32px;height:32px;border-radius:50%;background:${SOFT[n]};display:grid;place-items:center;font-weight:800;font-size:13px;flex:none">${n === 'You' ? 'A' : n[0]}</span><div><div class="t">${n === 'You' ? 'You pay' : n + ' pays'} Ben</div><div class="s tn">${f(v)}</div></div><span class="v" style="font-size:14px">Record</span></div>`).join('')}`;
+  },
+};
+
+const T = [['a', A], ['b', B], ['c', C], ['d', D], ['e', EE]];
+document.getElementById('root').innerHTML = T.map(([k, t], i) => `
+  <section class="dir ${k}" id="${k}">
+    <div class="dir-head"><span class="n">${String.fromCharCode(65 + i)}</span><h2>${t.name}</h2></div>
+    <p class="dir-desc">${t.desc}</p>
+    <div class="row">${phone(t.groups(), 'Groups')}${phone(t.group(), 'Group')}${phone(t.add(), 'Add expense')}${phone(t.person(), 'Person')}</div>
+  </section>`).join('');
+</script>
+</body>
+</html>
