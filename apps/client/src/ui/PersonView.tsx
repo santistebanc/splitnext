@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { View, type TextInput } from 'react-native';
 import { memberHasRecords, preferredMember } from '@splitnext/client';
-import { Button, ErrorMessage, IconButton, ListRow, PencilIcon, Row, Stack, Text, balanceStyle, between, rules, sizes, titleStyle } from '../design';
+import { Button, ErrorMessage, IconButton, ListRow, PencilIcon, Row, Stack, Text, avatarSizes, balanceStyle, between, rules, sizes, titleStyle } from '../design';
 import { memberBreakdown } from '../model/breakdown';
 import { balanceRows, memberName, moneyLabel } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
@@ -67,7 +67,9 @@ export function PersonHeader(props: { app: MemberListApp }) {
 
   const nameField = useRef<TextInput>(null);
   const [youWidth, setYouWidth] = useState(0);
+  const [nameHeight, setNameHeight] = useState(0);
   const actions = useActions();
+  const avatarFold = Math.min(1, 2 * progress);
 
   function finishRename(): void {
     if (save.can('saveMemberEdit')) void save.call('saveMemberEdit', {});
@@ -81,36 +83,38 @@ export function PersonHeader(props: { app: MemberListApp }) {
         start={<BackButton label={`Back to ${backTo}`} text={backTo} disabled={!back.can('closePanel')} onPress={() => { void back.call('closePanel', {}); }} />}
         end={<ActivityLink app={props.app} />}
         heading={(
-          <Row fill gap={12}>
-            {replica && memberId && progress <= 0.5 ? (
-              <View style={{ opacity: Math.max(0, 1 - 2 * progress), alignSelf: 'flex-start', paddingTop: 2 }}>
+          <Row fill gap={0} style={{ height: renaming ? undefined : between(Math.max(nameHeight, avatarSizes.large.box + 2), sizes.touch, progress) }}>
+            {replica && memberId ? (
+              <View style={{ width: between(avatarSizes.large.box, 0, avatarFold), height: between(avatarSizes.large.box + 2, 0, avatarFold), marginRight: between(12, 0, avatarFold), opacity: 1 - avatarFold, overflow: avatarFold > 0 ? 'hidden' : 'visible', alignSelf: 'flex-start', paddingTop: between(2, 0, avatarFold) }}>
                 <MemberAvatar replica={replica} memberId={memberId} size="large" app={props.app} />
               </View>
             ) : null}
-            {renaming ? (
-              <TitleField
-                inputRef={nameField}
-                accessibilityLabel="Name"
-                placeholder="Name"
-                value={ui.memberEdit?.name ?? ''}
-                onChangeText={(value) => { void actions.dispatch('changeDraft', { field: 'member.name', value }, { origin: 'ui' }); }}
-                maxLength={100}
-                onBlur={finishRename}
-                // What follows the name: you and a gap, then a gap and the pencil, 44 wide with 12 past the edge.
-                inset={(isYou ? youWidth + 12 : 0) + 12 + 32}
-                style={{ ...titleStyle(progress), paddingBottom: 4, ...rules.inkBelow }}
-              />
-            ) : (
-              <>
-                <Text ref={morph(replica && memberId ? `pname-${replica.group_id}-${memberId}` : null)} accessibilityRole="header" numberOfLines={2} style={[titleStyle(progress), { flex: 1, minWidth: 0 }]}>{name}</Text>
-                {isYou ? <Text onLayout={(event) => setYouWidth(event.nativeEvent.layout.width)} variant="body" tone="muted">you</Text> : null}
-                {active && memberId && progress <= 0.5 ? (
-                  <IconButton label={`Rename ${name}`} disabled={!edit.can('beginEditMember', { memberId })} onPress={() => { void edit.call('beginEditMember', { memberId }); }} style={{ marginLeft: 'auto', marginRight: -12, opacity: Math.max(0, 1 - 2 * progress) }}>
-                    <PencilIcon size={18} />
-                  </IconButton>
-                ) : null}
-              </>
-            )}
+            <Row fill gap={12} style={{ alignSelf: 'stretch' }}>
+              {renaming ? (
+                <TitleField
+                  inputRef={nameField}
+                  accessibilityLabel="Name"
+                  placeholder="Name"
+                  value={ui.memberEdit?.name ?? ''}
+                  onChangeText={(value) => { void actions.dispatch('changeDraft', { field: 'member.name', value }, { origin: 'ui' }); }}
+                  maxLength={100}
+                  onBlur={finishRename}
+                  // What follows the name: you and a gap, then a gap and the pencil, 44 wide with 12 past the edge.
+                  inset={(isYou ? youWidth + 12 : 0) + 12 + 32}
+                  style={{ ...titleStyle(progress), paddingBottom: 4, ...rules.inkBelow }}
+                />
+              ) : (
+                <>
+                  <Text ref={morph(replica && memberId ? `pname-${replica.group_id}-${memberId}` : null)} accessibilityRole="header" numberOfLines={2} onLayout={(event) => { if (progress === 0) setNameHeight(event.nativeEvent.layout.height); }} style={[titleStyle(progress), { flex: 1, minWidth: 0, alignSelf: 'flex-start' }]}>{name}</Text>
+                  {isYou ? <Text onLayout={(event) => setYouWidth(event.nativeEvent.layout.width)} variant="body" tone="muted">you</Text> : null}
+                  {active && memberId && progress <= 0.5 ? (
+                    <IconButton label={`Rename ${name}`} disabled={!edit.can('beginEditMember', { memberId })} onPress={() => { void edit.call('beginEditMember', { memberId }); }} style={{ marginLeft: 'auto', marginRight: -12, opacity: Math.max(0, 1 - 2 * progress) }}>
+                      <PencilIcon size={18} />
+                    </IconButton>
+                  ) : null}
+                </>
+              )}
+            </Row>
           </Row>
         )}
         below={(

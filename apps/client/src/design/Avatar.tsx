@@ -3,7 +3,7 @@ import { initials } from './initials';
 import { Text } from './Text';
 import { avatarTints, colors, radii } from './tokens';
 
-const avatarSizes = {
+export const avatarSizes = {
   /** Beside a name in a dense list, such as a split. */
   small: { box: 22, text: 'count' },
   /** Beside a name in a row. */

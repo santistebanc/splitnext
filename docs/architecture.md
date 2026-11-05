@@ -131,6 +131,10 @@ up, New group, and Activity with their titles. `Reveal` opens content in place,
 growing it down from nothing and shrinking it away before it unmounts. Both
 skip motion when reduced motion is preferred, and native shows changes at once.
 
+Person headers reserve their expanded name height while collapsing. The avatar's
+space folds continuously with scroll progress, so its disappearing decoration
+cannot move the name sideways or release a wrapped line's height at once.
+
 A group has one screen (`home`) with two tabs, People and Expenses, kept in
 `AppUiState.groupTab` and switched through `showGroupTab`; opening a group
 starts on People and saving a new expense switches to Expenses. `GroupHeader`
