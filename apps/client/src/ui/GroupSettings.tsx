@@ -1,5 +1,4 @@
-import { Text, View } from 'react-native';
-import { Button, ErrorMessage, Field, FooterButton, s } from './components';
+import { Button, ErrorMessage, Field, Stack, Text, TextButton } from '../design';
 import { ConfirmSheet } from './ConfirmSheet';
 import type { MemberListApp } from './MemberList';
 import { useActionCall, useActions, useUiState } from './useActionCall';
@@ -31,9 +30,9 @@ export function GroupSettingsFooter(props: { close?: () => void }) {
   return (
     <>
       <ErrorMessage message={rename.error} />
-      <FooterButton busy={ui.phase === 'saving' || rename.busy} disabled={!rename.can('saveGroupSettings')} onPress={save}>
+      <Button busy={ui.phase === 'saving' || rename.busy} disabled={!rename.can('saveGroupSettings')} onPress={save}>
         {ui.phase === 'saving' || rename.busy ? 'Saving…' : 'Save group name'}
-      </FooterButton>
+      </Button>
     </>
   );
 }
@@ -47,7 +46,7 @@ export function GroupSettings(props: GroupSettingsProps) {
   const leave = useActionCall();
 
   return (
-    <View style={[s.stack, { gap: 24 }]}>
+    <Stack gap={24}>
       <Field
         label="Group name"
         value={name}
@@ -58,17 +57,16 @@ export function GroupSettings(props: GroupSettingsProps) {
         maxLength={100}
         returnKeyType="done"
         onSubmitEditing={save}
-        style={{ height: 56, fontSize: 18 }}
       />
-      <Text style={s.caption}>Everyone in the group sees the new name.</Text>
-      <Button
-        danger
+      <Text variant="caption" tone="muted">Everyone in the group sees the new name.</Text>
+      <TextButton
+        tone="danger"
         label="Leave group on this device"
         disabled={!leave.can('leaveGroup')}
         onPress={() => { void leave.call('leaveGroup', {}); }}
       >
         Leave group
-      </Button>
+      </TextButton>
       <ErrorMessage message={leave.error} />
       {leave.confirmation ? (
         <ConfirmSheet
@@ -80,6 +78,6 @@ export function GroupSettings(props: GroupSettingsProps) {
           onCancel={leave.cancel}
         />
       ) : null}
-    </View>
+    </Stack>
   );
 }

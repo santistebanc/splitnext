@@ -1,8 +1,8 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { preferredMember, type ClientReplicaState, type Expense, type Settlement } from '@splitnext/client';
 import { currentExpenses, expenseLabel, memberName, moneyLabel } from '../model/expenses';
 import { needsReview } from '../model/notices';
-import { ErrorMessage, FooterButton, ListRow, colors, s } from './components';
+import { Button, Dot, ErrorMessage, ListRow, Row, Stack, Text, colors, rules } from '../design';
 import { morph } from './ScreenMorph';
 import { useActionCall } from './useActionCall';
 
@@ -44,7 +44,7 @@ export function ExpenseList(props: { replica: Replica }) {
 
   return (
     <View role="list" aria-label="Expenses">
-      <View style={s.listCard}>
+      <View style={rules.below}>
         {entries.map((entry, index) =>
           entry.kind === 'expense'
             ? <ExpenseRow key={entry.expense.id} replica={props.replica} expense={entry.expense} first={index === 0} />
@@ -57,21 +57,21 @@ export function ExpenseList(props: { replica: Replica }) {
 
 /** The small orange dot on a row whose change from this device needs review. */
 function ReviewDot() {
-  return <View role="img" aria-label="Needs review" style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: colors.alert }} />;
+  return <Dot label="Needs review" color={colors.alert} />;
 }
 
-function Row(props: { first: boolean; label: string; title: string; meta?: string; amount: string; quiet?: boolean; review: boolean; disabled: boolean; onPress: () => void; error: string | null; morph?: string }) {
+function EntryRow(props: { first: boolean; label: string; title: string; meta?: string; amount: string; quiet?: boolean; review: boolean; disabled: boolean; onPress: () => void; error: string | null; morph?: string }) {
   return (
     <View>
       <ListRow label={props.label} disabled={props.disabled} onPress={props.onPress}>
-        <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text ref={morph(props.morph && `etitle-${props.morph}`)} numberOfLines={2} style={[s.name, { flexShrink: 1, fontSize: 17, lineHeight: 22 }]}>{props.title}</Text>
+        <Stack fill gap={8}>
+          <Row gap={8}>
+            <Text ref={morph(props.morph && `etitle-${props.morph}`)} numberOfLines={2} variant="large" weight="semibold" style={{ flexShrink: 1 }}>{props.title}</Text>
             {props.review ? <ReviewDot /> : null}
-          </View>
-          {props.meta ? <Text numberOfLines={1} style={s.rowCaption}>{props.meta}</Text> : null}
-        </View>
-        <Text ref={morph(props.morph && `eamt-${props.morph}`, { unclipped: true })} style={[s.amount, props.quiet && { color: colors.muted }]}>{props.amount}</Text>
+          </Row>
+          {props.meta ? <Text numberOfLines={1} variant="caption" tone="muted">{props.meta}</Text> : null}
+        </Stack>
+        <Text ref={morph(props.morph && `eamt-${props.morph}`, { unclipped: true })} variant="figure" tone={props.quiet ? 'muted' : 'ink'}>{props.amount}</Text>
       </ListRow>
       <ErrorMessage message={props.error} />
     </View>
@@ -85,7 +85,7 @@ function ExpenseRow(props: { replica: Replica; expense: Expense; first: boolean 
   const people = expense.parts.length;
 
   return (
-    <Row
+    <EntryRow
       first={props.first}
       label={`Change ${expenseLabel(expense)}`}
       morph={expense.id}
@@ -107,7 +107,7 @@ export function RepaymentRow(props: { replica: Replica; settlement: Settlement; 
   const title = repaymentTitle(props.replica, entry);
 
   return (
-    <Row
+    <EntryRow
       first={props.first}
       label={`Change repayment: ${title} ${moneyLabel(entry.amount, entry.currency)}`}
       title={title}
@@ -128,9 +128,9 @@ export function AddExpenseButton() {
   return (
     <>
       <ErrorMessage message={add.error} />
-      <FooterButton morph="addexp" disabled={!add.can('showExpense', {})} onPress={() => { void add.call('showExpense', {}); }}>
+      <Button ref={morph('addexp')} disabled={!add.can('showExpense', {})} onPress={() => { void add.call('showExpense', {}); }}>
         Add expense
-      </FooterButton>
+      </Button>
     </>
   );
 }

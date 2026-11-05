@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import { colors } from './theme';
+import { colors } from './tokens';
 
-type IconProps = { size?: number; color?: string; strokeWidth?: number };
+type IconProps = { size?: number; color?: string; strokeWidth?: number | undefined };
 
 /** Stroked 24-unit outline icons, in ink unless given a colour. */
 function Outline(props: IconProps & { children: ReactNode; fallback: number }) {
@@ -23,7 +23,7 @@ function Outline(props: IconProps & { children: ReactNode; fallback: number }) {
   );
 }
 
-export function LinkIcon(props: IconProps & { broken?: boolean }) {
+export function LinkIcon(props: IconProps & { broken?: boolean | undefined }) {
   return (
     <Outline {...props} fallback={18}>
       <Path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
@@ -169,7 +169,7 @@ export function RefreshIcon(props: IconProps) {
   );
 }
 
-export function WifiIcon(props: IconProps & { off?: boolean }) {
+export function WifiIcon(props: IconProps & { off?: boolean | undefined }) {
   return (
     <Outline {...props} fallback={20}>
       <Path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0" />

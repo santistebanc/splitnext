@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Row, Text, TextButton, durations, scrim, withTransition } from '../design';
 import { Reveal } from './Reveal';
-import { colors, s } from './components';
-import { withTransition } from './theme';
 
 export type FooterDrawerProps = {
   open: boolean;
@@ -27,30 +26,24 @@ export type FooterDrawerProps = {
 export function FooterDrawer(props: FooterDrawerProps) {
   return (
     // The footer's own top padding belongs to the drawer.
-    <View style={{ gap: 10, marginTop: -10, paddingTop: 10, zIndex: 10 }}>
+    <View style={{ gap: 12, marginTop: -12, paddingTop: 12, zIndex: 10 }}>
       <Pressable
         accessibilityLabel={`Close ${props.title}`}
         aria-hidden={!props.open}
         tabIndex={-1}
         disabled={!props.open || props.busy}
         onPress={props.onClose}
-        style={withTransition({ position: 'absolute', bottom: '100%', top: -4000, left: -4000, right: -4000, backgroundColor: 'rgba(20, 20, 19, 0.32)', opacity: props.open ? 1 : 0, pointerEvents: props.open ? 'auto' : 'none' }, 'opacity', props.open ? 340 : 260)}
+        style={withTransition({ position: 'absolute', bottom: '100%', top: -4000, left: -4000, right: -4000, backgroundColor: scrim, opacity: props.open ? 1 : 0, pointerEvents: props.open ? 'auto' : 'none' }, 'opacity', props.open ? durations.medium : durations.medium)}
       />
       <Reveal upward>
         {props.open ? (
           <View role="region" aria-label={props.title} style={{ paddingBottom: 8 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text accessibilityRole="header" style={[s.headerActionText, { fontSize: 17, fontWeight: '700' }]}>{props.title}</Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={props.closeLabel}
-                disabled={props.busy}
-                onPress={props.onClose}
-                style={({ pressed }) => [{ height: 44, justifyContent: 'center', paddingLeft: 16 }, pressed && s.pressed]}
-              >
-                <Text style={[s.headerActionText, { color: colors.muted }]}>{props.closeText ?? 'Cancel'}</Text>
-              </Pressable>
-            </View>
+            <Row justify="between">
+              <Text accessibilityRole="header" variant="heading">{props.title}</Text>
+              <TextButton label={props.closeLabel} tone="muted" underline={false} disabled={props.busy} onPress={props.onClose} style={{ paddingLeft: 16 }}>
+                {props.closeText ?? 'Cancel'}
+              </TextButton>
+            </Row>
             {props.children}
           </View>
         ) : null}

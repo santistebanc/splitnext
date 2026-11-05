@@ -1,7 +1,7 @@
 import type { RefObject } from 'react';
 import { TextInput } from 'react-native';
 import { formatAmount, parseAmount } from '@splitnext/client';
-import { colors, s } from './components';
+import { colors, fonts, strokes } from '../design';
 
 export type AmountInputHandle = { focus: (options?: FocusOptions) => void };
 
@@ -34,7 +34,7 @@ export function AmountInput(props: AmountInputProps) {
       onFocus={props.onFocus}
       onBlur={props.onBlur}
       placeholder={formatAmount(0, props.currency)}
-      placeholderTextColor={colors.control}
+      placeholderTextColor={colors.faint}
       inputMode="decimal"
       value={props.value}
       onChangeText={(value) => {
@@ -47,9 +47,9 @@ export function AmountInput(props: AmountInputProps) {
       returnKeyType="done"
       onSubmitEditing={props.onSubmitEditing}
       style={[
-        s.amountInput,
+        { flex: 1, minWidth: 0, color: colors.ink, fontFamily: fonts.mono, fontWeight: '500', letterSpacing: -2.8 },
         { marginLeft: 0, paddingHorizontal: 15, height: props.height, fontSize: props.fontSize, textAlign: props.align ?? 'left' },
-        props.inline && { paddingHorizontal: 0, textAlign: 'right', borderWidth: 0, borderBottomWidth: 1.5, borderColor: colors.ink },
+        props.inline && { paddingHorizontal: 0, textAlign: 'right', borderWidth: 0, borderBottomWidth: strokes.ink, borderColor: colors.ink },
       ]}
     />
   );

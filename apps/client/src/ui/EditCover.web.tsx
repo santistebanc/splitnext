@@ -1,10 +1,10 @@
+import { durations, scrim } from '../design';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useScreenHost } from './screenHost';
 import type { EditCoverProps } from './EditCover';
 
 /** The same shade as the drawers' backdrop. */
-const scrim = 'rgba(20, 20, 19, 0.32)';
 
 /** Room left uncovered around the field. */
 const pad = 6;
@@ -25,7 +25,7 @@ export function EditCover(props: EditCoverProps) {
   useEffect(() => {
     if (!props.open) {
       setShown(false);
-      const timer = setTimeout(() => setBox(null), 260);
+      const timer = setTimeout(() => setBox(null), durations.medium);
 
       return () => clearTimeout(timer);
     }
@@ -70,7 +70,7 @@ export function EditCover(props: EditCoverProps) {
   ];
 
   return createPortal(
-    <div data-testid="edit-cover" aria-hidden style={{ position: host ? 'absolute' : 'fixed', inset: 0, zIndex: 1000, pointerEvents: 'none', opacity: shown ? 1 : 0, transition: `opacity ${shown ? 340 : 260}ms` }}>
+    <div data-testid="edit-cover" aria-hidden style={{ position: host ? 'absolute' : 'fixed', inset: 0, zIndex: 1000, pointerEvents: 'none', opacity: shown ? 1 : 0, transition: `opacity ${durations.medium}ms` }}>
       {parts.map((part, index) => (
         <div
           key={index}

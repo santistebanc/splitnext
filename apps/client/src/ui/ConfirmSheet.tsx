@@ -1,5 +1,6 @@
-import { Pressable, Text, View } from 'react-native';
-import { Button, s } from './components';
+import { Pressable, View } from 'react-native';
+import { Button, Row, Stack, Text } from '../design';
+import { backdrop, overlay, sheet } from './Drawer';
 import { ScreenModal } from './ScreenModal';
 
 type ConfirmSheetProps = {
@@ -8,24 +9,30 @@ type ConfirmSheetProps = {
   message: string;
   confirmLabel: string;
   busy: boolean;
+  /** Keeps the confirming button from being pressed, as while offline; Cancel still works. */
+  disabled?: boolean | undefined;
   onConfirm: () => void;
   onCancel: () => void;
 };
 
-/** An action's confirmation message, with Cancel beside the dark button that confirms it. */
+/**
+ * An action's confirmation message, with Cancel beside the black button that
+ * confirms it: in a sheet, or in place under what asked, such as Leave on a
+ * group's row or Regenerate under the invite link.
+ */
 export function Confirmation(props: Omit<ConfirmSheetProps, 'title'>) {
   return (
-    <>
-      <Text style={s.lead}>{props.message}</Text>
-      <View style={[s.actions, { marginTop: 8 }]}>
-        <Button grow secondary disabled={props.busy} onPress={props.onCancel}>
+    <Stack gap={16}>
+      <Text variant="body">{props.message}</Text>
+      <Row gap={12} align="stretch">
+        <Button grow variant="secondary" disabled={props.busy} onPress={props.onCancel}>
           Cancel
         </Button>
-        <Button grow dark disabled={props.busy} onPress={props.onConfirm}>
+        <Button grow disabled={props.busy || props.disabled} onPress={props.onConfirm}>
           {props.confirmLabel}
         </Button>
-      </View>
-    </>
+      </Row>
+    </Stack>
   );
 }
 
@@ -33,10 +40,10 @@ export function Confirmation(props: Omit<ConfirmSheetProps, 'title'>) {
 export function ConfirmSheet(props: ConfirmSheetProps) {
   return (
     <ScreenModal onRequestClose={props.onCancel}>
-      <View style={s.overlay}>
-        <Pressable accessibilityLabel="Cancel" style={s.backdrop} onPress={props.onCancel} />
-        <View role="dialog" aria-modal aria-label={props.title} style={s.sheet}>
-          <Text accessibilityRole="header" style={s.drawerTitle}>
+      <View style={overlay(false)}>
+        <Pressable accessibilityLabel="Cancel" style={backdrop} onPress={props.onCancel} />
+        <View role="dialog" aria-modal aria-label={props.title} style={sheet}>
+          <Text accessibilityRole="header" variant="heading">
             {props.title}
           </Text>
           <Confirmation {...props} />

@@ -1,6 +1,6 @@
 import type { RefObject } from 'react';
 import { Platform, Text, TextInput, View, type TextInputKeyPressEvent, type TextStyle } from 'react-native';
-import { colors } from './theme';
+import { colors } from '../design';
 
 export type TitleFieldProps = {
   value: string;
@@ -61,7 +61,7 @@ export function TitleField(props: TitleFieldProps) {
         selectTextOnFocus
         accessibilityLabel={props.accessibilityLabel}
         placeholder={props.placeholder}
-        placeholderTextColor={colors.muted}
+        placeholderTextColor={colors.faint}
         value={props.value}
         onChangeText={(value) => props.onChangeText(value.replace(/\n/g, ''))}
         maxLength={props.maxLength}

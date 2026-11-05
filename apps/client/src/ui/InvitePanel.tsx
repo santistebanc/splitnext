@@ -1,16 +1,15 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Platform, View, type Text as NativeText } from 'react-native';
 import { formatInviteLink } from '@splitnext/client';
+import { ErrorMessage, IconButton, RefreshIcon, Row, ShareIcon, Stack, Text, Touchable, colors, sizes, strokes } from '../design';
+import { Confirmation } from './ConfirmSheet';
 import type { AppController } from '../model/controller';
-import { Button, ErrorMessage, s } from './components';
-import { RefreshIcon, ShareIcon } from './icons';
-import { colors, monoFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 export type InvitePanelApp = Pick<AppController, 'snapshot'>;
 
 /** Selects the link's text on the web, so copying shows what was copied. */
-function selectLink(node: Text | null): void {
+function selectLink(node: NativeText | null): void {
   // On the web a text ref is its element.
   if (Platform.OS !== 'web' || !(node instanceof Node)) return;
 
@@ -20,16 +19,9 @@ function selectLink(node: Text | null): void {
 /** A square icon action beside the link. */
 function LinkAction(props: { label: string; disabled: boolean; onPress: () => void; children: ReactNode }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={props.label}
-      accessibilityState={{ disabled: props.disabled }}
-      disabled={props.disabled}
-      onPress={props.onPress}
-      style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, props.disabled && s.dim]}
-    >
+    <IconButton label={props.label} disabled={props.disabled} onPress={props.onPress}>
       {props.children}
-    </Pressable>
+    </IconButton>
   );
 }
 
@@ -46,7 +38,7 @@ export function InvitePanel(props: { app: InvitePanelApp }) {
   const copied = useUiState().copiedInviteId === invite?.id;
   const actions = useActions();
   const canShare = actions.capabilities.shareLink;
-  const linkText = useRef<Text>(null);
+  const linkText = useRef<NativeText>(null);
   const action = useActionCall();
   const replace = useActionCall();
   const online = props.app.snapshot().online;
@@ -65,8 +57,8 @@ export function InvitePanel(props: { app: InvitePanelApp }) {
   const linkSize = room && shown ? Math.min(15, room / (shown.length * 0.6)) : 15;
 
   return (
-    <View role="region" aria-label="Invite people" style={{ gap: 8, paddingTop: 4 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 56, borderTopWidth: 1.5, borderBottomWidth: 1, borderTopColor: colors.ink, borderBottomColor: colors.rule }}>
+    <Stack role="region" aria-label="Invite people" gap={8} paddingTop={4}>
+      <Row gap={4} style={{ minHeight: sizes.row, borderTopWidth: strokes.ink, borderBottomWidth: strokes.hairline, borderTopColor: colors.ink, borderBottomColor: colors.rule }}>
         {link && canShare ? (
           <View style={{ marginLeft: -12 }}>
             <LinkAction label="Share link" disabled={!action.can('shareInviteLink')} onPress={() => { void action.call('shareInviteLink', {}); }}>
@@ -75,7 +67,7 @@ export function InvitePanel(props: { app: InvitePanelApp }) {
           </View>
         ) : null}
         {link ? (
-          <Pressable
+          <Touchable
             accessibilityRole="button"
             accessibilityLabel={copied ? 'Link copied' : 'Copy link'}
             disabled={!action.can('copyInviteLink')}
@@ -84,33 +76,27 @@ export function InvitePanel(props: { app: InvitePanelApp }) {
               void action.call('copyInviteLink', {});
             }}
             onLayout={(event) => setRoom(event.nativeEvent.layout.width)}
-            style={({ pressed }) => [{ flex: 1, minWidth: 0, paddingVertical: 14 }, pressed && s.pressed]}
+            style={{ flex: 1, minWidth: 0, paddingVertical: 14 }}
           >
-            <Text ref={linkText} testID="invite-link" selectable numberOfLines={1} style={{ fontFamily: monoFamily, fontSize: linkSize, lineHeight: 21, fontWeight: '500', color: colors.ink }}>
+            <Text ref={linkText} testID="invite-link" selectable numberOfLines={1} variant="figure" style={{ fontSize: linkSize, lineHeight: 21 }}>
               {shown}
             </Text>
-          </Pressable>
+          </Touchable>
         ) : (
-          <Text style={[s.lead, { flex: 1, paddingVertical: 14 }]}>No invite link yet</Text>
+          <Text variant="body" tone="muted" style={{ flex: 1, paddingVertical: 14 }}>No invite link yet</Text>
         )}
         <View style={{ marginRight: -12 }}>
           <LinkAction label="Regenerate link" disabled={Boolean(confirming) || !replace.can('regenerateInvite')} onPress={() => { void replace.call('regenerateInvite', {}); }}>
             <RefreshIcon size={18} />
           </LinkAction>
         </View>
-      </View>
-      {link && copied && !confirming ? <Text accessibilityLiveRegion="polite" style={[s.caption, { color: colors.ink }]}>✓ Copied</Text> : null}
+      </Row>
+      {link && copied && !confirming ? <Text accessibilityLiveRegion="polite" variant="caption">✓ Copied</Text> : null}
       {confirming ? (
-        <View style={{ gap: 10, paddingTop: 4 }}>
-          <Text style={[s.body, { fontWeight: '500' }]}>{confirming.message}</Text>
-          <View style={s.actions}>
-            <Button grow secondary disabled={replace.busy} onPress={replace.cancel}>Cancel</Button>
-            <Button grow disabled={replace.busy} onPress={confirming.confirm}>{replace.busy ? 'Regenerating…' : 'Regenerate'}</Button>
-          </View>
-        </View>
+        <Confirmation message={confirming.message} confirmLabel={replace.busy ? 'Regenerating…' : 'Regenerate'} busy={replace.busy} onConfirm={confirming.confirm} onCancel={replace.cancel} />
       ) : null}
-      {!online && !confirming ? <Text style={s.caption}>Connect to regenerate the link.</Text> : null}
+      {!online && !confirming ? <Text variant="caption" tone="muted">Connect to regenerate the link.</Text> : null}
       <ErrorMessage message={replace.error ?? action.error} />
-    </View>
+    </Stack>
   );
 }

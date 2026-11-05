@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from 'react';
 import type { RevealProps } from './Reveal';
 import { useScreenHost } from './screenHost';
-import { easeOut } from './theme';
+import { durations, easeOut } from '../design';
 
 type Frame = { height: string; opacity: string | number; transform: string };
 
@@ -85,7 +85,7 @@ export function Reveal(props: RevealProps) {
 
     if (present) {
       setClosing(false);
-      const animation = node.animate([current ?? shut, open], { duration: 340, easing: easeOut });
+      const animation = node.animate([current ?? shut, open], { duration: durations.medium, easing: easeOut });
 
       running.current = animation;
       animation.onfinish = () => { running.current = null; };
@@ -94,7 +94,7 @@ export function Reveal(props: RevealProps) {
     }
 
     setClosing(true);
-    const animation = node.animate([current ?? open, shut], { duration: 260, easing: easeOut, fill: 'forwards' });
+    const animation = node.animate([current ?? open, shut], { duration: durations.medium, easing: easeOut, fill: 'forwards' });
 
     running.current = animation;
     // The last frame holds until the content has gone; letting go first would

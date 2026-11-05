@@ -1,17 +1,17 @@
 import { useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { View, type TextInput } from 'react-native';
 import { parseInviteLink, type ClientGroupSummary } from '@splitnext/client';
+import { ArrowRightIcon, BalanceBar, BrandMark, Button, Divider, EmptyState, ErrorMessage, Field, IconButton, ListRow, Notice, Row, Stack, Text, TextButton, Touchable, TrashIcon, between, colors, rules, sizes, titleStyle } from '../design';
+import { Confirmation } from './ConfirmSheet';
 import type { AppController } from '../model/controller';
-import { BrandMark } from './BrandMark';
+import { balanceColor, signedFigure } from './balance';
 import { CreateGroup, useSubmitCreate } from './CreateGroup';
 import { EditCover } from './EditCover';
 import { FooterDrawer } from './FooterDrawer';
-import { between, useCompactProgress } from './pageScroll';
+import { useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
+import { ScreenHeader } from './ScreenHeader';
 import { morph } from './ScreenMorph';
-import { BalanceBar, Button, ErrorMessage, FooterButton, Notice, ScreenHeader, balanceColor, s, signedFigure, titleStyle } from './components';
-import { ArrowRightIcon, TrashIcon } from './icons';
-import { colors, fontFamily, monoFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
 export type GroupsViewApp = Pick<AppController, 'snapshot'>;
@@ -42,8 +42,9 @@ export function GroupsFooter(props: { app: GroupsViewApp }) {
       footer={(
         <>
           <ErrorMessage message={action.error} />
-          <FooterButton
-            morph="newgroup"
+          <Button
+           
+            ref={morph('newgroup')}
             busy={creating && busy}
             disabled={creating ? !create.can('submitCreateGroup') : !action.can('showCreateGroup')}
             onPress={() => {
@@ -52,7 +53,7 @@ export function GroupsFooter(props: { app: GroupsViewApp }) {
             }}
           >
             {creating ? (busy ? 'Creating…' : create.error ? 'Try again' : 'Create group') : 'New group'}
-          </FooterButton>
+          </Button>
         </>
       )}
     >
@@ -102,55 +103,44 @@ export function GroupsHeader() {
     <>
       <ScreenHeader
         end={(
-          <Pressable
+          <TextButton
             ref={joinToggle}
-            accessibilityRole="button"
-            accessibilityLabel="Join with an invite link"
-            accessibilityState={{ expanded: open }}
+            label="Join with an invite link"
+            expanded={open}
             disabled={!join.can('showJoinGroup', {})}
             onPress={() => {
               setOpen(!open);
               setInvalid(false);
             }}
-            style={({ pressed }) => [{ height: 44, justifyContent: 'center', paddingLeft: 16, paddingRight: 24, marginRight: -12 }, pressed && s.pressed]}
+            style={{ height: sizes.touch, paddingLeft: 16, paddingRight: 24, marginRight: -12 }}
           >
-            <Text style={[s.headerActionText, s.link]}>Join with a link</Text>
-          </Pressable>
+            Join with a link
+          </TextButton>
         )}
         underRow={(
           <Reveal toggle={joinToggle} onOutsidePress={close}>
             {open ? (
-              <View ref={joinPanel} style={{ gap: 8, paddingTop: 4 }}>
-                <View style={[s.fieldRow, invalid && { borderColor: colors.owes }]}>
-                  <TextInput
-                    ref={field}
-                    autoFocus
-                    accessibilityLabel="Invite link"
-                    value={link}
-                    onChangeText={(value) => {
-                      setLink(value);
-                      setInvalid(false);
-                    }}
-                    onSubmitEditing={submit}
-                    placeholder="Paste invite link"
-                    placeholderTextColor={colors.placeholder}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="go"
-                    style={[s.input, { height: 40, fontFamily: monoFamily, fontSize: 13 }]}
-                  />
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Open"
-                    onPress={submit}
-                    hitSlop={6}
-                    style={({ pressed }) => [{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.action }, pressed && s.pressed]}
-                  >
-                    <ArrowRightIcon size={16} color={colors.actionInk} />
-                  </Pressable>
-                </View>
-                {invalid ? <Text style={[s.caption, { color: colors.owes }]}>That isn’t a splitnext invite link.</Text> : null}
-              </View>
+              <Stack ref={joinPanel} paddingTop={4}>
+                {/* The same field as the join screen's, with Open at its end. */}
+                <Field
+                  inputRef={field}
+                  label="Invite link"
+                  hideLabel
+                  autoFocus
+                  value={link}
+                  onChangeText={(value) => {
+                    setLink(value);
+                    setInvalid(false);
+                  }}
+                  onSubmitEditing={submit}
+                  placeholder="Paste invite link"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="go"
+                  error={invalid ? 'That isn’t a splitnext invite link.' : undefined}
+                  trailing={<Button size="compact" label="Open" icon={<ArrowRightIcon size={16} color={colors.background} />} onPress={submit} />}
+                />
+              </Stack>
             ) : null}
           </Reveal>
         )}
@@ -171,30 +161,25 @@ export function GroupsHeader() {
 
 /** The first screen, before any group: the same list, empty, with how to begin. */
 export function WelcomeView() {
-  return (
-    <View style={s.emptyState}>
-      <Text style={s.emptyTitle}>No groups yet</Text>
-      <Text style={s.emptyText}>Start a group for a trip or a shared home, or join one with an invite link.</Text>
-    </View>
-  );
+  return <EmptyState title="No groups yet" text="Start a group for a trip or a shared home, or join one with an invite link." />;
 }
 
 /** Your balance and how it compares with your other groups, or why there is none. */
 function GroupBalance(props: { group: ClientGroupSummary }) {
   const balances = props.group.stored_locally ? props.group.you_balances : undefined;
 
-  if (balances === null) return <Text style={[s.amount, { color: colors.muted }]}>choose who you are</Text>;
+  if (balances === null) return <Text variant="figure" tone="muted">choose who you are</Text>;
 
-  if (balances === undefined) return <Text style={[s.amount, { color: colors.muted }]}>—</Text>;
+  if (balances === undefined) return <Text variant="figure" tone="muted">—</Text>;
 
-  if (!balances.length) return <Text style={[s.amount, { color: colors.muted }]}>settled</Text>;
+  if (!balances.length) return <Text variant="figure" tone="muted">settled</Text>;
 
   return (
-    <View style={{ alignItems: 'flex-end', gap: 6 }}>
+    <Stack gap={8} align="end">
       {balances.map(({ currency, amount }) => (
-        <Text key={currency} ref={morph(`gamt-${props.group.group_id}-${currency}`, { unclipped: true })} style={[s.amount, { color: balanceColor(amount) }]}>{signedFigure(amount, currency)}</Text>
+        <Text key={currency} ref={morph(`gamt-${props.group.group_id}-${currency}`, { unclipped: true })} variant="figure" color={balanceColor(amount)}>{signedFigure(amount, currency)}</Text>
       ))}
-    </View>
+    </Stack>
   );
 }
 
@@ -240,47 +225,50 @@ export function GroupsView(props: GroupsViewProps) {
 
     return (
       <View key={group.group_id}>
-        <Pressable
+        <Touchable
           accessibilityRole="button"
           accessibilityLabel={`Open ${group.name}`}
           disabled={action.busy}
+          feedback="tint"
           onPress={() => open(group)}
-          style={({ pressed }) => [s.groupCard, pressed && s.pressed]}
+          style={[{ gap: 12, paddingVertical: 16 }, rules.above]}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-start' }}>
-              <Text ref={morph(`gname-${group.group_id}`)} numberOfLines={2} style={{ maxWidth: '100%', fontFamily, fontSize: 20, lineHeight: 25, fontWeight: '600', color: colors.ink }}>{group.name}</Text>
-            </View>
-            <Pressable
+          <Row gap={12} justify="between">
+            <Stack fill align="start">
+              <Text ref={morph(`gname-${group.group_id}`)} numberOfLines={2} variant="headline" style={{ maxWidth: '100%' }}>{group.name}</Text>
+            </Stack>
+            <IconButton
               ref={leaving === group.group_id ? leaveToggle : undefined}
-              accessibilityRole="button"
-              accessibilityLabel={`Leave ${group.name}`}
+              label={`Leave ${group.name}`}
               onPress={() => setLeaving(leaving === group.group_id ? null : group.group_id)}
-              style={({ pressed }) => [{ width: 44, height: 44, marginVertical: -10, marginRight: -12, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed]}
+              style={{ marginVertical: -10, marginRight: -12 }}
             >
               <TrashIcon size={18} color={colors.muted} />
-            </Pressable>
-          </View>
-          <BalanceBar track amount={firstBalance(group)} max={max} morph={barMorph(group)} />
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 20 }}>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text numberOfLines={1} style={s.caption}>{meta || ' '}</Text>
-              {group.pending_commands ? <Text style={s.caption}>{group.pending_commands === 1 ? '1 change waiting' : `${group.pending_commands} changes waiting`}</Text> : null}
-              {review ? <Text style={[s.caption, { fontWeight: '600', color: colors.warningInk }]}>A change needs review</Text> : null}
-            </View>
+            </IconButton>
+          </Row>
+          <BalanceBar track amount={firstBalance(group)} max={max} stripRef={morph(barMorph(group), { stretch: true })} />
+          <Row justify="between" style={{ minHeight: 20 }}>
+            <Stack fill gap={2}>
+              <Text numberOfLines={1} variant="caption" tone="muted">{meta || ' '}</Text>
+              {group.pending_commands ? <Text variant="caption" tone="muted">{group.pending_commands === 1 ? '1 change waiting' : `${group.pending_commands} changes waiting`}</Text> : null}
+              {review ? <Text variant="caption" tone="danger" weight="semibold">A change needs review</Text> : null}
+            </Stack>
             <GroupBalance group={group} />
-          </View>
-        </Pressable>
+          </Row>
+        </Touchable>
         <Reveal toggle={leaveToggle} onOutsidePress={() => setLeaving(null)}>
           {leaving === group.group_id ? (
-            <View style={{ gap: 10, paddingBottom: 18 }}>
-              <Text style={s.body}>Leave {group.name} on this device? You can rejoin it later.</Text>
-              <View style={s.actions}>
-                <Button grow secondary disabled={action.busy} onPress={() => setLeaving(null)}>Cancel</Button>
-                <Button grow disabled={action.busy || !state.online} onPress={() => { void leave(group); }}>Leave</Button>
-              </View>
-              {!state.online ? <Text style={s.caption}>You’re offline. Connect to leave.</Text> : null}
-            </View>
+            <Stack gap={12} paddingBottom={16}>
+              <Confirmation
+                message={`Leave ${group.name} on this device? You can rejoin it later.`}
+                confirmLabel="Leave"
+                busy={action.busy}
+                disabled={!state.online}
+                onConfirm={() => { void leave(group); }}
+                onCancel={() => setLeaving(null)}
+              />
+              {!state.online ? <Text variant="caption" tone="muted">You’re offline. Connect to leave.</Text> : null}
+            </Stack>
           ) : null}
         </Reveal>
         {target === group.group_id ? <ErrorMessage message={action.error} /> : null}
@@ -291,16 +279,10 @@ export function GroupsView(props: GroupsViewProps) {
   function leftRow(group: ClientGroupSummary) {
     return (
       <View key={group.group_id}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Rejoin ${group.name}`}
-          disabled={action.busy}
-          onPress={() => open(group)}
-          style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 18 }, s.ruled, pressed && s.pressed]}
-        >
-          <Text numberOfLines={2} style={{ flex: 1, fontFamily, fontSize: 20, lineHeight: 25, fontWeight: '600', color: colors.faint }}>{group.name}</Text>
-          <Text style={s.rowAction}>Rejoin</Text>
-        </Pressable>
+        <ListRow label={`Rejoin ${group.name}`} disabled={action.busy} onPress={() => open(group)}>
+          <Text numberOfLines={2} variant="headline" tone="faint" style={{ flex: 1 }}>{group.name}</Text>
+          <Text variant="caption" weight="semibold" underline>Rejoin</Text>
+        </ListRow>
         {target === group.group_id ? <ErrorMessage message={action.error} /> : null}
       </View>
     );
@@ -310,19 +292,19 @@ export function GroupsView(props: GroupsViewProps) {
     <View>
       {active.length ? active.map(row) : <WelcomeView />}
       {left.length ? (
-        <Pressable
+        <Touchable
           accessibilityRole="button"
           accessibilityState={{ expanded: showLeft }}
           onPress={() => {
             void actions.dispatch('setLeftGroupsVisible', { visible: !showLeft }, { origin: 'ui' });
           }}
-          style={({ pressed }) => [{ minHeight: 52, justifyContent: 'center' }, s.ruled, pressed && s.pressed]}
+          style={[{ minHeight: sizes.row, justifyContent: 'center' }, rules.above]}
         >
-          <Text style={[s.caption, s.link, { fontSize: 14 }]}>{`${showLeft ? 'Hide' : 'Show'} ${left.length === 1 ? '1 group' : `${left.length} groups`} you left`}</Text>
-        </Pressable>
+          <Text variant="caption" tone="muted" underline>{`${showLeft ? 'Hide' : 'Show'} ${left.length === 1 ? '1 group' : `${left.length} groups`} you left`}</Text>
+        </Touchable>
       ) : null}
       <Reveal>{showLeft && left.length ? <View>{left.map(leftRow)}</View> : null}</Reveal>
-      <View style={s.ruled} />
+      <Divider />
     </View>
   );
 }

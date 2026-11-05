@@ -1,23 +1,22 @@
 import { useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { View, type TextInput } from 'react-native';
 import { groupNameSchema, memberHasRecords, preferredMember, repaymentMembers } from '@splitnext/client';
+import { BalanceBar, BellIcon, Button, CloseIcon, CountBadge, ErrorMessage, IconButton, PencilIcon, Row, Stack, Tag, Text, TextButton, Touchable, YouBadge, between, colors, layout, rules, sizes, titleStyle } from '../design';
 import { attentionCount } from '../model/activity';
 import { hasRecords } from '../model/breakdown';
 import { balanceRows, memberName, moneyLabel } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
-import { BackButton, BalanceBar, Button, ErrorMessage, ScreenHeader, balanceColor, colors, s, signedFigure, titleStyle } from './components';
+import { balanceColor, signedFigure } from './balance';
 import { ExpenseList } from './ExpenseList';
-import { BellIcon, CloseIcon, PencilIcon } from './icons';
 import { InvitePanel } from './InvitePanel';
 import { AddPersonRow, MemberIcon, type MemberListApp, type Replica } from './MemberList';
-import { between, useCompactProgress } from './pageScroll';
+import { useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
 import { EditCover } from './EditCover';
+import { ScreenHeader, BackButton } from './ScreenHeader';
 import { TitleField } from './TitleField';
 import { morph } from './ScreenMorph';
-import { fontFamily } from './theme';
 import { useActionCall, useActions, useUiState } from './useActionCall';
-import { YouBadge } from './YouBadge';
 
 type GroupViewProps = { app: MemberListApp };
 
@@ -34,21 +33,15 @@ export function ActivityLink(props: { app: MemberListApp }) {
     : 'Activity, no new updates';
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      disabled={!open.can('showActivity')}
-      onPress={() => { void open.call('showActivity', {}); }}
-      style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !open.can('showActivity') && s.dim]}
-    >
+    <IconButton label={label} disabled={!open.can('showActivity')} onPress={() => { void open.call('showActivity', {}); }}>
       <BellIcon size={22} />
       {/* The count sits on the bell's shoulder. */}
       {count ? (
-        <View aria-hidden style={{ position: 'absolute', top: 4, left: 23, minWidth: 18, height: 18, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', borderRadius: 999, borderWidth: 2, borderColor: colors.background, backgroundColor: colors.alert }}>
-          <Text testID="activity-count" style={{ fontFamily, fontSize: 10, lineHeight: 12, fontWeight: '700', color: '#ffffff' }}>{count}</Text>
+        <View style={{ position: 'absolute', top: 4, left: 23 }}>
+          <CountBadge testID="activity-count" count={count} />
         </View>
       ) : null}
-    </Pressable>
+    </IconButton>
   );
 }
 
@@ -84,22 +77,18 @@ function GroupName(props: { name: string; groupId: string }) {
   return (
     <View style={{ flex: 1, minWidth: 0 }}>
       {/* While editing, the field sets the height, growing as the name wraps. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, height: fullTitleHeight && draft === null ? between(Math.max(44, fullTitleHeight), 44, progress) : undefined }}>
+      <Row style={{ minHeight: sizes.touch, height: fullTitleHeight && draft === null ? between(Math.max(sizes.touch, fullTitleHeight), sizes.touch, progress) : undefined }}>
         {/* Measure the expanded title independently of wrapping during collapse.
             Its second line releases space continuously rather than all at once. */}
         <Text aria-hidden pointerEvents="none" numberOfLines={2} onLayout={(event) => setFullTitleHeight(event.nativeEvent.layout.height)} style={[titleStyle(0), { position: 'absolute', left: 0, right: 34, top: 0, opacity: 0 }]}>{name}</Text>
         {draft === null ? (
           <>
             <Text ref={morph(`gname-${props.groupId}`)} accessibilityRole="header" numberOfLines={2} style={[titleStyle(progress), { flexShrink: 1, alignSelf: 'flex-start' }]}>{name}</Text>
-            {progress <= 0.5 ? <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Rename group"
-              disabled={!rename.can('renameGroup', { name })}
-              onPress={() => setDraft(name)}
-              style={({ pressed }) => [{ marginLeft: 'auto', marginRight: -10, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: Math.max(0, 1 - 2 * progress) }, pressed && s.pressed, !rename.can('renameGroup', { name }) && s.dim]}
-            >
-              <PencilIcon size={18} color={colors.ink} />
-            </Pressable> : null}
+            {progress <= 0.5 ? (
+              <IconButton label="Rename group" disabled={!rename.can('renameGroup', { name })} onPress={() => setDraft(name)} style={{ marginLeft: 'auto', marginRight: -10, opacity: Math.max(0, 1 - 2 * progress) }}>
+                <PencilIcon size={18} />
+              </IconButton>
+            ) : null}
           </>
         ) : (
           <TitleField
@@ -112,10 +101,10 @@ function GroupName(props: { name: string; groupId: string }) {
             onEscape={() => setDraft(null)}
             // The pencil's share of the row: 44 wide, 10 of it past the edge.
             inset={34}
-            style={{ ...titleStyle(progress), paddingBottom: 4, borderBottomWidth: 1.5, borderColor: colors.ink }}
+            style={{ ...titleStyle(progress), paddingBottom: 4, ...rules.inkBelow }}
           />
         )}
-      </View>
+      </Row>
       <EditCover open={draft !== null} target={input} onPress={() => input.current?.blur()} />
       <ErrorMessage message={rename.error} />
     </View>
@@ -149,19 +138,19 @@ export function GroupHeader(props: { app: MemberListApp }) {
         <View>
           {/* Folds away as the page scrolls, for more room, unless the invite is open under it. */}
           {/* Mostly folded, it is out of reach rather than a sliver under the title. */}
-          <View aria-hidden={!inviting && progress > 0.5} style={{ flexDirection: 'row', alignItems: 'center', gap: 16, height: inviting ? 44 : between(44, 0, progress), opacity: inviting ? 1 : 1 - progress, overflow: 'hidden', pointerEvents: !inviting && progress > 0.5 ? 'none' : 'auto' }}>
-            <Text style={[s.caption, { fontSize: 14 }]}>{people === 1 ? '1 person' : `${people} people`}</Text>
-            <Pressable
+          <Row gap={16} aria-hidden={!inviting && progress > 0.5} style={{ height: inviting ? sizes.touch : between(sizes.touch, 0, progress), opacity: inviting ? 1 : 1 - progress, overflow: 'hidden', pointerEvents: !inviting && progress > 0.5 ? 'none' : 'auto' }}>
+            <Text variant="caption" tone="muted">{people === 1 ? '1 person' : `${people} people`}</Text>
+            <TextButton
               ref={inviteToggle}
-              accessibilityRole="button"
-              accessibilityState={{ expanded: inviting }}
+              size="small"
+              expanded={inviting}
               disabled={!invite.can(inviting ? 'closePanel' : 'showInvite', {})}
               onPress={() => { void invite.call(inviting ? 'closePanel' : 'showInvite', {}); }}
-              style={({ pressed }) => [{ height: 44, justifyContent: 'center', paddingHorizontal: 12, marginLeft: -12 }, pressed && s.pressed]}
+              style={{ height: sizes.touch, paddingHorizontal: 12, marginLeft: -12 }}
             >
-              <Text style={[s.headerActionText, s.link, { fontSize: 14, fontWeight: '400' }]}>Invite people</Text>
-            </Pressable>
-          </View>
+              Invite people
+            </TextButton>
+          </Row>
           <Reveal
             toggle={inviteToggle}
             // A tap elsewhere may open another view; it acts first, and the
@@ -231,43 +220,39 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
 
   return (
     <View>
-      <View style={[{ flexDirection: 'row', alignItems: 'stretch', marginHorizontal: -24 }, s.ruled, props.you && { backgroundColor: colors.youRow }]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${name}${props.you ? ' (you)' : ''}${props.removed ? ', removed' : ''}, ${amounts.join(', ') || (props.recorded ? 'settled' : 'no expenses yet')}. Show details`}
-        disabled={!open.can('showPerson', { memberId: props.memberId })}
-        onPress={() => { void open.call('showPerson', { memberId: props.memberId }); }}
-        style={({ pressed }) => [{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', minHeight: 52, paddingLeft: 24, paddingRight: removable ? 0 : 24, gap: 8 }, pressed && s.rowPressed]}
-      >
-        <View style={{ width: '34%', flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0 }}>
-          <MemberIcon participants={participants} size={6} />
-          <Text ref={morph(`pname-${props.replica.group_id}-${props.memberId}`)} numberOfLines={2} style={[s.name, { flexShrink: 1, lineHeight: 20 }]}>{name}</Text>
-          {props.you ? <YouBadge /> : null}
-          {props.removed ? <Text style={s.tag}>removed</Text> : null}
-        </View>
-        <View style={{ flex: 1, alignSelf: 'stretch' }}>
-          {props.recorded ? <BalanceBar amount={first} max={props.max} morph={bar} /> : null}
-        </View>
-        <View style={{ width: props.figureWidth, alignItems: 'flex-end', gap: 6 }}>
-          {props.balances.length ? props.balances.map((entry) => (
-            <Text key={entry.currency} ref={morph(props.you ? `gamt-${props.replica.group_id}-${entry.currency}` : `pamt-${props.replica.group_id}-${props.memberId}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} style={[s.amount, { color: balanceColor(entry.amount) }]}>
-              {signedFigure(entry.amount, entry.currency)}
-            </Text>
-          )) : null}
-        </View>
-      </Pressable>
-      {/* Someone no expense or repayment has named can go straight from here. */}
-      {removable ? (
-        <Pressable
+      {/* The row runs to the screen's edges, so your tint does too. */}
+      <View style={[{ flexDirection: 'row', alignItems: 'stretch', marginHorizontal: -layout.gutter }, rules.above, props.you && { backgroundColor: colors.tint }]}>
+        <Touchable
+          feedback="tint"
           accessibilityRole="button"
-          accessibilityLabel={`Remove ${name}`}
-          disabled={!remove.can('removeMember', { memberId: props.memberId })}
-          onPress={() => { void remove.call('removeMember', { memberId: props.memberId }); }}
-          style={({ pressed }) => [{ width: 44, marginRight: 10, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed, !remove.can('removeMember', { memberId: props.memberId }) && s.dim]}
+          accessibilityLabel={`${name}${props.you ? ' (you)' : ''}${props.removed ? ', removed' : ''}, ${amounts.join(', ') || (props.recorded ? 'settled' : 'no expenses yet')}. Show details`}
+          disabled={!open.can('showPerson', { memberId: props.memberId })}
+          onPress={() => { void open.call('showPerson', { memberId: props.memberId }); }}
+          style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', minHeight: sizes.row, paddingLeft: layout.gutter, paddingRight: removable ? 0 : layout.gutter, gap: 8 }}
         >
-          <CloseIcon size={16} color={colors.muted} />
-        </Pressable>
-      ) : null}
+          <Row gap={8} style={{ width: '34%', minWidth: 0 }}>
+            <MemberIcon participants={participants} />
+            <Text ref={morph(`pname-${props.replica.group_id}-${props.memberId}`)} numberOfLines={2} variant="strong" style={{ flexShrink: 1 }}>{name}</Text>
+            {props.you ? <YouBadge /> : null}
+            {props.removed ? <Tag>removed</Tag> : null}
+          </Row>
+          <View style={{ flex: 1, alignSelf: 'stretch' }}>
+            {props.recorded ? <BalanceBar amount={first} max={props.max} stripRef={morph(bar, { stretch: true })} /> : null}
+          </View>
+          <Stack gap={8} align="end" style={{ width: props.figureWidth }}>
+            {props.balances.map((entry) => (
+              <Text key={entry.currency} ref={morph(props.you ? `gamt-${props.replica.group_id}-${entry.currency}` : `pamt-${props.replica.group_id}-${props.memberId}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} variant="figure" color={balanceColor(entry.amount)}>
+                {signedFigure(entry.amount, entry.currency)}
+              </Text>
+            ))}
+          </Stack>
+        </Touchable>
+        {/* Someone no expense or repayment has named can go straight from here. */}
+        {removable ? (
+          <IconButton label={`Remove ${name}`} disabled={!remove.can('removeMember', { memberId: props.memberId })} onPress={() => { void remove.call('removeMember', { memberId: props.memberId }); }} style={{ height: 'auto', marginRight: 10 }}>
+            <CloseIcon size={16} color={colors.muted} />
+          </IconButton>
+        ) : null}
       </View>
       <ErrorMessage message={open.error ?? remove.error} />
     </View>
@@ -321,19 +306,19 @@ export function GroupView(props: GroupViewProps) {
 
   if (replica.hidden)
     return (
-      <View style={s.prompt}>
-        <Text style={s.body}>You left this group.</Text>
+      <Stack gap={12} paddingY={12} style={rules.inkAbove}>
+        <Text variant="body">You left this group.</Text>
         <Button disabled={!action.can('showRejoin')} onPress={() => { void action.call('showRejoin', {}); }}>
           Rejoin group
         </Button>
         <ErrorMessage message={action.error} />
-      </View>
+      </Stack>
     );
 
   return (
-    <View style={{ gap: 28 }}>
+    <Stack gap={32}>
       <People app={props.app} replica={replica} />
       <ExpenseList replica={replica} />
-    </View>
+    </Stack>
   );
 }

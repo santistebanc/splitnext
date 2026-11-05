@@ -3,7 +3,9 @@ import { emptyClientDocument, serializeClientDocument } from '../../../../src/cl
 import { AppController } from '../model/controller';
 import { fixtureGroupId, scenarioPresence, scenarioReplica, type Connection, type MemberListScenario } from './memberListFixture';
 import { memoryTransport } from '../../../../src/memoryTransport';
-import type { Log } from './stories';
+
+/** Records a callback a preview fired, such as a press. */
+export type Log = (event: string, detail?: string) => void;
 
 export type FakeApp = AppController;
 

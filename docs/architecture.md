@@ -23,9 +23,10 @@ How the system fits together and the rules each part keeps. The
   subscriptions.
 - **App** (`apps/client/`): an Expo Router app, built for the web today. Its
   `model/` holds the controller over the SDK, the action catalog every caller
-  uses, the workflow state machine, and the shared UI state; `ui/` holds the
-  screens, `devtools/` the in-app development panel, and `workbench/` the
-  component workbench.
+  uses, the workflow state machine, and the shared UI state; `design/` holds
+  the design system; `ui/` the screens built from it; `devtools/` the in-app
+  development panel; `catalog/` the design system's catalog; and
+  `workbench/` the in-memory fake app the catalog and tests run screens on.
 
 ## The web app
 
@@ -53,28 +54,43 @@ screen code without going through the host. See
 The Worker serves a public homepage, invite entry pages, and the Expo web app
 at `/app`.
 
-The app uses one fixed light palette from `ui/theme.ts`: near-black ink on
-warm paper, hairline rules instead of cards, square black main actions, green
-for money someone gets back and orange for money someone owes, each as an ink
-figure and a lighter bar, and a brighter orange for the Activity count, new
-Activity entries, and changes to review. `splitHues` colours each person in an
-expense's split. Body text and titles use local Instrument Sans, amounts and
-invite links local Geist Mono. Icons are stroked outlines in `ui/icons.tsx`.
-Everything is square (`radius` is 0 except for dots and counts), and nothing
-casts a shadow: a header shows a hairline once content scrolls under it.
+### Design system
 
-Screens build from the shared pieces in `ui/components.tsx` rather than their
-own copies: `Button` (black, outlined `secondary`, underlined `quiet`),
-`FooterButton` for a screen's one main action, `HeaderAction` for Cancel,
-Delete, and Save, `BackButton` for the text back action named after where it
-goes, `Choice` for square chips, `RadioRow`, `ListRow` for ruled rows,
-`BalanceBar` for a balance growing either side of an ink line, `Notice`,
-`EmptyState`, `Tag`, and `signedFigure` with `balanceColor` for balances.
-`withTransition` in `theme.ts` eases a style property on the web, where views
-are elements, with the shared `easeOut` curve. Recorded repayments use the
-expense list's `RepaymentRow` everywhere. Pressing a control fades it
-(`s.pressed`), pressing a row tints it (`s.rowPressed`), and `s.dim` only
-marks something unavailable.
+`apps/client/src/design/` is the design system, imported from `../design`. It
+knows nothing about groups or money; `ui/` composes it into screens.
+
+- **Tokens** (`design/tokens.ts`): one fixed light palette named by role —
+  near-black ink on warm paper, hairline rules instead of cards, square black
+  main actions, green for money someone gets back and orange for money someone
+  owes (each as an ink figure and a lighter bar), and a brighter orange for
+  counts and marks that need attention; `splitHues` for each person in an
+  expense's split; the type ramp (`typeScale`, Instrument Sans for text and
+  Geist Mono for figures); a 2-point spacing scale (`space`); control
+  `sizes`, line `strokes`, `opacities`, column `layout` widths, `radii`
+  (square except dots and counts), and `durations` with one easing.
+  Nothing casts a shadow: a header shows a hairline once content scrolls under it.
+- **Primitives**: `Text` (a type step in a tone; nested text inherits),
+  `Input`, `Stack` and `Row` (gaps and padding only from `space`),
+  `Touchable` (press feedback and disabled dimming), and `IconButton`.
+- **Components**: `Button` (primary or secondary; compact, field, small,
+  regular, and `block` for a screen's one main action), `TextButton`,
+  `Field`, `RadioRow`, `Checkbox`, `SegmentedControl`, `Chip`, `Notice`,
+  `ErrorMessage`, `EmptyState`, `Tag`, `YouBadge`, `CountBadge`, `Dot`,
+  `Skeleton`, `ListRow`, `SectionHeading`, `Divider` and `rules`,
+  `BalanceBar`, outline icons, and `BrandMark`.
+
+Screens take every color, size, and duration from tokens and build from these
+components rather than their own copies. App chrome that needs the app's
+scrolling or modal plumbing lives in `ui/` on top of them: `ScreenHeader`
+with `BackButton` and `HeaderAction`, `Drawer`, `ConfirmSheet`,
+`FooterDrawer`, `Toast`, and `SyncStatus`. `ui/balance.ts` formats balances
+(`signedFigure`, `balanceColor`) and `ui/errors.ts` turns error codes into copy.
+`withTransition` eases a style property on the web, where views are elements,
+with the shared `easeOut` curve. Recorded repayments use the expense list's
+`RepaymentRow` everywhere. Pressing a control fades it, pressing a row tints
+it (`Touchable`'s `feedback`), and dimming only marks something unavailable.
+
+### Screens
 
 Screens follow the agreed prototype, in one narrow column on every device.
 `AppScreen` picks each view's header, body, and main action, and `Frame` lays
@@ -262,28 +278,18 @@ that discovers an outage can disable SDK delivery while another refresh is
 between listing groups and synchronizing one; that SDK offline result remains
 transient and schedules another retry while the device itself stays online.
 
-### Component workbench
+### Design system catalog
 
-`/components` (or `:8081/components` under Expo) opens the component
-workbench. Search the sidebar, pick a component, and edit its controls;
-callbacks such as presses appear in the Events log. `MemberIcon` has an
-explicit `isYou` switch, separate presence controls, and an other-participant
-count; turn `isYou` off with one other participant to preview a dot without
-the YOU badge. `GroupView balances` runs against an in-memory group, with controls for
-members, who is you, other participants, presence, connection, latency, and
-forced command errors. The viewport presets resize the canvas only; components
-that read the window size still see the real window. The Screens group
-renders each app screen's content (groups list, create, group, join, invite,
-group settings, Activity) against the same in-memory fake, with connection, latency,
-and failure controls. Add examples with `defineStory` in
-`apps/client/src/workbench/catalog.tsx` or `screens.tsx`. The Worker serves
+`/components` (or `:8081/components` under Expo) opens the catalog: a page
+per token family (colors, typography, spacing, sizes and lines, motion,
+icons), per component (usage, live examples, and props), per piece of app
+chrome, and per screen. Screen pages run the real screen on the production
+`AppController`, SDK, and group engine over an isolated memory transport
+(`workbench/`), seeded with one fixed scenario. Add a page to
+`catalog/foundations.tsx`, `catalog/components.tsx`, or `catalog/screens.tsx`
+when a token or component is added; every color and type step must have a
+described role there, or the catalog does not typecheck. The Worker serves
 this route only when `ENABLE_DEBUG_INSPECTION` is true.
-
-The workbench uses the production `AppController`, SDK, and group engine
-through an isolated memory transport. Its fixtures use valid contracts;
-creation, joining, leaving, replacement links, outboxes, and notices
-follow the same rules as the app. Latency and forced server failures apply to
-connected requests; offline ledger edits continue to queue locally.
 
 ## App actions
 

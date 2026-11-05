@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import type { JsonValue } from '@splitnext/client';
-import { colors, s } from '../ui/components';
+import { colors, strokes, textStyle } from '../design';
 import { sourceOptions, type ValueOption } from '../model/actionInputs';
 import {
   exampleAt,
@@ -289,6 +289,12 @@ function Combobox(props: ComboboxProps) {
   );
 }
 
+/** The app's own text steps the form borrows. */
+const s = StyleSheet.create({
+  caption: { ...textStyle('caption', 'muted') },
+  chosen: { borderWidth: strokes.ink, borderColor: colors.ink },
+});
+
 const fs = StyleSheet.create({
   form: { gap: 12 },
   field: { gap: 4 },
@@ -303,7 +309,7 @@ const fs = StyleSheet.create({
     color: colors.muted,
     fontSize: 11,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.rule,
     borderRadius: 3,
     paddingHorizontal: 4,
   },
@@ -312,9 +318,9 @@ const fs = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.rule,
     borderRadius: 4,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     color: colors.ink,
     fontSize: 14,
   },
@@ -331,9 +337,9 @@ const fs = StyleSheet.create({
   menu: {
     marginTop: 4,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.rule,
     borderRadius: 4,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     overflow: 'hidden',
   },
   item: {
@@ -347,6 +353,6 @@ const fs = StyleSheet.create({
     gap: 10,
     paddingLeft: 10,
     borderLeftWidth: 2,
-    borderColor: colors.border,
+    borderColor: colors.rule,
   },
 });

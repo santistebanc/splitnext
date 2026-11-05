@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
 import { reversibleEffect, undoProblem, type ClientReplicaState } from '@splitnext/client';
+import { ArrowRightIcon, Button, EmptyState, ErrorMessage, Row, SectionHeading, Stack, Tag, Text, colors, fonts, hairlineShadow, rules, strokes } from '../design';
 import { activityTarget, describeActivity, newActivity, visibleActivity } from '../model/activity';
 import { reviewDetail, reviewTitle } from '../model/notices';
 import { BackHeader } from './BackHeader';
-import { EmptyState, ErrorMessage, SectionHeading, Tag, colors, s } from './components';
-import { ArrowRightIcon } from './icons';
 import type { MemberListApp } from './MemberList';
 import { StickyTop } from './StickyTop';
-import { fontFamily, monoFamily } from './theme';
 import { dayLabel, timeLabel } from './relativeTime';
 import { useActionCall, useUiState } from './useActionCall';
 
@@ -28,30 +26,18 @@ export function ActivityHeader(props: { app: MemberListApp }) {
   );
 }
 
-/**
- * A compact action at the end of an entry, outlined unless it is the entry's
- * main one. Its touch area reaches past its edge to a full target.
- */
-function EntryAction(props: { text: string; label: string; disabled: boolean; onPress: () => void; primary?: boolean; icon?: boolean }) {
+/** A compact action at the end of an entry, outlined unless it is the entry's main one. */
+function EntryAction(props: { text: string; label: string; disabled: boolean; onPress: () => void; primary?: boolean }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={props.label}
-      accessibilityState={{ disabled: props.disabled }}
-      disabled={props.disabled}
-      hitSlop={{ top: 6, bottom: 6 }}
-      onPress={props.onPress}
-      style={({ pressed }) => [
-        { minHeight: 32, paddingHorizontal: 12, justifyContent: 'center', borderWidth: 1, borderColor: colors.ink, backgroundColor: props.primary ? colors.action : 'transparent' },
-        pressed && !props.disabled && s.pressed,
-        props.disabled && (props.primary ? s.busyButton : s.dim),
-      ]}
-    >
-      <Text style={{ fontFamily, fontSize: 13, fontWeight: '600', color: props.primary ? (props.disabled ? colors.actionBusyInk : colors.actionInk) : colors.ink }}>
-        {props.text}
-      </Text>
-    </Pressable>
+    <Button size="compact" variant={props.primary ? 'primary' : 'secondary'} label={props.label} disabled={props.disabled} onPress={props.onPress}>
+      {props.text}
+    </Button>
   );
+}
+
+/** The mark at an entry's start: orange while it is new or needs review, room for one otherwise. */
+function EntryMarker(props: { on: boolean }) {
+  return <View aria-hidden style={{ width: strokes.marker, backgroundColor: props.on ? colors.alert : 'transparent' }} />;
 }
 
 /**
@@ -63,7 +49,7 @@ function DayHeading(props: { title: string; color?: string }) {
 
   return (
     <StickyTop onPinnedChange={setPinned}>
-      <View style={{ paddingTop: 8, paddingBottom: 4, backgroundColor: colors.background, boxShadow: pinned ? '0 1px 0 rgba(20, 20, 19, 0.14)' : 'none' }}>
+      <View style={{ paddingTop: 8, paddingBottom: 4, backgroundColor: colors.background, boxShadow: hairlineShadow(pinned ? 1 : 0) }}>
         <SectionHeading title={props.title} {...(props.color !== undefined && { color: props.color })} />
       </View>
     </StickyTop>
@@ -86,27 +72,28 @@ function NeedsReview(props: { replica: ClientReplicaState }) {
 
   return (
     <View role="region" aria-label="Needs your review" style={{ paddingBottom: 8 }}>
-      <DayHeading color={colors.owes} title={`Needs your review · ${notices.length}`} />
-      <View style={s.listCard}>
+      <DayHeading color={colors.danger} title={`Needs your review · ${notices.length}`} />
+      <View style={rules.below}>
         {notices.map((notice) => {
           const commandId = notice.command.command_id;
 
           return (
-            <View key={commandId} style={[{ gap: 10, paddingVertical: 14, paddingLeft: 16 }, s.ruled, { borderLeftWidth: 4, borderLeftColor: colors.alert }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-                <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-                  <Text style={{ fontFamily, fontSize: 15, lineHeight: 20, color: colors.ink }}>
-                    <Text style={{ fontWeight: '600' }}>{reviewTitle(notice)}</Text> wasn’t applied
+            <Row key={commandId} gap={12} paddingY={12} align="stretch" style={rules.above}>
+              <EntryMarker on />
+              <Stack fill gap={12}>
+                <Stack gap={4}>
+                  <Text variant="body">
+                    <Text weight="semibold">{reviewTitle(notice)}</Text> wasn’t applied
                   </Text>
-                  <Text style={{ fontFamily, fontSize: 13, lineHeight: 19, color: colors.soft }}>{reviewDetail(notice)}</Text>
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
-                <EntryAction primary text="Apply again" label="Apply again" disabled={!action.can('retryNotice', { commandId })} onPress={() => act(commandId, 'retryNotice')} />
-                <EntryAction text="Dismiss" label="Dismiss" disabled={!action.can('dismissNotice', { commandId })} onPress={() => act(commandId, 'dismissNotice')} />
-              </View>
-              {target === commandId ? <ErrorMessage message={action.error} /> : null}
-            </View>
+                  <Text variant="caption" tone="muted">{reviewDetail(notice)}</Text>
+                </Stack>
+                <Row gap={8} justify="end">
+                  <EntryAction primary text="Apply again" label="Apply again" disabled={!action.can('retryNotice', { commandId })} onPress={() => act(commandId, 'retryNotice')} />
+                  <EntryAction text="Dismiss" label="Dismiss" disabled={!action.can('dismissNotice', { commandId })} onPress={() => act(commandId, 'dismissNotice')} />
+                </Row>
+                {target === commandId ? <ErrorMessage message={action.error} /> : null}
+              </Stack>
+            </Row>
           );
         })}
       </View>
@@ -130,6 +117,7 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
   const snapshot = props.replica.projected_snapshot;
   const events = visibleActivity(props.replica.activity).toReversed();
   const fresh = new Set(newActivity(props.replica, seenOnArrival).map((event) => event.id));
+
   useEffect(() => { void load.call('refreshActivity', {}); }, [props.replica.group_id, props.replica.revision]);
   useEffect(() => {
     if (markSeen.can('markActivitySeen')) void markSeen.call('markActivitySeen', {});
@@ -146,9 +134,9 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
   }
 
   return (
-    <View style={{ gap: 6, paddingBottom: 32 }}>
+    <Stack gap={8} paddingBottom={32}>
       <NeedsReview replica={props.replica} />
-      {load.busy && !events.length ? <Text role="status" style={s.caption}>Loading Activity…</Text> : null}
+      {load.busy && !events.length ? <Text role="status" variant="caption" tone="muted">Loading Activity…</Text> : null}
       {!load.busy && !events.length ? (
         <EmptyState
           title="Nothing here yet"
@@ -159,7 +147,7 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
       {days.map((day) => (
         <View key={day.label} style={{ paddingBottom: 8 }}>
           <DayHeading title={day.label} />
-          <View style={s.listCard}>
+          <View style={rules.below}>
             {day.events.map((event) => {
               const entry = describeActivity(event, props.replica);
               const isNew = fresh.has(event.id);
@@ -177,40 +165,41 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
               const problem = reversible && snapshot ? undoProblem(snapshot, event, props.replica.activity) : null;
 
               return (
-                <View key={event.id} testID={`activity-${event.id}`} style={[{ flexDirection: 'row', gap: 12, paddingVertical: 14 }, s.ruled]}>
-                  <View aria-hidden style={{ width: 4, backgroundColor: isNew ? colors.alert : 'transparent' }} />
-                  <View style={{ flex: 1, minWidth: 0, gap: 10 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-                    <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
-                      <Text style={{ fontFamily, fontSize: 16, lineHeight: 21, color: colors.ink }}>
-                        <Text style={{ fontWeight: '700' }}>{entry.who}</Text> {entry.whatSegments.map((part, index) => <Text key={index} style={part.reference ? { fontWeight: '600' } : undefined}>{part.text}</Text>)}
+                <Row key={event.id} testID={`activity-${event.id}`} gap={12} paddingY={12} align="stretch" style={rules.above}>
+                  <EntryMarker on={isNew} />
+                  <Row fill gap={12} align="start">
+                    <Stack fill gap={8}>
+                      <Text variant="body">
+                        <Text weight="bold">{entry.who}</Text> {entry.whatSegments.map((part, index) => <Text key={index} weight={part.reference ? 'semibold' : undefined}>{part.text}</Text>)}
                       </Text>
-                      {entry.detail ? <Text style={{ fontFamily: monoFamily, fontSize: 13, fontWeight: '500', color: colors.muted }}>{entry.detailSegments.map((part, index) => <Text key={index} style={part.reference ? { fontFamily, fontWeight: '600', color: colors.ink } : undefined}>{part.text}</Text>)}</Text> : null}
-                    </View>
+                      {entry.detail ? (
+                        <Text variant="figureSmall" tone="muted">
+                          {/* What the change named, such as an expense, reads as a name rather than a figure. */}
+                          {entry.detailSegments.map((part, index) => part.reference ? <Text key={index} tone="ink" weight="semibold" style={{ fontFamily: fonts.body }}>{part.text}</Text> : <Text key={index}>{part.text}</Text>)}
+                        </Text>
+                      ) : null}
+                    </Stack>
                     {/* The time, then whether it is new, then Undo or Restore, in one column at the end. */}
-                    <View style={{ alignItems: 'flex-end', gap: 8, paddingTop: 2 }}>
-                      <Text style={{ fontFamily, fontSize: 12, color: colors.muted }}>{timeLabel(new Date(event.occurred_at))}</Text>
+                    <Stack gap={8} align="end" paddingTop={2}>
+                      <Text variant="meta" tone="muted" weight="regular">{timeLabel(new Date(event.occurred_at))}</Text>
                       {target && action.can(target.name, target.input) ? (
-                        <Pressable accessibilityRole="button" accessibilityLabel={target.label + ': ' + label} hitSlop={6} onPress={() => { void action.call(target.name, target.input); }} style={({ pressed }) => [{ minWidth: 32, minHeight: 32, borderWidth: 1, borderColor: colors.ink, alignItems: 'center', justifyContent: 'center' }, pressed && s.pressed]}>
-                          <ArrowRightIcon size={16} />
-                        </Pressable>
+                        <Button size="compact" variant="secondary" label={target.label + ': ' + label} icon={<ArrowRightIcon size={16} />} onPress={() => { void action.call(target.name, target.input); }} />
                       ) : null}
                       {isNew ? <Tag tone="warning">new</Tag> : null}
                       {reversible && !problem ? (
-                        <EntryAction icon text="Undo" label={`Undo: ${label}`} disabled={!action.can('undoChange', { eventId: event.id })} onPress={() => { void action.call('undoChange', { eventId: event.id }); }} />
+                        <EntryAction text="Undo" label={`Undo: ${label}`} disabled={!action.can('undoChange', { eventId: event.id })} onPress={() => { void action.call('undoChange', { eventId: event.id }); }} />
                       ) : null}
-                      {restorable && change === 'expense.removed' ? <EntryAction icon text="Restore" label="Restore expense" disabled={!action.can('restoreExpense', { expenseId: event.target.id })} onPress={() => { void action.call('restoreExpense', { expenseId: event.target.id }); }} /> : null}
-                      {restorable && change === 'settlement.removed' ? <EntryAction icon text="Restore" label="Restore repayment" disabled={!action.can('restoreSettlement', { settlementId: event.target.id })} onPress={() => { void action.call('restoreSettlement', { settlementId: event.target.id }); }} /> : null}
-                      {restorable && change === 'member.removed' ? <EntryAction icon text="Restore" label="Restore member" disabled={!action.can('restoreMember', { memberId: event.target.id })} onPress={() => { void action.call('restoreMember', { memberId: event.target.id }); }} /> : null}
-                    </View>
-                  </View>
-                  </View>
-                </View>
+                      {restorable && change === 'expense.removed' ? <EntryAction text="Restore" label="Restore expense" disabled={!action.can('restoreExpense', { expenseId: event.target.id })} onPress={() => { void action.call('restoreExpense', { expenseId: event.target.id }); }} /> : null}
+                      {restorable && change === 'settlement.removed' ? <EntryAction text="Restore" label="Restore repayment" disabled={!action.can('restoreSettlement', { settlementId: event.target.id })} onPress={() => { void action.call('restoreSettlement', { settlementId: event.target.id }); }} /> : null}
+                      {restorable && change === 'member.removed' ? <EntryAction text="Restore" label="Restore member" disabled={!action.can('restoreMember', { memberId: event.target.id })} onPress={() => { void action.call('restoreMember', { memberId: event.target.id }); }} /> : null}
+                    </Stack>
+                  </Row>
+                </Row>
               );
             })}
           </View>
         </View>
       ))}
-    </View>
+    </Stack>
   );
 }

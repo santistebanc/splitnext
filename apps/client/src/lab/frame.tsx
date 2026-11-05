@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { useWindowDimensions } from 'react-native';
 import { AppScreen } from '../ui/AppScreen';
 import { ScreenHostContext, type ScreenHost } from '../ui/screenHost';
-import { colors, fontFamily, monoFamily } from '../ui/theme';
+import { colors, fonts } from '../design';
 import { LabDevice, type DeviceConfig, type FakeCapabilities, type HostEnvironment } from './device';
 import type { LabReport } from './events';
 
@@ -42,7 +42,7 @@ class DeviceBoundary extends Component<{ children: ReactNode; device: string; re
   }
 
   override render() {
-    return this.state.error ? createElement('pre', { style: { padding: 12, color: colors.dangerInk, whiteSpace: 'pre-wrap' } }, this.state.error) : this.props.children;
+    return this.state.error ? createElement('pre', { style: { padding: 12, color: colors.danger, whiteSpace: 'pre-wrap' } }, this.state.error) : this.props.children;
   }
 }
 
@@ -83,10 +83,10 @@ function installStyles(): void {
   const style = document.createElement('style');
 
   style.textContent =
-    `@font-face{font-family:"${fontFamily}";src:url(/assets/instrument-sans.woff2) format("woff2");font-style:normal;font-weight:400 700;font-display:swap}` +
-    `@font-face{font-family:"${monoFamily}";src:url(/assets/geist-mono.woff2) format("woff2");font-style:normal;font-weight:400 700;font-display:swap}` +
+    `@font-face{font-family:"${fonts.body}";src:url(/assets/instrument-sans.woff2) format("woff2");font-style:normal;font-weight:400 700;font-display:swap}` +
+    `@font-face{font-family:"${fonts.mono}";src:url(/assets/geist-mono.woff2) format("woff2");font-style:normal;font-weight:400 700;font-display:swap}` +
     'html,body{height:100%;margin:0;overflow:hidden;color-scheme:light;-webkit-font-smoothing:antialiased}' +
-    `:focus-visible{outline:3px solid ${colors.action}!important;outline-offset:2px}` +
+    `:focus-visible{outline:3px solid ${colors.ink}!important;outline-offset:2px}` +
     'input:focus-visible,textarea:focus-visible{outline:none!important}';
   document.head.appendChild(style);
 }

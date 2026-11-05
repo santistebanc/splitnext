@@ -1,12 +1,9 @@
 import { useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
+import { RadioRow, Row, Text, Touchable, YouBadge, durations, rules, sizes, strokes, withTransition } from '../design';
 import { memberName } from '../model/expenses';
-import { participantMarkers } from '../model/memberPresentation';
-import { colors, s } from './components';
-import { MemberIcon, type MemberListApp } from './MemberList';
+import type { MemberListApp } from './MemberList';
 import { Reveal } from './Reveal';
-import { YouBadge } from './YouBadge';
-import { fontFamily, withTransition } from './theme';
 
 export type MemberChoiceProps = {
   app: MemberListApp;
@@ -21,29 +18,14 @@ export type MemberChoiceProps = {
   onChange: (memberId: string) => void;
 };
 
-/** One member in an open choice, with presence and the you badge. */
+/** One member in an open choice: the same radio row as choosing who you are when joining. */
 function MemberChoiceRow(props: { app: MemberListApp; memberId: string; you: boolean; selected: boolean; onPress: () => void }) {
-  const state = props.app.snapshot();
-  const replica = state.group;
-  const name = memberName(replica?.projected_snapshot, props.memberId);
-  const participants = replica ? participantMarkers(replica, props.memberId, props.app.client.presence(replica.group_id), state.online && state.reachable) : [];
+  const name = memberName(props.app.snapshot().group?.projected_snapshot, props.memberId);
 
   return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityLabel={`${name}${props.you ? ' (you)' : ''}`}
-      accessibilityState={{ checked: props.selected }}
-      aria-checked={props.selected}
-      onPress={props.onPress}
-      style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 52, marginHorizontal: -24, paddingHorizontal: 24, borderBottomWidth: 1, borderColor: colors.rule }, props.you && { backgroundColor: colors.youRow }, pressed && s.rowPressed]}
-    >
-      <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-        <MemberIcon participants={participants} size={6} />
-        <Text numberOfLines={1} style={[s.name, { flexShrink: 1 }]}>{name}</Text>
-        {props.you ? <YouBadge /> : null}
-      </View>
-      {props.selected ? <Text aria-hidden style={{ fontFamily, fontSize: 16, fontWeight: '600', color: colors.ink }}>✓</Text> : null}
-    </Pressable>
+    <RadioRow label={name} accessibilityLabel={`${name}${props.you ? ' (you)' : ''}`} selected={props.selected} onPress={props.onPress}>
+      {props.you ? <YouBadge /> : null}
+    </RadioRow>
   );
 }
 
@@ -57,24 +39,25 @@ export function MemberChoice(props: MemberChoiceProps) {
 
   return (
     <View>
-      <Pressable
+      <Touchable
         ref={toggle}
         accessibilityRole="button"
         accessibilityLabel={`${props.label} ${props.value ? `${name}${props.value === props.you ? ' (you)' : ''}` : 'nobody yet'}. ${props.change}`}
         accessibilityState={{ expanded: showing, disabled: Boolean(props.disabled) }}
         disabled={props.disabled}
         onPress={() => setOpen(!open)}
-        style={({ pressed }) => [{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderColor: colors.rule }, pressed && s.pressed]}
+        style={[{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: sizes.row }, rules.below]}
       >
-        <Text style={{ fontFamily, fontSize: 16, color: colors.muted }}>{props.label}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={{ fontFamily, fontSize: 16, fontWeight: '600', color: colors.ink }}>{props.value ? name : 'Choose'}</Text>
-          <Text style={withTransition({ fontSize: 14, color: colors.ink, transform: [{ rotate: showing ? '180deg' : '0deg' }] }, 'transform', 350)}>▾</Text>
-        </View>
-      </Pressable>
+        <Text variant="body" tone="muted">{props.label}</Text>
+        <Row gap={8}>
+          <Text variant="strong">{props.value ? name : 'Choose'}</Text>
+          <Text variant="caption" tone="muted" style={withTransition({ transform: [{ rotate: showing ? '180deg' : '0deg' }] }, 'transform', durations.medium)}>▾</Text>
+        </Row>
+      </Touchable>
       <Reveal toggle={toggle} onOutsidePress={() => setOpen(false)}>
         {showing ? (
-          <View role="radiogroup" aria-label={props.label}>
+          // The first row's rule overlaps the toggle's, so they draw one line.
+          <View role="radiogroup" aria-label={props.label} style={[{ marginTop: -strokes.hairline }, rules.below]}>
             {props.members.map((memberId) => (
               <MemberChoiceRow
                 key={memberId}

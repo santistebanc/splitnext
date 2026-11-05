@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { clientErrorKind, parseInviteLink } from '@splitnext/client';
 import { AppController } from '../model/controller';
 import { createDispatcher } from '../model/actions';
@@ -26,7 +26,9 @@ import { Devtools } from '../devtools/Devtools';
 import { ActionsProvider, useActionCall, useActions, useUiState } from './useActionCall';
 import { useCompactLayout } from './useVisibleViewport';
 import { useDismissKeyboard } from './screenHost';
-import { BackButton, Button, ErrorMessage, ScreenHeader, errorMessage, s, useAction } from './components';
+import { Button, ErrorMessage, Row, Skeleton, Stack, Text, colors, rules } from '../design';
+import { errorMessage, useAction } from './errors';
+import { BackButton, ScreenHeader } from './ScreenHeader';
 import type { AppSubstrate } from './substrate';
 import type { UiState } from '../model/uiState';
 
@@ -36,7 +38,7 @@ type ScreenProps = { incomingGroupId?: string; invite?: boolean; substrate?: App
 type AppProps = { controller: AppController; invite?: boolean; substrate: AppSubstrate };
 
 /** What a screen shows: a fixed header, its content, and at most one main action. */
-type Screen = { header?: ReactNode; body: ReactNode; footer?: ReactNode; ruledFooter?: boolean };
+type Screen = { header?: ReactNode; body: ReactNode; footer?: ReactNode };
 
 export function AppScreen(props: ScreenProps) {
   const substrate = props.substrate ?? browserSubstrate;
@@ -93,8 +95,8 @@ export function AppScreen(props: ScreenProps) {
     return (
       <Frame>
         {error ? (
-          <View style={[s.stack, { paddingTop: 32 }]}>
-            <Text style={s.heading}>Let’s try that again</Text>
+          <Stack gap={16} paddingTop={32}>
+            <Text variant="heading">Let’s try that again</Text>
             <ErrorMessage message={error} />
             <Button
               onPress={() => {
@@ -104,7 +106,7 @@ export function AppScreen(props: ScreenProps) {
             >
               Try again
             </Button>
-          </View>
+          </Stack>
         ) : (
           <LoadingGroups />
         )}
@@ -118,24 +120,21 @@ export function AppScreen(props: ScreenProps) {
 /** A placeholder shaped like the groups list while local storage opens. */
 export function LoadingGroups() {
   return (
-    <View
-      accessibilityLabel="Opening your groups…"
-      accessibilityLiveRegion="polite"
-      aria-busy
-      style={{ gap: 10 }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 20, paddingBottom: 8 }}>
-        <View style={[s.skeleton, { width: 32, height: 32, borderRadius: 9 }]} />
-        <View style={[s.skeleton, { width: 110, height: 22 }]} />
+    <Stack accessibilityLabel="Opening your groups…" accessibilityLiveRegion="polite" aria-busy gap={12}>
+      <Row gap={12} paddingTop={24} paddingBottom={8}>
+        <Skeleton width={32} height={32} radius={9} />
+        <Skeleton width={110} height={22} />
+      </Row>
+      <View style={{ marginTop: 20, marginBottom: 6 }}>
+        <Skeleton width={210} height={36} />
       </View>
-      <View style={[s.skeleton, { width: 210, height: 36, marginTop: 20, marginBottom: 6 }]} />
       {[0, 1, 2].map((row) => (
-        <View key={row} style={s.groupCard}>
-          <View style={[s.skeleton, s.skeletonLine]} />
-          <View style={[s.skeleton, s.skeletonShort]} />
-        </View>
+        <Stack key={row} gap={12} paddingY={16} style={rules.above}>
+          <Skeleton width="60%" height={16} />
+          <Skeleton width="35%" height={12} />
+        </Stack>
       ))}
-    </View>
+    </Stack>
   );
 }
 
@@ -309,7 +308,6 @@ function ReadyApp(props: AppProps) {
         header: <ScreenHeader start={<BackButton label="Back" disabled={!actions.availability('closePanel', {}).available} onPress={() => dispatch('closePanel')} />} />,
         body: <JoinGroup {...joinProps} />,
         footer: <JoinGroupFooter {...joinProps} />,
-        ruledFooter: true,
       };
     }
 
@@ -340,7 +338,7 @@ function ReadyApp(props: AppProps) {
         return { header: <ActivityHeader app={app} />, body: <ActivityPanel replica={group} /> };
       case 'settings':
         return {
-          header: <ScreenHeader title="Group settings" context={group.projected_snapshot?.group.name} start={<BackButton label="Back to group" disabled={!actions.availability('closePanel', {}).available} onPress={() => dispatch('closePanel')} />} />,
+          header: <ScreenHeader title="Group settings" start={<BackButton label="Back to group" disabled={!actions.availability('closePanel', {}).available} onPress={() => dispatch('closePanel')} />} />,
           body: <GroupSettings app={app} />,
           footer: <GroupSettingsFooter />,
         };
@@ -369,13 +367,12 @@ function ReadyApp(props: AppProps) {
             const screen = screenFor(join);
 
             return (
-              <View style={s.page}>
+              <View style={{ flex: 1, backgroundColor: colors.background }}>
                 <ScreenMorph screen={pageKey} depth={depth} sheet={sheet}>
                 <Frame
                   status={<SyncStatus online={state.online} reachable={state.reachable} pending={pending} busy={connection.busy} onRetry={retry} retryError={connection.error} />}
                   header={screen.header}
                   footer={screen.footer}
-                  ruledFooter={screen.ruledFooter}
                   scrollKey={pageKey}
                   navigationDepth={depth}
                   restoreScroll={ui.navigation.mode === 'restore'}

@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Pressable, Text } from 'react-native';
-import { Button, ErrorMessage, colors, s } from './components';
+import { Button, ErrorMessage, Text, Touchable, WifiIcon, colors, sizes } from '../design';
 import { Drawer } from './Drawer';
-import { WifiIcon } from './icons';
-import { fontFamily } from './theme';
 
 function saved(pending: number): string {
   return pending === 0 ? '' : pending === 1 ? ' · 1 change saved here' : ` · ${pending} changes saved here`;
@@ -26,21 +23,21 @@ export function SyncStatus(props: { online: boolean; reachable: boolean; pending
 
   return (
     <>
-      <Pressable
+      <Touchable
         accessibilityRole="button"
         accessibilityLabel={`${label}. Connection details`}
         accessibilityLiveRegion="polite"
         accessibilityState={{ expanded }}
         onPress={() => setExpanded(true)}
-        style={({ pressed }) => [{ minHeight: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 4, backgroundColor: colors.track }, pressed && s.pressed]}
+        style={{ minHeight: sizes.compact, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 4, backgroundColor: colors.tint }}
       >
-        <WifiIcon off size={14} color={colors.soft} strokeWidth={2} />
-        <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily, fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.soft }}>{label}</Text>
-      </Pressable>
+        <WifiIcon off size={14} color={colors.muted} strokeWidth={2} />
+        <Text numberOfLines={1} variant="meta" tone="muted" weight="semibold" style={{ flexShrink: 1 }}>{label}</Text>
+      </Touchable>
       {expanded ? (
         <Drawer title="Connection" onClose={() => setExpanded(false)}>
-          <Text role="status" accessibilityLiveRegion="polite" style={{ fontFamily, fontSize: 15, fontWeight: '600', color: colors.ink }}>{label}</Text>
-          <Text style={s.body}>Changes saved here sync automatically when you reconnect.</Text>
+          <Text role="status" accessibilityLiveRegion="polite" variant="strong">{label}</Text>
+          <Text variant="body">Changes saved here sync automatically when you reconnect.</Text>
           <ErrorMessage message={props.retryError ?? null} />
           {props.online ? <Button disabled={props.busy} onPress={props.onRetry}>Retry</Button> : null}
         </Drawer>

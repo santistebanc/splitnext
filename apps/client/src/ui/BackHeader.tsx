@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
-import { BackButton, ErrorMessage, ScreenHeader } from './components';
+import { ErrorMessage } from '../design';
+import { BackButton, ScreenHeader } from './ScreenHeader';
 import { useActionCall, useUiState } from './useActionCall';
 
 /** A details screen's header: back to where it was opened from, named in the first row, then the title. */
