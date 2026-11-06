@@ -37,7 +37,9 @@ npm run verify:expense-recovery
 ```
 
 The command builds current sources, uses two real headless Chromium profiles and
-a fresh local Worker store under `.wrangler/verification/private/RUN_ID/environment`.
+a fresh local Worker store under `.wrangler/lab/v-RUN_ID`. Keeping the state path
+short avoids the Windows SQLite path limit; metadata and command logs remain in
+`.wrangler/verification/private/RUN_ID`.
 Use executable help/discovery for scenario and control commands. The optional
 `--built` mode checks both production inputs and every built asset against the
 build stamp; missing, changed or stale files fail. Full e2e uses this mode after

@@ -18,9 +18,11 @@ const config = JSON.parse(await readFile(process.argv[3], 'utf8'));
 
 const root = path.resolve(config.root);
 
-assert.ok(root.startsWith(path.resolve('.wrangler/verification/private') + path.sep), 'scenario_root_must_be_owned_private_state');
+const runId = path.basename(path.dirname(path.resolve(process.argv[3])));
 
-assert.equal(path.dirname(root), path.dirname(path.resolve(process.argv[3])), 'scenario_config_and_state_must_share_run');
+assert.match(runId, /^[a-f0-9-]{36}$/);
+
+assert.equal(root, path.resolve('.wrangler/lab', `v-${runId}`), 'scenario_root_must_match_owned_run');
 
 await mkdir(root, { recursive: true });
 
