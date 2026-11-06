@@ -47,6 +47,9 @@ Its convergence predicate is not the oracle: assertions read rendered UI, Indexe
 and stopped-Worker SQLite. Offline and dropped responses are controlled faults,
 not claims about physical packet loss. IndexedDB and reload run in Chromium, not
 an in-memory state simulation. Storage failure aborts a real browser transaction.
+The lab's browser reload temporarily permits shell traffic while its API gate
+stays offline. This proves restoration from real IndexedDB after a page reload;
+it does not verify service-worker caching or app-shell startup without a network.
 Negative controls corrupt isolated oracle inputs, never product sources or stores.
 Recovery waits are bounded at 90 seconds, allowing the app's capped background
 backoff; browser interactions have a separate 15-second bound.
