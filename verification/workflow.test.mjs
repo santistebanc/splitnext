@@ -116,6 +116,7 @@ test('CLI rejects unknown scenarios, remote targets and invalid arguments withou
 
 test('build stamp rejects stale source, changed assets, absent builds and zero source fixtures', async () => {
   const original = process.cwd();
+  const ciScript = path.resolve('scripts/verification-ci-result.mjs');
   const directory = await mkdtemp(path.join(tmpdir(), 'splitnext-provenance-'));
   const git = (...args) => execFileSync('git', args, { cwd: directory, stdio: 'ignore' });
 
@@ -127,6 +128,12 @@ test('build stamp rejects stale source, changed assets, absent builds and zero s
     await writeFile('.gitignore', '.wrangler/\nsrc/generated/\n');
     git('add', '.');
     git('-c', 'user.name=Verification Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'fixture');
+
+    const missingSteps = spawnSync(process.execPath, [ciScript], { cwd: directory, encoding: 'utf8',
+      env: { ...process.env, VERIFICATION_JOB: 'check', VERIFICATION_OUTCOME: 'success', VERIFICATION_STEPS: '{}' } });
+
+    assert.equal(missingSteps.status, 1, 'a claimed successful CI job with missing gates must fail');
+    assert.equal(JSON.parse(missingSteps.stdout).status, 'blocked');
     await assert.rejects(currentBuild());
     await mkdir('.wrangler/app-assets', { recursive: true });
     await mkdir('src/generated/expo-server', { recursive: true });
