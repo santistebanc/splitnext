@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, rm, unlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, realpath, rm, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -118,11 +118,17 @@ test('build stamp rejects stale source, changed assets, absent builds and zero s
   const original = process.cwd();
   const ciScript = path.resolve('scripts/verification-ci-result.mjs');
   const directory = await mkdtemp(path.join(tmpdir(), 'splitnext-provenance-'));
-  const git = (...args) => execFileSync('git', args, { cwd: directory, stdio: 'ignore' });
+  const git = (...args) => execFileSync('git', args, { cwd: directory, encoding: 'utf8' });
+  // Git hooks (e.g. pre-push) export GIT_DIR and friends; inherited, they make
+  // this fixture's git calls and source identity act on the enclosing repository.
+  const inherited = Object.entries(process.env).filter(([name]) => name.startsWith('GIT_'));
 
   try {
+    for (const [name] of inherited) delete process.env[name];
     process.chdir(directory);
-    git('init');
+    git('init', '--quiet');
+    assert.equal(path.resolve(git('rev-parse', '--show-toplevel').trim()), await realpath(directory),
+      'fixture git commands must not resolve to another repository');
     await mkdir('src', { recursive: true });
     await writeFile('src/app.ts', 'export const v = 1;');
     await writeFile('.gitignore', '.wrangler/\nsrc/generated/\n');
@@ -156,6 +162,8 @@ test('build stamp rejects stale source, changed assets, absent builds and zero s
     await assert.rejects(buildInputs(), /missing_production_sources/);
   } finally {
     process.chdir(original);
+
+    for (const [name, value] of inherited) process.env[name] = value;
     // The resolved mkdtemp directory is owned by this fixture.
     assert.equal(path.dirname(directory), path.resolve(tmpdir()));
     await rm(directory, { recursive: true, force: true });
