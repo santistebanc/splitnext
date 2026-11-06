@@ -63,5 +63,10 @@ export default defineConfig({
     include: ['test/**/*.test.ts'],
     reporters: ['default', 'json'],
     outputFile: '.wrangler/verification/private/unit-results.json',
+    // Polls assert eventual convergence (realtime, background sync), which the
+    // product promises without a latency bound. The 1 s default failed on a
+    // CPU-starved machine although every catch-up completed; 3 s still fails a
+    // lost update with its assertion, leaving setup room in the 5 s test timeout.
+    expect: { poll: { timeout: 3_000 } },
   },
 });
