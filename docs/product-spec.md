@@ -563,6 +563,9 @@ operations remain available without opening an editor, including offline.
 
 ## Offline client model
 
+The [expense recovery contract](agents/expense-recovery.md) defines the observable
+Save, reload, retry and persistence-failure outcomes for the first verification slice.
+
 - A client keeps a durable local snapshot, its last confirmed group revision,
   an ordered command outbox, and local conflict notices.
 - Production PWA clients should be able to use IndexedDB and React Native

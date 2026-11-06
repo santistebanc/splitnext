@@ -14,7 +14,7 @@ export default defineConfig({
   workers: 1,
   timeout: 60_000,
   expect: { timeout: 10_000 },
-  reporter: 'list',
+  reporter: [['list'], ['json', { outputFile: '.wrangler/verification/private/browser-results.json' }]],
   use: {
     baseURL: `http://localhost:${port}`,
     viewport: { width: 1100, height: 900 },

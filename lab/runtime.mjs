@@ -292,6 +292,12 @@ export class Lab {
     await context.route("**/*", async (route) => {
       const url = new URL(route.request().url());
 
+      if (url.origin !== this.base) {
+        await this.event("network.unexpected", { device: id, url: url.href });
+
+        return route.abort("blockedbyclient");
+      }
+
       if (!/^\/(identities|identity|groups|invites)(\/|$)/.test(url.pathname))
         return route.continue();
       const epoch = d.epoch;

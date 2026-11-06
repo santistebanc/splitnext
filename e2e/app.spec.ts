@@ -3,6 +3,20 @@ import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { once } from 'node:events';
 
+test('expense recovery verifies durable saves, lost responses and failed persistence', async () => {
+  test.setTimeout(600_000);
+  const result = await promisify(execFile)(process.execPath, ['scripts/verify.mjs', 'run', 'expense-recovery', '--built'], { timeout: 580_000 });
+
+  expect(JSON.parse(result.stdout).status).toBe('passed');
+});
+
+test('verification detects lost saved work through the real app and IndexedDB path', async () => {
+  test.setTimeout(600_000);
+  const result = await promisify(execFile)(process.execPath, ['scripts/verify.mjs', 'controls', '--built'], { timeout: 580_000 });
+
+  expect(JSON.parse(result.stdout)).toMatchObject({ status: 'passed', control: 'lost-outbox', observedStatus: 'failed' });
+});
+
 test('device lab runs the real two-device offline and recovery acceptance scenario', async () => {
   test.setTimeout(400_000);
   const result = await promisify(execFile)(process.execPath, ['lab/acceptance.mjs'], { timeout: 380_000 });
@@ -179,6 +193,16 @@ function button(page: Page, name: string | RegExp) {
 
 function field(page: Page, name: string) {
   return page.getByRole('textbox', { name, exact: true });
+}
+
+/**
+ * Waits until a field's whole text is selected. React Native Web and
+ * NumericFormat select a tick after focus, so typing before then would land
+ * beside the text rather than replace it.
+ */
+async function expectWholeTextSelected(target: Locator) {
+  await expect.poll(() => target.evaluate((node: HTMLInputElement | HTMLTextAreaElement) =>
+    node.value.length > 0 && node.selectionStart === 0 && node.selectionEnd === node.value.length)).toBe(true);
 }
 
 function heading(page: Page, name: string) {
@@ -731,13 +755,15 @@ test('opens a rename where the name already is: full width, the same lines in th
 
     // The whole name is selected, ready to be typed over.
     await expect(input).toBeFocused();
-    expect(await input.evaluate((node: HTMLTextAreaElement) => [node.selectionStart, node.selectionEnd])).toEqual([0, rename.title.length]);
+    await expectWholeTextSelected(input);
+    expect(await input.evaluate((node: HTMLTextAreaElement) => node.value.length)).toBe(rename.title.length);
     await input.press('Escape');
     await expect(input).toHaveCount(0);
   }
 
   // Typing replaces the name rather than adding to it.
   await button(page, `Rename ${you}`).click();
+  await expectWholeTextSelected(field(page, 'Name'));
   await page.keyboard.type('Ana');
   await expect(field(page, 'Name')).toHaveValue('Ana');
   await page.keyboard.press('Enter');
@@ -1281,6 +1307,7 @@ test('mixes fixed amounts and weighted shares, preserves them offline, and clear
   await button(page, /^Amount for Cy:/).click();
   await expect(field(page, 'Amount for Cy')).toBeFocused();
   // Its shown share is selected, so typing replaces it.
+  await expectWholeTextSelected(field(page, 'Amount for Cy'));
   await page.keyboard.type('101');
   await expect(field(page, 'Amount for Cy')).toHaveValue('101.00');
   await expect(button(page, 'Save')).toBeDisabled();
@@ -1643,13 +1670,20 @@ test('opens views at the top and restores context on returning or browsing histo
   await scroller.evaluate((node) => { node.scrollTop = 250; });
   await expect(field(page, 'Amount')).toHaveCSS('height', '36px');
   await button(page, 'Cancel').click();
+  // Locator auto-scrolling is not a scroll-restoration precondition: the next
+  // row can already be visible at the top on a fast/reduced-motion render.
+  await scroller.evaluate((node) => { node.scrollTop = 200; });
+  await button(page, 'Change Thing 6 · 70.00').scrollIntoViewIfNeeded();
+  const expenseListPosition = await position();
+
+  expect(expenseListPosition).toBeGreaterThan(0);
   await button(page, 'Change Thing 6 · 70.00').click();
   await atTop();
   await expect(field(page, 'Amount')).toHaveCSS('height', '60px');
   await field(page, 'Amount').fill('75');
   await button(page, 'Save').click();
   await expect(heading(page, 'Scroll navigation')).toBeVisible();
-  await expect.poll(position).toBeGreaterThan(0);
+  await expect.poll(position).toBeCloseTo(expenseListPosition, 0);
   await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '18px');
 });
 
