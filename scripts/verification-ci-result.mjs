@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { sourceIdentity } from '../verification/provenance.mjs';
-import { ciReports } from '../verification/ci-summary.mjs';
+import { ciReports, failureLines } from '../verification/ci-summary.mjs';
 
 export function ciResult(job, outcome, steps, source) {
   const required = { check: ['install', 'contracts', 'checks'], browser: ['install', 'doctor', 'build', 'browsers'] }[job];
@@ -34,6 +34,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 
   await mkdir('.wrangler/verification/public', { recursive: true });
   await writeFile(`.wrangler/verification/public/${result.runId}.ci.json`, JSON.stringify({ ...result, ...summaries }, null, 2));
+
+  for (const line of failureLines(summaries.reports)) console.log(line);
   console.log(JSON.stringify({ ...result, ...summaries }));
 
   if (inconsistentSuccess) process.exitCode = 1;
