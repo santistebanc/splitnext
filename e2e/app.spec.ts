@@ -5,9 +5,16 @@ import { once } from 'node:events';
 
 test('expense recovery verifies durable saves, lost responses and failed persistence', async () => {
   test.setTimeout(600_000);
-  const result = await promisify(execFile)(process.execPath, ['lab/expense-recovery.mjs'], { timeout: 580_000 });
+  const result = await promisify(execFile)(process.execPath, ['scripts/verify.mjs', 'run', 'expense-recovery', '--built'], { timeout: 580_000 });
 
-  expect(result.stdout).toContain('Expense recovery passed:');
+  expect(JSON.parse(result.stdout).status).toBe('passed');
+});
+
+test('verification detects lost saved work through the real app and IndexedDB path', async () => {
+  test.setTimeout(600_000);
+  const result = await promisify(execFile)(process.execPath, ['scripts/verify.mjs', 'controls', '--built'], { timeout: 580_000 });
+
+  expect(JSON.parse(result.stdout)).toMatchObject({ status: 'passed', control: 'lost-outbox', observedStatus: 'failed' });
 });
 
 test('device lab runs the real two-device offline and recovery acceptance scenario', async () => {
@@ -1650,13 +1657,20 @@ test('opens views at the top and restores context on returning or browsing histo
   await scroller.evaluate((node) => { node.scrollTop = 250; });
   await expect(field(page, 'Amount')).toHaveCSS('height', '36px');
   await button(page, 'Cancel').click();
+  // Locator auto-scrolling is not a scroll-restoration precondition: the next
+  // row can already be visible at the top on a fast/reduced-motion render.
+  await scroller.evaluate((node) => { node.scrollTop = 200; });
+  await button(page, 'Change Thing 6 · 70.00').scrollIntoViewIfNeeded();
+  const expenseListPosition = await position();
+
+  expect(expenseListPosition).toBeGreaterThan(0);
   await button(page, 'Change Thing 6 · 70.00').click();
   await atTop();
   await expect(field(page, 'Amount')).toHaveCSS('height', '60px');
   await field(page, 'Amount').fill('75');
   await button(page, 'Save').click();
   await expect(heading(page, 'Scroll navigation')).toBeVisible();
-  await expect.poll(position).toBeGreaterThan(0);
+  await expect.poll(position).toBeCloseTo(expenseListPosition, 0);
   await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '18px');
 });
 

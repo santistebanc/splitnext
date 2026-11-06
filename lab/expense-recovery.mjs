@@ -1,20 +1,26 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as delay } from 'node:timers/promises';
 import { expect as playwrightExpect } from '@playwright/test';
 import { Lab } from './runtime.mjs';
+import { currentBuild, git } from '../verification/provenance.mjs';
 
 const expect = playwrightExpect.configure({ timeout: 15000 });
 
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
-const git = (...args) => execFileSync('git', args, { encoding: 'utf8' });
+assert.equal(process.argv[2], '--config', 'Use npm run verify -- run expense-recovery');
 
-const root = path.resolve('.wrangler/lab', `expense-${randomUUID()}`);
+const config = JSON.parse(await readFile(process.argv[3], 'utf8'));
+
+const root = path.resolve(config.root);
+
+assert.ok(root.startsWith(path.resolve('.wrangler/verification/private') + path.sep), 'scenario_root_must_be_owned_private_state');
+
+assert.equal(path.dirname(root), path.dirname(path.resolve(process.argv[3])), 'scenario_config_and_state_must_share_run');
 
 await mkdir(root, { recursive: true });
 
@@ -31,6 +37,16 @@ for (const file of git('ls-files', '--others', '--exclude-standard').trim().spli
 
 const lab = new Lab(root, 8857, { host: 'headless' });
 
+let closing;
+
+const close = () => closing ??= lab.close();
+
+const interrupt = () => { void close().finally(() => process.exit(130)); };
+
+process.once('SIGTERM', interrupt);
+
+process.once('SIGINT', interrupt);
+
 const op = (name, input = {}) => lab.execute(name, input);
 
 const action = async (device, name, input = {}) => {
@@ -42,8 +58,9 @@ const button = (page, name) => page.getByRole('button', { name, exact: true });
 
 const field = (page, name) => page.getByRole('textbox', { name, exact: true });
 
-const required = ['offline-save-and-reload', 'reconnected', 'lost-response-reload-retry',
-  'persistence-abort-no-success', 'independent-sqlite'];
+const required = config.expected;
+
+assert.ok(Array.isArray(required) && required.length > 0, 'missing_expected_checks');
 
 function complete(checkpoints) { assert.deepEqual(checkpoints, required, 'critical checkpoint skipped'); }
 
@@ -165,13 +182,10 @@ function rejectControl(name, check) {
 }
 
 try {
-  // A successful fresh build is mandatory, even when invoked by the e2e suite.
-  assert.ok(process.env.npm_execpath, 'run through npm run verify:expense-recovery');
-  execFileSync(process.execPath, [process.env.npm_execpath, 'run', 'frontend:build'], { stdio: 'inherit' });
-  evidence.build = { command: 'npm run frontend:build', exitCode: 0, lockHash: hash(await readFile('package-lock.json')) };
-  evidence.assets = {};
-
-  for (const file of [...await files('.wrangler/app-assets'), ...await files('src/generated/expo-server')]) evidence.assets[file] = hash(await readFile(file));
+  assert.deepEqual(await currentBuild(), config.build, 'stale_build');
+  evidence.build = config.build;
+  evidence.assets = config.build.assets;
+  evidence.currentCheck = 'fixture-setup';
   assert.ok(Object.keys(evidence.assets).some((file) => file.endsWith('.js')), 'missing built JavaScript');
   await lab.init();
   await op('addDevice', { device: 'a', kind: 'browser' });
@@ -212,13 +226,48 @@ try {
   const queued = (await document(a)).groups[0].outbox;
   assert.equal(queued.length, 1);
   evidence.commandId = queued[0].command.command_id;
+  evidence.currentCheck = 'outbox-survives-reload';
+
+  if (config.negativeControl === 'lost-outbox') {
+    evidence.negativeControl = { id: 'lost-outbox', injected: false, expectedCheck: 'outbox-survives-reload' };
+    await a.evaluate(async () => {
+      const db = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('splitnext-app');
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+
+      try {
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction('client_documents', 'readwrite');
+          const store = tx.objectStore('client_documents');
+          const key = localStorage.getItem('splitnext.installation.v1');
+          const request = store.get(key);
+
+          request.onsuccess = () => {
+            const saved = JSON.parse(request.result);
+
+            saved.groups[0].outbox = [];
+            store.put(JSON.stringify(saved), key);
+          };
+
+          tx.oncomplete = resolve;
+          tx.onabort = () => reject(new Error('negative_control_write_failed'));
+        });
+      } finally { db.close(); }
+    });
+    evidence.negativeControl.injected = true;
+  } else assert.equal(config.negativeControl, null, 'unknown_negative_control');
   await op('reloadDevice', { device: 'a' });
-  assert.deepEqual((await document(a)).groups[0].outbox, queued);
+  assert.deepEqual((await document(a)).groups[0].outbox, queued, 'expense_outbox_lost_after_reload');
   await expect(a.getByRole('button', { name: /Offline.*1 change saved here/ })).toBeVisible();
   evidence.checkpoints.push('offline-save-and-reload');
+  evidence.currentCheck = 'reconnected';
   await op('deviceNetwork', { device: 'a', online: true });
   await settled([a, b], ['Offline meal']);
   evidence.checkpoints.push('reconnected');
+  evidence.currentCheck = 'lost-response-reload-retry';
 
   // Drop exactly the response containing the second expense, after real commit.
   let dropped = 0;
@@ -262,6 +311,7 @@ try {
       expenses: doc.groups[0].snapshot.expenses };
   }));
   evidence.checkpoints.push('lost-response-reload-retry');
+  evidence.currentCheck = 'persistence-abort-no-success';
 
   // Abort the actual put transaction, after the adapter has prepared its write.
   await draft(a, 'Unsaved meal');
@@ -287,6 +337,7 @@ try {
   await a.reload();
   assert.equal((await document(a)).groups[0].snapshot.expenses.length, 2);
   evidence.checkpoints.push('persistence-abort-no-success');
+  evidence.currentCheck = 'independent-sqlite';
 
   // Stop first, then independently query files, not debug routes or lab convergence.
   await op('serverProcess', { running: false });
@@ -365,6 +416,8 @@ try {
   console.log(`Expense recovery passed: ${root}`);
 } catch (error) {
   evidence.error = String(error.stack ?? error);
+  evidence.passed = false;
+  evidence.failure = { category: error.code === 'EADDRINUSE' ? 'environment' : error.code === 'ERR_ASSERTION' && evidence.currentCheck !== 'fixture-setup' ? 'product' : 'harness', check: evidence.currentCheck ?? 'fixture-setup' };
 
   for (const [id, device] of lab.devices) {
     if (!device.page) continue;
@@ -375,12 +428,15 @@ try {
 
   throw error;
 } finally {
-  try { await lab.close(); } catch (error) {
+  try { await close(); evidence.cleanup = 'completed'; } catch (error) {
     evidence.passed = false;
+    evidence.cleanup = 'failed';
     evidence.cleanupError = String(error);
     process.exitCode = 1;
   } finally {
     await writeFile(path.join(root, 'evidence.json'), JSON.stringify(evidence, null, 2));
     console.log(`Evidence: ${path.join(root, 'evidence.json')}`);
+    process.removeListener('SIGTERM', interrupt);
+    process.removeListener('SIGINT', interrupt);
   }
 }

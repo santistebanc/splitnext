@@ -1,8 +1,11 @@
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-plugin';
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
+import { mkdir } from 'node:fs/promises';
 
 const migrations = await readD1Migrations('./migrations');
+
+await mkdir('.wrangler/verification/private', { recursive: true });
 
 export default defineConfig({
   plugins: [
@@ -58,5 +61,7 @@ export default defineConfig({
   ],
   test: {
     include: ['test/**/*.test.ts'],
+    reporters: ['default', 'json'],
+    outputFile: '.wrangler/verification/private/unit-results.json',
   },
 });

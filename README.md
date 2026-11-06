@@ -1,8 +1,24 @@
 # Splitnext MVP
 
-Run `npm run verify:expense-recovery` for the isolated expense durability slice.
-Its [behavior contract and reproduction guide](docs/agents/expense-recovery.md)
-describe the fault boundaries, evidence and unverified scope.
+Start verification with `npm run verify -- help`. Machine-readable discovery is
+`npm run --silent verify -- discover --json`; `doctor` checks local prerequisites.
+The [feature map](verification/features.json) names executable promises, their
+expected checks, fidelity and limits. Agents use the
+[repository verification skill](.agents/skills/verify-splitnext/SKILL.md).
+
+`npm run check:fast` includes verification contracts and deterministic architecture
+checks. It runs the unchanged storage timing budget separately after the other
+unit tests, with one worker. `npm run check` additionally builds and runs e2e,
+including expense recovery and its real lost-outbox detector control. The scenario
+validates and reuses that build; it does not build a second time. CI runs these
+same boundaries in bounded check/browser jobs on Node from `.nvmrc`.
+
+Only `.wrangler/verification/public/` contains intended publishable evidence.
+Private logs, patches, profiles, traces, credentials and state remain under
+`.wrangler/verification/private/` or the lab/test directories; CI never uploads
+them. Full assertion errors stay private; public results preserve check IDs,
+statuses, source/build/data fingerprints and failure categories. Categories need
+investigation rather than being proof that the product or environment is at fault.
 
 Splitnext is an offline-first group ledger foundation built on Cloudflare
 Workers, D1, and one SQLite Durable Object per group. The current MVP handles

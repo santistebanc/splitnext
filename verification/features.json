@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "features": [
+    {
+      "id": "expense-recovery",
+      "promise": "One saved expense survives connection failure and reload, reaches both clients exactly once, and never claims a durable save after persistence failure.",
+      "entryPoint": "apps/client/src/ui/ExpenseEditor.tsx",
+      "contract": "docs/agents/expense-recovery.md",
+      "scenario": "lab/expense-recovery.mjs",
+      "command": "npm run verify -- run expense-recovery",
+      "prerequisites": ["Node >=24 (CI uses .nvmrc)", "npm ci", "npx playwright install chromium", "Free loopback port 8857"],
+      "sideEffects": ["Builds local assets unless --built validates a current build", "Own local Worker and two disposable Chromium profiles", "Retains private diagnostics under .wrangler/verification/private"],
+      "fidelity": "Real Chromium UI, IndexedDB and local Worker SQLite; controlled API network faults. Reload may fetch app-shell assets.",
+      "limits": ["Physical packet loss", "Fully disconnected app-shell startup", "Storage eviction and hardware durability", "Native clients", "Acknowledgment-write failure", "Server disk failure", "Production deployment"],
+      "expected": ["offline-save-and-reload", "reconnected", "lost-response-reload-retry", "persistence-abort-no-success", "independent-sqlite"],
+      "oracleControls": ["duplicate expense", "lost expense", "missing fixture", "zero checks", "skipped critical check", "wrong store", "stale build", "unexpected network"],
+      "negativeControl": { "id": "lost-outbox", "expectedCheck": "outbox-survives-reload", "fault": "Erase the actual persisted outbox after a successful offline Save, then reload the real app." },
+      "affectedPaths": ["src/client/", "src/domain/commands/expense", "src/group", "apps/client/src/model/", "apps/client/src/ui/Expense", "lab/", "verification/"]
+    }
+  ],
+  "gates": [
+    { "id": "contracts", "command": "npm run verify:check", "scope": "Verification metadata, skill references, CI artifact boundary, build provenance and pure-domain imports; tool unit tests." },
+    { "id": "fast", "command": "npm run check:fast", "scope": "Required text, generated types, lint, type checks, Worker dry run, lab and domain/model tests, then isolated performance budget." },
+    { "id": "full", "command": "npm run check", "scope": "Fresh frontend, fast gates, and browser suite including the expense scenario exactly once." },
+    { "id": "storage-performance", "command": "npm run test:performance", "scope": "Unchanged 20 ms median budget, isolated from concurrent test files; this is a performance measurement, not deterministic correctness." }
+  ]
+}
