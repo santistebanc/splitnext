@@ -28,7 +28,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const result = ciResult(process.env.VERIFICATION_JOB, process.env.VERIFICATION_OUTCOME, steps, source);
   const summaries = await ciReports(process.env.VERIFICATION_JOB, steps, source);
 
-  const inconsistentSuccess = result.status === 'passed' && !summaries.passed;
+  const inconsistentSuccess = process.env.VERIFICATION_OUTCOME === 'success' && (result.status !== 'passed' || !summaries.passed);
 
   if (inconsistentSuccess) result.status = 'blocked';
 
