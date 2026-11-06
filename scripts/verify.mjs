@@ -18,7 +18,7 @@ const help = `Splitnext verification (local disposable state only)
   npm run verify -- evidence RUN_ID           Read sanitized result; validate source identity
   --json                                    JSON result (child logs stay on stderr)
 --built accepts only a source- and content-verified build, not a skip-build flag.
-Private logs/state: .wrangler/verification/private/RUN_ID
+Private logs: .wrangler/verification/private/RUN_ID; state: .wrangler/lab/v-RUN_ID
 Publishable allowlisted JSON only: .wrangler/verification/public/RUN_ID.json
 Existing required gates remain check:fast and check. Discover their scope above.`;
 
@@ -74,7 +74,9 @@ async function doctor() {
 
 async function scenario(feature, reuse, control = false) {
   const id = randomUUID();
-  const run = { id, directory: path.resolve('.wrangler/verification/private', id), source: await sourceIdentity(), build: null, status: 'not-run' };
+
+  const run = { id, directory: path.resolve('.wrangler/verification/private', id),
+    stateDirectory: path.resolve('.wrangler/lab', `v-${id}`), source: await sourceIdentity(), build: null, status: 'not-run' };
 
   await mkdir(run.directory, { recursive: true });
   await writeFile(path.join(run.directory, 'source.json'), JSON.stringify(run.source, null, 2));
@@ -88,7 +90,7 @@ async function scenario(feature, reuse, control = false) {
   try {
     run.build = reuse ? await currentBuild() : await build(log.fd);
 
-    const config = { root: path.join(run.directory, 'environment'), build: run.build, sourceFingerprint: run.source.fingerprint,
+    const config = { root: run.stateDirectory, build: run.build, sourceFingerprint: run.source.fingerprint,
       expected: feature.expected, negativeControl: control ? feature.negativeControl.id : null };
 
     const configFile = path.join(run.directory, 'scenario.json');
@@ -117,7 +119,7 @@ async function scenario(feature, reuse, control = false) {
 
   const evidence = await publish(run, feature, raw, failure);
 
-  return { ...evidence, privateDiagnostics: run.directory };
+  return { ...evidence, privateDiagnostics: run.directory, privateState: run.stateDirectory };
 }
 
 async function main(args) {

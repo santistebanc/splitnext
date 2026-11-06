@@ -58,7 +58,7 @@ export async function publish(run, feature, raw, failure) {
 }
 
 export async function readPrivate(run) {
-  try { return JSON.parse(await readFile(path.join(run.directory, 'environment/evidence.json'), 'utf8')); } catch (error) {
+  try { return JSON.parse(await readFile(path.join(run.stateDirectory, 'evidence.json'), 'utf8')); } catch (error) {
     if (error.code === 'ENOENT') return null;
     throw error;
   }
