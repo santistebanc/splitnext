@@ -179,8 +179,13 @@ same boundaries in bounded check/browser jobs on Node from `.nvmrc`.
 Only `.wrangler/verification/public/` contains intended publishable evidence.
 Private logs, patches, profiles, traces, credentials and state remain under
 `.wrangler/verification/private/` or the lab/test directories; CI never uploads
-them. Full assertion errors stay private; public results preserve check IDs,
-statuses, source/build/data fingerprints and failure categories. Categories need
+them. Failure messages stay private, since their values, locators and call logs
+can hold credentials, URLs or personal data. Public results preserve check IDs,
+statuses, source/build/data fingerprints and failure categories. For each failed
+test, the CI log and evidence give its location, a failure kind (assertion,
+test-timeout, error or unknown) with the matcher, action or error class and
+timeout, the failing line of tracked source, and a command to reproduce it
+locally. Titles are shown only when the source spells them out. Categories need
 investigation rather than being proof that the product or environment is at fault.
 
 ## Showcase

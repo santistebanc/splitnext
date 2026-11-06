@@ -10,7 +10,7 @@ import { publicEvidence, publish } from './evidence.mjs';
 import { buildInputs, stampBuild, currentBuild, sourceIdentity } from './provenance.mjs';
 import { ciResult } from '../scripts/verification-ci-result.mjs';
 import { runOwned } from './owned-process.mjs';
-import { testSummary } from './ci-summary.mjs';
+import { failureLines, testSummary } from './ci-summary.mjs';
 
 test('pure domain boundary catches imports that types alone allow, including exports and dynamic/type imports', () => {
   for (const source of ["import '../client/storage'", "export * from '../client/storage'", "import('@splitnext/client')", "type T = import('../client/storage').T", "import x = require('../client/storage')", 'import(moduleName)', "require('node:fs')"])
@@ -62,16 +62,87 @@ test('CI summaries preserve not-run states and never publish step outputs or raw
   assert.equal(ciResult('check', 'success', {}, source).status, 'blocked');
 });
 
-test('test summaries expose source locations and counts, excluding raw assertion messages and private state', () => {
-  const sourceFiles = { 'test/fixture.test.ts': 'digest', 'e2e/app.spec.ts': 'digest' };
-  const unit = testSummary({ numTotalTests: 1, numFailedTests: 1, testResults: [{ name: path.resolve('test/fixture.test.ts'), status: 'failed', message: 'SECRET_SESSION' }] }, 'unit', sourceFiles);
-  const browser = testSummary({ stats: { unexpected: 1 }, suites: [{ specs: [{ file: 'app.spec.ts', line: 42, ok: false, tests: [{ error: 'SECRET_TOKEN' }] }] }] }, 'browser', sourceFiles);
+// Message shapes copied from real Playwright and Vitest JSON reports, with planted secrets.
+const planted = ['sk_live_TOKEN', 'INVITE_CODE', 'ana@example.com', 'https://evil.example', '\u001b', 'device_secret'];
 
-  assert.equal(unit.executed, 1);
-  assert.deepEqual(browser.failed, [{ file: 'e2e/app.spec.ts', line: 42 }]);
-  assert.ok(!JSON.stringify([unit, browser]).includes('SECRET'));
-  assert.equal(testSummary({}, 'unit', sourceFiles).status, 'not-run');
-  assert.equal(testSummary({ numTotalTests: 2, numPendingTests: 2 }, 'unit', sourceFiles).status, 'not-run');
+const spec = [
+  "test('opens a rename where the name already is', async ({ page }) => {",
+  "  await expect(field(page, 'Name')).toHaveValue('Ana');",
+  "test('times out while clicking', async ({ page }) => {",
+  "  await button(page, 'Missing').click();",
+  "test('throws', async () => {",
+  "  throw new TypeError('kept private');",
+].join('\n');
+
+const unitSource = ['describe("realtime client synchronization", () => {', "  it('catches up on announcements missed while offline', async () => {",
+  "    await expect.poll(() => name()).toBe('Missed name');", "  it('waits forever', async () => {", '  it(`interpolated ${value}`, () => {}); // eslint-disable-line'].join('\n');
+
+const sources = { 'e2e/app.spec.ts': spec, 'test/realtime.test.ts': unitSource };
+
+const sourceFiles = { 'e2e/app.spec.ts': 'digest', 'test/realtime.test.ts': 'digest', 'test/missing.test.ts': 'deleted' };
+
+const read = (file) => sources[file] ?? null;
+
+const browserError = (line, message) => ({ location: { file: path.resolve('e2e/app.spec.ts'), line, column: 3 }, message });
+
+const browserReport = { stats: { expected: 70, unexpected: 4 }, suites: [{ specs: [
+  { file: 'app.spec.ts', line: 1, title: 'opens a rename where the name already is', ok: false, tests: [{ results: [{ status: 'failed', errors: [browserError(2,
+    "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveValue\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('textbox', { name: 'Name' })\nExpected: \u001b[32m\"Ana\"\u001b[39m\nReceived: \u001b[31m\"Bearer sk_live_TOKEN ana@example.com\"\u001b[39m\nTimeout:  10000ms\n\nCall log:\n  - waiting for https://evil.example/join?code=INVITE_CODE")] }] }] },
+  { file: 'app.spec.ts', line: 3, title: 'times out while clicking', ok: false, tests: [{ results: [{ status: 'timedOut', errors: [
+    { message: '\u001b[31mTest timeout of 1000ms exceeded.\u001b[39m' },
+    browserError(4, "Error: locator.click: Test timeout of 1000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'device_secret=sk_live_TOKEN' })")] }] }] },
+  { file: 'app.spec.ts', line: 5, title: 'throws', ok: false, tests: [{ results: [{ status: 'failed', errors: [browserError(6, 'TypeError: device_secret=sk_live_TOKEN\nline two \u001b[31mred\u001b[0m')] }] }] },
+  { file: 'app.spec.ts', line: 900, title: 'Runtime title INVITE_CODE', ok: false, tests: [{ results: [{ status: 'failed', errors: [
+    { location: { file: path.resolve('node_modules/x/index.js'), line: 1 }, message: 'something odd: sk_live_TOKEN' }] }] }] },
+] }] };
+
+const frame = (file, line) => `\n    at ${path.resolve(file).split(path.sep).join('/')}:${line}:5`;
+
+const unitReport = { numPassedTests: 300, numFailedTests: 3, testResults: [
+  { name: path.resolve('test/realtime.test.ts'), status: 'failed', assertionResults: [
+    { status: 'failed', ancestorTitles: ['realtime client synchronization'], title: 'catches up on announcements missed while offline',
+      failureMessages: [`Error: expected 'sk_live_TOKEN ana@example.com' to be 'Missed name' // Object.is equality${frame('node_modules/vitest/dist/chunk.js', 3748).replace('at ', 'at Proxy.__VITEST_POLL_CHAIN__ (')})${frame('test/realtime.test.ts', 3)}`] },
+    { status: 'failed', ancestorTitles: ['realtime client synchronization'], title: 'waits forever', failureMessages: [`Error: STACK_TRACE_ERROR${frame('test/realtime.test.ts', 4)}`] },
+    { status: 'failed', ancestorTitles: [], title: 'interpolated INVITE_CODE', failureMessages: ['\u001b[31mweird failure https://evil.example\u001b[0m'] },
+    { status: 'passed', ancestorTitles: [], title: 'passes', failureMessages: [] },
+  ] },
+  { name: path.resolve('test/missing.test.ts'), status: 'failed', message: 'Error: device_secret leaked', assertionResults: [] },
+] };
+
+test('CI failure diagnostics locate and classify failures without publishing runtime message text', () => {
+  const browser = testSummary(browserReport, 'browser', sourceFiles, read);
+  const unit = testSummary(unitReport, 'unit', sourceFiles, read);
+  const lines = failureLines([unit, browser]);
+  const published = JSON.stringify([unit, browser]) + lines.join('\n');
+
+  for (const secret of planted) assert.ok(!published.includes(secret), secret);
+  assert.deepEqual(browser.failed[0], { file: 'e2e/app.spec.ts', line: 1, title: 'opens a rename where the name already is', kind: 'assertion', matcher: 'toHaveValue',
+    action: null, errorType: null, timeoutMs: 10000, at: { file: 'e2e/app.spec.ts', line: 2 }, source: "await expect(field(page, 'Name')).toHaveValue('Ana');",
+    reproduce: 'npm run frontend:build && npx playwright test e2e/app.spec.ts:1' });
+  assert.deepEqual([browser.failed[1].kind, browser.failed[1].action, browser.failed[1].timeoutMs, browser.failed[1].source], ['test-timeout', 'locator.click', 1000, "await button(page, 'Missing').click();"]);
+  assert.deepEqual([browser.failed[2].kind, browser.failed[2].errorType, browser.failed[2].source], ['error', 'TypeError', "throw new TypeError('kept private');"]);
+  // Unrecognized messages, runtime titles and dependency frames stay explicit unknowns.
+  assert.deepEqual([browser.failed[3].kind, browser.failed[3].title, browser.failed[3].at, browser.failed[3].source], ['unknown', null, null, null]);
+  assert.deepEqual([unit.failed[0].matcher, unit.failed[0].at, unit.failed[0].reproduce],
+    ['expect.poll', { file: 'test/realtime.test.ts', line: 3 }, 'npx vitest run test/realtime.test.ts -t "realtime client synchronization catches up on announcements missed while offline"']);
+  assert.equal(unit.failed[1].kind, 'test-timeout');
+  assert.deepEqual([unit.failed[2].kind, unit.failed[2].title, unit.failed[2].reproduce], ['unknown', null, 'npx vitest run test/realtime.test.ts']);
+  assert.equal(unit.failed.length, 3, 'a deleted file is not published as a location');
+  assert.equal(browser.failedTests, 4);
+  assert.ok(lines.every((line) => !line.includes('\n')));
+  assert.ok(lines.includes("::error file=e2e/app.spec.ts,line=2,title=browser test failed::browser: opens a rename where the name already is: assertion toHaveValue after 10000ms"));
+});
+
+test('CI summaries list at most twenty failures and keep zero-work reports not-run', () => {
+  const many = { numPassedTests: 0, numFailedTests: 25, testResults: [{ name: path.resolve('test/realtime.test.ts'), status: 'failed',
+    assertionResults: Array.from({ length: 25 }, (_, index) => ({ status: 'failed', ancestorTitles: [], title: `t${index}`, failureMessages: ['x'] })) }] };
+
+  const summary = testSummary(many, 'unit', sourceFiles, read);
+
+  assert.deepEqual([summary.failed.length, summary.omitted, summary.failedTests], [20, 5, 25]);
+  assert.match(failureLines([summary]).at(-1), /5 more failures are only in the private report/);
+  assert.equal(testSummary({}, 'unit', sourceFiles, read).status, 'not-run');
+  assert.equal(testSummary({ numTotalTests: 2, numPendingTests: 2 }, 'unit', sourceFiles, read).status, 'not-run');
 });
 
 test('owned command timeout fails and actually terminates its process', async () => {
