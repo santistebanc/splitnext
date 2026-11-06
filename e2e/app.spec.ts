@@ -195,6 +195,16 @@ function field(page: Page, name: string) {
   return page.getByRole('textbox', { name, exact: true });
 }
 
+/**
+ * Waits until a field's whole text is selected. React Native Web and
+ * NumericFormat select a tick after focus, so typing before then would land
+ * beside the text rather than replace it.
+ */
+async function expectWholeTextSelected(target: Locator) {
+  await expect.poll(() => target.evaluate((node: HTMLInputElement | HTMLTextAreaElement) =>
+    node.value.length > 0 && node.selectionStart === 0 && node.selectionEnd === node.value.length)).toBe(true);
+}
+
 function heading(page: Page, name: string) {
   return page.getByRole('heading', { name, exact: true });
 }
@@ -745,13 +755,15 @@ test('opens a rename where the name already is: full width, the same lines in th
 
     // The whole name is selected, ready to be typed over.
     await expect(input).toBeFocused();
-    expect(await input.evaluate((node: HTMLTextAreaElement) => [node.selectionStart, node.selectionEnd])).toEqual([0, rename.title.length]);
+    await expectWholeTextSelected(input);
+    expect(await input.evaluate((node: HTMLTextAreaElement) => node.value.length)).toBe(rename.title.length);
     await input.press('Escape');
     await expect(input).toHaveCount(0);
   }
 
   // Typing replaces the name rather than adding to it.
   await button(page, `Rename ${you}`).click();
+  await expectWholeTextSelected(field(page, 'Name'));
   await page.keyboard.type('Ana');
   await expect(field(page, 'Name')).toHaveValue('Ana');
   await page.keyboard.press('Enter');
@@ -1295,6 +1307,7 @@ test('mixes fixed amounts and weighted shares, preserves them offline, and clear
   await button(page, /^Amount for Cy:/).click();
   await expect(field(page, 'Amount for Cy')).toBeFocused();
   // Its shown share is selected, so typing replaces it.
+  await expectWholeTextSelected(field(page, 'Amount for Cy'));
   await page.keyboard.type('101');
   await expect(field(page, 'Amount for Cy')).toHaveValue('101.00');
   await expect(button(page, 'Save')).toBeDisabled();
