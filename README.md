@@ -176,6 +176,13 @@ including expense recovery and its real lost-outbox detector control. The scenar
 validates and reuses that build; it does not build a second time. CI runs these
 same boundaries in bounded check/browser jobs on Node from `.nvmrc`.
 
+Two kinds of test measure time on the machine running them: the storage
+budget and browser tests tagged `@timing`, which count animation frames. A
+busy host can fail them while the app is fine. `npm run check:steady` runs
+the full check without them and `npm run check:timing` runs only them, after
+a build, so a shared runner can wait for a quiet machine first. `check`,
+`check:fast` and CI still run everything.
+
 Only `.wrangler/verification/public/` contains intended publishable evidence.
 Private logs, patches, profiles, traces, credentials and state remain under
 `.wrangler/verification/private/` or the lab/test directories; CI never uploads

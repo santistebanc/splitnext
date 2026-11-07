@@ -2470,7 +2470,8 @@ test('morphs between screens and leaves nothing behind', async ({ page }) => {
   await expect(heading(page, 'Morphing')).toBeVisible();
 });
 
-test('keeps a scrolled group still beneath the opening expense sheet', async ({ page }) => {
+// Counts animation frames, so a busy host can starve it: runs in check:timing.
+test('keeps a scrolled group still beneath the opening expense sheet', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 650 });
   await createGroup(page, 'Still underneath', 'Ana');
 
