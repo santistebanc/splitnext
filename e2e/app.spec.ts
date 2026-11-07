@@ -2488,7 +2488,11 @@ test('keeps a scrolled group still beneath the opening expense sheet', async ({ 
     const before = await scroller.evaluate((node) => ({ top: node.getBoundingClientRect().top, scroll: node.scrollTop }));
 
     const watching = page.evaluate(() => new Promise<{ samples: { top: number; scroll: number; title: string; amount: string }[]; screenScrolls: number[] }>((resolve) => {
-      const start = performance.now();
+      // Sample for 700 ms from the first frame showing the opening sheet, not
+      // from when watching starts: on a loaded host the click and the
+      // transition can begin late enough to leave a fixed window nearly empty.
+      const deadline = performance.now() + 5000;
+      let start: number | undefined;
       const samples: { top: number; scroll: number; title: string; amount: string }[] = [];
       const screenScrolls: number[] = [];
 
@@ -2508,9 +2512,14 @@ test('keeps a scrolled group still beneath the opening expense sheet', async ({ 
         const title = document.querySelector('[aria-hidden] [data-morph^="gname-"]');
         const amount = document.querySelector('#splitnext-page')?.parentElement?.parentElement?.querySelector('input[aria-label="Amount"]');
 
-        if (copied && title && amount) samples.push({ top: copied.getBoundingClientRect().top, scroll: copied.scrollTop, title: getComputedStyle(title).fontSize, amount: getComputedStyle(amount).fontSize });
+        const now = performance.now();
 
-        if (performance.now() - start < 700) requestAnimationFrame(frame);
+        if (copied && title && amount) {
+          start ??= now;
+          samples.push({ top: copied.getBoundingClientRect().top, scroll: copied.scrollTop, title: getComputedStyle(title).fontSize, amount: getComputedStyle(amount).fontSize });
+        }
+
+        if (start === undefined ? now < deadline : now - start < 700) requestAnimationFrame(frame);
         else {
           document.removeEventListener('scroll', onScroll, true);
           resolve({ samples, screenScrolls });
