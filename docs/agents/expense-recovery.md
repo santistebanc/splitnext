@@ -48,6 +48,12 @@ Port 8857 must be free; an occupied port fails rather than reusing a service.
 No production data or port 8787 is used. Only owned processes are stopped. Retained
 profiles contain disposable credentials; do not publish them.
 
+The enclosing Playwright suite uses port 8791 by default. Set
+`SPLITNEXT_E2E_PORT` to another free, unprivileged port when that port belongs to
+another service. The suite never reuses that service or changes its state. Port
+8787 stays reserved for normal development. The standalone expense scenario has
+its own port 8857.
+
 The lab's process/profile ownership and network gates are reused after inspection.
 Its convergence predicate is not the oracle: assertions read rendered UI, IndexedDB
 and stopped-Worker SQLite. Offline and dropped responses are controlled faults,

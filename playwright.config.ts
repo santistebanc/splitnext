@@ -1,6 +1,10 @@
 import { defineConfig } from '@playwright/test';
 
-const port = 8791;
+const port = Number(process.env.SPLITNEXT_E2E_PORT ?? 8791);
+
+if (!Number.isSafeInteger(port) || port < 1024 || port > 65535 || port === 8787) {
+  throw new Error('SPLITNEXT_E2E_PORT must be an integer from 1024 to 65535, excluding development port 8787');
+}
 
 const state = '.wrangler/e2e-state';
 
