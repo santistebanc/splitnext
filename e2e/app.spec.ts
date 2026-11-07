@@ -3,6 +3,20 @@ import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { once } from 'node:events';
 
+test('expense recovery verifies durable saves, lost responses and failed persistence', async () => {
+  test.setTimeout(600_000);
+  const result = await promisify(execFile)(process.execPath, ['scripts/verify.mjs', 'run', 'expense-recovery', '--built'], { timeout: 580_000 });
+
+  expect(JSON.parse(result.stdout).status).toBe('passed');
+});
+
+test('verification detects lost saved work through the real app and IndexedDB path', async () => {
+  test.setTimeout(600_000);
+  const result = await promisify(execFile)(process.execPath, ['scripts/verify.mjs', 'controls', '--built'], { timeout: 580_000 });
+
+  expect(JSON.parse(result.stdout)).toMatchObject({ status: 'passed', control: 'lost-outbox', observedStatus: 'failed' });
+});
+
 test('device lab runs the real two-device offline and recovery acceptance scenario', async () => {
   test.setTimeout(400_000);
   const result = await promisify(execFile)(process.execPath, ['lab/acceptance.mjs'], { timeout: 380_000 });
@@ -179,6 +193,16 @@ function button(page: Page, name: string | RegExp) {
 
 function field(page: Page, name: string) {
   return page.getByRole('textbox', { name, exact: true });
+}
+
+/**
+ * Waits until a field's whole text is selected. React Native Web and
+ * NumericFormat select a tick after focus, so typing before then would land
+ * beside the text rather than replace it.
+ */
+async function expectWholeTextSelected(target: Locator) {
+  await expect.poll(() => target.evaluate((node: HTMLInputElement | HTMLTextAreaElement) =>
+    node.value.length > 0 && node.selectionStart === 0 && node.selectionEnd === node.value.length)).toBe(true);
 }
 
 function heading(page: Page, name: string) {
@@ -615,7 +639,7 @@ test('wraps long names onto more lines while renaming, and Enter still saves', a
   }
 });
 
-test('keeps rename fields steady from their first frame', async ({ page }) => {
+test('keeps rename fields steady from their first frame', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 650 });
   await createGroup(page, 'Rename flash', 'Ana');
   await addMember(page, 'Benjamin Alexander');
@@ -731,13 +755,15 @@ test('opens a rename where the name already is: full width, the same lines in th
 
     // The whole name is selected, ready to be typed over.
     await expect(input).toBeFocused();
-    expect(await input.evaluate((node: HTMLTextAreaElement) => [node.selectionStart, node.selectionEnd])).toEqual([0, rename.title.length]);
+    await expectWholeTextSelected(input);
+    expect(await input.evaluate((node: HTMLTextAreaElement) => node.value.length)).toBe(rename.title.length);
     await input.press('Escape');
     await expect(input).toHaveCount(0);
   }
 
   // Typing replaces the name rather than adding to it.
   await button(page, `Rename ${you}`).click();
+  await expectWholeTextSelected(field(page, 'Name'));
   await page.keyboard.type('Ana');
   await expect(field(page, 'Name')).toHaveValue('Ana');
   await page.keyboard.press('Enter');
@@ -1281,6 +1307,7 @@ test('mixes fixed amounts and weighted shares, preserves them offline, and clear
   await button(page, /^Amount for Cy:/).click();
   await expect(field(page, 'Amount for Cy')).toBeFocused();
   // Its shown share is selected, so typing replaces it.
+  await expectWholeTextSelected(field(page, 'Amount for Cy'));
   await page.keyboard.type('101');
   await expect(field(page, 'Amount for Cy')).toHaveValue('101.00');
   await expect(button(page, 'Save')).toBeDisabled();
@@ -1643,13 +1670,20 @@ test('opens views at the top and restores context on returning or browsing histo
   await scroller.evaluate((node) => { node.scrollTop = 250; });
   await expect(field(page, 'Amount')).toHaveCSS('height', '36px');
   await button(page, 'Cancel').click();
+  // Locator auto-scrolling is not a scroll-restoration precondition: the next
+  // row can already be visible at the top on a fast/reduced-motion render.
+  await scroller.evaluate((node) => { node.scrollTop = 200; });
+  await button(page, 'Change Thing 6 · 70.00').scrollIntoViewIfNeeded();
+  const expenseListPosition = await position();
+
+  expect(expenseListPosition).toBeGreaterThan(0);
   await button(page, 'Change Thing 6 · 70.00').click();
   await atTop();
   await expect(field(page, 'Amount')).toHaveCSS('height', '60px');
   await field(page, 'Amount').fill('75');
   await button(page, 'Save').click();
   await expect(heading(page, 'Scroll navigation')).toBeVisible();
-  await expect.poll(position).toBeGreaterThan(0);
+  await expect.poll(position).toBeCloseTo(expenseListPosition, 0);
   await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '18px');
 });
 
@@ -2436,7 +2470,7 @@ test('morphs between screens and leaves nothing behind', async ({ page }) => {
   await expect(heading(page, 'Morphing')).toBeVisible();
 });
 
-test('keeps a scrolled group still beneath the opening expense sheet', async ({ page }) => {
+test('keeps a scrolled group still beneath the opening expense sheet', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 650 });
   await createGroup(page, 'Still underneath', 'Ana');
 
@@ -2454,7 +2488,11 @@ test('keeps a scrolled group still beneath the opening expense sheet', async ({ 
     const before = await scroller.evaluate((node) => ({ top: node.getBoundingClientRect().top, scroll: node.scrollTop }));
 
     const watching = page.evaluate(() => new Promise<{ samples: { top: number; scroll: number; title: string; amount: string }[]; screenScrolls: number[] }>((resolve) => {
-      const start = performance.now();
+      // Sample for 700 ms from the first frame showing the opening sheet, not
+      // from when watching starts: on a loaded host the click and the
+      // transition can begin late enough to leave a fixed window nearly empty.
+      const deadline = performance.now() + 5000;
+      let start: number | undefined;
       const samples: { top: number; scroll: number; title: string; amount: string }[] = [];
       const screenScrolls: number[] = [];
 
@@ -2474,9 +2512,14 @@ test('keeps a scrolled group still beneath the opening expense sheet', async ({ 
         const title = document.querySelector('[aria-hidden] [data-morph^="gname-"]');
         const amount = document.querySelector('#splitnext-page')?.parentElement?.parentElement?.querySelector('input[aria-label="Amount"]');
 
-        if (copied && title && amount) samples.push({ top: copied.getBoundingClientRect().top, scroll: copied.scrollTop, title: getComputedStyle(title).fontSize, amount: getComputedStyle(amount).fontSize });
+        const now = performance.now();
 
-        if (performance.now() - start < 700) requestAnimationFrame(frame);
+        if (copied && title && amount) {
+          start ??= now;
+          samples.push({ top: copied.getBoundingClientRect().top, scroll: copied.scrollTop, title: getComputedStyle(title).fontSize, amount: getComputedStyle(amount).fontSize });
+        }
+
+        if (start === undefined ? now < deadline : now - start < 700) requestAnimationFrame(frame);
         else {
           document.removeEventListener('scroll', onScroll, true);
           resolve({ samples, screenScrolls });
@@ -2592,7 +2635,7 @@ test('never cuts off the tops or tails of letters in titles and names', async ({
   }
 });
 
-test('keeps a cut-off name cut off while it flies to its title', async ({ page }) => {
+test('keeps a cut-off name cut off while it flies to its title', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Long names', 'Ana');
   await addMember(page, 'Maximiliano Fernández-Castellanos de la Vega y Montenegro');
@@ -2818,7 +2861,7 @@ test('floats standard field labels without moving the textboxes', async ({ page 
 });
 
 
-test('keeps member name line breaks stable while returning from details', async ({ page }) => {
+test('keeps member name line breaks stable while returning from details', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 760 });
   const name = 'Benjamin Alex';
 
@@ -2871,7 +2914,7 @@ test('keeps member name line breaks stable while returning from details', async 
   await expect(person(page, name)).toBeVisible();
 });
 
-test('moves the expense amount straight from its row to the editor', async ({ page }) => {
+test('moves the expense amount straight from its row to the editor', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Straight amounts', 'Ana');
   await addExpense(page, 'Dinner', '1234.56');
@@ -2910,7 +2953,7 @@ test('moves the expense amount straight from its row to the editor', async ({ pa
   expect(Math.max(...deviations)).toBeLessThanOrEqual(1);
 });
 
-test('keeps member amounts on one line throughout the details transition', async ({ page }) => {
+test('keeps member amounts on one line throughout the details transition', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 760 });
   await createGroup(page, 'Unbroken amounts', 'Ana');
   await addMember(page, 'Benjamin Alexander');
@@ -2976,7 +3019,7 @@ test('uses a floating label for the expense description and saves with Enter', a
 });
 
 
-test('collapses a two-line group title without a sudden header jump', async ({ page }) => {
+test('collapses a two-line group title without a sudden header jump', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 640 });
   await createGroup(page, 'A long summer holiday', 'Ana');
 
@@ -3185,7 +3228,7 @@ test('keeps payer and recipient labels on one line beside long names on a narrow
   expect(await page.locator('#splitnext-page').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
 });
 
-test('folds a person avatar without jumping their name sideways while scrolling', async ({ page }) => {
+test('folds a person avatar without jumping their name sideways while scrolling', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 640 });
   await createGroup(page, 'Person scroll', 'Ana');
   const name = 'Benjamin Alexander Fitzgerald';

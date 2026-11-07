@@ -1,15 +1,20 @@
-# Splitnext MVP
+# Splitnext
 
-Splitnext is an offline-first group ledger foundation built on Cloudflare
-Workers, D1, and one SQLite Durable Object per group. The current MVP handles
-groups, invite links, ledger members, expenses, repayments, Activity and safe undo with
-offline synchronization and realtime revision announcements.
+Splitnext is an offline-first app for sharing expenses with a group. See who
+owes what, split expenses equally, by shares or by exact amounts, and record
+repayments. Changes apply immediately, stay on the device while offline, and
+sync across devices when connected. Activity keeps the history, with safe undo.
+
+[Try the staging app](https://splitnext-api-staging.santistebanc94.workers.dev/app).
+The web client uses React Native with Expo; the backend runs on Cloudflare
+Workers, D1, and one SQLite Durable Object per group.
 
 <p>
-  <img src="docs/screenshots/group.png" alt="A group's balances and expenses" width="200">
-  <img src="docs/screenshots/expense.png" alt="Recording an expense split by shares" width="200">
-  <img src="docs/screenshots/person.png" alt="One person's balance and the expenses behind it" width="200">
-  <img src="docs/screenshots/settle.png" alt="The settle-up plan with the fewest payments" width="200">
+  <img src="docs/screenshots/group.png" alt="Lisbon trip: the People tab with each person's balance" width="160">
+  <img src="docs/screenshots/expenses.png" alt="The group's Expenses tab with payer and amount for each expense" width="160">
+  <img src="docs/screenshots/expense.png" alt="An apartment expense split into unequal shares" width="160">
+  <img src="docs/screenshots/person.png" alt="Ana's balance and the expenses behind it" width="160">
+  <img src="docs/screenshots/settle.png" alt="The group's settle-up plan with the fewest payments" width="160">
 </p>
 
 How it fits together, and the rules each part keeps, is in
@@ -75,7 +80,7 @@ How it fits together, and the rules each part keeps, is in
   the web. Theme assets are precached with the app shell
   for offline reloads; changing a theme asset invalidates that cache.
 - Amounts are plain numbers with two decimals, never shown with a currency,
-  and shown with their digits grouped in threes, such as 1 234.50.
+  and shown with their digits grouped in threes, such as 1,234.50.
   Expenses and repayments record the no-currency code XXX, and the ledger keeps
   any older real-currency records separate; see
   [ADR 0025](./docs/adr/0025-deal-in-plain-numbers-without-currency.md).
@@ -117,8 +122,18 @@ leaves both unresponsive.
 - To try several devices by hand, open `/app` in separate browser profiles or
   a private window; tabs in one profile share an installation.
 
-Remote deployment has not been performed. `wrangler.jsonc` still contains a
-placeholder D1 database id.
+## Staging
+
+The current web app is deployed at
+[splitnext-api-staging.santistebanc94.workers.dev/app](https://splitnext-api-staging.santistebanc94.workers.dev/app).
+
+`npm run deploy:staging` builds the client, applies pending migrations to the
+separate staging D1 database, and deploys the staging Worker. It requires a clean
+checkout and Cloudflare credentials. `/health` reports the deployed Git revision;
+`/ready` checks D1 and the group Durable Object.
+
+The staging environment is configured in `wrangler.jsonc`. The default
+production environment still has a placeholder D1 database id and is not deployed.
 
 ## Checks
 
@@ -133,18 +148,54 @@ tests. The Worker tests load the bundle the dry run writes to
 run.
 
 `npm run check:fast` runs everything except the app build and the browser
-tests, against the last app build, in about a minute. The pre-push hook runs
+tests, against the last app build. The pre-push hook runs
 it; when Git for Windows pushes a checkout inside WSL, the hook runs the checks
 inside that distribution. Skip it once with `git push --no-verify`.
-`.github/workflows/check.yml` runs the full `npm run check` on a fresh checkout
-for every push to `main` or `master` and every pull request, and keeps
-Playwright traces when it fails.
+`.github/workflows/check.yml` runs the same boundaries on a fresh checkout for
+every push to `main` or `master` and every pull request, and uploads only the
+sanitized public verification evidence, also when it fails.
 
 `npm run test:e2e` drives the built app in headless Chromium. It starts its
 own Worker on port 8791 with separate local storage in `.wrangler/e2e-state`,
 recreated on every run, so it does not touch `npm run dev` data. Install the
 browser once with `npx playwright install chromium-headless-shell`; a failure
 keeps a trace in `test-results/` that `npx playwright show-trace` opens.
+
+### Verification
+
+Start verification with `npm run verify -- help`. Machine-readable discovery is
+`npm run --silent verify -- discover --json`; `doctor` checks local prerequisites.
+The [feature map](verification/features.json) names executable promises, their
+expected checks, fidelity and limits. Agents use the
+[repository verification skill](.agents/skills/verify-splitnext/SKILL.md).
+
+`npm run check:fast` includes verification contracts and deterministic architecture
+checks. It runs the unchanged storage timing budget separately after the other
+unit tests, with one worker. `npm run check` additionally builds and runs e2e,
+including expense recovery and its real lost-outbox detector control. The scenario
+validates and reuses that build; it does not build a second time. CI runs these
+same boundaries in bounded check/browser jobs on Node from `.nvmrc`.
+
+Two kinds of test measure time on the machine running them: the storage
+budget and browser tests tagged `@timing`, which count animation frames. A
+busy host can fail them while the app is fine. Tag a browser test `@timing`
+when it needs a minimum number of frames or limits the change between
+consecutive frames. `npm run check:steady` runs
+the full check without them and `npm run check:timing` runs only them, after
+a build, so a shared runner can wait for a quiet machine first. `check`,
+`check:fast` and CI still run everything.
+
+Only `.wrangler/verification/public/` contains intended publishable evidence.
+Private logs, patches, profiles, traces, credentials and state remain under
+`.wrangler/verification/private/` or the lab/test directories; CI never uploads
+them. Failure messages stay private, since their values, locators and call logs
+can hold credentials, URLs or personal data. Public results preserve check IDs,
+statuses, source/build/data fingerprints and failure categories. For each failed
+test, the CI log and evidence give its location, a failure kind (assertion,
+test-timeout, error or unknown) with the matcher, action or error class and
+timeout, the failing line of tracked source, and a command to reproduce it
+locally. Titles are shown only when the source spells them out. Categories need
+investigation rather than being proof that the product or environment is at fault.
 
 ## Showcase
 
@@ -208,5 +259,3 @@ state. See [docs/architecture.md](./docs/architecture.md#diagnostics).
 - [Agent working agreement](./AGENTS.md)
 - [Operations: monitoring, backups, release checklist](./docs/operations.md)
 - [Support playbook](./docs/support-playbook.md)
-
-The groups list shows your balance. Settle up suggests net transfers and records partial or excess repayments, including offline. Repayments represent money paid outside the app.

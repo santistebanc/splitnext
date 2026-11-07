@@ -3,6 +3,9 @@
 # browser tests against a local Worker. No Cloudflare account is needed.
 name: Check
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main, master]
@@ -15,7 +18,43 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+      VITEST_MAX_WORKERS: '2'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - id: install
+        run: npm ci --ignore-scripts
+      - id: contracts
+        run: npm run verify:check
+      - id: checks
+        run: |
+          mkdir -p .wrangler/verification/private
+          npm run frontend:check > .wrangler/verification/private/check.log 2>&1
+          npm run check:fast >> .wrangler/verification/private/check.log 2>&1
+      - if: always()
+        run: node scripts/verification-ci-result.mjs
+        env:
+          VERIFICATION_JOB: check
+          VERIFICATION_OUTCOME: ${{ job.status }}
+          VERIFICATION_STEPS: ${{ toJSON(steps) }}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-check-evidence
+          path: .wrangler/verification/public/
+          if-no-files-found: warn
+          retention-days: 7
+
+  browser:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
     env:
       WRANGLER_SEND_METRICS: 'false'
     steps:
@@ -24,12 +63,26 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps --only-shell chromium
-      - run: npm run check
-      - if: failure()
+      - id: install
+        run: npm ci --ignore-scripts && npx playwright install --with-deps --only-shell chromium
+      - id: doctor
+        run: npm run verify -- doctor --json
+      - id: build
+        run: |
+          mkdir -p .wrangler/verification/private
+          npm run frontend:build > .wrangler/verification/private/build.log 2>&1
+      - id: browsers
+        run: npm run test:e2e > .wrangler/verification/private/browser.log 2>&1
+      - if: always()
+        run: node scripts/verification-ci-result.mjs
+        env:
+          VERIFICATION_JOB: browser
+          VERIFICATION_OUTCOME: ${{ job.status }}
+          VERIFICATION_STEPS: ${{ toJSON(steps) }}
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-traces
-          path: test-results/
-          if-no-files-found: ignore
+          name: verification-browser-evidence
+          path: .wrangler/verification/public/
+          if-no-files-found: warn
+          retention-days: 7
