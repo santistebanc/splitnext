@@ -178,7 +178,9 @@ same boundaries in bounded check/browser jobs on Node from `.nvmrc`.
 
 Two kinds of test measure time on the machine running them: the storage
 budget and browser tests tagged `@timing`, which count animation frames. A
-busy host can fail them while the app is fine. `npm run check:steady` runs
+busy host can fail them while the app is fine. Tag a browser test `@timing`
+when it needs a minimum number of frames or limits the change between
+consecutive frames. `npm run check:steady` runs
 the full check without them and `npm run check:timing` runs only them, after
 a build, so a shared runner can wait for a quiet machine first. `check`,
 `check:fast` and CI still run everything.

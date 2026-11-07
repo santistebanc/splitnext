@@ -639,7 +639,7 @@ test('wraps long names onto more lines while renaming, and Enter still saves', a
   }
 });
 
-test('keeps rename fields steady from their first frame', async ({ page }) => {
+test('keeps rename fields steady from their first frame', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 650 });
   await createGroup(page, 'Rename flash', 'Ana');
   await addMember(page, 'Benjamin Alexander');
@@ -2470,7 +2470,6 @@ test('morphs between screens and leaves nothing behind', async ({ page }) => {
   await expect(heading(page, 'Morphing')).toBeVisible();
 });
 
-// Counts animation frames, so a busy host can starve it: runs in check:timing.
 test('keeps a scrolled group still beneath the opening expense sheet', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 650 });
   await createGroup(page, 'Still underneath', 'Ana');
@@ -2636,7 +2635,7 @@ test('never cuts off the tops or tails of letters in titles and names', async ({
   }
 });
 
-test('keeps a cut-off name cut off while it flies to its title', async ({ page }) => {
+test('keeps a cut-off name cut off while it flies to its title', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Long names', 'Ana');
   await addMember(page, 'Maximiliano Fernández-Castellanos de la Vega y Montenegro');
@@ -2862,7 +2861,7 @@ test('floats standard field labels without moving the textboxes', async ({ page 
 });
 
 
-test('keeps member name line breaks stable while returning from details', async ({ page }) => {
+test('keeps member name line breaks stable while returning from details', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 760 });
   const name = 'Benjamin Alex';
 
@@ -2915,7 +2914,7 @@ test('keeps member name line breaks stable while returning from details', async 
   await expect(person(page, name)).toBeVisible();
 });
 
-test('moves the expense amount straight from its row to the editor', async ({ page }) => {
+test('moves the expense amount straight from its row to the editor', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 760 });
   await createGroup(page, 'Straight amounts', 'Ana');
   await addExpense(page, 'Dinner', '1234.56');
@@ -2954,7 +2953,7 @@ test('moves the expense amount straight from its row to the editor', async ({ pa
   expect(Math.max(...deviations)).toBeLessThanOrEqual(1);
 });
 
-test('keeps member amounts on one line throughout the details transition', async ({ page }) => {
+test('keeps member amounts on one line throughout the details transition', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 760 });
   await createGroup(page, 'Unbroken amounts', 'Ana');
   await addMember(page, 'Benjamin Alexander');
@@ -3020,7 +3019,7 @@ test('uses a floating label for the expense description and saves with Enter', a
 });
 
 
-test('collapses a two-line group title without a sudden header jump', async ({ page }) => {
+test('collapses a two-line group title without a sudden header jump', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 640 });
   await createGroup(page, 'A long summer holiday', 'Ana');
 
@@ -3229,7 +3228,7 @@ test('keeps payer and recipient labels on one line beside long names on a narrow
   expect(await page.locator('#splitnext-page').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
 });
 
-test('folds a person avatar without jumping their name sideways while scrolling', async ({ page }) => {
+test('folds a person avatar without jumping their name sideways while scrolling', { tag: '@timing' }, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 640 });
   await createGroup(page, 'Person scroll', 'Ana');
   const name = 'Benjamin Alexander Fitzgerald';
