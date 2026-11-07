@@ -22,6 +22,8 @@
     { "id": "contracts", "command": "npm run verify:check", "scope": "Verification metadata, skill references, CI artifact boundary, build provenance and pure-domain imports; tool unit tests." },
     { "id": "fast", "command": "npm run check:fast", "scope": "Required text, generated types, lint, type checks, Worker dry run, lab and domain/model tests, then isolated performance budget." },
     { "id": "full", "command": "npm run check", "scope": "Fresh frontend, fast gates, and browser suite including the expense scenario exactly once." },
+    { "id": "steady", "command": "npm run check:steady", "scope": "The full check without timing-sensitive tests: what a shared, possibly busy host can decide reliably." },
+    { "id": "timing", "command": "npm run check:timing", "scope": "Storage time budget and browser tests tagged @timing (frame counting); run on a quiet host after a build. check and check:fast still include them." },
     { "id": "storage-performance", "command": "npm run test:performance", "scope": "Unchanged 20 ms median budget, isolated from concurrent test files; this is a performance measurement, not deterministic correctness." }
   ]
 }
