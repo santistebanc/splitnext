@@ -18,6 +18,8 @@ How the system fits together and the rules each part keeps. The
 - **Shared domain** (`src/domain/`): schemas and pure rules used by the server
   and by every client's optimistic projection. Each group command is one file
   in `src/domain/commands/`, registered in `src/domain/commands.ts`.
+  `verify:check` mechanically rejects imports outside this directory other than
+  Zod, including dynamic imports, exports and type imports.
 - **Client SDK** (`src/client/`): the HTTP transport, the stateful sync client,
   the replica store over a swappable storage adapter, and realtime
   subscriptions.
