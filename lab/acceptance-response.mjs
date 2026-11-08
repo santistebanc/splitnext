@@ -26,7 +26,9 @@ export async function loseCommittedResponse(lab, { device, groupId, name, action
     const record = await original.call(lab, kind, detail);
 
     if (!active) return record;
+
     if (cutting && kind === 'response.lost' && matches(detail)) lost.resolve(record);
+
     if (observing || cutting || kind !== 'response.received' || !matches(detail)) return record;
     observing = true;
 
@@ -50,12 +52,14 @@ export async function loseCommittedResponse(lab, { device, groupId, name, action
   };
 
   lab.event = observe;
+
   // Carry the action's outcome without leaving a rejection unobserved when
   // an observation timeout is followed by page closure during cleanup.
   const outcome = Promise.resolve().then(action).then(
     (value) => ({ ok: true, value }),
     (error) => ({ ok: false, error }),
   );
+
   const failure = outcome.then((result) => {
     if (!result.ok) throw result.error;
 
@@ -70,6 +74,7 @@ export async function loseCommittedResponse(lab, { device, groupId, name, action
     await bounded(lost.promise, lossTimeoutMs, 'response_not_lost');
   } finally {
     active = false;
+
     if (lab.event === observe) lab.event = original;
   }
 }
