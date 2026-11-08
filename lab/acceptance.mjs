@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { Lab } from "./runtime.mjs";
 import { createLabServer } from "./http.mjs";
-import { setTimeout as delay } from "node:timers/promises";
+import { loseCommittedResponse } from './acceptance-response.mjs';
 
 // Run once per device kind: LAB_ACCEPT_KIND=browser (default) or inpage.
 const kind = process.env.LAB_ACCEPT_KIND ?? "browser";
@@ -103,36 +103,10 @@ try {
   });
   // Drop the response after the real Worker has committed a request.
   await op("deviceNetwork", { device: "a", online: true, latencyMs: 1000 });
-  const beforeInflight = lab.sequence;
-  const inflight = action("a", "renameGroup", { name: "Response lost" });
-  const deadline = Date.now() + 10000;
-
-  while (
-    !(await lab.lines("timeline")).some(
-      (entry) =>
-        entry.sequence > beforeInflight &&
-        entry.kind === "response.received" &&
-        entry.detail.device === "a",
-    )
-  ) {
-    if (Date.now() > deadline) throw new Error("inflight_request_timeout");
-    await delay(20);
-  }
-
-  await op("serverNetwork", { available: false });
-  await inflight;
-  // The action finishes once applied locally; the delayed response is dropped after.
-  const lostDeadline = Date.now() + 15000;
-
-  while (
-    !(await lab.lines("timeline")).some(
-      (entry) =>
-        entry.sequence > beforeInflight && entry.kind === "response.lost",
-    )
-  ) {
-    if (Date.now() > lostDeadline) throw new Error("response_not_lost");
-    await delay(20);
-  }
+  await loseCommittedResponse(lab, {
+    device: 'a', groupId, name: 'Response lost',
+    action: () => action('a', 'renameGroup', { name: 'Response lost' }),
+  });
 
   await op("deviceNetwork", { device: "a", online: true, latencyMs: 0 });
   await op("serverNetwork", { available: true });
