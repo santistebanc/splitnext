@@ -7,6 +7,132 @@ import { DatabaseSync } from "node:sqlite";
 import { stores } from "./stores.mjs";
 import { operations, discovery } from "./operations.mjs";
 import { Lab } from "./runtime.mjs";
+import { loseCommittedResponse } from './acceptance-response.mjs';
+
+test('lost-response acceptance waits for the committed mutation, not background reads', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'splitnext-response-'));
+  const lab = new Lab(root, 0);
+  let committed = false;
+  const perform = lab.perform.bind(lab);
+  const gated = Promise.withResolvers();
+  let pending;
+
+  lab.inspectServer = async () => ({ groups: [{ snapshot: { group: { id: 'group', name: committed ? 'Changed' : 'Original' } } }] });
+  lab.perform = async (operation, input) => {
+    if (operation === 'serverNetwork' && !input.available) assert.equal(committed, true, 'gate_before_commit');
+    const result = await perform(operation, input);
+
+    if (operation === 'serverNetwork') gated.resolve();
+
+    return result;
+  };
+
+  try {
+    await loseCommittedResponse(lab, {
+      device: 'a', groupId: 'group', name: 'Changed', timeoutMs: 1000,
+      action: () => (pending = (async () => {
+        await lab.event('response.received', { device: 'a', method: 'GET', path: '/identity/groups' });
+        await lab.event('response.received', { device: 'a', method: 'POST', path: '/groups/group/sync' });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        committed = true;
+        await lab.event('response.received', { device: 'a', method: 'POST', path: '/groups/group/sync' });
+        await gated.promise;
+        assert.equal(lab.available, false, 'response_was_not_interrupted');
+        await lab.event('response.lost', { device: 'a', method: 'POST', path: '/groups/group/sync' });
+      })()),
+    });
+    assert.equal(lab.available, false);
+  } finally {
+    gated.resolve();
+    await pending?.catch(() => {});
+    await lab.eventTail;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a failed action is reported before the observation timeout', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'splitnext-response-'));
+  const lab = new Lab(root, 0);
+  const failure = new Error('action_failed_before_response');
+  const action = Promise.reject(failure);
+
+  // The assertion concerns the primary error, not the test runner's own
+  // unhandled-rejection reporting while exercising the old implementation.
+  void action.catch(() => {});
+  try {
+    await assert.rejects(loseCommittedResponse(lab, { device: 'a', action: () => action, timeoutMs: 30 }), (error) => error === failure);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a host report is acknowledged before awaiting a gate result on the same channel', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'splitnext-response-channel-'));
+  const lab = new Lab(root, 0);
+  const acknowledged = Promise.withResolvers();
+  const gated = Promise.withResolvers();
+  const perform = lab.perform.bind(lab);
+  let pending;
+
+  lab.inspectServer = async () => ({ groups: [{ snapshot: { group: { id: 'group', name: 'Changed' } } }] });
+  lab.perform = async (operation, input) => {
+    if (operation === 'serverNetwork') await acknowledged.promise;
+    const result = await perform(operation, input);
+
+    if (operation === 'serverNetwork') gated.resolve();
+
+    return result;
+  };
+  try {
+    await loseCommittedResponse(lab, {
+      device: 'a', groupId: 'group', name: 'Changed', timeoutMs: 150,
+      action: () => (pending = (async () => {
+        await lab.event('response.received', { device: 'a', method: 'POST', path: '/groups/group/sync' });
+        acknowledged.resolve();
+        await gated.promise;
+        await lab.event('response.lost', { device: 'a', method: 'POST', path: '/groups/group/sync' });
+      })()),
+    });
+  } finally {
+    acknowledged.resolve();
+    await pending?.catch(() => {});
+    await lab.eventTail;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('lost-response acceptance fails when the response is not actually lost', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'splitnext-response-'));
+  const lab = new Lab(root, 0);
+  const perform = lab.perform.bind(lab);
+
+  lab.inspectServer = async () => ({ groups: [{ snapshot: { group: { id: 'group', name: 'Changed' } } }] });
+  // Deliberately broken fault injection: claiming to close the gate must not
+  // count as proof that an acknowledgment was lost.
+  lab.perform = (operation, input) => operation === 'serverNetwork' ? { available: false } : perform(operation, input);
+  try {
+    await assert.rejects(loseCommittedResponse(lab, {
+      device: 'a', groupId: 'group', name: 'Changed', timeoutMs: 1000, lossTimeoutMs: 30,
+      action: () => lab.event('response.received', { device: 'a', method: 'POST', path: '/groups/group/sync' }),
+    }), /response_not_lost/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('an observation timeout retains its error when cleanup rejects the pending action', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'splitnext-response-'));
+  const lab = new Lab(root, 0);
+  const originalEvent = lab.event;
+  const action = Promise.withResolvers();
+
+  try {
+    await assert.rejects(loseCommittedResponse(lab, { device: 'a', action: () => action.promise, timeoutMs: 30 }), /inflight_request_timeout/);
+    action.reject(new Error('host_disconnected_during_cleanup'));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(lab.event, originalEvent);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("failed startup cleanup preserves the existing environment manifest", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "splitnext-lab-start-"));
