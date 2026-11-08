@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { Component, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Platform, ScrollView, View } from 'react-native';
 import { Row, Tag, Text, colors, layout, sizes } from '../design';
 import { ScrollToTopContext } from './pageScroll';
@@ -17,6 +17,22 @@ const scrollStyle = Platform.OS === 'web' ? { ...page, overflowAnchor: 'none' } 
 
 /** App screens are one narrow column, like the phone app, on every device. */
 const column = { width: '100%', maxWidth: layout.column, alignSelf: 'center', paddingHorizontal: layout.gutter } as const;
+
+/** Read the departing screen before React changes its content and clamps its
+ * scroll offset. A scroll event can still be waiting for the next frame. */
+class ScrollPositionSnapshot extends Component<{ scrollKey: string; save: () => void; children: ReactNode }> {
+  getSnapshotBeforeUpdate(previous: Readonly<typeof this.props>): null {
+    if (previous.scrollKey !== this.props.scrollKey) previous.save();
+
+    return null;
+  }
+
+  componentDidUpdate(): void {
+    // The snapshot saves before mutation; there is no post-update work.
+  }
+
+  render(): ReactNode { return this.props.children; }
+}
 
 type FrameProps = {
   children: ReactNode;
@@ -108,6 +124,11 @@ export function Frame(props: FrameProps) {
   );
 
   return (
+    <ScrollPositionSnapshot scrollKey={scrollKey} save={() => {
+      const node: unknown = Platform.OS === 'web' ? scroll.current?.getScrollableNode() : null;
+
+      positions.current.set(scrollKey, Platform.OS === 'web' && node instanceof HTMLElement ? node.scrollTop : scrolled.current);
+    }}>
     <ScrollToTopContext.Provider value={() => scroll.current?.scrollTo({ y: 0, animated: true })}>
       <View style={[page, visibleHeight !== null && { maxHeight: visibleHeight }]}>
         {props.status ? <View onLayout={(event) => props.onStatusLayout?.(event.nativeEvent.layout.height)}>{props.status}</View> : null}
@@ -186,5 +207,6 @@ export function Frame(props: FrameProps) {
         ) : null}
       </View>
     </ScrollToTopContext.Provider>
+    </ScrollPositionSnapshot>
   );
 }

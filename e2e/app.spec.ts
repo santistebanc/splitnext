@@ -1687,6 +1687,38 @@ test('opens views at the top and restores context on returning or browsing histo
   await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '18px');
 });
 
+test.describe('pending scroll position', () => {
+  test('restores the actual position when navigation precedes the scroll event', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 640 });
+    await createGroup(page, 'Pending scroll', 'Ana');
+
+    for (const name of ['Ben', 'Cy', 'Dana', 'Eli', 'Fran', 'Gus', 'Hal', 'Ida', 'Jo', 'Kai', 'Lu', 'Mo']) await addMember(page, name);
+
+    const scroller = page.locator('#splitnext-page');
+
+    await scroller.evaluate((node) => { node.scrollTop = 160; });
+    await expect(heading(page, 'Pending scroll')).toHaveCSS('font-size', '18px');
+    // A scroll event is delivered on a later frame. Navigate in the same turn
+    // as the new offset, so restoration cannot rely on that event arriving.
+    const departed = await person(page, 'Gus').evaluate((row) => {
+      const node = document.getElementById('splitnext-page');
+
+      if (!node || !(row instanceof HTMLElement)) throw new Error('missing_scroll_target');
+      node.scrollTop = 200;
+      const top = node.scrollTop;
+
+      row.click();
+
+      return top;
+    });
+
+    expect(departed).toBe(200);
+    await expect(heading(page, 'Gus')).toBeVisible();
+    await button(page, 'Back to Pending scroll').click();
+    await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBe(departed);
+  });
+});
+
 test('joins from a second device and shows changes on both through realtime', async ({ page, browser }) => {
   await createGroup(page, 'Trip', 'Ana');
   const link = await inviteLink(page);
