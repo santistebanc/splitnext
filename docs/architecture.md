@@ -191,6 +191,9 @@ opens the group and leaves it confirmed. `Frame` starts fresh screen openings
 at the top, restoring saved positions when navigation depth decreases or
 browser history is restored. The compact header jumps to the arriving screen's
 position before the transition; in-place panels keep the same scroll key.
+Before React replaces a screen, `Frame` snapshots its actual web scroll offset.
+This also preserves a movement whose scroll event has not arrived yet; reading
+after replacement would instead save the offset clamped by the new content.
 Removing a member sets `AppUiState.removal`, which `RemovalToast` shows without
 an Undo action until it is dismissed or times out. `GroupSettings` stays in the catalog as `settings`
 without an entry point on screen. Appearance assets are served locally and
