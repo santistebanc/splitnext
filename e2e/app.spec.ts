@@ -1698,6 +1698,7 @@ test.describe('pending scroll position', () => {
 
     await scroller.evaluate((node) => { node.scrollTop = 160; });
     await expect(heading(page, 'Pending scroll')).toHaveCSS('font-size', '18px');
+
     // A scroll event is delivered on a later frame. Navigate in the same turn
     // as the new offset, so restoration cannot rely on that event arriving.
     const departed = await person(page, 'Gus').evaluate((row) => {

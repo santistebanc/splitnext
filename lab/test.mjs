@@ -59,6 +59,7 @@ test('a failed action is reported before the observation timeout', async () => {
   // The assertion concerns the primary error, not the test runner's own
   // unhandled-rejection reporting while exercising the old implementation.
   void action.catch(() => {});
+
   try {
     await assert.rejects(loseCommittedResponse(lab, { device: 'a', action: () => action, timeoutMs: 30 }), (error) => error === failure);
   } finally {
@@ -83,6 +84,7 @@ test('a host report is acknowledged before awaiting a gate result on the same ch
 
     return result;
   };
+
   try {
     await loseCommittedResponse(lab, {
       device: 'a', groupId: 'group', name: 'Changed', timeoutMs: 150,
@@ -110,6 +112,7 @@ test('lost-response acceptance fails when the response is not actually lost', as
   // Deliberately broken fault injection: claiming to close the gate must not
   // count as proof that an acknowledgment was lost.
   lab.perform = (operation, input) => operation === 'serverNetwork' ? { available: false } : perform(operation, input);
+
   try {
     await assert.rejects(loseCommittedResponse(lab, {
       device: 'a', groupId: 'group', name: 'Changed', timeoutMs: 1000, lossTimeoutMs: 30,
