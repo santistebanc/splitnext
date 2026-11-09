@@ -168,6 +168,7 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
               const last = entry.whatSegments.at(-1);
               const linked = opens && last?.reference ? last : null;
               const words = linked ? entry.whatSegments.slice(0, -1) : entry.whatSegments;
+              const open = () => { if (target) void action.call(target.name, target.input); };
 
               return (
                 <Row key={event.id} testID={`activity-${event.id}`} gap={12} paddingY={12} align="stretch" style={rules.above}>
@@ -176,11 +177,16 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
                     <Stack fill gap={8}>
                       <Text variant="body">
                         <Text weight="bold">{entry.who}</Text> {words.map((part, index) => <Text key={index} weight={part.reference ? 'semibold' : undefined}>{part.text}</Text>)}
-                        {/* The name the entry ends on, with an arrow after it, opens what it names. */}
+                        {/*
+                          * The name the entry ends on, and the arrow after it, open what it names.
+                          * The arrow is the button; the name stays plain text so it wraps like the rest of the line.
+                          */}
                         {opens && target ? (
-                          <Text accessibilityRole="button" accessibilityLabel={target.label + ': ' + label} onPress={() => { void action.call(target.name, target.input); }} style={{ cursor: 'pointer' }}>
-                            {linked ? <Text weight="semibold">{linked.text}</Text> : null}
-                            {' →'}
+                          <Text weight={linked ? 'semibold' : undefined} onPress={open} style={{ cursor: 'pointer' }}>
+                            {linked ? <Text>{linked.text}</Text> : null}
+                            {/* A no-break space keeps the arrow on the name's last line. */}
+                            {' '}
+                            <Text accessibilityRole="button" accessibilityLabel={target.label + ': ' + label} onPress={open} weight="regular">→</Text>
                           </Text>
                         ) : null}
                       </Text>
