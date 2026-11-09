@@ -120,6 +120,13 @@ needs the browser to reproduce, or that must be shown on a real browser before i
 fixed, belongs to a `browser` device. When unsure, reproduce on `inpage` first and
 confirm on `browser`. The two kinds can share one environment and one Worker.
 
+The acceptance scenario's lost-response control observes a sync POST for its
+target group and confirms the expected mutation in the authoritative store
+before closing the server gate. Unrelated background reads do not trigger it.
+It also requires a matching `response.lost` event; closing a gate alone is not
+proof of a lost acknowledgment. Pending action failures remain observed during
+cleanup, so a disconnected host cannot mask the original failure.
+
 ### Hosting in-page devices
 
 In-page devices need a page to render in. The supervisor serves the lab page at
