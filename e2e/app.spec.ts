@@ -2266,7 +2266,7 @@ test('undoes a money change and then reverses that undo through Activity', async
 
   // Reversing that is restoring the repayment.
   await button(page, 'Restore repayment').click();
-  await expect(page.getByText('You restored a repayment', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^You restored a repayment\s→$/)).toBeVisible();
   await button(page, 'Back to Money undo').click();
   await showTab(page, 'Expenses');
   await expect(button(page, 'Change repayment: Ben paid you back 12.00')).toBeVisible();
@@ -3115,6 +3115,15 @@ test('opens canonical Activity records and returns, keeping unavailable actions 
   await motionSettled(page);
   const title = page.getByText('Dinner', { exact: true });
   await expect(title).toHaveCSS('font-weight', '600');
+  // The arrow follows the name on its line, and the name opens the expense as well.
+  const nameBox = (await title.boundingBox())!;
+  const arrowBox = (await button(page, 'Open expense: You added Dinner').boundingBox())!;
+  expect(Math.abs(nameBox.y + nameBox.height / 2 - (arrowBox.y + arrowBox.height / 2))).toBeLessThan(4);
+  expect(arrowBox.x).toBeGreaterThan(nameBox.x + nameBox.width);
+  await title.click();
+  await button(page, 'Cancel').click();
+  await expect(heading(page, 'Activity')).toBeVisible();
+  await motionSettled(page);
   await button(page, 'Undo: You added Dinner').click();
   await expect(button(page, 'Open expense: You added Dinner')).toHaveCount(0);
   await expect(button(page, 'Open expense: You removed Dinner')).toHaveCount(0);
