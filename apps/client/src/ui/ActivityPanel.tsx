@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { reversibleEffect, undoProblem, type ClientReplicaState } from '@splitnext/client';
-import { ArrowRightIcon, Button, EmptyState, ErrorMessage, Row, SectionHeading, Stack, Tag, Text, colors, fonts, hairlineShadow, rules, strokes } from '../design';
+import { Button, EmptyState, ErrorMessage, Row, SectionHeading, Stack, Tag, Text, colors, fonts, hairlineShadow, rules, strokes } from '../design';
 import { activityTarget, describeActivity, newActivity, visibleActivity } from '../model/activity';
 import { reviewDetail, reviewTitle } from '../model/notices';
 import { BackHeader } from './BackHeader';
@@ -163,6 +163,12 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
 
               const reversible = !removal && Boolean(reversibleEffect(event) && snapshot);
               const problem = reversible && snapshot ? undoProblem(snapshot, event, props.replica.activity) : null;
+              const undoable = reversible && !problem;
+              const opens = Boolean(target && action.can(target.name, target.input));
+              const last = entry.whatSegments.at(-1);
+              const linked = opens && last?.reference ? last : null;
+              const words = linked ? entry.whatSegments.slice(0, -1) : entry.whatSegments;
+              const open = () => { if (target) void action.call(target.name, target.input); };
 
               return (
                 <Row key={event.id} testID={`activity-${event.id}`} gap={12} paddingY={12} align="stretch" style={rules.above}>
@@ -170,7 +176,19 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
                   <Row fill gap={12} align="start">
                     <Stack fill gap={8}>
                       <Text variant="body">
-                        <Text weight="bold">{entry.who}</Text> {entry.whatSegments.map((part, index) => <Text key={index} weight={part.reference ? 'semibold' : undefined}>{part.text}</Text>)}
+                        <Text weight="bold">{entry.who}</Text> {words.map((part, index) => <Text key={index} weight={part.reference ? 'semibold' : undefined}>{part.text}</Text>)}
+                        {/*
+                          * The name the entry ends on, and the arrow after it, open what it names.
+                          * The arrow is the button; the name stays plain text so it wraps like the rest of the line.
+                          */}
+                        {opens && target ? (
+                          <Text weight={linked ? 'semibold' : undefined} onPress={open} style={{ cursor: 'pointer' }}>
+                            {linked ? <Text>{linked.text}</Text> : null}
+                            {/* A no-break space keeps the arrow on the name's last line. */}
+                            {' '}
+                            <Text accessibilityRole="button" accessibilityLabel={target.label + ': ' + label} onPress={open} weight="regular">→</Text>
+                          </Text>
+                        ) : null}
                       </Text>
                       {entry.detail ? (
                         <Text variant="figureSmall" tone="muted">
@@ -179,19 +197,20 @@ export function ActivityPanel(props: { replica: ClientReplicaState }) {
                         </Text>
                       ) : null}
                     </Stack>
-                    {/* The time, then whether it is new, then Undo or Restore, in one column at the end. */}
+                    {/* The time, then whether it is new, then Undo or Restore. */}
                     <Stack gap={8} align="end" paddingTop={2}>
                       <Text variant="meta" tone="muted" weight="regular">{timeLabel(new Date(event.occurred_at))}</Text>
-                      {target && action.can(target.name, target.input) ? (
-                        <Button size="compact" variant="secondary" label={target.label + ': ' + label} icon={<ArrowRightIcon size={16} />} onPress={() => { void action.call(target.name, target.input); }} />
-                      ) : null}
                       {isNew ? <Tag tone="warning">new</Tag> : null}
-                      {reversible && !problem ? (
-                        <EntryAction text="Undo" label={`Undo: ${label}`} disabled={!action.can('undoChange', { eventId: event.id })} onPress={() => { void action.call('undoChange', { eventId: event.id }); }} />
+                      {undoable || restorable ? (
+                        <Row gap={8} align="center">
+                          {undoable ? (
+                            <EntryAction text="Undo" label={`Undo: ${label}`} disabled={!action.can('undoChange', { eventId: event.id })} onPress={() => { void action.call('undoChange', { eventId: event.id }); }} />
+                          ) : null}
+                          {restorable && change === 'expense.removed' ? <EntryAction text="Restore" label="Restore expense" disabled={!action.can('restoreExpense', { expenseId: event.target.id })} onPress={() => { void action.call('restoreExpense', { expenseId: event.target.id }); }} /> : null}
+                          {restorable && change === 'settlement.removed' ? <EntryAction text="Restore" label="Restore repayment" disabled={!action.can('restoreSettlement', { settlementId: event.target.id })} onPress={() => { void action.call('restoreSettlement', { settlementId: event.target.id }); }} /> : null}
+                          {restorable && change === 'member.removed' ? <EntryAction text="Restore" label="Restore member" disabled={!action.can('restoreMember', { memberId: event.target.id })} onPress={() => { void action.call('restoreMember', { memberId: event.target.id }); }} /> : null}
+                        </Row>
                       ) : null}
-                      {restorable && change === 'expense.removed' ? <EntryAction text="Restore" label="Restore expense" disabled={!action.can('restoreExpense', { expenseId: event.target.id })} onPress={() => { void action.call('restoreExpense', { expenseId: event.target.id }); }} /> : null}
-                      {restorable && change === 'settlement.removed' ? <EntryAction text="Restore" label="Restore repayment" disabled={!action.can('restoreSettlement', { settlementId: event.target.id })} onPress={() => { void action.call('restoreSettlement', { settlementId: event.target.id }); }} /> : null}
-                      {restorable && change === 'member.removed' ? <EntryAction text="Restore" label="Restore member" disabled={!action.can('restoreMember', { memberId: event.target.id })} onPress={() => { void action.call('restoreMember', { memberId: event.target.id }); }} /> : null}
                     </Stack>
                   </Row>
                 </Row>
