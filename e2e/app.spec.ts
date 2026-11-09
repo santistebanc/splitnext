@@ -2266,7 +2266,7 @@ test('undoes a money change and then reverses that undo through Activity', async
 
   // Reversing that is restoring the repayment.
   await button(page, 'Restore repayment').click();
-  await expect(page.getByText('You restored a repayment', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^You restored a repayment\s→$/)).toBeVisible();
   await button(page, 'Back to Money undo').click();
   await showTab(page, 'Expenses');
   await expect(button(page, 'Change repayment: Ben paid you back 12.00')).toBeVisible();
