@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "tool": "project-showcase/capture.mjs",
+  "project": "Splitnext",
+  "source": "http://localhost:8787",
+  "commit": "621d6d3",
+  "capturedAt": "2026-11-11T13:28:18.184Z",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 900,
+      "scale": 1
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "scale": 2,
+      "mobile": true
+    }
+  },
+  "warnings": [],
+  "items": [
+    {
+      "id": "group",
+      "kind": "screenshot",
+      "file": "screens/group-mobile-light.png",
+      "viewport": "mobile",
+      "theme": "light",
+      "caption": "A group: each person's balance first, then the expenses",
+      "path": "/app",
+      "hero": false,
+      "width": 780,
+      "bytes": 52679
+    },
+    {
+      "id": "split",
+      "kind": "screenshot",
+      "file": "screens/split-mobile-light.png",
+      "viewport": "mobile",
+      "theme": "light",
+      "caption": "An expense split by shares: Cy takes two shares, the others one each",
+      "path": "/app",
+      "hero": false,
+      "width": 780,
+      "bytes": 54608
+    },
+    {
+      "id": "settle",
+      "kind": "screenshot",
+      "file": "screens/settle-mobile-light.png",
+      "viewport": "mobile",
+      "theme": "light",
+      "caption": "The settle-up plan with the fewest payments",
+      "path": "/app",
+      "hero": false,
+      "width": 780,
+      "bytes": 35485
+    },
+    {
+      "id": "add-expense",
+      "kind": "clip",
+      "files": {
+        "gif": "clips/add-expense.gif",
+        "poster": "clips/add-expense.png",
+        "webm": "clips/add-expense.webm"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "caption": "Add an expense: the amount, who paid and a description; balances update at once",
+      "path": "/app",
+      "hero": true,
+      "durationS": 11.4,
+      "gifWidth": 320,
+      "videoWidth": 390,
+      "bytes": {
+        "gif": 237603,
+        "poster": 60209,
+        "webm": 123278
+      }
+    },
+    {
+      "id": "settle-up",
+      "kind": "clip",
+      "files": {
+        "gif": "clips/settle-up.gif",
+        "poster": "clips/settle-up.png",
+        "webm": "clips/settle-up.webm"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "caption": "Open a person, see the plan and record a repayment with one press",
+      "path": "/app",
+      "hero": false,
+      "durationS": 5.8,
+      "gifWidth": 320,
+      "videoWidth": 390,
+      "bytes": {
+        "gif": 81341,
+        "poster": 26545,
+        "webm": 55056
+      }
+    }
+  ]
+}
