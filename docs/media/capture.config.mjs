@@ -5,10 +5,13 @@
 // showcase/ (npm run showcase) is the longer per-flow walkthrough page; this folder feeds the README.
 
 const BASE = 'http://localhost:8787';
+
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const button = (page, name) => page.getByRole('button', { name, exact: !(name instanceof RegExp) });
+
 const field = (page, name) => page.getByRole('textbox', { name, exact: true });
-const person = (page, name) => button(page, new RegExp(`^${esc(name)}( \\(you\\))?(, removed)?, .*\\. Show details$`));
+
 
 async function createGroup(page, name, you) {
   await button(page, 'New group').waitFor({ timeout: 20000 });
@@ -21,6 +24,7 @@ async function createGroup(page, name, you) {
 
 async function addMember(page, name) {
   const showAll = page.getByRole('button', { name: /^Show all \d+ people$/ });
+
   if (await showAll.count()) await showAll.click();
   await field(page, 'Add a person').fill(name);
   await field(page, 'Add a person').press('Enter');
@@ -32,10 +36,12 @@ async function addMember(page, name) {
 async function addExpense(page, description, amount, payer) {
   await button(page, 'Add expense').click();
   await field(page, 'Amount').fill(amount);
+
   if (payer) {
     await button(page, /^Paid by .*Change payer$/).click();
     await page.getByRole('radio', { name: new RegExp(`^${esc(payer)}( \\(you\\))?$`) }).click();
   }
+
   await field(page, 'Description').fill(description);
   await button(page, 'Save').click();
   await button(page, new RegExp(`^Change ${esc(description)} · `)).waitFor();
@@ -46,11 +52,13 @@ async function lisbon(page, h, { expenses = true } = {}) {
   await createGroup(page, 'Lisbon trip', 'Ana');
   await addMember(page, 'Ben');
   await addMember(page, 'Cy');
+
   if (expenses) {
     await addExpense(page, 'Apartment', '360');
     await addExpense(page, 'Dinner at Taberna', '90', 'Ben');
     await addExpense(page, 'Tram tickets', '24', 'Cy');
   }
+
   await page.getByText(/saved here|changes? waiting/).first().waitFor({ state: 'detached', timeout: 15000 }).catch(() => {});
   await page.getByRole('tab', { name: /^People/ }).or(button(page, /^People, \d+$/)).first().click();
   await h.pause(500);
