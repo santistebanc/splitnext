@@ -1,13 +1,8 @@
 # Splitnext
 
-Splitnext is an offline-first app for sharing expenses with a group. See who
-owes what, split expenses equally, by shares or by exact amounts, and record
-repayments. Changes apply immediately, stay on the device while offline, and
-sync across devices when connected. Activity keeps the history, with safe undo.
+An offline-first app for sharing expenses with a group. See who owes what, split equally, by shares or by exact amounts, and record repayments. Changes apply at once, stay on the device while offline, and sync when connected. Activity keeps the history, with safe undo.
 
-[Try the staging app](https://splitnext-api-staging.santistebanc94.workers.dev/app).
-The web client uses React Native with Expo; the backend runs on Cloudflare
-Workers, D1, and one SQLite Durable Object per group.
+[Try the staging app](https://splitnext-api-staging.santistebanc94.workers.dev/app). Expo (React Native, web build) on Cloudflare Workers, D1 and one SQLite Durable Object per group.
 
 <p>
   <img src="docs/screenshots/group.png" alt="Lisbon trip: the People tab with each person's balance" width="160">
@@ -17,245 +12,54 @@ Workers, D1, and one SQLite Durable Object per group.
   <img src="docs/screenshots/settle.png" alt="The group's settle-up plan with the fewest payments" width="160">
 </p>
 
-How it fits together, and the rules each part keeps, is in
-[docs/architecture.md](./docs/architecture.md).
+## Features
 
-## What works
+- **No accounts:** an anonymous identity per installation; join through one reusable invite link per group (regenerating it invalidates the old one).
+- **Offline everything:** group, member, expense and repayment commands queue in an ordered, idempotent outbox and sync in the background over realtime WebSockets. Rejected or superseded commands become notices to review.
+- **Fair money:** plain two-decimal numbers with no currency ([ADR 0025](./docs/adr/0025-deal-in-plain-numbers-without-currency.md)); whole minor units with burden-fair rounding in `src/domain/money.ts` ([ADR 0017](./docs/adr/0017-allocate-money-in-whole-minor-units-with-burden-fair-rounding.md)); mixed fixed amounts and weighted shares.
+- **Settle up** with the fewest payments; partial or excess repayments.
+- **Activity** with attributed history, safe compensating undo (even of an undo), and a count of new changes.
+- **One group screen:** where you stand first, People and Expenses tabs, person details with a balance breakdown. A design system in `apps/client/src/design/`, a `/components` catalog and in-app devtools.
 
-- Anonymous per-installation identities and device credentials backed by D1;
-  there is no sign-in or account linking.
-- Retry-safe group creation with a client-generated group id and an immediately
-  usable invite, created atomically by the API.
-- Joining through a reusable invite link with a preview of the group, then
-  choosing an existing member or joining as someone new.
-- Exactly one current invite link per group with no time limit and
-  regeneration. Every participant can share the same current link.
-  Regeneration invalidates the previous link.
-- Offline-capable group rename and member add, rename, remove, and restore
-  commands.
-- Offline-capable expense record, edit, remove, and restore commands, as
-  plain numbers without currency, with allocations and burden-fair rounding
-  fixed by the server.
-- Explicit repayments with a settle-up plan of the fewest payments,
-  partial or excess amounts, offline recording and versioned
-  edit/remove/restore commands.
-- Cached, attributed Activity and safe compensating undo, including reversing a
-  reversal while preserving immutable history and later changes.
-- An Activity count in the group header for new changes from other
-  identities and changes waiting for review, with new entries marked in
-  Activity and Mark all seen.
-- Renaming a group in place from its header, and leaving it on this device
-  from its row in the groups list.
-- Nonexclusive preferred-member selection (the member the UI calls “you”).
-- Leaving and rejoining a group without revoking its permanent access grant.
-- A per-identity list of accessible groups, marking the ones it left, backed
-  by a derived D1 index and cached by the SDK for offline use. The server index
-  can restore the list when an installation still has its device credential
-  but has lost its local group cache.
-- Ordered, idempotent outboxes and full revisioned server snapshots.
-- Rejected or superseded command notices stored by the client.
-- Realtime revision announcements over hibernatable WebSockets, with automatic
-  background synchronization, reconnection, and catch-up in the SDK.
-- A stateful TypeScript client SDK with swappable local storage adapters.
-- A server group engine with Durable Object and in-memory repository adapters.
-- A responsive Expo web app at `/app`, with a public homepage and invite entry
-  pages rendered by the same Cloudflare Worker: single-screen group creation,
-  member management, invitation sharing, joining and rejoining, group
-  switching, expense entry and editing with per-person share controls and fixed
-  amounts mixed with weighted shares, balances, and offline command and conflict feedback. Its
-  screens are
-  described in [docs/architecture.md](./docs/architecture.md#the-web-app) and
-  specified in [docs/product-spec.md](./docs/product-spec.md).
-- One group screen led by where you stand and Settle up, with People and
-  Expenses tabs: everyone's balance beside their avatar, settled people folded
-  away, and expenses and repayments by month with expense search; a settle-up
-  page with your payments first; person details with a balance breakdown,
-  Settle up, rename, and remove; and browser Back/Forward support. Forms return to where
-  they were opened.
-- A design system (`apps/client/src/design/`) every screen is built from,
-  documented in a `/components` catalog, and in-app devtools; both are
-  enabled with debug inspection.
-- One fixed light theme on warm paper with barely rounded black controls, locally
-  served Instrument Sans and Geist Mono fonts, and morphing screen changes on
-  the web. Theme assets are precached with the app shell
-  for offline reloads; changing a theme asset invalidates that cache.
-- Amounts are plain numbers with two decimals, never shown with a currency,
-  and shown with their digits grouped in threes, such as 1,234.50.
-  Expenses and repayments record the no-currency code XXX, and the ledger keeps
-  any older real-currency records separate; see
-  [ADR 0025](./docs/adr/0025-deal-in-plain-numbers-without-currency.md).
-- Expenses use the pure, property-tested money module, `src/domain/money.ts`:
-  whole minor units per currency, allocation by
-  exact amounts and shares, rounding extras that rotate by accumulated burden,
-  and balances that net to zero per currency; see
-  [ADR 0017](./docs/adr/0017-allocate-money-in-whole-minor-units-with-burden-fair-rounding.md).
+Only the web build exists. A native build would need a SQLite storage adapter at the SDK seam, and nothing tests native today. Agreed behavior is in the [product spec](./docs/product-spec.md).
 
-Repayments, cached Activity, safe undo and the Activity count are
-implemented. Their agreed behavior is in
-[the product specification](./docs/product-spec.md#agreed-feature-port-from-the-earlier-app).
-
-Only the web build of the app exists so far. The Expo app has native
-variants of a few components, but no native build has been made, its storage
-would need a SQLite adapter at the SDK's storage seam, and nothing tests it:
-every app test drives the shared model or the web build.
-
-## Quickstart
+## Run
 
 ```bash
-npm install
-npm run dev
+npm install     # also enables the tracked .githooks/
+npm run dev     # migrations, web export, Worker on :8787 with debug inspection
 ```
 
-`npm install` also points git at the tracked hooks in `.githooks/`. The
-development command applies pending migrations to the local D1 database,
-exports the Expo web client, and starts the API and server-rendered entry
-pages on port 8787 with debug inspection on. It refuses to start while
-something already listens on 8787, since a second server in one checkout
-leaves both unresponsive.
+- `http://localhost:8787/` homepage, `/app` the app, `/app?devtools` the dev panel, `/components` the catalog.
+- Fast UI loop: keep `dev` running and run `npm run app:dev` (Expo on :8081 against :8787).
+- Several devices by hand: separate browser profiles or a private window (tabs in one profile share an installation).
+- `dev` refuses to start if something already listens on :8787.
 
-- `http://localhost:8787/` is the homepage and `/app` the app.
-- `/app?devtools` opens the in-app development panel; `/components` the
-  design system catalog.
-- For fast UI iteration, keep that Worker running and run `npm run app:dev` in
-  a second terminal; Expo serves on port 8081 against the API on port 8787, and
-  reloads SDK edits in `src/` without a restart.
-- To try several devices by hand, open `/app` in separate browser profiles or
-  a private window; tabs in one profile share an installation.
+## Check
+
+| Command | What it runs |
+|---|---|
+| `npm run check` | Everything: encoding, app build, Worker types, lint, both TS projects, deploy dry run, Worker tests, browser tests |
+| `npm run check:fast` | All but the app build and browser tests (pre-push hook; skip once with `--no-verify`) |
+| `npm run check:steady` / `check:timing` | Without / only the time-measuring tests (storage budget, `@timing` browser tests) |
+| `npm run test:e2e` | Built app in headless Chromium on :8791 with fresh `.wrangler/e2e-state` |
+| `npm run verify -- help` | Verification entry point; see the [feature map](verification/features.json) and the [verification skill](.agents/skills/verify-splitnext/SKILL.md) |
+| `npm run showcase` | Video of every flow plus forced conditional states, written to `showcase/out/index.html` (port :8793, not committed) |
+
+`npm test` alone loads the bundle from `.wrangler/dry-run`, so run it after a check or dry run. Tag a browser test `@timing` when it counts frames. CI (`.github/workflows/check.yml`) runs the same checks on every push to `main`/`master` and every PR.
+
+Only `.wrangler/verification/public/` holds publishable evidence. Logs, traces, credentials and failure messages stay in `.wrangler/verification/private/` and are never uploaded.
+
+The [device lab](./docs/agents/device-lab.md) runs real independent installations against a local Worker (`npm run lab -- --env=NAME`). A failing generated test prints the shortest failing sequence; keep it as an example once fixed.
 
 ## Staging
 
-The current web app is deployed at
-[splitnext-api-staging.santistebanc94.workers.dev/app](https://splitnext-api-staging.santistebanc94.workers.dev/app).
+`npm run deploy:staging` (clean checkout, Cloudflare credentials) builds, migrates the staging D1 and deploys. `/health` reports the deployed revision; `/ready` checks D1 and the Durable Object. Production in `wrangler.jsonc` still has a placeholder D1 id and is not deployed.
 
-`npm run deploy:staging` builds the client, applies pending migrations to the
-separate staging D1 database, and deploys the staging Worker. It requires a clean
-checkout and Cloudflare credentials. `/health` reports the deployed Git revision;
-`/ready` checks D1 and the group Durable Object.
+## Diagnose
 
-The staging environment is configured in `wrangler.jsonc`. The default
-production environment still has a placeholder D1 database id and is not deployed.
+Devtools → Actions → **Copy diagnostics** copies recent actions and request ids without names, links or inputs. Each id is in the Worker's log line for that request. In development `GET /debug/groups/{groupId}` reads a group's server state. See [architecture: diagnostics](./docs/architecture.md#diagnostics).
 
-## Checks
+## Docs
 
-```bash
-npm run check
-```
-
-runs everything: text encoding, the app build, generated Worker types, lint,
-both TypeScript projects, a deploy dry run, the Worker tests, and the browser
-tests. The Worker tests load the bundle the dry run writes to
-`.wrangler/dry-run`, so run `npm test` on its own only after a check or a dry
-run.
-
-`npm run check:fast` runs everything except the app build and the browser
-tests, against the last app build. The pre-push hook runs
-it; when Git for Windows pushes a checkout inside WSL, the hook runs the checks
-inside that distribution. Skip it once with `git push --no-verify`.
-`.github/workflows/check.yml` runs the same boundaries on a fresh checkout for
-every push to `main` or `master` and every pull request, and uploads only the
-sanitized public verification evidence, also when it fails.
-
-`npm run test:e2e` drives the built app in headless Chromium. It starts its
-own Worker on port 8791 with separate local storage in `.wrangler/e2e-state`,
-recreated on every run, so it does not touch `npm run dev` data. Install the
-browser once with `npx playwright install chromium-headless-shell`; a failure
-keeps a trace in `test-results/` that `npx playwright show-trace` opens.
-
-### Verification
-
-Start verification with `npm run verify -- help`. Machine-readable discovery is
-`npm run --silent verify -- discover --json`; `doctor` checks local prerequisites.
-The [feature map](verification/features.json) names executable promises, their
-expected checks, fidelity and limits. Agents use the
-[repository verification skill](.agents/skills/verify-splitnext/SKILL.md).
-
-`npm run check:fast` includes verification contracts and deterministic architecture
-checks. It runs the unchanged storage timing budget separately after the other
-unit tests, with one worker. `npm run check` additionally builds and runs e2e,
-including expense recovery and its real lost-outbox detector control. The scenario
-validates and reuses that build; it does not build a second time. CI runs these
-same boundaries in bounded check/browser jobs on Node from `.nvmrc`.
-
-Two kinds of test measure time on the machine running them: the storage
-budget and browser tests tagged `@timing`, which count animation frames. A
-busy host can fail them while the app is fine. Tag a browser test `@timing`
-when it needs a minimum number of frames or limits the change between
-consecutive frames. `npm run check:steady` runs
-the full check without them and `npm run check:timing` runs only them, after
-a build, so a shared runner can wait for a quiet machine first. `check`,
-`check:fast` and CI still run everything.
-
-Only `.wrangler/verification/public/` contains intended publishable evidence.
-Private logs, patches, profiles, traces, credentials and state remain under
-`.wrangler/verification/private/` or the lab/test directories; CI never uploads
-them. Failure messages stay private, since their values, locators and call logs
-can hold credentials, URLs or personal data. Public results preserve check IDs,
-statuses, source/build/data fingerprints and failure categories. For each failed
-test, the CI log and evidence give its location, a failure kind (assertion,
-test-timeout, error or unknown) with the matcher, action or error class and
-timeout, the failing line of tracked source, and a command to reproduce it
-locally. Titles are shown only when the source spells them out. Categories need
-investigation rather than being proof that the product or environment is at fault.
-
-## Showcase
-
-```bash
-npm run showcase
-```
-
-builds the app and drives it through every flow on a phone-sized screen.
-It records a video of each flow, with steps and thumbnails that jump to each
-moment, then writes `showcase/out/index.html` to open in a browser. Its
-Conditional UI section spotlights every element that appears only in some
-situation, such as an empty state, an offline or failure message, a conflict
-to review, or a missing browser capability, forcing each one with offline
-mode, failed or slowed requests, a second device, or a shifted clock. Like the
-browser tests, it starts its own Worker, on port 8793, with fresh storage in
-`.wrangler/showcase-state`. The flows live in `showcase/capture.spec.ts` and
-the conditional cases in `showcase/cases.spec.ts`; a case that can no longer
-be reached shows on the page as not captured, with the reason.
-`npm run showcase:page` rebuilds only the page from the last capture. The
-output is not committed.
-
-## How it is tested
-
-The [device lab](./docs/agents/device-lab.md) runs real independent installations
-against a dedicated local Worker. Start it with `npm run lab -- --env=NAME` after
-building the frontend; `npm run lab:cli -- discover` publishes the common operation
-schemas used by its frontend and AI callers. It retains isolated profiles, steps
-and diagnostics under `.wrangler/lab/`. Devices are real headless browsers (`kind: "browser"`)
-or many live app instances, each in its own frame of the lab page (`kind: "inpage"`); the guide says when
-to use each. See the guide before controlling stores.
-
-| What | Where | What it guarantees |
-| --- | --- | --- |
-| Command rules | `test/groupCommandRules.test.ts` | The outcome of every rule of every command, as a table. |
-| Money | `test/money.test.ts` | Allocation and balances net to zero and round fairly, for generated inputs. |
-| Server and HTTP | `test/groups.test.ts`, `join.test.ts`, `sync.test.ts`, `realtime.test.ts`, `transportContract.test.ts`, and others | Routes, persistence, and the contract both transports share. |
-| Offline synchronization | `test/syncConvergence.test.ts` | Generated devices, tabs, and groups with lost requests, failed storage, and races converge on the server, with one outcome per command. |
-| Client storage | `test/storageBudget.test.ts` | The installation document's size, round trips, and speed stay within budget. |
-| App actions | `test/appActions.test.ts`, `test/actionModel.test.ts` | The rules of each action, and for generated sequences, including double clicks, that dispatch agrees with availability and the app always settles. |
-| Diagnostics | `test/requestLog.test.ts`, `test/diagnostics.test.ts` | Request ids join client reports to Worker logs, without names or secrets. |
-| Browser | `e2e/app.spec.ts` | Rendering, focus, history, realtime between two devices, and offline edits in the built app. |
-
-A generated test that fails prints the shortest failing sequence of steps; keep
-it in that test's examples once fixed.
-
-## Diagnosing a problem
-
-In development, **Copy diagnostics** in devtools' Actions tab copies
-a report of the app's recent actions and requests with their ids, without
-names, links, or inputs. Every request's id is also in the Worker's log line
-for it, which records what the server decided. In development, devtools show
-the same log live, and `GET /debug/groups/{groupId}` reads a group's server
-state. See [docs/architecture.md](./docs/architecture.md#diagnostics).
-
-## Project documentation
-
-- [Architecture](./docs/architecture.md)
-- [Domain language](./CONTEXT.md)
-- [Accepted product behavior](./docs/product-spec.md)
-- [Architecture decisions](./docs/adr/)
-- [Agent working agreement](./AGENTS.md)
-- [Operations: monitoring, backups, release checklist](./docs/operations.md)
-- [Support playbook](./docs/support-playbook.md)
+[Architecture](./docs/architecture.md) · [Domain language](./CONTEXT.md) · [Product spec](./docs/product-spec.md) · [ADRs](./docs/adr/) · [Agent agreement](./AGENTS.md) · [Operations](./docs/operations.md) · [Support playbook](./docs/support-playbook.md)
