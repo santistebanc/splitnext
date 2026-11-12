@@ -10,7 +10,9 @@
   "overrides": {
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-native": "0.86.3"
+    "react-native": "0.86.3",
+    "decode-uri-component": "0.5.1",
+    "minimatch": "11.0.8"
   },
   "scripts": {
     "dev": "node scripts/check-dev-port.mjs && npm run db:migrate:local && npm run frontend:build && wrangler dev --port 8787 --var ENABLE_DEBUG_INSPECTION:true",
