@@ -10,8 +10,8 @@ The web client uses React Native with Expo; the backend runs on Cloudflare
 Workers, D1, and one SQLite Durable Object per group.
 
 <p>
-  <img src="docs/screenshots/group.png" alt="Lisbon trip: the People tab with each person's balance" width="160">
-  <img src="docs/screenshots/expenses.png" alt="The group's Expenses tab with payer and amount for each expense" width="160">
+  <img src="docs/screenshots/group.png" alt="Lisbon trip: each person's balance" width="160">
+  <img src="docs/screenshots/expenses.png" alt="The group's expenses with payer and amount for each expense" width="160">
   <img src="docs/screenshots/expense.png" alt="An apartment expense split into unequal shares" width="160">
   <img src="docs/screenshots/person.png" alt="Ana's balance and the expenses behind it" width="160">
   <img src="docs/screenshots/settle.png" alt="The group's settle-up plan with the fewest payments" width="160">
@@ -67,7 +67,7 @@ How it fits together, and the rules each part keeps, is in
   described in [docs/architecture.md](./docs/architecture.md#the-web-app) and
   specified in [docs/product-spec.md](./docs/product-spec.md).
 - One group screen led by where you stand and Settle up, with People and
-  Expenses tabs: everyone's balance beside their avatar, settled people folded
+  Expenses together: everyone's balance beside their avatar, people that can fold
   away, and expenses and repayments by month with expense search; a settle-up
   page with your payments first; person details with a balance breakdown,
   Settle up, rename, and remove; and browser Back/Forward support. Forms return to where

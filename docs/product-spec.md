@@ -38,7 +38,7 @@ installation, saved in localStorage. The default stays editable and survives
 reloads and leaving groups. Creating, joining, selecting a different member,
 or renaming the current preferred member updates this local default.
 Use the same default in the name field when joining or rejoining as someone new.
-After creation, open the group screen. Its People tab ends with an inline Add a
+After creation, open the group screen. Its People section ends with an inline Add a
 person row, and Invite people, an icon in the header, opens the invite link in
 place under the group's name, so adding names and inviting can happen in either
 order. The groups list shows each group's name and your balance in it. The invite link shows in the monospaced face, without
@@ -107,7 +107,7 @@ opens your details. Before any expense or repayment names you, a quiet line
 with your avatar, your name and "you" opens your details instead. It folds away
 as the page scrolls.
 
-The People tab lists everyone else with their balance, from most negative to
+The People section lists everyone else with their balance, from most negative to
 most positive (owing first, then owed), then people in no current expense or
 repayment yet. Each row is your avatar-sized initials, the name on up to two
 lines, and the signed figure; there are no balance bars, the figure's colour
@@ -225,26 +225,29 @@ ruled row per name (Taken when another device has it) and a last row whose
 name is typed in place as someone new; Join as the chosen name is pinned at
 the foot.
 
-A group opens on one screen with two tabs. Its header has ‹ Groups, Search
-while the expenses show, Invite people and Activity (with a count of new
+A group opens on one screen with people and expenses together. Its header has
+‹ Groups, Invite people and Activity (with a count of new
 changes and changes to review), then the group's name with a pencil that
-renames it in place, then where you stand, then the People and Expenses tabs,
-each with its count. People shows the balances; Expenses shows expenses and
+renames it in place, then where you stand. The content has a People section
+with its count and a control to hide or show its rows, followed by Expenses
+with its count. People starts open; closing it keeps expenses easy to reach.
+People shows the balances; Expenses shows expenses and
 recorded repayments newest first under the month each falls in (with the year
 outside the current one), each opening its editor. An expense row is the
 payer's avatar, what it was for on up to two lines, its amount, and under it
 what it did to your balance when that is not nothing; a row that names you
 neither as a payer nor in the split is faded. Saving a new expense, or recording a
-repayment, switches to Expenses, where it leads the list. Add expense is pinned at the foot,
+repayment, puts it first in the expense list. Add expense is pinned at the foot,
 including before the first expense and after the last one is removed. An
 unassigned installation is asked to tap its name in the balances.
 
-Search opens a field under the tabs with Involves you and Paid by you filters,
+Search sits beside the Expenses heading when the group has entries. It opens
+a field below that heading with Involves you and Paid by you filters,
 which show only while searching. It finds every word typed in what an expense
 was for, or in a repayment's sentence, ignoring case and accents, and ends the
 results with their count and what they come to for you. Cancel, or Search
-again, closes it and shows everything; opening a group starts on People with
-no search.
+again, closes it and shows everything. Search does not hide or filter people.
+Opening a group starts with people shown and no search.
 
 Settle up beside your balance opens the group's settle-up page: the payments
 of the plan that involve you first, each naming the other person with You pay

@@ -137,12 +137,14 @@ Person headers reserve their expanded name height while collapsing. The avatar's
 space folds continuously with scroll progress, so its disappearing decoration
 cannot move the name sideways or release a wrapped line's height at once.
 
-A group has one screen (`home`) with two tabs, People and Expenses, kept in
-`AppUiState.groupTab` and switched through `showGroupTab`; opening a group
-starts on People and saving a new expense switches to Expenses. `GroupHeader`
-holds ‹ Groups, Search (on Expenses), Invite people and Activity with its
+A group has one screen (`home`) with People and Expenses together.
+`AppUiState.peopleExpanded` controls whether the people are shown, through
+`setPeopleExpanded`; opening a group shows them. `GroupHeader`
+holds ‹ Groups, Invite people and Activity with its
 count as icons, the group's name with a pencil that renames it in place
-through `renameGroup`, then `YourBalance` and the `Tabs`. `TitleField` sizes itself from an invisible,
+through `renameGroup`, then `YourBalance`. The scroll content holds the people
+section and the expense list. Search sits beside the Expenses heading and
+filters only that list. `TitleField` sizes itself from an invisible,
 in-flow copy of the name, with the editable field laid over it, so opening
 and typing never wait for a second layout to set the height. Invite people
 shows `InvitePanel` in a `Reveal` under the name while the view is `invite`,

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { formatAmount, formatInviteLink, repaymentMembers, settlementSuggestions } from '@splitnext/client';
 import { newActivity } from '../activity';
 import { canExcludeExpensePart, decreaseExpenseShare, fixExpenseAmount, increaseExpenseShare, noCurrency } from '../expenses';
-import { closedSearch, draftFields, groupTabs, groupViews, personFits, viewFits, viewNames } from '../uiState';
+import { closedSearch, draftFields, groupViews, personFits, viewFits, viewNames } from '../uiState';
 import { workflowGuard, type WorkflowIntent } from '../workflow';
 import { requireSettlement, unavailable, editorLock, navigationLock, defineAction, openSnapshot, requireExpense, requireOpenable, requireMember, requireNotice, requireJoin, joinMembers, requireConfirmation, requireInvite, memberResource, noticeResources, empty, choice, type ActionHost, type ActionPlatform } from './define';
 
@@ -32,18 +32,18 @@ export const uiActions = {
     },
     run: async (host, input, ui) => ui.show('settle', 'push', { person: input.memberId ?? null }),
   }),
-  showGroupTab: defineAction({
-    group: 'UI', description: 'Switch the group screen between everyone’s balances and the expenses and repayments.',
-    input: z.object({ tab: z.enum(groupTabs) }), example: { tab: 'expenses' }, requires: ['openGroup'],
-    run: async (host, input, ui) => ui.update({ groupTab: input.tab }),
+  setPeopleExpanded: defineAction({
+    group: 'UI', description: 'Show or hide the people above the expense list.',
+    input: z.object({ expanded: z.boolean() }), example: { expanded: false }, requires: ['openGroup'],
+    run: async (host, input, ui) => ui.update({ peopleExpanded: input.expanded }),
   }),
   searchExpenses: defineAction({
-    group: 'UI', description: 'Search the group’s expenses and repayments by what they were for, optionally only those involving you or paid by you; it opens the expenses.',
+    group: 'UI', description: 'Search expenses and repayments by description. You can limit the results to entries that involve you or that you paid.',
     input: z.object({ query: z.string().max(100).optional(), involvesYou: z.boolean().optional(), paidByYou: z.boolean().optional() }), example: { query: 'dinner' }, requires: ['openGroup'],
     run: async (host, input, ui) => {
       const search = ui.snapshot().search;
 
-      ui.update({ groupTab: 'expenses', search: { open: true, query: input.query ?? search.query, involvesYou: input.involvesYou ?? search.involvesYou, paidByYou: input.paidByYou ?? search.paidByYou } });
+      ui.update({ search: { open: true, query: input.query ?? search.query, involvesYou: input.involvesYou ?? search.involvesYou, paidByYou: input.paidByYou ?? search.paidByYou } });
     },
   }),
   closeExpenseSearch: defineAction({
@@ -530,7 +530,7 @@ export const uiActions = {
 
       if (host.snapshot().group?.hidden) ui.showJoin('', true);
       else {
-        ui.update({ balancesExpanded: false, groupTab: 'people', search: closedSearch });
+        ui.update({ balancesExpanded: false, peopleExpanded: true, search: closedSearch });
         ui.show('home');
       }
     },

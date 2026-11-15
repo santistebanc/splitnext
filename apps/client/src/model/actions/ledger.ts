@@ -64,12 +64,10 @@ export const ledgerActions = {
       return input.from !== input.to && members.some((member) => member.id === input.from) && members.some((member) => member.id === input.to) && (parseAmount(input.amount, input.currency ?? noCurrency) ?? 0) > 0
         ? null : unavailable('invalid_input', 'Choose two different members and a positive amount.');
     },
-    run: async (host, input, ui) => {
+    run: async (host, input) => {
       const currency = input.currency ?? noCurrency;
 
       await host.submit({ type: 'settlement.record', payload: { from_member_id: input.from, to_member_id: input.to, currency, amount: parseAmount(input.amount, currency) ?? 0 } });
-      // Like a new expense, the repayment then leads the group's expenses.
-      ui.update({ groupTab: 'expenses' });
     },
   }),
   saveMemberEdit: defineAction({
@@ -255,9 +253,6 @@ export const ledgerActions = {
             payload: { ...result.entry, expense_id: draft.expenseId, expected_version: draft.expectedVersion },
           })
         : host.submit({ type: 'expense.record', payload: result.entry }));
-
-      // A new expense returns to the expenses, where it now leads the list.
-      if (!draft.expenseId) ui.update({ groupTab: 'expenses' });
     },
   }),
   recordExpense: defineAction({

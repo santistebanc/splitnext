@@ -1,7 +1,7 @@
 import { useRef, useState, type RefObject } from 'react';
 import { View, type TextInput } from 'react-native';
 import { groupNameSchema, preferredMember, repaymentMembers } from '@splitnext/client';
-import { BellIcon, Button, ChevronDownIcon, ChevronUpIcon, CountBadge, ErrorMessage, IconButton, Input, InviteIcon, PencilIcon, Row, SearchIcon, Stack, Tabs, Tag, Text, TextButton, ToggleChip, Touchable, YouBadge, between, colors, balanceStyle, layout, radii, rules, sizes, titleStyle } from '../design';
+import { BellIcon, Button, ChevronDownIcon, ChevronUpIcon, CountBadge, ErrorMessage, IconButton, Input, InviteIcon, PencilIcon, Row, SearchIcon, Stack, Tag, Text, TextButton, ToggleChip, Touchable, YouBadge, between, colors, balanceStyle, layout, radii, rules, sizes, titleStyle } from '../design';
 import { attentionCount } from '../model/activity';
 import { hasRecords } from '../model/breakdown';
 import { balanceRows, currentExpenses, memberName, moneyLabel } from '../model/expenses';
@@ -128,12 +128,10 @@ function InviteToggle(props: { toggle: RefObject<View | null> }) {
   );
 }
 
-/** Search, at the header's end while the expenses show: it opens a field under the tabs. */
+/** Search stays beside the expense list that it filters. */
 function SearchToggle() {
   const actions = useActions();
   const ui = useUiState();
-
-  if (ui.groupTab !== 'expenses') return null;
 
   return (
     <IconButton
@@ -141,7 +139,7 @@ function SearchToggle() {
       aria-expanded={ui.search.open}
       onPress={() => { void actions.dispatch(ui.search.open ? 'closeExpenseSearch' : 'searchExpenses', {}, { origin: 'ui' }); }}
     >
-      <SearchIcon size={22} />
+      <SearchIcon size={18} />
     </IconButton>
   );
 }
@@ -250,8 +248,8 @@ function YourBalance(props: { replica: Replica }) {
 
 /**
  * The group screen's fixed top: back to the groups, Invite people and
- * Activity, the group's name, where you stand, and the People and Expenses
- * tabs. Invite people opens the link in place under the name.
+ * Activity, the group's name, and where you stand.
+ * Invite people opens the link in place under the name.
  */
 export function GroupHeader(props: { app: MemberListApp }) {
   const actions = useActions();
@@ -262,16 +260,13 @@ export function GroupHeader(props: { app: MemberListApp }) {
   const name = snapshot?.group.name ?? '';
   const open = Boolean(replica && !replica.hidden);
   const inviting = ui.view === 'invite';
-  const people = repaymentMembers(snapshot).length;
-  const entries = currentExpenses(snapshot).length + (snapshot?.settlements ?? []).filter((entry) => entry.status === 'active').length;
 
   return (
     <ScreenHeader
       start={<BackButton label="Back to groups" disabled={!actions.availability('showGroups', {}).available} onPress={() => { void actions.dispatch('showGroups', {}, { origin: 'ui' }); }} />}
-      end={open ? <><SearchToggle /><InviteToggle toggle={inviteToggle} /><ActivityLink app={props.app} /></> : undefined}
+      end={open ? <><InviteToggle toggle={inviteToggle} /><ActivityLink app={props.app} /></> : undefined}
       heading={open && replica ? <GroupName name={name} groupId={replica.group_id} /> : undefined}
       title={open ? undefined : name}
-      flush={open}
       below={open && replica ? (
         <View>
           <Reveal
@@ -285,14 +280,6 @@ export function GroupHeader(props: { app: MemberListApp }) {
             {inviting ? <View style={{ paddingTop: 8 }}><InvitePanel app={props.app} /></View> : null}
           </Reveal>
           <YourBalance replica={replica} />
-          <Tabs
-            label="Group"
-            value={ui.groupTab}
-            onChange={(tab) => { void actions.dispatch('showGroupTab', { tab }, { origin: 'ui' }); }}
-            options={[{ value: 'people', text: 'People', count: people }, { value: 'expenses', text: 'Expenses', count: entries }]}
-            style={{ marginTop: 8, marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter }}
-          />
-          {ui.groupTab === 'expenses' && ui.search.open ? <SearchBar /> : null}
         </View>
       ) : undefined}
     />
@@ -415,11 +402,12 @@ function People(props: { app: MemberListApp; replica: Replica }) {
 }
 
 /**
- * The group screen's content under its tabs: everyone's balance, or the
- * expenses and repayments; or rejoining a group left here.
+ * People and expenses share one page. The people can fold away while the
+ * expense list stays available below them.
  */
 export function GroupView(props: GroupViewProps) {
   const action = useActionCall();
+  const actions = useActions();
   const ui = useUiState();
   const replica = props.app.snapshot().group;
   const snapshot = replica?.projected_snapshot;
@@ -437,5 +425,34 @@ export function GroupView(props: GroupViewProps) {
       </Stack>
     );
 
-  return ui.groupTab === 'expenses' ? <ExpenseList replica={replica} /> : <People app={props.app} replica={replica} />;
+  const people = repaymentMembers(snapshot).length;
+  const entries = currentExpenses(snapshot).length + snapshot.settlements.filter((entry) => entry.status === 'active').length;
+
+  return (
+    <Stack gap={24}>
+      <View role="region" aria-label="Group people">
+        <Touchable
+          accessibilityRole="button"
+          accessibilityLabel={ui.peopleExpanded ? 'Hide people' : 'Show people'}
+          aria-expanded={ui.peopleExpanded}
+          onPress={() => { void actions.dispatch('setPeopleExpanded', { expanded: !ui.peopleExpanded }, { origin: 'ui' }); }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: sizes.touch }}
+        >
+          <Text accessibilityRole="header" variant="strong">People</Text>
+          <Text variant="body" tone="muted" style={{ flex: 1 }}>{people}</Text>
+          {ui.peopleExpanded ? <ChevronUpIcon size={16} color={colors.muted} /> : <ChevronDownIcon size={16} color={colors.muted} />}
+        </Touchable>
+        <Reveal>{ui.peopleExpanded ? <People app={props.app} replica={replica} /> : null}</Reveal>
+      </View>
+      <View role="region" aria-label="Group expenses">
+        <Row gap={8} style={{ minHeight: sizes.touch, ...rules.below }}>
+          <Text accessibilityRole="header" variant="strong">Expenses</Text>
+          <Text variant="body" tone="muted" style={{ flex: 1 }}>{entries}</Text>
+          {entries ? <SearchToggle /> : null}
+        </Row>
+        <Reveal>{ui.search.open ? <SearchBar /> : null}</Reveal>
+        <ExpenseList replica={replica} />
+      </View>
+    </Stack>
+  );
 }

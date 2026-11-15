@@ -35,10 +35,6 @@ export function isGroupView(view: ViewName): view is GroupView {
 
 export type DraftField = (typeof draftFields)[number];
 
-export const groupTabs = ['people', 'expenses'] as const;
-
-export type GroupTab = (typeof groupTabs)[number];
-
 export type ExpenseSearch = { open: boolean; query: string; involvesYou: boolean; paidByYou: boolean };
 
 export const closedSearch: ExpenseSearch = { open: false, query: '', involvesYou: false, paidByYou: false };
@@ -65,8 +61,8 @@ type UiContext = {
   person: string | null;
   /** Whether the group's settled people are shown, or folded into one line. */
   balancesExpanded: boolean;
-  /** Which of the group screen's tabs is open: everyone's balances, or expenses and repayments. */
-  groupTab: GroupTab;
+  /** Whether the people section is open above the expenses. */
+  peopleExpanded: boolean;
   /** Searching the group's expenses and repayments: open, what to look for, and the filters on. */
   search: ExpenseSearch;
   /** The last Activity sequence marked seen in each group on this installation. */
@@ -149,7 +145,7 @@ export class AppUiState {
       trail: [],
       person: null,
       balancesExpanded: false,
-      groupTab: 'people',
+      peopleExpanded: true,
       search: closedSearch,
       activitySeen: seenStorage?.read() ?? {},
       removal: null,
@@ -191,7 +187,7 @@ export class AppUiState {
 
   update(
     patch: Partial<
-      Pick<UiContext, 'showLeftGroups' | 'copiedInviteId' | 'balancesExpanded' | 'groupTab' | 'search' | 'removal'>
+      Pick<UiContext, 'showLeftGroups' | 'copiedInviteId' | 'balancesExpanded' | 'peopleExpanded' | 'search' | 'removal'>
     >,
   ): void {
     this.patch(patch);
