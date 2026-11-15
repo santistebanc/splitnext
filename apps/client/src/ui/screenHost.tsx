@@ -47,7 +47,8 @@ export function useFieldFocused(): () => boolean {
   return () => {
     const focused = document.activeElement;
 
-    return focused instanceof HTMLInputElement && (!host || host.frame.contains(focused));
+    return (focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement)
+      && (!host || host.frame.contains(focused));
   };
 }
 

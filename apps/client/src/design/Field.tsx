@@ -1,6 +1,7 @@
 import { useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Pressable, TextInput, View, type TextInputProps } from 'react-native';
 import { Text, inputStyle } from './Text';
+import { TextLine } from './TextLine';
 import { colors, durations, opacities, sizes, strokes, typeScale, withTransition } from './tokens';
 
 export type FieldProps = TextInputProps & {
@@ -30,6 +31,7 @@ export function Field(props: FieldProps) {
   const disabled = input.editable === false;
   const invalid = Boolean(error);
   const activeColor = invalid ? colors.danger : colors.ink;
+  const Line = input.multiline ? TextInput : TextLine;
 
   return (
     <View style={{ gap: 4, opacity: disabled ? opacities.disabled : 1 }}>
@@ -40,8 +42,8 @@ export function Field(props: FieldProps) {
           </Pressable>
         ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: strokes.hairline, borderColor: invalid ? colors.danger : hovered && !disabled ? colors.ink : colors.faint }}>
-          <TextInput
-            // No browser autofill bar unless a field asks for it.
+          <Line
+            // No browser autofill unless a field asks for it.
             autoComplete="off"
             {...input}
             ref={field}

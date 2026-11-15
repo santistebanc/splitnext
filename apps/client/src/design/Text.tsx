@@ -1,6 +1,7 @@
 import type { Ref } from 'react';
 import { Text as NativeText, TextInput, type TextInputProps, type TextProps as NativeTextProps } from 'react-native';
 import { colors, fontWeights, typeScale, type FontWeight, type TypeVariant } from './tokens';
+import { TextLine } from './TextLine';
 
 /** What a text's color says, rather than the color itself. */
 export const tones = {
@@ -80,6 +81,8 @@ export type InputProps = TextInputProps & { ref?: Ref<TextInput> | undefined; va
 export function Input(props: InputProps) {
   const { variant, weight, style, ...rest } = props;
 
-  // Fields here never hold addresses, cards or passwords, so the browser's autofill bar stays away unless a field asks for it.
-  return <TextInput placeholderTextColor={colors.faint} autoComplete="off" {...rest} style={[inputStyle(variant ?? 'large', weight), style]} />;
+  const Line = rest.multiline ? TextInput : TextLine;
+
+  // Fields here never hold addresses, cards or passwords, so the browser's autofill stays away unless a field asks for it.
+  return <Line placeholderTextColor={colors.faint} autoComplete="off" {...rest} style={[inputStyle(variant ?? 'large', weight), style]} />;
 }

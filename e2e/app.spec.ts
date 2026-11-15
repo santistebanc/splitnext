@@ -642,11 +642,27 @@ test('adds a person from the Add button at the end of the row, keeping the field
 });
 
 test('suits phone keyboards: no autofill, capitalized names, and Next from the amount', async ({ page }) => {
-  await createGroup(page, 'Keys', 'Ana');
+  await page.goto('/app');
+  await button(page, /^(New group|Create a group)$/).click();
+  const groupName = field(page, 'Group name');
+  const yourName = field(page, 'Your name in this group');
+
+  await groupName.fill('Keys');
+  await groupName.press('Enter');
+  await expect(yourName).toBeFocused();
+  // Keep typing while the form's delayed focus attempt runs.
+  await yourName.pressSequentially('Ana', { delay: 150 });
+  await expect(groupName).toHaveValue('Keys');
+  await expect(yourName).toHaveValue('Ana');
+  await yourName.press('Enter');
+  await expect(heading(page, 'Keys')).toBeVisible();
+  await motionSettled(page);
   const add = field(page, 'Add a person');
 
   await expect(add).toHaveAttribute('autocomplete', 'off');
   await expect(add).toHaveAttribute('autocapitalize', 'words');
+  // Chrome on Android shows its password, card and address bar for any text input, whatever autocomplete says, but never for a textarea.
+  expect(await add.evaluate((node) => node.tagName)).toBe('TEXTAREA');
 
   await button(page, 'Add expense').click();
   const amount = field(page, 'Amount');
