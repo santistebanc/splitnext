@@ -644,6 +644,67 @@ test('adds a person from the Add button at the end of the row, keeping the field
   await expect(button(page, /^Add /)).toHaveCount(0);
 });
 
+test('keeps group creation errors and retry above the phone keyboard without losing names', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/app');
+  await button(page, /^(New group|Create a group)$/).click();
+  await field(page, 'Group name').fill('Keyboard trip');
+  await field(page, 'Your name in this group').fill('Ana');
+  await page.route('**/groups', (route) => route.request().method() === 'POST' ? route.abort('connectionrefused') : route.continue());
+  await button(page, 'Create group').click();
+  const form = page.getByRole('region', { name: 'New group', exact: true });
+  const error = form.getByRole('alert').last();
+
+  await expect(error).toBeVisible();
+  await expect(field(page, 'Group name')).toHaveValue('Keyboard trip');
+  await expect(field(page, 'Your name in this group')).toHaveValue('Ana');
+  await field(page, 'Group name').focus();
+  // Android can shrink only the visible viewport while the page stays tall.
+  await page.evaluate(() => {
+    const viewport = window.visualViewport!;
+
+    Object.defineProperty(viewport, 'height', { configurable: true, value: 380 });
+    viewport.dispatchEvent(new Event('resize'));
+  });
+  const retry = button(page, 'Try again');
+
+  await expect.poll(async () => {
+    const box = (await retry.boundingBox())!;
+
+    return box.y >= 0 && box.y + box.height <= 380;
+  }).toBe(true);
+  const cancel = button(page, 'Back to groups');
+
+  expect(await cancel.evaluate((node) => {
+    const box = node.getBoundingClientRect();
+
+    return box.top >= 0 && box.bottom <= 380 && node.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2));
+  })).toBe(true);
+  await error.scrollIntoViewIfNeeded();
+  const box = (await error.boundingBox())!;
+
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height).toBeLessThanOrEqual(380);
+  await page.screenshot({ path: test.info().outputPath('create-error-above-keyboard.png') });
+  // Also cover browsers that resize the layout viewport itself.
+  await page.setViewportSize({ width: 320, height: 380 });
+  await error.scrollIntoViewIfNeeded();
+  const narrowError = (await error.boundingBox())!;
+  const narrowRetry = (await retry.boundingBox())!;
+
+  expect(narrowError.y).toBeGreaterThanOrEqual(0);
+  expect(narrowError.y + narrowError.height).toBeLessThanOrEqual(380);
+  expect(narrowRetry.y + narrowRetry.height).toBeLessThanOrEqual(380);
+  await expect(field(page, 'Group name')).toHaveValue('Keyboard trip');
+  await expect(field(page, 'Your name in this group')).toHaveValue('Ana');
+  await page.unroute('**/groups');
+  await page.context().setOffline(true);
+  await page.context().setOffline(false);
+  await expect(retry).toBeEnabled();
+  await retry.click();
+  await expect(heading(page, 'Keyboard trip')).toBeVisible();
+});
+
 test('suits phone keyboards: no autofill, capitalized names, and Next from the amount', async ({ page }) => {
   await page.goto('/app');
   await button(page, /^(New group|Create a group)$/).click();
@@ -1034,7 +1095,7 @@ test('shows each balance and your balance on the groups list', async ({ page }) 
 test('records, changes, and removes an expense with plain-number balances', async ({ page }) => {
   await createGroup(page, 'Trip', 'Ana');
   await addMember(page, 'Ben');
-  await expect(page.getByText('No expenses yet', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('No expenses yet', { exact: true })).toBeVisible();
   await expect(button(page, 'Add the first expense')).toHaveCount(0);
   const addButton = button(page, 'Add expense');
   await expect(addButton).toBeVisible();
@@ -1560,7 +1621,7 @@ test('renames the group in place, copies the invite link, and replaces it after 
     const start = performance.now();
 
     (function frame() {
-      const title = document.querySelector('[role="heading"]')?.textContent ?? '';
+      const title = document.querySelector('[role="heading"]:not([aria-level="2"])')?.textContent ?? '';
 
       if (title && seen.at(-1) !== title) seen.push(title);
 

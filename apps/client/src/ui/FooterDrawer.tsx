@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
-import { Row, Text, TextButton, durations, scrim, withTransition } from '../design';
+import { Pressable, ScrollView, View } from 'react-native';
+import { Row, Text, TextButton, colors, durations, scrim, sizes, withTransition } from '../design';
 import { Reveal } from './Reveal';
+import { useScreenSize } from './screenHost';
+import { useVisibleViewportHeight } from './useVisibleViewport';
 
 export type FooterDrawerProps = {
   open: boolean;
@@ -24,9 +26,14 @@ export type FooterDrawerProps = {
  * it. The button stays below it.
  */
 export function FooterDrawer(props: FooterDrawerProps) {
+  const { height } = useScreenSize();
+  const visibleHeight = useVisibleViewportHeight(true);
+  // Leave room for the pinned action, footer padding, and space above the sheet.
+  const contentHeight = Math.max(sizes.touch, (visibleHeight ?? height) - 120);
+
   return (
     // The footer's own top padding belongs to the drawer.
-    <View style={{ gap: 12, marginTop: -12, paddingTop: 12, zIndex: 10 }}>
+    <View style={{ gap: 12, marginTop: -12, paddingTop: 12, zIndex: 10, backgroundColor: colors.background }}>
       <Pressable
         accessibilityLabel={`Close ${props.title}`}
         aria-hidden={!props.open}
@@ -37,14 +44,16 @@ export function FooterDrawer(props: FooterDrawerProps) {
       />
       <Reveal upward>
         {props.open ? (
-          <View role="region" aria-label={props.title} style={{ paddingBottom: 8 }}>
+          <View role="region" aria-label={props.title} style={{ paddingBottom: 8, maxHeight: contentHeight }}>
             <Row justify="between">
               <Text accessibilityRole="header" variant="heading">{props.title}</Text>
               <TextButton label={props.closeLabel} tone="muted" underline={false} disabled={props.busy} onPress={props.onClose} style={{ paddingLeft: 16 }}>
                 {props.closeText ?? 'Cancel'}
               </TextButton>
             </Row>
-            {props.children}
+            <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled">
+              {props.children}
+            </ScrollView>
           </View>
         ) : null}
       </Reveal>

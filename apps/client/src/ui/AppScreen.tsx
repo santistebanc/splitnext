@@ -383,6 +383,7 @@ function ReadyApp(props: AppProps) {
                   status={<SyncStatus online={state.online} reachable={state.reachable} pending={pending} busy={connection.busy} onRetry={retry} retryError={connection.error} />}
                   header={screen.header}
                   footer={editingInPlace ? undefined : screen.footer}
+                  floatingFooter={view === 'create'}
                   scrollKey={pageKey}
                   navigationDepth={depth}
                   restoreScroll={ui.navigation.mode === 'restore'}

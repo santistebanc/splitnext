@@ -219,6 +219,9 @@ Creating… while it works. Your name starts as the last name used here, with
 the names you go by in your other groups offered under it, each once, to use
 with a tap. Cancel, Back, or a tap on the dimmed screen closes it and
 discards the draft.
+While the keyboard is open, keep Create group above it and let the drawer
+content scroll. Connection failures keep both names and leave the error and
+the action within reach, including on narrow screens.
 
 The join screen shows the group's name large and Which one are you?, with one
 ruled row per name (Taken when another device has it) and a last row whose

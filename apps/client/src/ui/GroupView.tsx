@@ -438,7 +438,7 @@ export function GroupView(props: GroupViewProps) {
           onPress={() => { void actions.dispatch('setPeopleExpanded', { expanded: !ui.peopleExpanded }, { origin: 'ui' }); }}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: sizes.touch }}
         >
-          <Text accessibilityRole="header" variant="strong">People</Text>
+          <Text accessibilityRole="header" aria-level={2} variant="strong">People</Text>
           <Text variant="body" tone="muted" style={{ flex: 1 }}>{people}</Text>
           {ui.peopleExpanded ? <ChevronUpIcon size={16} color={colors.muted} /> : <ChevronDownIcon size={16} color={colors.muted} />}
         </Touchable>
@@ -446,7 +446,7 @@ export function GroupView(props: GroupViewProps) {
       </View>
       <View role="region" aria-label="Group expenses">
         <Row gap={8} style={{ minHeight: sizes.touch, ...rules.below }}>
-          <Text accessibilityRole="header" variant="strong">Expenses</Text>
+          <Text accessibilityRole="header" aria-level={2} variant="strong">Expenses</Text>
           <Text variant="body" tone="muted" style={{ flex: 1 }}>{entries}</Text>
           {entries ? <SearchToggle /> : null}
         </Row>

@@ -129,7 +129,7 @@ async function settled(pages, descriptions) {
     // Reload independently of the controller inspector; render only persisted state.
     await page.reload();
     await expect(button(page, 'Add expense')).toBeVisible();
-    await page.getByRole('tab', { name: /^Expenses/ }).click();
+    await page.getByRole('heading', { name: 'Expenses', exact: true }).scrollIntoViewIfNeeded();
 
     for (const description of descriptions) {
       exactlyOne((await document(page)).groups[0].snapshot.expenses, description);

@@ -194,7 +194,7 @@ export function Frame(props: FrameProps) {
           floating ? (
             <View
               pointerEvents="box-none"
-              style={{ position: 'absolute', left: 0, right: 0, bottom: 24 }}
+              style={{ position: 'absolute', left: 0, right: 0, bottom: 24, zIndex: 6 }}
             >
               <View pointerEvents="box-none" style={[column, { gap: 12 }]}>{props.footer}</View>
             </View>
