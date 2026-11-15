@@ -266,7 +266,8 @@ async function showSection(page: Page, name: 'People' | 'Expenses'): Promise<voi
   const show = button(page, `Show all ${name.toLowerCase()}`);
 
   if (await show.count()) await show.click();
-  await page.getByRole('region', { name: `Group ${name.toLowerCase()}`, exact: true }).scrollIntoViewIfNeeded();
+  await page.locator('#splitnext-page').evaluate((node) => { node.scrollTop = 0; });
+  if (name === 'Expenses') await heading(page, 'Expenses').scrollIntoViewIfNeeded();
 }
 
 /** Geometry checks compare settled screens; motion tests sample the movement separately. */
@@ -3307,6 +3308,7 @@ test('fits a small group overview and expands either list on a phone', async ({ 
   await expect(button(page, 'Change Dinner together · 100.00')).toHaveCount(0);
   await scroller.evaluate((node) => { node.scrollTop = 12; });
   await expect(button(page, 'Settle up')).toBeInViewport({ ratio: 1 });
+  await expect(button(page, 'Add expense')).toBeInViewport({ ratio: 1 });
   const balance = page.getByTestId('your-balance');
   await expect(balance).toBeInViewport({ ratio: 1 });
   expect(await clippedText(page)).toEqual([]);
@@ -3314,6 +3316,7 @@ test('fits a small group overview and expands either list on a phone', async ({ 
   await button(page, 'Show all expenses').click();
   await expect(person(page, 'Ben')).toHaveCount(0);
   await expect(button(page, 'Change Dinner together · 100.00')).toBeVisible();
+  await expect(button(page, 'Add expense')).toBeInViewport({ ratio: 1 });
   await page.screenshot({ path: test.info().outputPath('expenses-expanded.png') });
   await overview.click();
   await expect(person(page, 'Ben')).toBeAttached();
