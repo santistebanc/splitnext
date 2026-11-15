@@ -94,7 +94,6 @@ export const ledgerActions = {
 
       if (name && !edit.memberId) {
         await host.submit({ type: 'member.create', payload: { display_name: name } });
-        ui.update({ groupFocus: 'people' });
       } else if (name && name !== edit.expectedName && edit.memberId)
         await host.submit({
           type: 'member.rename',
@@ -254,8 +253,6 @@ export const ledgerActions = {
             payload: { ...result.entry, expense_id: draft.expenseId, expected_version: draft.expectedVersion },
           })
         : host.submit({ type: 'expense.record', payload: result.entry }));
-
-      if (ui.snapshot().groupFocus === 'people') ui.update({ groupFocus: 'expenses' });
     },
   }),
   recordExpense: defineAction({

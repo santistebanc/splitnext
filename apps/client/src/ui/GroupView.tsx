@@ -1,5 +1,5 @@
-import { useContext, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { View, type TextInput } from 'react-native';
+import { useContext, useEffect, useRef, useState, type RefObject } from 'react';
+import { Platform, View, type TextInput } from 'react-native';
 import { groupNameSchema, preferredMember, repaymentMembers } from '@splitnext/client';
 import { BellIcon, Button, ChevronDownIcon, ChevronUpIcon, CountBadge, ErrorMessage, IconButton, Input, InviteIcon, PencilIcon, Row, SearchIcon, Stack, Tag, Text, TextButton, ToggleChip, Touchable, YouBadge, between, colors, balanceStyle, layout, radii, rules, sizes, titleStyle } from '../design';
 import { attentionCount } from '../model/activity';
@@ -9,7 +9,7 @@ import { balanceColor, signedFigure } from './balance';
 import { ExpenseList } from './ExpenseList';
 import { InvitePanel } from './InvitePanel';
 import { AddPersonRow, MemberAvatar, type MemberListApp, type Replica } from './MemberList';
-import { PageHeightContext, ScrollToTopContext, useCompactProgress } from './pageScroll';
+import { RevealContext, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
 import { EditCover } from './EditCover';
 import { ScreenHeader, BackButton } from './ScreenHeader';
@@ -357,7 +357,7 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
  * Everyone else with their balance, then the people who are settled folded
  * into one line that shows them, and a last row to add a person.
  */
-function People(props: { app: MemberListApp; replica: Replica; limit?: number | undefined; end?: ReactNode }) {
+function People(props: { app: MemberListApp; replica: Replica }) {
   const actions = useActions();
   const ui = useUiState();
   const snapshot = props.replica.projected_snapshot;
@@ -376,8 +376,8 @@ function People(props: { app: MemberListApp; replica: Replica; limit?: number | 
 
   return (
     <View role="region" aria-label="Balances">
-      {open.slice(0, props.limit).map(row)}
-      {square.length && (props.limit === undefined || open.length < props.limit) ? (
+      {open.map(row)}
+      {square.length ? (
         <Touchable
           feedback="tint"
           accessibilityRole="button"
@@ -397,29 +397,22 @@ function People(props: { app: MemberListApp; replica: Replica; limit?: number | 
           {ui.balancesExpanded ? <ChevronUpIcon size={16} color={colors.faint} /> : <ChevronDownIcon size={16} color={colors.faint} />}
         </Touchable>
       ) : null}
-      {ui.balancesExpanded ? square.slice(0, props.limit === undefined ? undefined : Math.max(0, props.limit - open.length)).map(row) : null}
-      <AddPersonRow end={props.end} />
+      {ui.balancesExpanded ? square.map(row) : null}
+      <AddPersonRow />
     </View>
   );
 }
 
-/** The overview's fixed rows: adding a person, the gap, and the expenses heading. */
-const overviewChrome = sizes.row + 8 + sizes.touch;
-
 /**
- * People and expenses share one page. The people can fold away while the
- * expense list stays available below them.
+ * People and expenses share one page, each list in full, scrolled as one.
+ * While the expenses are still below the screen, a floating button at the
+ * foot jumps to them.
  */
 export function GroupView(props: GroupViewProps) {
   const action = useActionCall();
-  const actions = useActions();
   const ui = useUiState();
   const replica = props.app.snapshot().group;
   const snapshot = replica?.projected_snapshot;
-  const pageHeight = useContext(PageHeightContext);
-  const scrollToTop = useContext(ScrollToTopContext);
-  const [fit, setFit] = useState({ key: '', rows: 0, ceiling: Infinity });
-  const fitKey = `${pageHeight}:${ui.groupFocus}:${ui.search.open}:${ui.balancesExpanded}`;
 
   if (!snapshot || !replica) return null;
 
@@ -434,79 +427,70 @@ export function GroupView(props: GroupViewProps) {
       </Stack>
     );
 
-  const people = repaymentMembers(snapshot).length;
   const entries = currentExpenses(snapshot).length + snapshot.settlements.filter((entry) => entry.status === 'active').length;
 
-  const others = repaymentMembers(snapshot).filter((member) => member.id !== preferredMember(snapshot, replica.session?.identity.id)?.id).length;
-  const focus = ui.groupFocus;
-  // Rows that fit beside the add-person row, the gap and the expenses heading.
-  // The overview's measured height corrects this for rows that wrap or grow.
-  const rows = fit.key === fitKey ? fit.rows : Math.max(2, Math.floor((pageHeight - overviewChrome) / sizes.row));
-  const peopleLimit = Math.min(others, Math.max(1, rows - Math.min(entries, Math.floor(rows / 2))));
-  const expenseLimit = Math.max(1, rows - Math.max(1, Math.min(others, peopleLimit)));
-
-  const changeFocus = (next: 'overview' | 'people' | 'expenses') => {
-    void actions.dispatch('setGroupFocus', { focus: next }, { origin: 'ui' });
-    scrollToTop?.();
-  };
-
-  // The overview never scrolls while a row fewer would fit: a row leaves when
-  // the content runs past the page, and returns while one more still fits.
-  const measure = (height: number) => {
-    if (focus !== 'overview' || !pageHeight) return;
-    const ceiling = fit.key === fitKey ? fit.ceiling : Infinity;
-
-    if (height > pageHeight + 0.5 && rows > 2) setFit({ key: fitKey, rows: rows - 1, ceiling: rows - 1 });
-    else if (height + sizes.row <= pageHeight && rows < ceiling && (others > peopleLimit || entries > expenseLimit)) setFit({ key: fitKey, rows: rows + 1, ceiling });
-  };
-
-  const showAll = (list: 'people' | 'expenses', count: number) => (
-    <TextButton label={`Show all ${list}`} onPress={() => changeFocus(list)} underline={false} tone="muted" style={{ height: sizes.touch, paddingLeft: 12 }}>
-      {`All ${count} ›`}
-    </TextButton>
+  return (
+    <Stack gap={12}>
+      <View role="region" aria-label="Group people">
+        <People app={props.app} replica={replica} />
+      </View>
+      <View role="region" aria-label="Group expenses" nativeID={expensesAnchor}>
+        <Row gap={8} style={{ minHeight: sizes.touch, ...rules.below }}>
+          <Text accessibilityRole="header" aria-level={2} variant="strong">Expenses</Text>
+          <Text variant="body" tone="muted" style={{ flex: 1 }}>{entries}</Text>
+          {entries ? <SearchToggle /> : null}
+        </Row>
+        <Reveal>{ui.search.open ? <SearchBar /> : null}</Reveal>
+        <ExpenseList replica={replica} />
+      </View>
+    </Stack>
   );
+}
 
-  // An expanded list folds the other into one row; tapping it brings both back.
-  const folded = (label: string, children: ReactNode) => (
-    <Touchable accessibilityRole="button" accessibilityLabel={`${label}. Show overview`} onPress={() => changeFocus('overview')} style={{ minHeight: sizes.touch, flexDirection: 'row', alignItems: 'center', gap: 8, ...rules.below }}>
-      {children}
-      <ChevronDownIcon size={16} />
-    </Touchable>
-  );
+/** The expenses section's element id, which the jump button watches and scrolls to. */
+const expensesAnchor = 'group-expenses';
+
+/**
+ * A floating "Expenses" button over the foot of the group screen, shown only
+ * while the expenses start below the visible page; it scrolls them up to just
+ * under the compact header.
+ */
+export function ExpensesJump(props: { app: MemberListApp }) {
+  const reveal = useContext(RevealContext);
+  const [below, setBelow] = useState(false);
+  const snapshot = props.app.snapshot().group?.projected_snapshot;
+  const entries = snapshot ? currentExpenses(snapshot).length + snapshot.settlements.filter((entry) => entry.status === 'active').length : 0;
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const target = document.getElementById(expensesAnchor);
+    const root = document.getElementById('splitnext-page');
+
+    if (!target || !root) return;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry) setBelow(!entry.isIntersecting && entry.boundingClientRect.top >= (entry.rootBounds?.bottom ?? 0));
+    }, { root });
+
+    observer.observe(target);
+
+    return () => observer.disconnect();
+  }, []);
+
+  if (!below || !entries) return null;
 
   return (
-    <View onLayout={(event) => measure(event.nativeEvent.layout.height)}>
-      <Stack gap={focus === 'overview' ? 8 : 12}>
-        <View role="region" aria-label="Group people">
-          {focus === 'expenses' ? folded(`${people} people`, (
-            <>
-              <Row>{repaymentMembers(snapshot).slice(0, 3).map((member, index) => <View key={member.id} style={{ marginLeft: index ? -8 : 0 }}><MemberAvatar replica={replica} memberId={member.id} size="small" /></View>)}</Row>
-              <Text variant="body" tone="muted" style={{ flex: 1 }}>{people} people</Text>
-            </>
-          )) : (
-            <People app={props.app} replica={replica} limit={focus === 'overview' ? peopleLimit : undefined} end={focus === 'overview' && others > peopleLimit ? showAll('people', others) : undefined} />
-          )}
-        </View>
-        <View role="region" aria-label="Group expenses">
-          {focus === 'people' ? folded(`Expenses, ${entries}`, (
-            <>
-              <Text variant="strong">Expenses</Text>
-              <Text variant="body" tone="muted" style={{ flex: 1 }}>{entries}</Text>
-            </>
-          )) : (
-            <>
-              <Row gap={8} style={{ minHeight: sizes.touch, ...rules.below }}>
-                <Text accessibilityRole="header" aria-level={2} variant="strong">Expenses</Text>
-                <Text variant="body" tone="muted" style={{ flex: 1 }}>{entries}</Text>
-                {focus === 'overview' && entries > expenseLimit ? showAll('expenses', entries) : null}
-                {entries ? <SearchToggle /> : null}
-              </Row>
-              <Reveal>{ui.search.open ? <SearchBar /> : null}</Reveal>
-              <ExpenseList replica={replica} limit={focus === 'overview' ? expenseLimit : undefined} />
-            </>
-          )}
-        </View>
-      </Stack>
+    // Floats just above the main action without taking its place.
+    <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: '100%', alignItems: 'center', paddingBottom: 12 }}>
+      <Touchable
+        accessibilityRole="button"
+        accessibilityLabel={`Show expenses, ${entries}`}
+        onPress={() => reveal?.(expensesAnchor)}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: radii.round, backgroundColor: colors.ink, boxShadow: '0 2px 8px rgba(20, 20, 19, 0.18)' }}
+      >
+        <Text variant="body" weight="semibold" color={colors.background}>{`Expenses ${entries}`}</Text>
+        <ChevronDownIcon size={16} color={colors.background} />
+      </Touchable>
     </View>
   );
 }

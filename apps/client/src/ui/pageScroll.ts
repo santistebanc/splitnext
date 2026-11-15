@@ -90,6 +90,9 @@ export function useCompactProgress(): number {
 /** Receives how much a screen header gives up when compact, as soon as it is measured. */
 export const HeaderShrinkContext = createContext<((shrink: number) => void) | null>(null);
 
+/** Scrolls the page element with this id up to just under the compact header. */
+export const RevealContext = createContext<((id: string) => void) | null>(null);
+
 /** Return the current frame to its start from its title. */
 export const ScrollToTopContext = createContext<(() => void) | null>(null);
 

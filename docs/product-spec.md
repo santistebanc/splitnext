@@ -57,12 +57,12 @@ Follow the agreed prototype (`docs/design-alternatives/round-5.html`, “Ledger,
 calmer”): ink on warm paper, barely rounded black actions, flat full-width
 rows ruled by hairlines instead of cards, large titles, and progressive
 disclosure, each screen answering one question and leaving detail to the next
-tap. Every screen's title is 32px and shrinks to 18px when the page scrolls
-under the header, with a hairline appearing below the header. The header has
-two states, full and compact, and changes between them at once in one short
-movement: compact once the content has scrolled past the height the header
-gives up, full again on the way back. The header lies over the content, which
-scrolls with the finger and never moves when the header changes. Fields are bare
+tap. Every screen's title is 32px. The header has two states, full and
+compact, and changes between them at once in one short movement: compact once
+the content has scrolled past the height the header gives up, full again on the
+way back. Compact keeps only the first row, with the screen's name small in its
+middle, which returns to the top, and a hairline below. The header lies over the
+content, which scrolls with the finger and never moves when the header changes. Fields are bare
 text over an ink underline and show focus by their caret. Changing screens
 moves as the prototype does: parts shown on both screens fly from one place to
 the other and change shape on the way (a group's name becomes its title, a
@@ -234,20 +234,14 @@ the foot.
 A group opens on one screen with people and expenses together. Its header has
 ‹ Groups, Invite people and Activity (with a count of new
 changes and changes to review), then the group's name with a pencil that
-renames it in place, then where you stand. The overview shows complete people
-rows without a People heading, followed by recent expenses with their count.
-It fills the page with as many complete rows of each list as fit, measured
-rather than estimated, and does not scroll; only larger text can make it.
-"All N ›" at the end of the add-person row and in the Expenses heading opens
-that list in full when some of it is hidden. Show all people leaves Expenses
-as one folded row; Show all expenses folds people to avatars and a count. The
-folded row brings the overview back. Expanded lists use one page scroll. As the
-header turns compact, the caption over your balance folds away and the figure
-shrinks; the balance and Settle up stay complete.
-People shows the balances; Expenses shows expenses and
-recorded repayments newest first, each opening its editor. A full list that
-spans more than one month heads each month (with the year outside the current
-one); the overview and a single month have no month headings. An expense row is the
+renames it in place, then where you stand. Below it, every person's row
+without a People heading, then Expenses with its count and search, in full, in
+one page scroll. While the expenses start below the screen, a floating
+"Expenses N" button above Add expense scrolls them up to just under the compact
+header. People shows the balances; Expenses shows expenses and
+recorded repayments newest first, each opening its editor. A list that spans
+more than one month heads each month (with the year outside the current one);
+a single month has no month heading. An expense row is the
 payer's avatar, what it was for on up to two lines, its amount, and under it
 what it did to your balance when that is not nothing; a row that names you
 neither as a payer nor in the split is faded. Saving a new expense, or recording a
@@ -261,7 +255,7 @@ which show only while searching. It finds every word typed in what an expense
 was for, or in a repayment's sentence, ignoring case and accents, and ends the
 results with their count and what they come to for you. Cancel, or Search
 again, closes it and shows everything. Search opens the full expense list with the people summary above it.
-Opening a group starts in the overview with no search.
+Opening a group starts at the top with no search.
 
 Settle up beside your balance opens the group's settle-up page: the payments
 of the plan that involve you first, each naming the other person with You pay

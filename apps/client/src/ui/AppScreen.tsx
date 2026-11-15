@@ -18,7 +18,7 @@ import { GroupsFooter, GroupsHeader, GroupsView } from './GroupsView';
 import { Toast } from './Toast';
 import { useActivityFeed } from './useActivityFeed';
 import { SettlementsFooter, SettlementsHeader, SettlementsPanel } from './SettlementsPanel';
-import { GroupHeader, GroupView } from './GroupView';
+import { ExpensesJump, GroupHeader, GroupView } from './GroupView';
 import { CompactProgressContext, createCompactProgress } from './pageScroll';
 import { InPlaceEditContext, createInPlaceEditStore, useEditingInPlace } from './inPlaceEdit';
 import { JoinGroup, JoinGroupFooter, type JoinCalls } from './JoinGroup';
@@ -355,7 +355,7 @@ function ReadyApp(props: AppProps) {
         return {
           header: <GroupHeader app={app} />,
           body: <GroupView app={app} />,
-          footer: addsExpenses ? <AddExpenseButton /> : undefined,
+          footer: addsExpenses ? <><ExpensesJump app={app} /><AddExpenseButton /></> : undefined,
         };
     }
   }

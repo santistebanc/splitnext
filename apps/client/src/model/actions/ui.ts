@@ -32,18 +32,13 @@ export const uiActions = {
     },
     run: async (host, input, ui) => ui.show('settle', 'push', { person: input.memberId ?? null }),
   }),
-  setGroupFocus: defineAction({
-    group: 'UI', description: 'Show the overview, all people, or all expenses.',
-    input: z.object({ focus: z.enum(['overview', 'people', 'expenses']) }), example: { focus: 'overview' }, requires: ['openGroup'],
-    run: async (host, input, ui) => ui.update({ groupFocus: input.focus, search: closedSearch }),
-  }),
   searchExpenses: defineAction({
     group: 'UI', description: 'Search expenses and repayments by description. You can limit the results to entries that involve you or that you paid.',
     input: z.object({ query: z.string().max(100).optional(), involvesYou: z.boolean().optional(), paidByYou: z.boolean().optional() }), example: { query: 'dinner' }, requires: ['openGroup'],
     run: async (host, input, ui) => {
       const search = ui.snapshot().search;
 
-      ui.update({ groupFocus: 'expenses', search: { open: true, query: input.query ?? search.query, involvesYou: input.involvesYou ?? search.involvesYou, paidByYou: input.paidByYou ?? search.paidByYou } });
+      ui.update({ search: { open: true, query: input.query ?? search.query, involvesYou: input.involvesYou ?? search.involvesYou, paidByYou: input.paidByYou ?? search.paidByYou } });
     },
   }),
   closeExpenseSearch: defineAction({
@@ -530,7 +525,7 @@ export const uiActions = {
 
       if (host.snapshot().group?.hidden) ui.showJoin('', true);
       else {
-        ui.update({ balancesExpanded: false, groupFocus: 'overview', search: closedSearch });
+        ui.update({ balancesExpanded: false, search: closedSearch });
         ui.show('home');
       }
     },

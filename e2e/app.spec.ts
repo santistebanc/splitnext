@@ -246,7 +246,8 @@ function clippedText(page: Page): Promise<string[]> {
 
       while (clipper && !clips(clipper)) clipper = clipper.parentElement;
 
-      if (!text || style.visibility === 'hidden' || !clipper || clipper.id === 'splitnext-page' || clipper === document.body) continue;
+      // A folded header part is hidden whole, not cut.
+      if (!text || style.visibility === 'hidden' || element.closest('[aria-hidden="true"]') || !clipper || clipper.id === 'splitnext-page' || clipper === document.body) continue;
       canvas.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
       const metrics = canvas.measureText(text);
       const content = metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent;
@@ -268,13 +269,6 @@ function clippedText(page: Page): Promise<string[]> {
 
 /** Brings a section of the shared group screen into view. */
 async function showSection(page: Page, name: 'People' | 'Expenses'): Promise<void> {
-  const show = button(page, `Show all ${name.toLowerCase()}`);
-  const overview = page.getByRole('button', { name: /\. Show overview$/ });
-
-  if (await overview.count()) await overview.click();
-
-  if (await show.count()) await show.click();
-
   await page.locator('#splitnext-page').evaluate((node) => { node.scrollTop = 0; });
 
   if (name === 'Expenses') await heading(page, 'Expenses').scrollIntoViewIfNeeded();
@@ -907,7 +901,7 @@ test('opens a rename where the name already is: full width, the same lines in th
   await expect(heading(page, 'Ana')).toBeVisible();
 });
 
-test('hides the rename pencil as the header compacts', async ({ page }) => {
+test('folds the rename pencil away with the header', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 520 });
   await createGroup(page, 'Pencils', 'Ana');
   await addMember(page, 'Ben');
@@ -926,9 +920,10 @@ test('hides the rename pencil as the header compacts', async ({ page }) => {
 
     await expect(button(page, pencil)).toBeVisible();
     await expect(button(page, pencil)).toHaveCSS('opacity', '1');
+    // A small scroll leaves the full header, pencil and all.
     await scroller.evaluate((node) => { node.scrollTop = 20; });
-    await expect.poll(() => button(page, pencil).evaluate((node) => Number(getComputedStyle(node).opacity))).toBeLessThan(1);
-    expect(await button(page, pencil).evaluate((node) => Number(getComputedStyle(node).opacity))).toBeGreaterThan(0);
+    await motionSettled(page);
+    await expect(button(page, pencil)).toHaveCSS('opacity', '1');
     await scroller.evaluate((node) => { node.scrollTop = 300; });
     await expect(button(page, pencil)).toHaveCount(0);
     await scroller.evaluate((node) => { node.scrollTop = 0; });
@@ -1764,7 +1759,7 @@ test('opens views at the top and restores context on returning or browsing histo
   await person(page, 'Gus').click();
   await atTop();
   await expect(heading(page, 'Gus')).toHaveCSS('font-size', '32px');
-  await scroller.evaluate((node) => { node.scrollTop = 150; });
+  await scroller.evaluate((node) => { node.scrollTop = 400; });
   await expect(compactTitle(page, 'Gus')).toBeVisible();
   await button(page, 'Back to Scroll navigation').click();
   await expect.poll(position).toBeCloseTo(groupPosition, 0);
@@ -1772,17 +1767,17 @@ test('opens views at the top and restores context on returning or browsing histo
   // A fresh opening starts at the top even if this person was scrolled before.
   await person(page, 'Gus').click();
   await atTop();
-  // Fully collapse the header before testing restoration; 120px can leave
-  // it partly expanded depending on the header's measured height.
-  await scroller.evaluate((node) => { node.scrollTop = 160; });
+  // Scroll past the whole fold, so restoration has a compact header to keep.
+  await scroller.evaluate((node) => { node.scrollTop = 400; });
   await expect(compactTitle(page, 'Gus')).toBeVisible();
   const personPosition = await position();
 
+  // Each screen comes back compact, named by its back action.
   await page.goBack();
-  await expect(heading(page, 'Scroll navigation')).toBeVisible();
+  await expect(button(page, 'Back to groups')).toBeVisible();
   await expect.poll(position).toBeCloseTo(groupPosition, 0);
   await page.goForward();
-  await expect(heading(page, 'Gus')).toBeVisible();
+  await expect(button(page, 'Back to Scroll navigation')).toBeVisible();
   await expect.poll(position).toBeCloseTo(personPosition, 0);
   await button(page, 'Back to Scroll navigation').click();
   await expect.poll(position).toBeCloseTo(groupPosition, 0);
@@ -1839,7 +1834,7 @@ test('opens views at the top and restores context on returning or browsing histo
   await expect(field(page, 'Amount')).toHaveCSS('height', '60px');
   await field(page, 'Amount').fill('75');
   await button(page, 'Save').click();
-  await expect(heading(page, 'Scroll navigation')).toBeVisible();
+  await expect(button(page, 'Back to groups')).toBeVisible();
   await expect.poll(position).toBeCloseTo(expenseListPosition, 0);
   await expect(compactTitle(page, 'Scroll navigation')).toBeVisible();
 });
@@ -3292,62 +3287,52 @@ test('opens canonical Activity records and returns, keeping unavailable actions 
 });
 
 
-test('fits a small group overview and expands either list on a phone', async ({ page }) => {
+test('shows both lists in full and jumps to expenses below the screen on a phone', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 744 });
   await createGroup(page, 'Together', 'Ana');
 
   for (const name of ['Ben', 'Dana', 'Eve', 'Waka']) await addMember(page, name);
-  await addExpense(page, 'Dinner together', '100');
-  // An expanded list folds the other into one row that brings the overview back.
-  const overview = page.getByRole('button', { name: /\. Show overview$/ });
 
-  if (await overview.count()) await overview.click();
+  await addExpense(page, 'Dinner together', '100');
   const scroller = page.locator('#splitnext-page');
+  const jump = page.getByRole('button', { name: /^Show expenses, \d+$/ });
+
   await scroller.evaluate((node) => { node.scrollTop = 0; });
+  // A small group fits: both lists show, with nothing to jump to.
   await expect(page.getByRole('heading', { name: 'People', exact: true })).toHaveCount(0);
-  await expect(person(page, 'Ben')).toBeInViewport({ ratio: 1 });
+  await expect(person(page, 'Waka')).toBeInViewport({ ratio: 1 });
   await expect(button(page, 'Change Dinner together · 100.00')).toBeInViewport({ ratio: 1 });
-  await expect.poll(() => scroller.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeLessThanOrEqual(1);
+  await expect(jump).toHaveCount(0);
   // One month needs no heading.
   await expect(heading(page, new Date().toLocaleString('en-US', { month: 'long' }))).toHaveCount(0);
-  await page.screenshot({ path: test.info().outputPath('overview-small.png') });
+  await page.screenshot({ path: test.info().outputPath('both-lists-small.png') });
 
-  // More people than fit still leave the overview without a scroll: the preview shortens.
+  // Everyone shows, however many; the expenses below the screen get a button.
   for (const name of ['Fran', 'Gus', 'Hal', 'Ida', 'Jo', 'Kai', 'Lu', 'Mo']) await addMember(page, name);
 
-  for (const item of ['Taxi', 'Bread', 'Museum', 'Ferry']) await addExpense(page, item, '10');
-
-  if (await overview.count()) await overview.click();
-  await expect.poll(() => scroller.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeLessThanOrEqual(1);
-  await expect(button(page, 'Change Ferry · 10.00')).toBeInViewport({ ratio: 1 });
-  await expect(button(page, 'Show all people')).toBeInViewport({ ratio: 1 });
-  await expect(button(page, 'Show all expenses')).toBeInViewport({ ratio: 1 });
-  await button(page, 'Show all people').click();
+  await scroller.evaluate((node) => { node.scrollTop = 0; });
   await expect(person(page, 'Mo')).toBeAttached();
-  await expect(button(page, 'Change Dinner together · 100.00')).toHaveCount(0);
-  await scroller.evaluate((node) => { node.scrollTop = 12; });
-  await expect(button(page, 'Settle up')).toBeInViewport({ ratio: 1 });
+  await expect(jump).toBeVisible();
   await expect(button(page, 'Add expense')).toBeInViewport({ ratio: 1 });
-  const balance = page.getByTestId('your-balance');
-  await expect(balance).toBeInViewport({ ratio: 1 });
+  await page.screenshot({ path: test.info().outputPath('expenses-below.png') });
+
+  // It brings the expenses up under the compact header, then goes.
+  await jump.click();
+  await expect(compactTitle(page, 'Together')).toBeVisible();
+  await expect(heading(page, 'Expenses')).toBeInViewport({ ratio: 1 });
+  await expect(button(page, 'Change Dinner together · 100.00')).toBeInViewport({ ratio: 1 });
+  await expect(jump).toHaveCount(0);
   expect(await clippedText(page)).toEqual([]);
-  await page.screenshot({ path: test.info().outputPath('people-expanded-small-scroll.png') });
-  await overview.click();
-  await button(page, 'Show all expenses').click();
-  await expect(person(page, 'Ben')).toHaveCount(0);
-  await expect(button(page, 'Change Dinner together · 100.00')).toBeVisible();
-  await expect(button(page, 'Add expense')).toBeInViewport({ ratio: 1 });
-  await page.screenshot({ path: test.info().outputPath('expenses-expanded.png') });
-  await overview.click();
-  await expect(person(page, 'Ben')).toBeAttached();
+  await page.screenshot({ path: test.info().outputPath('expenses-jumped.png') });
+
+  // Search stays beside the list it filters.
   const expenses = page.getByRole('region', { name: 'Group expenses', exact: true });
+
   await expenses.getByRole('button', { name: 'Search expenses', exact: true }).click();
   await field(page, 'Search expenses').fill('not found');
   await expect(page.getByText('Nothing matches', { exact: true })).toBeVisible();
   await button(page, 'Cancel').click();
-
-  if (await overview.count()) await overview.click();
-  await expect(button(page, 'Change Ferry · 10.00')).toBeAttached();
+  await expect(button(page, 'Change Dinner together · 100.00')).toBeAttached();
 });
 
 test('folds the header to its top row at once without moving the page', async ({ page }) => {

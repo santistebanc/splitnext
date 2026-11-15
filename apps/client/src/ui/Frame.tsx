@@ -1,7 +1,7 @@
 import { Component, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform, ScrollView, View } from 'react-native';
 import { Row, Tag, Text, colors, layout, sizes } from '../design';
-import { CompactProgressContext, HeaderShrinkContext, PageHeightContext, ScrollToTopContext } from './pageScroll';
+import { CompactProgressContext, HeaderShrinkContext, PageHeightContext, RevealContext, ScrollToTopContext } from './pageScroll';
 import { useHomepage } from './screenHost';
 import {
   useCompactLayout,
@@ -162,6 +162,19 @@ export function Frame(props: FrameProps) {
     setHeader(next);
   }
 
+  // Content scrolls under the header, so an element reaches the top of what
+  // shows once it sits just under the compact header.
+  function reveal(id: string): void {
+    const node: unknown = Platform.OS === 'web' ? scroll.current?.getScrollableNode() : null;
+    const element = Platform.OS === 'web' ? document.getElementById(id) : null;
+
+    if (!(node instanceof HTMLElement) || !(element instanceof HTMLElement)) return;
+    const y = element.getBoundingClientRect().top - node.getBoundingClientRect().top + node.scrollTop;
+    const compactHeight = headerRef.current.full - headerRef.current.shrink;
+
+    scroll.current?.scrollTo({ y: Math.max(0, y - compactHeight), animated: true });
+  }
+
   const footRoom = floating ? 104 : 32;
   const pageHeight = Math.max(0, pageArea - header.full);
 
@@ -177,6 +190,7 @@ export function Frame(props: FrameProps) {
       headers.current.set(scrollKey, headerRef.current);
     }}>
     <ScrollToTopContext.Provider value={() => scroll.current?.scrollTo({ y: 0, animated: true })}>
+    <RevealContext.Provider value={reveal}>
       <View style={[page, visibleHeight !== null && { maxHeight: visibleHeight }]}>
         {props.status ? <View onLayout={(event) => props.onStatusLayout?.(event.nativeEvent.layout.height)}>{props.status}</View> : null}
         <View style={page} onLayout={(event) => setPageArea(event.nativeEvent.layout.height)}>
@@ -254,6 +268,7 @@ export function Frame(props: FrameProps) {
           )
         ) : null}
       </View>
+    </RevealContext.Provider>
     </ScrollToTopContext.Provider>
     </ScrollPositionSnapshot>
   );

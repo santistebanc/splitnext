@@ -99,10 +99,12 @@ Screens follow the agreed prototype, in one narrow column on every device.
 them out: a header (`ScreenHeader`: a first row with the back or Cancel action
 and actions at its end, then the large title, then anything `below` it such as
 the invite link or a balance), the scrolling content, and the main action
-pinned at the foot. The title is 32px and shrinks to 18px with compact
-progress (`titleStyle`), which follows 96px of content travel; screens that
-shrink more, such as the expense amount and the person's balance, read the
-same progress. The groups list pins New group, which opens the create form upward above
+pinned at the foot. The header has two states. Compact keeps only the first
+row, with the screen's name small in its middle to return to the top; the
+title and `below` fold away whole, reading full-size progress while they close.
+Compact progress moves between 0 and 1 in one eased 240ms movement
+(`createCompactProgress`); parts outside `ScreenHeader`'s fold, such as the
+expense amount, read the same progress. The groups list pins New group, which opens the create form upward above
 itself (the `create` view, drawn on the groups list) and becomes Create group.
 Creation uses the floating footer so the action stays above the keyboard.
 `FooterDrawer` limits its content to the visible height and scrolls its body.
@@ -135,17 +137,10 @@ up, New group, and Activity with their titles. `Reveal` opens content in place,
 growing it down from nothing and shrinking it away before it unmounts. Both
 skip motion when reduced motion is preferred, and native shows changes at once.
 
-Person headers reserve their expanded name height while collapsing. The avatar's
-space folds continuously with scroll progress, so its disappearing decoration
-cannot move the name sideways or release a wrapped line's height at once.
-
-A group has one screen (`home`) with People and Expenses together.
-`AppUiState.groupFocus`, set by `setGroupFocus`, selects the overview or a full
-people or expense list. The overview budgets complete preview rows from the
-page height measured by `Frame`, with room for the main action. The budget uses
-the expanded header height so scrolling does not change the preview limits.
-Long rows and short screens retain normal scrolling. Opening a group restores
-the overview. `GroupHeader`
+A group has one screen (`home`) with People and Expenses together, each in
+full, in the one page scroll. While the expenses section is below the visible
+page, `ExpensesJump` floats over the main action and scrolls it up to just under
+the compact header through `Frame`'s `RevealContext`. `GroupHeader`
 holds ‹ Groups, Invite people and Activity with its
 count as icons, the group's name with a pencil that renames it in place
 through `renameGroup`, then `YourBalance`. The scroll content holds the people
@@ -167,24 +162,20 @@ hides the strip. Background network/offline errors use this status rather than
 a second banner; other background errors remain visible. The web
 `AmountInput` uses `react-number-format` to keep two fixed decimals while
 managing the caret, accepts dot/comma entry, and rejects ambiguous pasted
-amounts. Below the header, `Frame`'s one `ScrollView` is the only scroll area
-on every screen. On the web its scroll anchoring is disabled: automatic anchor
-adjustments during header resizing would feed back into compact progress.
-Header collapse follows content travel: the scroll offset plus the measured
-height released by the header. At the bottom, shrinking the header can force
-the scroll offset down by the same amount; this leaves content travel unchanged
-instead of reversing the collapse and making the header oscillate. The collapse
-distance exceeds the header's height change so expanding back to the top also
-converges. Each screen measures its own full header height. Returning restores
-that screen's saved header collapse along with its scroll offset, so compact
-headers stay compact instead of growing on return. Group and member rename
-pencils fade with compact progress, reaching zero opacity before they leave
-the header at halfway collapse, and fade back in as it expands.
+amounts. `Frame`'s one `ScrollView` is the only scroll area on every screen.
+The header lies over it, and the content starts below the full header, so a
+header change never moves the content or the scroll offset. The header turns
+compact once the content has scrolled past the height it gives up, which
+`ScreenHeader` reports as soon as it is measured, and full again 8px before
+that on the way back. Page measurements live outside render state, so scrolling
+never renders the page. Each screen keeps its full header height and the
+height it gives up; returning restores them with its scroll offset, so compact
+headers stay compact instead of growing on return.
 The group screen's content is `GroupView`: on People, everyone else as
 full-width rows of `MemberAvatar`, name and figure, settled people folded
 behind `setBalancesExpanded`, ending with `AddPersonRow`; on Expenses,
-`ExpenseList` with expenses and repayments newest first under month
-headings, each led by its payer's avatar and faded when it leaves you out.
+`ExpenseList` with expenses and repayments newest first, under month
+headings when they span more than one month, each led by its payer's avatar and faded when it leaves you out.
 `YourBalance`'s Settle up opens `settle` without a person, a page of its own
 (`SettleUpPlan`): your payments of the plan, then everyone else's folded.
 Tapping a person opens `person` (`PersonDetails`), whose Settle up opens
