@@ -3345,35 +3345,49 @@ test('fits a small group overview and expands either list on a phone', async ({ 
   await expect(button(page, 'Change Ferry · 10.00')).toBeAttached();
 });
 
-test('finishes the header shrink after a scroll stops partway', async ({ page }) => {
+test('switches the header between full and compact at once without moving the page', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 744 });
   await createGroup(page, 'Halfway', 'Ana');
   await addMember(page, 'Ben');
 
   for (let index = 0; index < 14; index++) await addExpense(page, `Item ${index}`, '20');
+
   await showSection(page, 'Expenses');
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const scroller = page.locator('#splitnext-page');
-  const top = () => scroller.evaluate((node) => node.scrollTop);
-  const caption = page.getByTestId('your-balance').getByText('You get back', { exact: true });
+  const title = heading(page, 'Halfway');
+  const row = button(page, 'Change Item 13 · 20.00');
 
-  // A small nudge returns to the full header.
-  await scroller.evaluate((node) => { node.scrollTop = 12; });
-  await expect.poll(top).toBe(0);
-  await expect(caption).toBeInViewport();
+  // Where the row sits in the content, which header changes never move.
+  const placed = () => scroller.evaluate((node, label) => {
+    const target = [...node.querySelectorAll('[role=button]')].find((element) => element.getAttribute('aria-label') === label)!;
 
-  // A scroll stopped past a fifth of the shrink glides on until the header is compact.
-  await scroller.evaluate((node) => { node.scrollTop = 60; });
-  await expect.poll(top).toBeGreaterThan(100);
-  const settled = await top();
-  await page.waitForTimeout(300);
-  expect(await top()).toBe(settled);
-  await expect.poll(() => caption.evaluate((node) => node.parentElement!.getBoundingClientRect().height)).toBeLessThan(1);
+    return Math.round(target.getBoundingClientRect().top + node.scrollTop);
+  }, 'Change Item 13 · 20.00');
+
+  const start = await placed();
+
+  // A small scroll leaves the header full, with nothing in between.
+  await scroller.evaluate((node) => { node.scrollTop = 20; });
+  await motionSettled(page);
+  await expect(title).toHaveCSS('font-size', '32px');
+  expect(await scroller.evaluate((node) => node.scrollTop)).toBe(20);
+
+  // Past what the header gives up, it turns compact on its own while the page stays where it was put.
+  await scroller.evaluate((node) => { node.scrollTop = 150; });
+  await expect(title).toHaveCSS('font-size', '18px');
+  await page.waitForTimeout(400);
+  expect(await scroller.evaluate((node) => node.scrollTop)).toBe(150);
+  expect(await placed()).toBe(start);
   await expect(button(page, 'Settle up')).toBeInViewport({ ratio: 1 });
+  await expect(row).toBeAttached();
 
-  // Stopping partway on the way up returns to the full header.
-  await scroller.evaluate((node) => { node.scrollTop = Math.round(node.scrollTop * 0.4); });
-  await expect.poll(top).toBe(0);
+  // Back near the top it is full again, and still nothing scrolls by itself.
+  await scroller.evaluate((node) => { node.scrollTop = 10; });
+  await expect(title).toHaveCSS('font-size', '32px');
+  await page.waitForTimeout(400);
+  expect(await scroller.evaluate((node) => node.scrollTop)).toBe(10);
+  expect(await placed()).toBe(start);
 });
 
 test('searches expenses and repayments with accent-insensitive words and personal filters', async ({ page }) => {
@@ -3525,19 +3539,25 @@ test('folds a person avatar without jumping their name sideways while scrolling'
 
   await page.screenshot({ path: test.info().outputPath('person-header-expanded.png') });
 
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+  // The header switches as one movement; each frame of it moves the name only a little.
   const positions = await page.locator('#splitnext-page').evaluate(async (node) => {
     const values: number[] = [];
+    const start = performance.now();
 
-    for (let top = 0; top <= 160; top += 2) {
-      node.scrollTop = top;
-      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    node.scrollTop = 160;
+
+    while (performance.now() - start < 500) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       values.push(document.querySelector('h1')!.getBoundingClientRect().x);
     }
 
     return values;
   });
 
-  expect(Math.max(...positions.slice(1).map((x, index) => Math.abs(x - positions[index]!)))).toBeLessThan(8);
+  expect(Math.max(...positions.slice(1).map((x, index) => Math.abs(x - positions[index]!)))).toBeLessThan(20);
+  expect(positions.at(-1)! - positions[0]!).toBeLessThan(-40);
   await expect(heading(page, name)).toHaveCSS('font-size', '18px');
   await page.screenshot({ path: test.info().outputPath('person-header-compact.png') });
 });

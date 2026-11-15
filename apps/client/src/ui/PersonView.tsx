@@ -69,7 +69,8 @@ export function PersonHeader(props: { app: MemberListApp }) {
   const [youWidth, setYouWidth] = useState(0);
   const [nameHeight, setNameHeight] = useState(0);
   const actions = useActions();
-  const avatarFold = Math.min(1, 2 * progress);
+  // The avatar folds over the whole switch, so the name beside it slides rather than leaps.
+  const avatarFold = progress;
 
   function finishRename(): void {
     if (save.can('saveMemberEdit')) void save.call('saveMemberEdit', {});

@@ -31,98 +31,50 @@ export function createValueStore() {
 
 export type ValueStore = ReturnType<typeof createValueStore>;
 
-/** Content travel, including the header's own collapse. Larger than its shrink
- * so expanding back to the top converges rather than amplifying layout changes. */
-const shrinkDistance = 192;
-
-/** The largest change followed at once: a finger or trackpad moves the page in steps this small. */
-const followedStep = 0.15;
-
-/** How quickly an eased change closes its distance, in milliseconds per e-fold. */
-const easing = 60;
+/** How long the header takes to change between full and compact. */
+const switchDuration = 240;
 
 /**
- * How far a screen's fixed top has shrunk, following the page's scroll: 0 at
- * the top of the page, 1 once scrolled past the shrink. Small scrolls move it
- * directly; a jump, such as a wheel step or a position restored on returning
- * to a screen, eases there instead of resizing the top at once.
+ * How far a screen's fixed top has shrunk: 0 full, 1 compact. The top has
+ * only these two states; a change between them plays at once as one short
+ * eased movement, whatever the scroll does meanwhile, and a change that
+ * arrives during one reverses it from where it is.
  */
 export function createCompactProgress() {
   const store = createValueStore();
-  let target = 0;
   let frame: number | null = null;
-  let last: number | null = null;
-
-  function step(time: number): void {
-    const elapsed = last === null ? 16 : time - last;
-    const current = store.get();
-    const next = current + (target - current) * (1 - Math.exp(-elapsed / easing));
-
-    last = time;
-
-    if (Math.abs(target - next) < 0.005) {
-      store.set(target);
-      frame = null;
-
-      return;
-    }
-
-    store.set(next);
-    frame = requestAnimationFrame(step);
-  }
 
   return {
     get: store.get,
     subscribe: store.subscribe,
-    /** Moves toward the shrink for this scroll position. */
-    follow(scrolled: number): void {
-      target = Math.min(1, Math.max(0, scrolled / shrinkDistance));
+    /** Moves to full (0) or compact (1); `instant` takes it there without motion. */
+    set(target: 0 | 1, instant: boolean): void {
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = null;
+      const from = store.get();
 
-      if (frame !== null) return;
-
-      if (Math.abs(target - store.get()) <= followedStep || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      if (instant || from === target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         store.set(target);
 
         return;
       }
 
-      last = null;
+      let start: number | null = null;
+
+      const step = (time: number) => {
+        start ??= time;
+        const done = Math.min(1, (time - start) / switchDuration);
+
+        // Eased in and out, so parts that travel across the header never leap on its first frame.
+        const eased = done < 0.5 ? 4 * done ** 3 : 1 - (-2 * done + 2) ** 3 / 2;
+
+        store.set(from + (target - from) * eased);
+        frame = done < 1 ? requestAnimationFrame(step) : null;
+      };
+
       frame = requestAnimationFrame(step);
     },
-    /**
-     * Takes the shrink for this scroll position at once, as when another
-     * screen opens at its own position: the change of screen is the movement.
-     */
-    jump(scrolled: number): void {
-      if (frame !== null) cancelAnimationFrame(frame);
-      frame = null;
-      last = null;
-      target = Math.min(1, Math.max(0, scrolled / shrinkDistance));
-      store.set(target);
-    },
   };
-}
-
-/**
- * Content a page needs below the screen, beyond what fits with the full top,
- * so that its top can always finish shrinking.
- */
-export const shrinkRoom = shrinkDistance;
-
-/**
- * Where a page that came to rest partway through its top's shrink glides to,
- * so the top is never left half shrunk: on to compact when the last movement
- * went down past a fifth of the way, otherwise back to the top. Null when the
- * top is already at either end. The top keeps releasing space in proportion
- * to the content's travel, so the scroll to finish scales by the same amount.
- */
-export function settledScroll(y: number, headerCollapse: number, down: boolean): number | null {
-  const travel = y + headerCollapse;
-  const progress = travel / shrinkDistance;
-
-  if (y <= 0 || progress <= 0.01 || progress >= 0.99) return null;
-
-  return (down ? progress >= 0.2 : progress > 0.8) ? Math.ceil((y * shrinkDistance) / travel) + 1 : 0;
 }
 
 /** The current screen's compact progress; outside a screen its top stays full size. */

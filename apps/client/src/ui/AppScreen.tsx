@@ -387,7 +387,7 @@ function ReadyApp(props: AppProps) {
                   scrollKey={pageKey}
                   navigationDepth={depth}
                   restoreScroll={ui.navigation.mode === 'restore'}
-                  onScroll={(y, headerCollapse, restored) => (restored ? compact.jump(y + headerCollapse) : compact.follow(y + headerCollapse))}
+                  onCompactChange={(next, instant) => compact.set(next ? 1 : 0, instant)}
                   onScrollDown={() => {
                     if (actions.ui.snapshot().view === 'invite') void actions.dispatch('closePanel', {}, { origin: 'ui' });
                   }}

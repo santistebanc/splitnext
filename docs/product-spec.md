@@ -57,12 +57,12 @@ Follow the agreed prototype (`docs/design-alternatives/round-5.html`, “Ledger,
 calmer”): ink on warm paper, barely rounded black actions, flat full-width
 rows ruled by hairlines instead of cards, large titles, and progressive
 disclosure, each screen answering one question and leaving detail to the next
-tap. Every screen's title is 32px and shrinks to 18px as the page scrolls
-under the header, with a hairline appearing below the header. Every part of the
-shrink follows the scroll. A scroll that stops partway glides on to compact, or
-back to the full header after a small nudge or a stop on the way up, so the
-header is never left half shrunk. A page that scrolls at all has room below it
-for the header to finish. Fields are bare
+tap. Every screen's title is 32px and shrinks to 18px when the page scrolls
+under the header, with a hairline appearing below the header. The header has
+two states, full and compact, and changes between them at once in one short
+movement: compact once the content has scrolled past the height the header
+gives up, full again on the way back. The header lies over the content, which
+scrolls with the finger and never moves when the header changes. Fields are bare
 text over an ink underline and show focus by their caret. Changing screens
 moves as the prototype does: parts shown on both screens fly from one place to
 the other and change shape on the way (a group's name becomes its title, a
@@ -242,7 +242,7 @@ rather than estimated, and does not scroll; only larger text can make it.
 that list in full when some of it is hidden. Show all people leaves Expenses
 as one folded row; Show all expenses folds people to avatars and a count. The
 folded row brings the overview back. Expanded lists use one page scroll. As the
-header shrinks, the caption over your balance folds away and the figure
+header turns compact, the caption over your balance folds away and the figure
 shrinks; the balance and Settle up stay complete.
 People shows the balances; Expenses shows expenses and
 recorded repayments newest first, each opening its editor. A full list that
