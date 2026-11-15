@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { View, type TextInput } from 'react-native';
 import { memberHasRecords, preferredMember } from '@splitnext/client';
-import { Button, ErrorMessage, IconButton, ListRow, PencilIcon, Row, Stack, Text, avatarSizes, balanceStyle, between, rules, sizes, titleStyle } from '../design';
+import { Button, ErrorMessage, IconButton, ListRow, PencilIcon, Row, Stack, Text, avatarSizes, balanceStyle, rules, sizes, titleStyle } from '../design';
 import { memberBreakdown } from '../model/breakdown';
 import { balanceRows, memberName, moneyLabel } from '../model/expenses';
 import { participantMarkers } from '../model/memberPresentation';
@@ -11,7 +11,6 @@ import { ActivityLink } from './GroupView';
 import { TitleField } from './TitleField';
 import { repaymentTitle } from './ExpenseList';
 import { MemberAvatar, presenceText, type MemberListApp } from './MemberList';
-import { useCompactProgress } from './pageScroll';
 import { BackButton, ScreenHeader } from './ScreenHeader';
 import { morph } from './ScreenMorph';
 import { useActionCall, useActions, useUiState } from './useActionCall';
@@ -44,7 +43,6 @@ export function BalanceFigure(props: { amount: number; currency: string; label: 
  */
 export function PersonHeader(props: { app: MemberListApp }) {
   const ui = useUiState();
-  const progress = useCompactProgress();
   const back = useActionCall();
   const save = useActionCall();
   const edit = useActionCall();
@@ -69,8 +67,6 @@ export function PersonHeader(props: { app: MemberListApp }) {
   const [youWidth, setYouWidth] = useState(0);
   const [nameHeight, setNameHeight] = useState(0);
   const actions = useActions();
-  // The avatar folds over the whole switch, so the name beside it slides rather than leaps.
-  const avatarFold = progress;
 
   function finishRename(): void {
     if (save.can('saveMemberEdit')) void save.call('saveMemberEdit', {});
@@ -83,10 +79,11 @@ export function PersonHeader(props: { app: MemberListApp }) {
       <ScreenHeader
         start={<BackButton label={`Back to ${backTo}`} text={backTo} disabled={!back.can('closePanel')} onPress={() => { void back.call('closePanel', {}); }} />}
         end={<ActivityLink app={props.app} />}
+        compactTitle={name}
         heading={(
-          <Row fill gap={0} style={{ height: renaming ? undefined : between(Math.max(nameHeight, avatarSizes.large.box + 2), sizes.touch, progress) }}>
+          <Row fill gap={0} style={{ height: renaming ? undefined : Math.max(nameHeight, avatarSizes.large.box + 2) }}>
             {replica && memberId ? (
-              <View style={{ width: between(avatarSizes.large.box, 0, avatarFold), height: between(avatarSizes.large.box + 2, 0, avatarFold), marginRight: between(12, 0, avatarFold), opacity: 1 - avatarFold, overflow: avatarFold > 0 ? 'hidden' : 'visible', alignSelf: 'flex-start', paddingTop: between(2, 0, avatarFold) }}>
+              <View style={{ width: avatarSizes.large.box, height: avatarSizes.large.box + 2, marginRight: 12, alignSelf: 'flex-start', paddingTop: 2 }}>
                 <MemberAvatar replica={replica} memberId={memberId} size="large" app={props.app} />
               </View>
             ) : null}
@@ -103,14 +100,14 @@ export function PersonHeader(props: { app: MemberListApp }) {
                   onBlur={finishRename}
                   // What follows the name: you and a gap, then a gap and the pencil, 44 wide with 12 past the edge.
                   inset={(isYou ? youWidth + 12 : 0) + 12 + 32}
-                  style={{ ...titleStyle(progress), paddingBottom: 4, ...rules.inkBelow }}
+                  style={{ ...titleStyle(0), paddingBottom: 4, ...rules.inkBelow }}
                 />
               ) : (
                 <>
-                  <Text ref={morph(replica && memberId ? `pname-${replica.group_id}-${memberId}` : null)} accessibilityRole="header" numberOfLines={2} onLayout={(event) => { if (progress === 0) setNameHeight(event.nativeEvent.layout.height); }} style={[titleStyle(progress), { flex: 1, minWidth: 0, alignSelf: 'flex-start' }]}>{name}</Text>
+                  <Text ref={morph(replica && memberId ? `pname-${replica.group_id}-${memberId}` : null)} accessibilityRole="header" numberOfLines={2} onLayout={(event) => setNameHeight(event.nativeEvent.layout.height)} style={[titleStyle(0), { flex: 1, minWidth: 0, alignSelf: 'flex-start' }]}>{name}</Text>
                   {isYou ? <Text onLayout={(event) => setYouWidth(event.nativeEvent.layout.width)} variant="body" tone="muted">you</Text> : null}
-                  {active && memberId && progress <= 0.5 ? (
-                    <IconButton label={`Rename ${name}`} disabled={!edit.can('beginEditMember', { memberId })} onPress={() => { void edit.call('beginEditMember', { memberId }); }} style={{ marginLeft: 'auto', marginRight: -12, opacity: Math.max(0, 1 - 2 * progress) }}>
+                  {active && memberId ? (
+                    <IconButton label={`Rename ${name}`} disabled={!edit.can('beginEditMember', { memberId })} onPress={() => { void edit.call('beginEditMember', { memberId }); }} style={{ marginLeft: 'auto', marginRight: -12 }}>
                       <PencilIcon size={18} />
                     </IconButton>
                   ) : null}
@@ -121,9 +118,9 @@ export function PersonHeader(props: { app: MemberListApp }) {
         )}
         below={(
           <Stack gap={8}>
-            <Text variant="caption" tone="muted" style={{ paddingTop: between(8, 2, progress) }}>{active ? presenceText(participants) : 'Removed · still in balances until settled'}</Text>
-            <View style={{ paddingTop: between(12, 4, progress) }}>
-              <BalanceFigure amount={first?.amount ?? 0} currency={first?.currency ?? 'XXX'} label={label} size={between(36, 22, progress)} morph={replica && memberId && first ? (isYou ? `gamt-${replica.group_id}-${first.currency}` : `pamt-${replica.group_id}-${memberId}-${first.currency}`) : null} />
+            <Text variant="caption" tone="muted" style={{ paddingTop: 8 }}>{active ? presenceText(participants) : 'Removed · still in balances until settled'}</Text>
+            <View style={{ paddingTop: 12 }}>
+              <BalanceFigure amount={first?.amount ?? 0} currency={first?.currency ?? 'XXX'} label={label} size={36} morph={replica && memberId && first ? (isYou ? `gamt-${replica.group_id}-${first.currency}` : `pamt-${replica.group_id}-${memberId}-${first.currency}`) : null} />
             </View>
           </Stack>
         )}

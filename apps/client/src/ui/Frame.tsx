@@ -1,7 +1,7 @@
 import { Component, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform, ScrollView, View } from 'react-native';
 import { Row, Tag, Text, colors, layout, sizes } from '../design';
-import { CompactProgressContext, PageHeightContext, ScrollToTopContext } from './pageScroll';
+import { CompactProgressContext, HeaderShrinkContext, PageHeightContext, ScrollToTopContext } from './pageScroll';
 import { useHomepage } from './screenHost';
 import {
   useCompactLayout,
@@ -151,6 +151,17 @@ export function Frame(props: FrameProps) {
     return () => cancelAnimationFrame(frame);
   }, [scrollKey]);
 
+  // A header can say what it gives up before it is first seen compact.
+  function reportShrink(shrink: number): void {
+    const current = headerRef.current;
+
+    if (Math.abs(shrink - current.shrink) <= 0.5) return;
+    const next = { ...current, shrink };
+
+    headerRef.current = next;
+    setHeader(next);
+  }
+
   const footRoom = floating ? 104 : 32;
   const pageHeight = Math.max(0, pageArea - header.full);
 
@@ -192,7 +203,9 @@ export function Frame(props: FrameProps) {
                 }
               }}
             >
-              <View style={column}>{props.header}</View>
+              <HeaderShrinkContext.Provider value={reportShrink}>
+                <View style={column}>{props.header}</View>
+              </HeaderShrinkContext.Provider>
             </View>
           ) : null}
           <ScrollView

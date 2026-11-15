@@ -209,6 +209,11 @@ function heading(page: Page, name: string) {
   return page.getByRole('heading', { name, exact: true });
 }
 
+/** A compact header's one row names the screen in its middle; tapping it returns to the top. */
+function compactTitle(page: Page, name: string) {
+  return button(page, `${name}. Scroll to top`);
+}
+
 function escaped(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -1752,7 +1757,7 @@ test('opens views at the top and restores context on returning or browsing histo
   const atTop = async () => { await expect.poll(position).toBe(0); };
 
   await scroller.evaluate((node) => { node.scrollTop = 160; });
-  await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '18px');
+  await expect(compactTitle(page, 'Scroll navigation')).toBeVisible();
   await person(page, 'Gus').scrollIntoViewIfNeeded();
   const groupPosition = await position();
 
@@ -1760,7 +1765,7 @@ test('opens views at the top and restores context on returning or browsing histo
   await atTop();
   await expect(heading(page, 'Gus')).toHaveCSS('font-size', '32px');
   await scroller.evaluate((node) => { node.scrollTop = 150; });
-  await expect(heading(page, 'Gus')).toHaveCSS('font-size', '18px');
+  await expect(compactTitle(page, 'Gus')).toBeVisible();
   await button(page, 'Back to Scroll navigation').click();
   await expect.poll(position).toBeCloseTo(groupPosition, 0);
 
@@ -1770,7 +1775,7 @@ test('opens views at the top and restores context on returning or browsing histo
   // Fully collapse the header before testing restoration; 120px can leave
   // it partly expanded depending on the header's measured height.
   await scroller.evaluate((node) => { node.scrollTop = 160; });
-  await expect(heading(page, 'Gus')).toHaveCSS('font-size', '18px');
+  await expect(compactTitle(page, 'Gus')).toBeVisible();
   const personPosition = await position();
 
   await page.goBack();
@@ -1797,7 +1802,7 @@ test('opens views at the top and restores context on returning or browsing histo
   await bell(page).click();
   await atTop();
   await scroller.evaluate((node) => { node.scrollTop = 200; });
-  await expect(heading(page, 'Activity')).toHaveCSS('font-size', '18px');
+  await expect(compactTitle(page, 'Activity')).toBeVisible();
   await button(page, 'Back to Scroll navigation').click();
   await bell(page).click();
   await atTop();
@@ -1836,7 +1841,7 @@ test('opens views at the top and restores context on returning or browsing histo
   await button(page, 'Save').click();
   await expect(heading(page, 'Scroll navigation')).toBeVisible();
   await expect.poll(position).toBeCloseTo(expenseListPosition, 0);
-  await expect(heading(page, 'Scroll navigation')).toHaveCSS('font-size', '18px');
+  await expect(compactTitle(page, 'Scroll navigation')).toBeVisible();
 });
 
 test.describe('pending scroll position', () => {
@@ -1849,7 +1854,7 @@ test.describe('pending scroll position', () => {
     const scroller = page.locator('#splitnext-page');
 
     await scroller.evaluate((node) => { node.scrollTop = 160; });
-    await expect(heading(page, 'Pending scroll')).toHaveCSS('font-size', '18px');
+    await expect(compactTitle(page, 'Pending scroll')).toBeVisible();
 
     // A scroll event is delivered on a later frame. Navigate in the same turn
     // as the new offset, so restoration cannot rely on that event arriving.
@@ -2346,7 +2351,8 @@ test('puts the Activity scroll divider under the pinned day heading', async ({ p
 
   await bell(page).click();
   const title = heading(page, 'Activity');
-  const header = title.locator('..').locator('..');
+  // The compact header's row, inside the header that would draw its divider.
+  const header = compactTitle(page, 'Activity').locator('..').locator('..');
   const today = heading(page, 'Today').locator('..').locator('..');
   const yesterday = heading(page, 'Yesterday').locator('..').locator('..');
   const scroller = page.locator('#splitnext-page');
@@ -2356,7 +2362,7 @@ test('puts the Activity scroll divider under the pinned day heading', async ({ p
   await expect(today).toHaveCSS('box-shadow', 'none');
   // Travel beyond full header collapse even after its released height adjusts scrollTop.
   await scroller.evaluate((node) => { node.scrollTop = 220; });
-  await expect(title).toHaveCSS('font-size', '18px');
+  await expect(compactTitle(page, 'Activity')).toBeVisible();
   await expect(today).not.toHaveCSS('box-shadow', 'none');
   await expect(header).toHaveCSS('box-shadow', 'none');
   await expect(yesterday).toHaveCSS('box-shadow', 'none');
@@ -2612,7 +2618,7 @@ test('shrinks the large title as the page scrolls and grows it back at the top',
   await scroller.evaluate((node) => { node.scrollTop = 0; });
   await expect(title).toHaveCSS('font-size', '32px');
   await scroller.evaluate((node) => { node.scrollTop = 200; });
-  await expect(title).toHaveCSS('font-size', '18px');
+  await expect(compactTitle(page, 'Long trip')).toBeVisible();
   await expect(button(page, 'Rename group')).toHaveCount(0);
   await expect(button(page, 'Add expense')).toBeInViewport();
 
@@ -2621,7 +2627,7 @@ test('shrinks the large title as the page scrolls and grows it back at the top',
     ['auto', 'scroll'].includes(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight ? [node.id || node.tagName] : []));
 
   expect(scrollAreas).toEqual(['splitnext-page']);
-  await button(page, 'Scroll to top').click();
+  await compactTitle(page, 'Long trip').click();
   await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBe(0);
   await expect(title).toHaveCSS('font-size', '32px');
   await expect(button(page, 'Rename group')).toBeVisible();
@@ -2665,7 +2671,7 @@ test('keeps a scrolled group still beneath the opening expense sheet', { tag: '@
 
   await showSection(page, 'Expenses');
   await scroller.evaluate((node) => { node.scrollTop = node.scrollHeight; });
-  await expect(heading(page, 'Still underneath')).toHaveCSS('font-size', '18px');
+  await expect(compactTitle(page, 'Still underneath')).toBeVisible();
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 
   for (const delta of [0, -60]) {
@@ -2717,7 +2723,7 @@ test('keeps a scrolled group still beneath the opening expense sheet', { tag: '@
 
     expect(samples.length).toBeGreaterThan(5);
     expect(screenScrolls).toEqual([]);
-    expect(samples.filter((sample) => Math.abs(sample.top - before.top) > 1 || Math.abs(sample.scroll - before.scroll) > 1 || sample.title !== '18px' || sample.amount !== '56px')).toEqual([]);
+    expect(samples.filter((sample) => Math.abs(sample.top - before.top) > 1 || Math.abs(sample.scroll - before.scroll) > 1 || sample.title !== '32px' || sample.amount !== '56px')).toEqual([]);
     await button(page, 'Cancel').click();
     await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBe(before.scroll);
     await expect(page.locator('[data-copied-page]')).toHaveCount(0);
@@ -3231,9 +3237,8 @@ test('collapses a two-line group title without a sudden header jump', { tag: '@t
   });
 
   expect(Math.max(...heights.slice(1).map((height, index) => Math.abs(height - heights[index]!)))).toBeLessThan(8);
-  await expect(title).toHaveCSS('font-size', '18px');
-  expect((await title.boundingBox())!.height).toBeLessThan(30);
-  await button(page, 'Scroll to top').click();
+  await expect(compactTitle(page, 'A long summer holiday')).toBeVisible();
+  await compactTitle(page, 'A long summer holiday').click();
   await expect(title).toHaveCSS('font-size', '32px');
 });
 
@@ -3345,7 +3350,7 @@ test('fits a small group overview and expands either list on a phone', async ({ 
   await expect(button(page, 'Change Ferry · 10.00')).toBeAttached();
 });
 
-test('switches the header between full and compact at once without moving the page', async ({ page }) => {
+test('folds the header to its top row at once without moving the page', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 744 });
   await createGroup(page, 'Halfway', 'Ana');
   await addMember(page, 'Ben');
@@ -3374,17 +3379,19 @@ test('switches the header between full and compact at once without moving the pa
   expect(await scroller.evaluate((node) => node.scrollTop)).toBe(20);
 
   // Past what the header gives up, it turns compact on its own while the page stays where it was put.
-  await scroller.evaluate((node) => { node.scrollTop = 150; });
-  await expect(title).toHaveCSS('font-size', '18px');
+  await scroller.evaluate((node) => { node.scrollTop = 220; });
+  await expect(compactTitle(page, 'Halfway')).toBeVisible();
   await page.waitForTimeout(400);
-  expect(await scroller.evaluate((node) => node.scrollTop)).toBe(150);
+  expect(await scroller.evaluate((node) => node.scrollTop)).toBe(220);
   expect(await placed()).toBe(start);
-  await expect(button(page, 'Settle up')).toBeInViewport({ ratio: 1 });
+  // Only the top row stays: the title and your balance fold away whole.
+  await expect(button(page, 'Settle up')).not.toBeInViewport();
   await expect(row).toBeAttached();
 
   // Back near the top it is full again, and still nothing scrolls by itself.
   await scroller.evaluate((node) => { node.scrollTop = 10; });
   await expect(title).toHaveCSS('font-size', '32px');
+  await expect(compactTitle(page, 'Halfway')).toHaveCount(0);
   await page.waitForTimeout(400);
   expect(await scroller.evaluate((node) => node.scrollTop)).toBe(10);
   expect(await placed()).toBe(start);
@@ -3541,12 +3548,12 @@ test('folds a person avatar without jumping their name sideways while scrolling'
 
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 
-  // The header switches as one movement; each frame of it moves the name only a little.
+  // The name folds away with the header in one movement, never sliding sideways.
   const positions = await page.locator('#splitnext-page').evaluate(async (node) => {
     const values: number[] = [];
     const start = performance.now();
 
-    node.scrollTop = 160;
+    node.scrollTop = 300;
 
     while (performance.now() - start < 500) {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -3556,8 +3563,7 @@ test('folds a person avatar without jumping their name sideways while scrolling'
     return values;
   });
 
-  expect(Math.max(...positions.slice(1).map((x, index) => Math.abs(x - positions[index]!)))).toBeLessThan(20);
-  expect(positions.at(-1)! - positions[0]!).toBeLessThan(-40);
-  await expect(heading(page, name)).toHaveCSS('font-size', '18px');
+  expect(Math.max(...positions.map((x) => Math.abs(x - positions[0]!)))).toBeLessThan(1);
+  await expect(compactTitle(page, name)).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('person-header-compact.png') });
 });

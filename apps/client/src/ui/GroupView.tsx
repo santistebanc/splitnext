@@ -47,9 +47,6 @@ export function ActivityLink(props: { app: MemberListApp }) {
 /** The compact title's row: its one 18px line with room for descenders. */
 const compactTitleRow = 28;
 
-/** The caption over your balance, which folds away as the header shrinks. */
-const standingLine = 18;
-
 /** The group's name, large; the pencil turns it into a field that saves on leaving it. */
 function GroupName(props: { name: string; groupId: string }) {
   const progress = useCompactProgress();
@@ -190,10 +187,9 @@ function yourStanding(amount: number | undefined): string {
 /**
  * Where you stand, first on the group: what you owe or get back, large, with
  * Settle up beside it while a payment of the plan involves you. Tapping the
- * figure opens your details. A compact figure stays complete while scrolling.
+ * figure opens your details. It folds away with the rest of the header.
  */
 function YourBalance(props: { replica: Replica }) {
-  const progress = useCompactProgress();
   const open = useActionCall();
   const settle = useActionCall();
   const snapshot = props.replica.projected_snapshot;
@@ -225,7 +221,7 @@ function YourBalance(props: { replica: Replica }) {
 
   return (
     <View testID="your-balance">
-      <Row gap={12} align="end" style={{ paddingTop: between(8, 4, progress) }}>
+      <Row gap={12} align="end" style={{ paddingTop: 8 }}>
         <Touchable
           accessibilityRole="button"
           accessibilityLabel={`${name} (you), ${amounts.join(', ') || 'settled'}. Show details`}
@@ -233,12 +229,9 @@ function YourBalance(props: { replica: Replica }) {
           onPress={() => { void open.call('showPerson', { memberId: you.id }); }}
           style={{ flex: 1, minWidth: 0 }}
         >
-          {/* Every part of the shrink follows the scroll, so nothing jumps. */}
-          <View style={{ height: between(standingLine, 0, progress), opacity: Math.max(0, 1 - 2 * progress), overflow: 'hidden' }}>
-            <Text variant="caption" weight="semibold" tone="muted">{yourStanding(balances[0]?.amount)}</Text>
-          </View>
+          <Text variant="caption" weight="semibold" tone="muted">{yourStanding(balances[0]?.amount)}</Text>
           {balances.map((entry) => (
-            <Text key={entry.currency} ref={morph(`gamt-${props.replica.group_id}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} color={balanceColor(entry.amount)} style={balanceStyle(between(36, 22, progress))}>
+            <Text key={entry.currency} ref={morph(`gamt-${props.replica.group_id}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} color={balanceColor(entry.amount)} style={balanceStyle(36)}>
               {moneyLabel(Math.abs(entry.amount), entry.currency)}
             </Text>
           ))}
@@ -274,6 +267,7 @@ export function GroupHeader(props: { app: MemberListApp }) {
       start={<BackButton label="Back to groups" disabled={!actions.availability('showGroups', {}).available} onPress={() => { void actions.dispatch('showGroups', {}, { origin: 'ui' }); }} />}
       end={open ? <><InviteToggle toggle={inviteToggle} /><ActivityLink app={props.app} /></> : undefined}
       heading={open && replica ? <GroupName name={name} groupId={replica.group_id} /> : undefined}
+      compactTitle={open ? name : undefined}
       title={open ? undefined : name}
       below={open && replica ? (
         <View>

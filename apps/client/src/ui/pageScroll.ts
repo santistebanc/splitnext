@@ -87,6 +87,9 @@ export function useCompactProgress(): number {
   return useSyncExternalStore(progress.subscribe, progress.get, progress.get);
 }
 
+/** Receives how much a screen header gives up when compact, as soon as it is measured. */
+export const HeaderShrinkContext = createContext<((shrink: number) => void) | null>(null);
+
 /** Return the current frame to its start from its title. */
 export const ScrollToTopContext = createContext<(() => void) | null>(null);
 
