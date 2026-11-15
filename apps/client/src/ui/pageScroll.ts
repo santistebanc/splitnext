@@ -103,6 +103,28 @@ export function createCompactProgress() {
   };
 }
 
+/**
+ * Content a page needs below the screen, beyond what fits with the full top,
+ * so that its top can always finish shrinking.
+ */
+export const shrinkRoom = shrinkDistance;
+
+/**
+ * Where a page that came to rest partway through its top's shrink glides to,
+ * so the top is never left half shrunk: on to compact when the last movement
+ * went down past a fifth of the way, otherwise back to the top. Null when the
+ * top is already at either end. The top keeps releasing space in proportion
+ * to the content's travel, so the scroll to finish scales by the same amount.
+ */
+export function settledScroll(y: number, headerCollapse: number, down: boolean): number | null {
+  const travel = y + headerCollapse;
+  const progress = travel / shrinkDistance;
+
+  if (y <= 0 || progress <= 0.01 || progress >= 0.99) return null;
+
+  return (down ? progress >= 0.2 : progress > 0.8) ? Math.ceil((y * shrinkDistance) / travel) + 1 : 0;
+}
+
 /** The current screen's compact progress; outside a screen its top stays full size. */
 export const CompactProgressContext = createContext<Pick<ValueStore, 'get' | 'subscribe'>>(createValueStore());
 

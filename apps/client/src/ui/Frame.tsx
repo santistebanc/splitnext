@@ -1,7 +1,7 @@
 import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform, ScrollView, View } from 'react-native';
 import { Row, Tag, Text, colors, layout, sizes } from '../design';
-import { PageHeightContext, ScrollToTopContext } from './pageScroll';
+import { PageHeightContext, ScrollToTopContext, settledScroll, shrinkRoom } from './pageScroll';
 import { useHomepage } from './screenHost';
 import {
   useCompactLayout,
@@ -66,7 +66,11 @@ type FrameProps = {
  * in one narrow column like a phone screen on every device.
  */
 export function Frame(props: FrameProps) {
-  const [pageHeight, setPageHeight] = useState(0);
+  // The page's height and the space its header has released are kept apart,
+  // since either can lay out first; the page with its full header is their difference.
+  const [pageArea, setPageArea] = useState(0);
+  const [released, setReleased] = useState(0);
+  const pageHeight = pageArea && pageArea - released;
   const mobile = useCompactLayout();
   const touch = useTouchInput();
   const scroll = useRef<ScrollView>(null);
@@ -112,6 +116,7 @@ export function Frame(props: FrameProps) {
     else headers.current.delete(scrollKey);
     scroll.current?.scrollTo({ y: restored, animated: false });
     props.onScroll?.(restored, restored > 0 && header ? header.full - header.current : 0, true);
+    setReleased(restored > 0 && header ? header.full - header.current : 0);
 
     const frame = requestAnimationFrame(() => {
       restoring.current = false;
@@ -119,6 +124,81 @@ export function Frame(props: FrameProps) {
 
     return () => cancelAnimationFrame(frame);
   }, [scrollKey]);
+
+  // A page let go partway through its header's shrink glides on to an end, as
+  // a scroll the person could have made, once the finger lifts and any fling
+  // or wheel movement stops.
+  const hasHeader = Boolean(props.header);
+
+  useEffect(() => {
+    const node: unknown = Platform.OS === 'web' ? scroll.current?.getScrollableNode() : null;
+
+    if (!hasHeader || !(node instanceof HTMLElement)) return;
+    let holding = false;
+    let down = true;
+    let last = node.scrollTop;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const settle = () => {
+      timer = undefined;
+
+      if (holding || restoring.current) return;
+      const y = node.scrollTop;
+      const header = headerSize.current;
+      const target = settledScroll(y, y > 0 ? header.full - header.current : 0, down);
+
+      if (target === null) return;
+      const top = Math.min(target, node.scrollHeight - node.clientHeight);
+
+      if (Math.abs(top - y) < 1) return;
+      // The ScrollView's own call: its node's scrollTo takes React Native's `{ y }`.
+      scroll.current?.scrollTo({ y: top, animated: !window.matchMedia('(prefers-reduced-motion: reduce)').matches });
+    };
+
+    const later = () => {
+      clearTimeout(timer);
+      timer = setTimeout(settle, 140);
+    };
+
+    const moved = () => {
+      const y = node.scrollTop;
+
+      if (y !== last) down = y > last;
+      last = y;
+      later();
+    };
+
+    const press = () => {
+      holding = true;
+      clearTimeout(timer);
+    };
+
+    const release = () => {
+      holding = false;
+      later();
+    };
+
+    node.addEventListener('scroll', moved, { passive: true });
+    node.addEventListener('touchstart', press, { passive: true });
+    node.addEventListener('touchend', release, { passive: true });
+    node.addEventListener('touchcancel', release, { passive: true });
+
+    return () => {
+      clearTimeout(timer);
+      node.removeEventListener('scroll', moved);
+      node.removeEventListener('touchstart', press);
+      node.removeEventListener('touchend', release);
+      node.removeEventListener('touchcancel', release);
+    };
+  }, [hasHeader]);
+
+  // Content taller than the page with its full header gets room for the
+  // header to finish shrinking, so it is never stuck partway at the bottom.
+  const [contentHeight, setContentHeight] = useState(0);
+  const footRoom = floating ? 104 : 32;
+  // The room is padding, not a minimum height: content that grows to fill the
+  // page then still ends where its own rows do, so the room never feeds itself.
+  const shrinkPadding = hasHeader && pageHeight > 0 && contentHeight + footRoom > pageHeight + 1 ? Math.max(0, pageHeight + shrinkRoom - contentHeight - footRoom) : 0;
 
   const visibleHeight = useVisibleViewportHeight(
     (mobile || touch) && !homepage,
@@ -149,6 +229,7 @@ export function Frame(props: FrameProps) {
 
               headerSize.current = { key: scrollKey, full: y > 0 ? Math.max(full, height) : height, current: height };
               headers.current.set(scrollKey, { full: headerSize.current.full, current: height });
+              setReleased(y > 0 ? Math.max(0, headerSize.current.full - height) : 0);
 
               if (restoring.current) return;
 
@@ -159,7 +240,7 @@ export function Frame(props: FrameProps) {
             <View style={column}>{props.header}</View>
           </View>
         ) : null}
-        <View style={page} onLayout={(event) => setPageHeight(event.nativeEvent.layout.height - Math.max(0, headerSize.current.full - headerSize.current.current))}>
+        <View style={page} onLayout={(event) => setPageArea(event.nativeEvent.layout.height)}>
           <ScrollView
             ref={scroll}
             onScroll={(event) => {
@@ -171,6 +252,8 @@ export function Frame(props: FrameProps) {
               scrolled.current = y;
               positions.current.set(scrollKey, y);
               props.onScroll?.(y, y > 0 && header.key === scrollKey ? header.full - header.current : 0);
+              // At the top the header is full, whatever size it had while scrolled.
+              setReleased(y > 0 && header.key === scrollKey ? Math.max(0, header.full - header.current) : 0);
 
               if (down) props.onScrollDown?.();
             }}
@@ -180,14 +263,17 @@ export function Frame(props: FrameProps) {
             contentContainerStyle={{ flexGrow: 1 }}
             keyboardShouldPersistTaps="handled"
           >
-            <View style={[{ width: '100%', maxWidth: homepage ? layout.page : layout.column, alignSelf: 'center', flexGrow: 1, paddingHorizontal: layout.gutter, paddingBottom: 32 }, floating && { paddingBottom: 104 }]}>
+            <View style={[{ width: '100%', maxWidth: homepage ? layout.page : layout.column, alignSelf: 'center', flexGrow: 1, paddingHorizontal: layout.gutter, paddingBottom: footRoom + shrinkPadding }]}>
               {homepage ? (
                 <Row gap={8} paddingY={mobile ? 4 : 12} style={{ minHeight: mobile ? sizes.row : 64 }}>
                   <Text variant="strong" weight="bold">splitnext</Text>
                   <Tag>beta</Tag>
                 </Row>
               ) : null}
-              <PageHeightContext.Provider value={pageHeight - (floating ? 104 : 32)}>{props.children}</PageHeightContext.Provider>
+              {/* Content fills the page with its full header, and measures taller only when it is. */}
+              <View style={{ minHeight: Math.max(0, pageHeight - footRoom) }} onLayout={(event) => setContentHeight(event.nativeEvent.layout.height)}>
+                <PageHeightContext.Provider value={pageHeight - footRoom}>{props.children}</PageHeightContext.Provider>
+              </View>
             </View>
           </ScrollView>
         </View>

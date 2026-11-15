@@ -264,9 +264,14 @@ function clippedText(page: Page): Promise<string[]> {
 /** Brings a section of the shared group screen into view. */
 async function showSection(page: Page, name: 'People' | 'Expenses'): Promise<void> {
   const show = button(page, `Show all ${name.toLowerCase()}`);
+  const overview = page.getByRole('button', { name: /\. Show overview$/ });
+
+  if (await overview.count()) await overview.click();
 
   if (await show.count()) await show.click();
+
   await page.locator('#splitnext-page').evaluate((node) => { node.scrollTop = 0; });
+
   if (name === 'Expenses') await heading(page, 'Expenses').scrollIntoViewIfNeeded();
 }
 
@@ -3288,7 +3293,8 @@ test('fits a small group overview and expands either list on a phone', async ({ 
 
   for (const name of ['Ben', 'Dana', 'Eve', 'Waka']) await addMember(page, name);
   await addExpense(page, 'Dinner together', '100');
-  const overview = button(page, 'Overview');
+  // An expanded list folds the other into one row that brings the overview back.
+  const overview = page.getByRole('button', { name: /\. Show overview$/ });
 
   if (await overview.count()) await overview.click();
   const scroller = page.locator('#splitnext-page');
@@ -3297,14 +3303,22 @@ test('fits a small group overview and expands either list on a phone', async ({ 
   await expect(person(page, 'Ben')).toBeInViewport({ ratio: 1 });
   await expect(button(page, 'Change Dinner together · 100.00')).toBeInViewport({ ratio: 1 });
   await expect.poll(() => scroller.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeLessThanOrEqual(1);
+  // One month needs no heading.
+  await expect(heading(page, new Date().toLocaleString('en-US', { month: 'long' }))).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('overview-small.png') });
 
-  for (const name of ['Fran', 'Gus', 'Hal', 'Ida', 'Jo']) await addMember(page, name);
+  // More people than fit still leave the overview without a scroll: the preview shortens.
+  for (const name of ['Fran', 'Gus', 'Hal', 'Ida', 'Jo', 'Kai', 'Lu', 'Mo']) await addMember(page, name);
+
+  for (const item of ['Taxi', 'Bread', 'Museum', 'Ferry']) await addExpense(page, item, '10');
 
   if (await overview.count()) await overview.click();
-  await expect(button(page, 'Show all people')).toBeVisible();
+  await expect.poll(() => scroller.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeLessThanOrEqual(1);
+  await expect(button(page, 'Change Ferry · 10.00')).toBeInViewport({ ratio: 1 });
+  await expect(button(page, 'Show all people')).toBeInViewport({ ratio: 1 });
+  await expect(button(page, 'Show all expenses')).toBeInViewport({ ratio: 1 });
   await button(page, 'Show all people').click();
-  await expect(person(page, 'Jo')).toBeAttached();
+  await expect(person(page, 'Mo')).toBeAttached();
   await expect(button(page, 'Change Dinner together · 100.00')).toHaveCount(0);
   await scroller.evaluate((node) => { node.scrollTop = 12; });
   await expect(button(page, 'Settle up')).toBeInViewport({ ratio: 1 });
@@ -3313,6 +3327,7 @@ test('fits a small group overview and expands either list on a phone', async ({ 
   await expect(balance).toBeInViewport({ ratio: 1 });
   expect(await clippedText(page)).toEqual([]);
   await page.screenshot({ path: test.info().outputPath('people-expanded-small-scroll.png') });
+  await overview.click();
   await button(page, 'Show all expenses').click();
   await expect(person(page, 'Ben')).toHaveCount(0);
   await expect(button(page, 'Change Dinner together · 100.00')).toBeVisible();
@@ -3325,8 +3340,40 @@ test('fits a small group overview and expands either list on a phone', async ({ 
   await field(page, 'Search expenses').fill('not found');
   await expect(page.getByText('Nothing matches', { exact: true })).toBeVisible();
   await button(page, 'Cancel').click();
-  await overview.click();
-  await expect(button(page, 'Change Dinner together · 100.00')).toBeAttached();
+
+  if (await overview.count()) await overview.click();
+  await expect(button(page, 'Change Ferry · 10.00')).toBeAttached();
+});
+
+test('finishes the header shrink after a scroll stops partway', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 744 });
+  await createGroup(page, 'Halfway', 'Ana');
+  await addMember(page, 'Ben');
+
+  for (let index = 0; index < 14; index++) await addExpense(page, `Item ${index}`, '20');
+  await showSection(page, 'Expenses');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const scroller = page.locator('#splitnext-page');
+  const top = () => scroller.evaluate((node) => node.scrollTop);
+  const caption = page.getByTestId('your-balance').getByText('You get back', { exact: true });
+
+  // A small nudge returns to the full header.
+  await scroller.evaluate((node) => { node.scrollTop = 12; });
+  await expect.poll(top).toBe(0);
+  await expect(caption).toBeInViewport();
+
+  // A scroll stopped past a fifth of the shrink glides on until the header is compact.
+  await scroller.evaluate((node) => { node.scrollTop = 60; });
+  await expect.poll(top).toBeGreaterThan(100);
+  const settled = await top();
+  await page.waitForTimeout(300);
+  expect(await top()).toBe(settled);
+  await expect.poll(() => caption.evaluate((node) => node.parentElement!.getBoundingClientRect().height)).toBeLessThan(1);
+  await expect(button(page, 'Settle up')).toBeInViewport({ ratio: 1 });
+
+  // Stopping partway on the way up returns to the full header.
+  await scroller.evaluate((node) => { node.scrollTop = Math.round(node.scrollTop * 0.4); });
+  await expect.poll(top).toBe(0);
 });
 
 test('searches expenses and repayments with accent-insensitive words and personal filters', async ({ page }) => {

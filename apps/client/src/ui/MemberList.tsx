@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Platform, View, type StyleProp, type TextInput, type TextStyle } from 'react-native';
 import type { ClientReplicaState } from '@splitnext/client';
 import { memberStatus, memberTint, participantMarkers, type ParticipantMarker } from '../model/memberPresentation';
@@ -124,7 +124,8 @@ export function MemberNameInput(props: {
  * text, Add at the row's end does what Enter does, so the keyboard's own key
  * is not the only way to say "add this one".
  */
-export function AddPersonRow() {
+/** `end` sits at the row's end, such as a way to show everyone, and steps aside while a name is typed. */
+export function AddPersonRow(props: { end?: ReactNode } = {}) {
   const actions = useActions();
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -241,7 +242,7 @@ export function AddPersonRow() {
           <View ref={addButton}>
             <Button size="compact" label={`Add ${text.trim()}`} onPress={() => { take(); input.current?.focus(); }}>Add</Button>
           </View>
-        ) : null}
+        ) : adding ? null : props.end}
       </View>
       <EditCover open={adding} target={row} onPress={() => input.current?.blur()} />
       <ErrorMessage message={error} />

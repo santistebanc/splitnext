@@ -1,4 +1,4 @@
-import { useContext, useRef, useState, type RefObject } from 'react';
+import { useContext, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { View, type TextInput } from 'react-native';
 import { groupNameSchema, preferredMember, repaymentMembers } from '@splitnext/client';
 import { BellIcon, Button, ChevronDownIcon, ChevronUpIcon, CountBadge, ErrorMessage, IconButton, Input, InviteIcon, PencilIcon, Row, SearchIcon, Stack, Tag, Text, TextButton, ToggleChip, Touchable, YouBadge, between, colors, balanceStyle, layout, radii, rules, sizes, titleStyle } from '../design';
@@ -44,6 +44,12 @@ export function ActivityLink(props: { app: MemberListApp }) {
   );
 }
 
+/** The compact title's row: its one 18px line with room for descenders. */
+const compactTitleRow = 28;
+
+/** The caption over your balance, which folds away as the header shrinks. */
+const standingLine = 18;
+
 /** The group's name, large; the pencil turns it into a field that saves on leaving it. */
 function GroupName(props: { name: string; groupId: string }) {
   const progress = useCompactProgress();
@@ -76,7 +82,7 @@ function GroupName(props: { name: string; groupId: string }) {
   return (
     <View style={{ flex: 1, minWidth: 0 }}>
       {/* While editing, the field sets the height, growing as the name wraps. */}
-      <Row style={{ minHeight: sizes.touch, height: fullTitleHeight && draft === null ? between(Math.max(sizes.touch, fullTitleHeight), sizes.touch, progress) : undefined }}>
+      <Row style={{ minHeight: draft === null ? between(sizes.touch, compactTitleRow, progress) : sizes.touch, height: fullTitleHeight && draft === null ? between(Math.max(sizes.touch, fullTitleHeight), compactTitleRow, progress) : undefined }}>
         {/* Measure the expanded title independently of wrapping during collapse.
             Its second line releases space continuously rather than all at once. */}
         <Text aria-hidden pointerEvents="none" numberOfLines={2} onLayout={(event) => setFullTitleHeight(event.nativeEvent.layout.height)} style={[titleStyle(0), { position: 'absolute', left: 0, right: 34, top: 0, opacity: 0 }]}>{name}</Text>
@@ -197,7 +203,6 @@ function YourBalance(props: { replica: Replica }) {
   const balances = balancesByMember(props.replica).get(you.id) ?? [];
   const name = memberName(snapshot, you.id);
   const amounts = balances.map((entry) => signedFigure(entry.amount, entry.currency));
-  const compact = progress > 0.12;
 
   // Until an expense names you, a quiet line still opens your details, such as to rename yourself.
   if (!hasRecords(snapshot, you.id))
@@ -220,7 +225,7 @@ function YourBalance(props: { replica: Replica }) {
 
   return (
     <View testID="your-balance">
-      <Row gap={12} align="end" style={{ paddingTop: 8 }}>
+      <Row gap={12} align="end" style={{ paddingTop: between(8, 4, progress) }}>
         <Touchable
           accessibilityRole="button"
           accessibilityLabel={`${name} (you), ${amounts.join(', ') || 'settled'}. Show details`}
@@ -228,9 +233,12 @@ function YourBalance(props: { replica: Replica }) {
           onPress={() => { void open.call('showPerson', { memberId: you.id }); }}
           style={{ flex: 1, minWidth: 0 }}
         >
-          <Text variant="caption" weight="semibold" tone="muted">{yourStanding(balances[0]?.amount)}</Text>
+          {/* Every part of the shrink follows the scroll, so nothing jumps. */}
+          <View style={{ height: between(standingLine, 0, progress), opacity: Math.max(0, 1 - 2 * progress), overflow: 'hidden' }}>
+            <Text variant="caption" weight="semibold" tone="muted">{yourStanding(balances[0]?.amount)}</Text>
+          </View>
           {balances.map((entry) => (
-            <Text key={entry.currency} ref={morph(`gamt-${props.replica.group_id}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} color={balanceColor(entry.amount)} style={balanceStyle(compact ? 24 : 36)}>
+            <Text key={entry.currency} ref={morph(`gamt-${props.replica.group_id}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} color={balanceColor(entry.amount)} style={balanceStyle(between(36, 22, progress))}>
               {moneyLabel(Math.abs(entry.amount), entry.currency)}
             </Text>
           ))}
@@ -355,7 +363,7 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
  * Everyone else with their balance, then the people who are settled folded
  * into one line that shows them, and a last row to add a person.
  */
-function People(props: { app: MemberListApp; replica: Replica; limit?: number | undefined }) {
+function People(props: { app: MemberListApp; replica: Replica; limit?: number | undefined; end?: ReactNode }) {
   const actions = useActions();
   const ui = useUiState();
   const snapshot = props.replica.projected_snapshot;
@@ -396,10 +404,13 @@ function People(props: { app: MemberListApp; replica: Replica; limit?: number | 
         </Touchable>
       ) : null}
       {ui.balancesExpanded ? square.slice(0, props.limit === undefined ? undefined : Math.max(0, props.limit - open.length)).map(row) : null}
-      <AddPersonRow />
+      <AddPersonRow end={props.end} />
     </View>
   );
 }
+
+/** The overview's fixed rows: adding a person, the gap, and the expenses heading. */
+const overviewChrome = sizes.row + 8 + sizes.touch;
 
 /**
  * People and expenses share one page. The people can fold away while the
@@ -413,6 +424,8 @@ export function GroupView(props: GroupViewProps) {
   const snapshot = replica?.projected_snapshot;
   const pageHeight = useContext(PageHeightContext);
   const scrollToTop = useContext(ScrollToTopContext);
+  const [fit, setFit] = useState({ key: '', rows: 0, ceiling: Infinity });
+  const fitKey = `${pageHeight}:${ui.groupFocus}:${ui.search.open}:${ui.balancesExpanded}`;
 
   if (!snapshot || !replica) return null;
 
@@ -432,44 +445,74 @@ export function GroupView(props: GroupViewProps) {
 
   const others = repaymentMembers(snapshot).filter((member) => member.id !== preferredMember(snapshot, replica.session?.identity.id)?.id).length;
   const focus = ui.groupFocus;
-  // Reserve the add-person row, section heading, month and disclosure controls.
-  // Short viewports and larger text can still scroll; complete rows stay usable.
-  const rowBudget = Math.max(2, Math.floor((pageHeight - 168) / sizes.row));
-  const peopleLimit = Math.min(others, 4, Math.max(1, rowBudget - Math.min(entries, 3)));
-  const expenseLimit = Math.max(1, Math.min(3, rowBudget - peopleLimit));
+  // Rows that fit beside the add-person row, the gap and the expenses heading.
+  // The overview's measured height corrects this for rows that wrap or grow.
+  const rows = fit.key === fitKey ? fit.rows : Math.max(2, Math.floor((pageHeight - overviewChrome) / sizes.row));
+  const peopleLimit = Math.min(others, Math.max(1, rows - Math.min(entries, Math.floor(rows / 2))));
+  const expenseLimit = Math.max(1, rows - Math.max(1, Math.min(others, peopleLimit)));
 
   const changeFocus = (next: 'overview' | 'people' | 'expenses') => {
     void actions.dispatch('setGroupFocus', { focus: next }, { origin: 'ui' });
     scrollToTop?.();
   };
 
+  // The overview never scrolls while a row fewer would fit: a row leaves when
+  // the content runs past the page, and returns while one more still fits.
+  const measure = (height: number) => {
+    if (focus !== 'overview' || !pageHeight) return;
+    const ceiling = fit.key === fitKey ? fit.ceiling : Infinity;
+
+    if (height > pageHeight + 0.5 && rows > 2) setFit({ key: fitKey, rows: rows - 1, ceiling: rows - 1 });
+    else if (height + sizes.row <= pageHeight && rows < ceiling && (others > peopleLimit || entries > expenseLimit)) setFit({ key: fitKey, rows: rows + 1, ceiling });
+  };
+
+  const showAll = (list: 'people' | 'expenses', count: number) => (
+    <TextButton label={`Show all ${list}`} onPress={() => changeFocus(list)} underline={false} tone="muted" style={{ height: sizes.touch, paddingLeft: 12 }}>
+      {`All ${count} ›`}
+    </TextButton>
+  );
+
+  // An expanded list folds the other into one row; tapping it brings both back.
+  const folded = (label: string, children: ReactNode) => (
+    <Touchable accessibilityRole="button" accessibilityLabel={`${label}. Show overview`} onPress={() => changeFocus('overview')} style={{ minHeight: sizes.touch, flexDirection: 'row', alignItems: 'center', gap: 8, ...rules.below }}>
+      {children}
+      <ChevronDownIcon size={16} />
+    </Touchable>
+  );
+
   return (
-    <Stack gap={16}>
-      {focus !== 'overview' ? <TextButton onPress={() => changeFocus('overview')} style={{ alignSelf: 'flex-start' }}>Overview</TextButton> : null}
-      <View role="region" aria-label="Group people">
-        {focus === 'expenses' ? (
-          <Touchable accessibilityRole="button" accessibilityLabel="Show all people" onPress={() => changeFocus('people')} style={{ minHeight: sizes.touch, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Row>{repaymentMembers(snapshot).slice(0, 3).map((member, index) => <View key={member.id} style={{ marginLeft: index ? -8 : 0 }}><MemberAvatar replica={replica} memberId={member.id} size="small" /></View>)}</Row>
-            <Text variant="body" tone="muted" style={{ flex: 1 }}>{people} people</Text>
-            <ChevronDownIcon size={16} />
-          </Touchable>
-        ) : (
-          <>
-            <People app={props.app} replica={replica} limit={focus === 'overview' ? peopleLimit : undefined} />
-            {focus === 'overview' && others > peopleLimit ? <TextButton onPress={() => changeFocus('people')} style={{ alignSelf: 'flex-start' }}>Show all people</TextButton> : null}
-          </>
-        )}
-      </View>
-      <View role="region" aria-label="Group expenses">
-        <Row gap={8} style={{ minHeight: sizes.touch, ...rules.below }}>
-          <Text accessibilityRole="header" aria-level={2} variant="strong">Expenses</Text>
-          <Text variant="body" tone="muted" style={{ flex: 1 }}>{entries}</Text>
-          {entries ? <SearchToggle /> : null}
-        </Row>
-        <Reveal>{ui.search.open ? <SearchBar /> : null}</Reveal>
-        {focus === 'people' ? <TextButton onPress={() => changeFocus('expenses')} style={{ alignSelf: 'flex-start' }}>Show all expenses</TextButton> : <ExpenseList replica={replica} limit={focus === 'overview' ? expenseLimit : undefined} />}
-        {focus === 'overview' && entries > expenseLimit ? <TextButton onPress={() => changeFocus('expenses')} style={{ alignSelf: 'flex-start' }}>Show all expenses</TextButton> : null}
-      </View>
-    </Stack>
+    <View onLayout={(event) => measure(event.nativeEvent.layout.height)}>
+      <Stack gap={focus === 'overview' ? 8 : 12}>
+        <View role="region" aria-label="Group people">
+          {focus === 'expenses' ? folded(`${people} people`, (
+            <>
+              <Row>{repaymentMembers(snapshot).slice(0, 3).map((member, index) => <View key={member.id} style={{ marginLeft: index ? -8 : 0 }}><MemberAvatar replica={replica} memberId={member.id} size="small" /></View>)}</Row>
+              <Text variant="body" tone="muted" style={{ flex: 1 }}>{people} people</Text>
+            </>
+          )) : (
+            <People app={props.app} replica={replica} limit={focus === 'overview' ? peopleLimit : undefined} end={focus === 'overview' && others > peopleLimit ? showAll('people', others) : undefined} />
+          )}
+        </View>
+        <View role="region" aria-label="Group expenses">
+          {focus === 'people' ? folded(`Expenses, ${entries}`, (
+            <>
+              <Text variant="strong">Expenses</Text>
+              <Text variant="body" tone="muted" style={{ flex: 1 }}>{entries}</Text>
+            </>
+          )) : (
+            <>
+              <Row gap={8} style={{ minHeight: sizes.touch, ...rules.below }}>
+                <Text accessibilityRole="header" aria-level={2} variant="strong">Expenses</Text>
+                <Text variant="body" tone="muted" style={{ flex: 1 }}>{entries}</Text>
+                {focus === 'overview' && entries > expenseLimit ? showAll('expenses', entries) : null}
+                {entries ? <SearchToggle /> : null}
+              </Row>
+              <Reveal>{ui.search.open ? <SearchBar /> : null}</Reveal>
+              <ExpenseList replica={replica} limit={focus === 'overview' ? expenseLimit : undefined} />
+            </>
+          )}
+        </View>
+      </Stack>
+    </View>
   );
 }

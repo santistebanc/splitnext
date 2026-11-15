@@ -39,7 +39,7 @@ function ledgerEntries(replica: Replica): Entry[] {
     .map(({ entry }) => entry);
 }
 
-/** The group screen's list: expenses and repayments, newest first, under the month each falls in. */
+/** The group screen's list: expenses and repayments, newest first, under the month each falls in when they span several. */
 export function ExpenseList(props: { replica: Replica; limit?: number | undefined }) {
   const search = useUiState().search;
   const you = preferredMember(props.replica.projected_snapshot, props.replica.session?.identity.id)?.id;
@@ -50,6 +50,8 @@ export function ExpenseList(props: { replica: Replica; limit?: number | undefine
 
   if (!entries.length) return <EmptyState title="Nothing matches" text="Try other words, or turn a filter off." />;
   const created = (entry: Entry) => (entry.kind === 'expense' ? entry.expense.created_at : entry.settlement.created_at);
+  // Months divide only a full list that spans more than one; a preview or a single month needs no heading.
+  const months = props.limit === undefined && new Set(entries.map((entry) => monthHeading(created(entry)))).size > 1;
 
   return (
     <View role="list" aria-label="Expenses">
@@ -59,7 +61,7 @@ export function ExpenseList(props: { replica: Replica; limit?: number | undefine
 
         return (
           <View key={entry.kind === 'expense' ? entry.expense.id : entry.settlement.id}>
-            {!previous || monthHeading(created(previous)) !== month ? (
+            {months && (!previous || monthHeading(created(previous)) !== month) ? (
               <Text accessibilityRole="header" variant="meta" weight="semibold" tone="muted" style={{ paddingTop: 16, paddingBottom: 4 }}>{month}</Text>
             ) : null}
             {entry.kind === 'expense'

@@ -58,7 +58,11 @@ calmer”): ink on warm paper, barely rounded black actions, flat full-width
 rows ruled by hairlines instead of cards, large titles, and progressive
 disclosure, each screen answering one question and leaving detail to the next
 tap. Every screen's title is 32px and shrinks to 18px as the page scrolls
-under the header, with a hairline appearing below the header. Fields are bare
+under the header, with a hairline appearing below the header. Every part of the
+shrink follows the scroll. A scroll that stops partway glides on to compact, or
+back to the full header after a small nudge or a stop on the way up, so the
+header is never left half shrunk. A page that scrolls at all has room below it
+for the header to finish. Fields are bare
 text over an ink underline and show focus by their caret. Changing screens
 moves as the prototype does: parts shown on both screens fly from one place to
 the other and change shape on the way (a group's name becomes its title, a
@@ -232,15 +236,18 @@ A group opens on one screen with people and expenses together. Its header has
 changes and changes to review), then the group's name with a pencil that
 renames it in place, then where you stand. The overview shows complete people
 rows without a People heading, followed by recent expenses with their count.
-It uses the available height to limit the previews, keeping both lists visible.
-Small groups fit without scrolling when space permits. Larger text and short
-screens can scroll. Show all people gives people the page and leaves an expense
-summary. Show all expenses gives expenses the page and reduces people to avatars
-and a count. Overview restores both previews. Expanded lists use one page scroll.
-The balance and Settle up stay complete when the header becomes compact.
+It fills the page with as many complete rows of each list as fit, measured
+rather than estimated, and does not scroll; only larger text can make it.
+"All N ›" at the end of the add-person row and in the Expenses heading opens
+that list in full when some of it is hidden. Show all people leaves Expenses
+as one folded row; Show all expenses folds people to avatars and a count. The
+folded row brings the overview back. Expanded lists use one page scroll. As the
+header shrinks, the caption over your balance folds away and the figure
+shrinks; the balance and Settle up stay complete.
 People shows the balances; Expenses shows expenses and
-recorded repayments newest first under the month each falls in (with the year
-outside the current one), each opening its editor. An expense row is the
+recorded repayments newest first, each opening its editor. A full list that
+spans more than one month heads each month (with the year outside the current
+one); the overview and a single month have no month headings. An expense row is the
 payer's avatar, what it was for on up to two lines, its amount, and under it
 what it did to your balance when that is not nothing; a row that names you
 neither as a payer nor in the split is faded. Saving a new expense, or recording a
