@@ -53,6 +53,22 @@ export function AmountInput(props: AmountInputProps) {
         const original = input.value;
         const decimal = plainDecimal(original);
         const caret = input.selectionStart ?? 0;
+        const inserted = event.nativeEvent instanceof InputEvent ? event.nativeEvent.data : null;
+
+        // Phone keyboards can insert a separator without keydown. Move past
+        // the displayed decimal point instead of treating it as a second one.
+        if (inserted === '.' || inserted === ',') {
+          const previous = original.slice(0, caret - 1) + original.slice(caret);
+          const point = previous.indexOf('.');
+
+          if (point !== -1) {
+            event.stopPropagation();
+            input.value = previous;
+            input.setSelectionRange(point + 1, point + 1);
+
+            return;
+          }
+        }
 
         if (!/^\d*(?:\.\d*)?$/.test(decimal)) {
           event.stopPropagation();

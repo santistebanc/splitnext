@@ -1158,6 +1158,26 @@ test('keeps the expense amount formatted while typing and accepts dots or commas
   await expect(button(page, 'Change Lunch · 12.50')).toBeVisible();
 });
 
+test('accepts decimal separators from phone input without keydown events', async ({ page }) => {
+  await createGroup(page, 'Phone decimals', 'Ana');
+  await button(page, 'Add expense').click();
+  const amount = field(page, 'Amount');
+
+  for (const separator of ['.', ',']) {
+    await amount.fill('');
+    // Phone keyboards can insert text without sending a keydown event.
+    await page.keyboard.insertText('1');
+    await page.keyboard.insertText('2');
+    await page.keyboard.insertText(separator);
+    await page.keyboard.insertText('5');
+    await expect(amount).toHaveValue('12.50');
+  }
+
+  await field(page, 'Description').fill('Phone lunch');
+  await button(page, 'Save').click();
+  await expect(button(page, 'Change Phone lunch · 12.50')).toBeVisible();
+});
+
 test('groups the digits of large amounts in threes, as typed and as shown', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await createGroup(page, 'Big', 'Ana');
