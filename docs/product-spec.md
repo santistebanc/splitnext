@@ -104,8 +104,7 @@ Where you stand leads the group screen, under its name: You owe, You get back
 or You're settled over your balance as a large bold figure, with Settle up
 beside it while a payment of the group's plan involves you; tapping the figure
 opens your details. Before any expense or repayment names you, a quiet line
-with your avatar, your name and "you" opens your details instead. It folds away
-as the page scrolls.
+with your avatar, your name and "you" opens your details instead. The balance becomes a complete compact row as the page scrolls.
 
 The People section lists everyone else with their balance, from most negative to
 most positive (owing first, then owed), then people in no current expense or
@@ -231,9 +230,14 @@ the foot.
 A group opens on one screen with people and expenses together. Its header has
 ‹ Groups, Invite people and Activity (with a count of new
 changes and changes to review), then the group's name with a pencil that
-renames it in place, then where you stand. The content has a People section
-with its count and a control to hide or show its rows, followed by Expenses
-with its count. People starts open; closing it keeps expenses easy to reach.
+renames it in place, then where you stand. The overview shows complete people
+rows without a People heading, followed by recent expenses with their count.
+It uses the available height to limit the previews, keeping both lists visible.
+Small groups fit without scrolling when space permits. Larger text and short
+screens can scroll. Show all people gives people the page and leaves an expense
+summary. Show all expenses gives expenses the page and reduces people to avatars
+and a count. Overview restores both previews. Expanded lists use one page scroll.
+The balance and Settle up stay complete when the header becomes compact.
 People shows the balances; Expenses shows expenses and
 recorded repayments newest first under the month each falls in (with the year
 outside the current one), each opening its editor. An expense row is the
@@ -249,8 +253,8 @@ a field below that heading with Involves you and Paid by you filters,
 which show only while searching. It finds every word typed in what an expense
 was for, or in a repayment's sentence, ignoring case and accents, and ends the
 results with their count and what they come to for you. Cancel, or Search
-again, closes it and shows everything. Search does not hide or filter people.
-Opening a group starts with people shown and no search.
+again, closes it and shows everything. Search opens the full expense list with the people summary above it.
+Opening a group starts in the overview with no search.
 
 Settle up beside your balance opens the group's settle-up page: the payments
 of the plan that involve you first, each naming the other person with You pay

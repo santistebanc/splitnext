@@ -1,7 +1,7 @@
-import { Component, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform, ScrollView, View } from 'react-native';
 import { Row, Tag, Text, colors, layout, sizes } from '../design';
-import { ScrollToTopContext } from './pageScroll';
+import { PageHeightContext, ScrollToTopContext } from './pageScroll';
 import { useHomepage } from './screenHost';
 import {
   useCompactLayout,
@@ -66,6 +66,7 @@ type FrameProps = {
  * in one narrow column like a phone screen on every device.
  */
 export function Frame(props: FrameProps) {
+  const [pageHeight, setPageHeight] = useState(0);
   const mobile = useCompactLayout();
   const touch = useTouchInput();
   const scroll = useRef<ScrollView>(null);
@@ -158,7 +159,7 @@ export function Frame(props: FrameProps) {
             <View style={column}>{props.header}</View>
           </View>
         ) : null}
-        <View style={page}>
+        <View style={page} onLayout={(event) => setPageHeight(event.nativeEvent.layout.height - Math.max(0, headerSize.current.full - headerSize.current.current))}>
           <ScrollView
             ref={scroll}
             onScroll={(event) => {
@@ -186,7 +187,7 @@ export function Frame(props: FrameProps) {
                   <Tag>beta</Tag>
                 </Row>
               ) : null}
-              {props.children}
+              <PageHeightContext.Provider value={pageHeight - (floating ? 104 : 32)}>{props.children}</PageHeightContext.Provider>
             </View>
           </ScrollView>
         </View>

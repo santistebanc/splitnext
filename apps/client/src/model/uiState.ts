@@ -61,8 +61,8 @@ type UiContext = {
   person: string | null;
   /** Whether the group's settled people are shown, or folded into one line. */
   balancesExpanded: boolean;
-  /** Whether the people section is open above the expenses. */
-  peopleExpanded: boolean;
+  /** The group overview or the list given the full page. */
+  groupFocus: 'overview' | 'people' | 'expenses';
   /** Searching the group's expenses and repayments: open, what to look for, and the filters on. */
   search: ExpenseSearch;
   /** The last Activity sequence marked seen in each group on this installation. */
@@ -145,7 +145,7 @@ export class AppUiState {
       trail: [],
       person: null,
       balancesExpanded: false,
-      peopleExpanded: true,
+      groupFocus: 'overview',
       search: closedSearch,
       activitySeen: seenStorage?.read() ?? {},
       removal: null,
@@ -187,7 +187,7 @@ export class AppUiState {
 
   update(
     patch: Partial<
-      Pick<UiContext, 'showLeftGroups' | 'copiedInviteId' | 'balancesExpanded' | 'peopleExpanded' | 'search' | 'removal'>
+      Pick<UiContext, 'showLeftGroups' | 'copiedInviteId' | 'balancesExpanded' | 'groupFocus' | 'search' | 'removal'>
     >,
   ): void {
     this.patch(patch);

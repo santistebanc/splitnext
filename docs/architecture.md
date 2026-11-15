@@ -140,8 +140,12 @@ space folds continuously with scroll progress, so its disappearing decoration
 cannot move the name sideways or release a wrapped line's height at once.
 
 A group has one screen (`home`) with People and Expenses together.
-`AppUiState.peopleExpanded` controls whether the people are shown, through
-`setPeopleExpanded`; opening a group shows them. `GroupHeader`
+`AppUiState.groupFocus`, set by `setGroupFocus`, selects the overview or a full
+people or expense list. The overview budgets complete preview rows from the
+page height measured by `Frame`, with room for the main action. The budget uses
+the expanded header height so scrolling does not change the preview limits.
+Long rows and short screens retain normal scrolling. Opening a group restores
+the overview. `GroupHeader`
 holds ‹ Groups, Invite people and Activity with its
 count as icons, the group's name with a pencil that renames it in place
 through `renameGroup`, then `YourBalance`. The scroll content holds the people

@@ -40,7 +40,7 @@ function ledgerEntries(replica: Replica): Entry[] {
 }
 
 /** The group screen's list: expenses and repayments, newest first, under the month each falls in. */
-export function ExpenseList(props: { replica: Replica }) {
+export function ExpenseList(props: { replica: Replica; limit?: number | undefined }) {
   const search = useUiState().search;
   const you = preferredMember(props.replica.projected_snapshot, props.replica.session?.identity.id)?.id;
   const all = ledgerEntries(props.replica);
@@ -53,7 +53,7 @@ export function ExpenseList(props: { replica: Replica }) {
 
   return (
     <View role="list" aria-label="Expenses">
-      {entries.map((entry, index) => {
+      {entries.slice(0, props.limit).map((entry, index) => {
         const month = monthHeading(created(entry));
         const previous = entries[index - 1];
 

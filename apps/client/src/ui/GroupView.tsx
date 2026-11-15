@@ -1,4 +1,4 @@
-import { useRef, useState, type RefObject } from 'react';
+import { useContext, useRef, useState, type RefObject } from 'react';
 import { View, type TextInput } from 'react-native';
 import { groupNameSchema, preferredMember, repaymentMembers } from '@splitnext/client';
 import { BellIcon, Button, ChevronDownIcon, ChevronUpIcon, CountBadge, ErrorMessage, IconButton, Input, InviteIcon, PencilIcon, Row, SearchIcon, Stack, Tag, Text, TextButton, ToggleChip, Touchable, YouBadge, between, colors, balanceStyle, layout, radii, rules, sizes, titleStyle } from '../design';
@@ -9,7 +9,7 @@ import { balanceColor, signedFigure } from './balance';
 import { ExpenseList } from './ExpenseList';
 import { InvitePanel } from './InvitePanel';
 import { AddPersonRow, MemberAvatar, type MemberListApp, type Replica } from './MemberList';
-import { useCompactProgress } from './pageScroll';
+import { PageHeightContext, ScrollToTopContext, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
 import { EditCover } from './EditCover';
 import { ScreenHeader, BackButton } from './ScreenHeader';
@@ -184,7 +184,7 @@ function yourStanding(amount: number | undefined): string {
 /**
  * Where you stand, first on the group: what you owe or get back, large, with
  * Settle up beside it while a payment of the plan involves you. Tapping the
- * figure opens your details. It folds away as the page scrolls.
+ * figure opens your details. A compact figure stays complete while scrolling.
  */
 function YourBalance(props: { replica: Replica }) {
   const progress = useCompactProgress();
@@ -197,12 +197,12 @@ function YourBalance(props: { replica: Replica }) {
   const balances = balancesByMember(props.replica).get(you.id) ?? [];
   const name = memberName(snapshot, you.id);
   const amounts = balances.map((entry) => signedFigure(entry.amount, entry.currency));
-  const folded = progress > 0.5;
+  const compact = progress > 0.12;
 
   // Until an expense names you, a quiet line still opens your details, such as to rename yourself.
   if (!hasRecords(snapshot, you.id))
     return (
-      <View aria-hidden={folded} style={{ height: between(sizes.touch, 0, progress), opacity: 1 - progress, overflow: 'hidden', pointerEvents: folded ? 'none' : 'auto' }}>
+      <View>
         <Touchable
           accessibilityRole="button"
           accessibilityLabel={`${name} (you), no expenses yet. Show details`}
@@ -219,7 +219,7 @@ function YourBalance(props: { replica: Replica }) {
     );
 
   return (
-    <View aria-hidden={folded} style={{ height: between(balances.length > 1 ? 120 : 78, 0, progress), opacity: 1 - progress, overflow: 'hidden', pointerEvents: folded ? 'none' : 'auto' }}>
+    <View testID="your-balance">
       <Row gap={12} align="end" style={{ paddingTop: 8 }}>
         <Touchable
           accessibilityRole="button"
@@ -230,7 +230,7 @@ function YourBalance(props: { replica: Replica }) {
         >
           <Text variant="caption" weight="semibold" tone="muted">{yourStanding(balances[0]?.amount)}</Text>
           {balances.map((entry) => (
-            <Text key={entry.currency} ref={morph(`gamt-${props.replica.group_id}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} color={balanceColor(entry.amount)} style={balanceStyle(36)}>
+            <Text key={entry.currency} ref={morph(`gamt-${props.replica.group_id}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} color={balanceColor(entry.amount)} style={balanceStyle(compact ? 24 : 36)}>
               {moneyLabel(Math.abs(entry.amount), entry.currency)}
             </Text>
           ))}
@@ -355,7 +355,7 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
  * Everyone else with their balance, then the people who are settled folded
  * into one line that shows them, and a last row to add a person.
  */
-function People(props: { app: MemberListApp; replica: Replica }) {
+function People(props: { app: MemberListApp; replica: Replica; limit?: number | undefined }) {
   const actions = useActions();
   const ui = useUiState();
   const snapshot = props.replica.projected_snapshot;
@@ -374,8 +374,8 @@ function People(props: { app: MemberListApp; replica: Replica }) {
 
   return (
     <View role="region" aria-label="Balances">
-      {open.map(row)}
-      {square.length ? (
+      {open.slice(0, props.limit).map(row)}
+      {square.length && (props.limit === undefined || open.length < props.limit) ? (
         <Touchable
           feedback="tint"
           accessibilityRole="button"
@@ -395,7 +395,7 @@ function People(props: { app: MemberListApp; replica: Replica }) {
           {ui.balancesExpanded ? <ChevronUpIcon size={16} color={colors.faint} /> : <ChevronDownIcon size={16} color={colors.faint} />}
         </Touchable>
       ) : null}
-      {ui.balancesExpanded ? square.map(row) : null}
+      {ui.balancesExpanded ? square.slice(0, props.limit === undefined ? undefined : Math.max(0, props.limit - open.length)).map(row) : null}
       <AddPersonRow />
     </View>
   );
@@ -411,6 +411,8 @@ export function GroupView(props: GroupViewProps) {
   const ui = useUiState();
   const replica = props.app.snapshot().group;
   const snapshot = replica?.projected_snapshot;
+  const pageHeight = useContext(PageHeightContext);
+  const scrollToTop = useContext(ScrollToTopContext);
 
   if (!snapshot || !replica) return null;
 
@@ -428,21 +430,35 @@ export function GroupView(props: GroupViewProps) {
   const people = repaymentMembers(snapshot).length;
   const entries = currentExpenses(snapshot).length + snapshot.settlements.filter((entry) => entry.status === 'active').length;
 
+  const others = repaymentMembers(snapshot).filter((member) => member.id !== preferredMember(snapshot, replica.session?.identity.id)?.id).length;
+  const focus = ui.groupFocus;
+  // Reserve the add-person row, section heading, month and disclosure controls.
+  // Short viewports and larger text can still scroll; complete rows stay usable.
+  const rowBudget = Math.max(2, Math.floor((pageHeight - 168) / sizes.row));
+  const peopleLimit = Math.min(others, 4, Math.max(1, rowBudget - Math.min(entries, 3)));
+  const expenseLimit = Math.max(1, Math.min(3, rowBudget - peopleLimit));
+
+  const changeFocus = (next: 'overview' | 'people' | 'expenses') => {
+    void actions.dispatch('setGroupFocus', { focus: next }, { origin: 'ui' });
+    scrollToTop?.();
+  };
+
   return (
-    <Stack gap={24}>
+    <Stack gap={16}>
+      {focus !== 'overview' ? <TextButton onPress={() => changeFocus('overview')} style={{ alignSelf: 'flex-start' }}>Overview</TextButton> : null}
       <View role="region" aria-label="Group people">
-        <Touchable
-          accessibilityRole="button"
-          accessibilityLabel={ui.peopleExpanded ? 'Hide people' : 'Show people'}
-          aria-expanded={ui.peopleExpanded}
-          onPress={() => { void actions.dispatch('setPeopleExpanded', { expanded: !ui.peopleExpanded }, { origin: 'ui' }); }}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: sizes.touch }}
-        >
-          <Text accessibilityRole="header" aria-level={2} variant="strong">People</Text>
-          <Text variant="body" tone="muted" style={{ flex: 1 }}>{people}</Text>
-          {ui.peopleExpanded ? <ChevronUpIcon size={16} color={colors.muted} /> : <ChevronDownIcon size={16} color={colors.muted} />}
-        </Touchable>
-        <Reveal>{ui.peopleExpanded ? <People app={props.app} replica={replica} /> : null}</Reveal>
+        {focus === 'expenses' ? (
+          <Touchable accessibilityRole="button" accessibilityLabel="Show all people" onPress={() => changeFocus('people')} style={{ minHeight: sizes.touch, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Row>{repaymentMembers(snapshot).slice(0, 3).map((member, index) => <View key={member.id} style={{ marginLeft: index ? -8 : 0 }}><MemberAvatar replica={replica} memberId={member.id} size="small" /></View>)}</Row>
+            <Text variant="body" tone="muted" style={{ flex: 1 }}>{people} people</Text>
+            <ChevronDownIcon size={16} />
+          </Touchable>
+        ) : (
+          <>
+            <People app={props.app} replica={replica} limit={focus === 'overview' ? peopleLimit : undefined} />
+            {focus === 'overview' && others > peopleLimit ? <TextButton onPress={() => changeFocus('people')} style={{ alignSelf: 'flex-start' }}>Show all people</TextButton> : null}
+          </>
+        )}
       </View>
       <View role="region" aria-label="Group expenses">
         <Row gap={8} style={{ minHeight: sizes.touch, ...rules.below }}>
@@ -451,7 +467,8 @@ export function GroupView(props: GroupViewProps) {
           {entries ? <SearchToggle /> : null}
         </Row>
         <Reveal>{ui.search.open ? <SearchBar /> : null}</Reveal>
-        <ExpenseList replica={replica} />
+        {focus === 'people' ? <TextButton onPress={() => changeFocus('expenses')} style={{ alignSelf: 'flex-start' }}>Show all expenses</TextButton> : <ExpenseList replica={replica} limit={focus === 'overview' ? expenseLimit : undefined} />}
+        {focus === 'overview' && entries > expenseLimit ? <TextButton onPress={() => changeFocus('expenses')} style={{ alignSelf: 'flex-start' }}>Show all expenses</TextButton> : null}
       </View>
     </Stack>
   );

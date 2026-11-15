@@ -115,3 +115,6 @@ export function useCompactProgress(): number {
 
 /** Return the current frame to its start from its title. */
 export const ScrollToTopContext = createContext<(() => void) | null>(null);
+
+/** Space available to page content with the full header, before footer clearance. */
+export const PageHeightContext = createContext(0);

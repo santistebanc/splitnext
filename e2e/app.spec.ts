@@ -263,13 +263,10 @@ function clippedText(page: Page): Promise<string[]> {
 
 /** Brings a section of the shared group screen into view. */
 async function showSection(page: Page, name: 'People' | 'Expenses'): Promise<void> {
-  if (name === 'People') {
-    const show = button(page, 'Show people');
+  const show = button(page, `Show all ${name.toLowerCase()}`);
 
-    if (await show.count()) await show.click();
-  }
-
-  await page.getByRole('heading', { name, exact: true }).scrollIntoViewIfNeeded();
+  if (await show.count()) await show.click();
+  await page.getByRole('region', { name: `Group ${name.toLowerCase()}`, exact: true }).scrollIntoViewIfNeeded();
 }
 
 /** Geometry checks compare settled screens; motion tests sample the movement separately. */
@@ -424,7 +421,7 @@ test('opens the invite link right under the group name, with people close below 
     await invite.click();
     const panel = page.getByRole('region', { name: 'Invite people' });
     const line = (await panel.getByRole('button', { name: 'Copy link' }).locator('..').boundingBox())!;
-    const people = (await button(page, 'Hide people').boundingBox())!;
+    const people = (await page.getByRole('region', { name: 'Group people', exact: true }).boundingBox())!;
 
     expect(line.y - title.y - title.height).toBeLessThanOrEqual(24);
     // Only the quiet line for you sits between the link and the people.
@@ -3284,38 +3281,49 @@ test('opens canonical Activity records and returns, keeping unavailable actions 
 });
 
 
-test('shows people and expenses together and keeps search beside expenses on a phone', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+test('fits a small group overview and expands either list on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 744 });
   await createGroup(page, 'Together', 'Ana');
-  await addMember(page, 'Ben');
-  await addExpense(page, 'Dinner together', '24');
-  await expect(page.getByRole('tablist', { name: 'Group' })).toHaveCount(0);
-  await expect(person(page, 'Ben')).toBeVisible();
-  await expect(button(page, 'Change Dinner together · 24.00')).toBeVisible();
-  await page.screenshot({ path: test.info().outputPath('shared-group-screen.png') });
-  const people = button(page, 'Hide people');
-  await people.click();
+
+  for (const name of ['Ben', 'Dana', 'Eve', 'Waka']) await addMember(page, name);
+  await addExpense(page, 'Dinner together', '100');
+  const overview = button(page, 'Overview');
+
+  if (await overview.count()) await overview.click();
+  const scroller = page.locator('#splitnext-page');
+  await scroller.evaluate((node) => { node.scrollTop = 0; });
+  await expect(page.getByRole('heading', { name: 'People', exact: true })).toHaveCount(0);
+  await expect(person(page, 'Ben')).toBeInViewport({ ratio: 1 });
+  await expect(button(page, 'Change Dinner together · 100.00')).toBeInViewport({ ratio: 1 });
+  await expect.poll(() => scroller.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: test.info().outputPath('overview-small.png') });
+
+  for (const name of ['Fran', 'Gus', 'Hal', 'Ida', 'Jo']) await addMember(page, name);
+
+  if (await overview.count()) await overview.click();
+  await expect(button(page, 'Show all people')).toBeVisible();
+  await button(page, 'Show all people').click();
+  await expect(person(page, 'Jo')).toBeAttached();
+  await expect(button(page, 'Change Dinner together · 100.00')).toHaveCount(0);
+  await scroller.evaluate((node) => { node.scrollTop = 12; });
+  await expect(button(page, 'Settle up')).toBeInViewport({ ratio: 1 });
+  const balance = page.getByTestId('your-balance');
+  await expect(balance).toBeInViewport({ ratio: 1 });
+  expect(await clippedText(page)).toEqual([]);
+  await page.screenshot({ path: test.info().outputPath('people-expanded-small-scroll.png') });
+  await button(page, 'Show all expenses').click();
   await expect(person(page, 'Ben')).toHaveCount(0);
-  await expect(button(page, 'Change Dinner together · 24.00')).toBeVisible();
-  await button(page, 'Show people').click();
-  await expect(person(page, 'Ben')).toBeVisible();
+  await expect(button(page, 'Change Dinner together · 100.00')).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath('expenses-expanded.png') });
+  await overview.click();
+  await expect(person(page, 'Ben')).toBeAttached();
   const expenses = page.getByRole('region', { name: 'Group expenses', exact: true });
   await expenses.getByRole('button', { name: 'Search expenses', exact: true }).click();
   await field(page, 'Search expenses').fill('not found');
   await expect(page.getByText('Nothing matches', { exact: true })).toBeVisible();
-  await expect(person(page, 'Ben')).toBeAttached();
   await button(page, 'Cancel').click();
-  await expect(button(page, 'Change Dinner together · 24.00')).toBeVisible();
-
-  for (const name of ['Cy', 'Dana', 'Eli', 'Fran', 'Gus', 'Hal', 'Ida', 'Jo']) await addMember(page, name);
-
-  await button(page, 'Hide people').click();
-  await page.locator('#splitnext-page').evaluate((node) => { node.scrollTop = 0; });
-  await expect(button(page, 'Change Dinner together · 24.00')).toBeInViewport();
-  await expect(button(page, 'Add expense')).toBeInViewport();
-  await page.screenshot({ path: test.info().outputPath('large-group-collapsed.png') });
-  await button(page, 'Show people').click();
-  await expect(person(page, 'Jo')).toBeAttached();
+  await overview.click();
+  await expect(button(page, 'Change Dinner together · 100.00')).toBeAttached();
 });
 
 test('searches expenses and repayments with accent-insensitive words and personal filters', async ({ page }) => {
