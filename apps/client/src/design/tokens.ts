@@ -51,7 +51,7 @@ export function inkAlpha(alpha: number): string {
   return `rgba(20, 20, 19, ${alpha})`;
 }
 
-/** What dims the page behind anything above it: a dialog, a drawer, or an in-place edit. */
+/** What dims the page behind anything above it: a dialog or a drawer. */
 export const scrim = inkAlpha(0.36);
 
 /** The hairline under a header once content scrolls beneath it; 0 hides it. */

@@ -41,6 +41,8 @@ export function Field(props: FieldProps) {
         ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: strokes.hairline, borderColor: invalid ? colors.danger : hovered && !disabled ? colors.ink : colors.faint }}>
           <TextInput
+            // No browser autofill bar unless a field asks for it.
+            autoComplete="off"
             {...input}
             ref={field}
             accessibilityLabel={label}

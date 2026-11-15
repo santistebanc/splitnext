@@ -198,6 +198,8 @@ export function JoinGroup(props: JoinGroupProps) {
           <Input
             accessibilityLabel="Your name"
             placeholder="Someone else"
+            autoCapitalize="words"
+            autoCorrect={false}
             variant="strong"
             value={name}
             editable={actions.availability('changeDraft', { field: 'join.name', value: name }).available}

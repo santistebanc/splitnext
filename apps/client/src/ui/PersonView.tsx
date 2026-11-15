@@ -95,6 +95,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
                   inputRef={nameField}
                   accessibilityLabel="Name"
                   placeholder="Name"
+                  autoCapitalize="words"
                   value={ui.memberEdit?.name ?? ''}
                   onChangeText={(value) => { void actions.dispatch('changeDraft', { field: 'member.name', value }, { origin: 'ui' }); }}
                   maxLength={100}

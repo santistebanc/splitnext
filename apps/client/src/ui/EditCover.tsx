@@ -1,4 +1,5 @@
 import type { RefObject } from 'react';
+import { useInPlaceEdit } from './inPlaceEdit';
 
 export type EditCoverProps = {
   open: boolean;
@@ -8,7 +9,9 @@ export type EditCoverProps = {
   onPress: () => void;
 };
 
-/** Native leaves the field's own blur to end the edit; the web dims around it. */
-export function EditCover(_props: EditCoverProps) {
+/** Native leaves the field's own blur to end the edit; the pinned main action still steps aside. */
+export function EditCover(props: EditCoverProps) {
+  useInPlaceEdit(props.open);
+
   return null;
 }

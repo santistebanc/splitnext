@@ -75,6 +75,8 @@ export function CreateGroup(props: CreateGroupProps) {
         label="Your name in this group"
         inputRef={personInput}
         placeholder="Your name"
+        autoCapitalize="words"
+        autoCorrect={false}
         value={person}
         editable={actions.availability('changeDraft', { field: 'create.yourName', value: person }).available}
         onChangeText={(value) => {

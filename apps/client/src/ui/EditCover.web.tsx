@@ -1,10 +1,8 @@
-import { durations, scrim } from '../design';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useScreenHost } from './screenHost';
+import { useInPlaceEdit } from './inPlaceEdit';
 import type { EditCoverProps } from './EditCover';
-
-/** The same shade as the drawers' backdrop. */
 
 /** Room left uncovered around the field. */
 const pad = 6;
@@ -12,22 +10,23 @@ const pad = 6;
 type Box = { top: number; left: number; right: number; bottom: number };
 
 /**
- * While a name is edited in place, everything but its field dims as behind a
- * drawer, and a tap on the dimmed part ends the edit without reaching what
- * is under it. The cover follows the field as the page moves, and fades in
- * and out like the drawers' backdrop.
+ * While a field is edited in place, a clear cover lies over everything but
+ * the field: a tap there ends the edit without reaching what is under it.
+ * Nothing dims, and the screen's pinned main action steps aside, so the
+ * keyboard and the field are all that is in play. The cover follows the
+ * field as the page moves.
  */
 export function EditCover(props: EditCoverProps) {
   const host = useScreenHost();
   const [box, setBox] = useState<Box | null>(null);
-  const [shown, setShown] = useState(false);
+
+  useInPlaceEdit(props.open);
 
   useEffect(() => {
     if (!props.open) {
-      setShown(false);
-      const timer = setTimeout(() => setBox(null), durations.medium);
+      setBox(null);
 
-      return () => clearTimeout(timer);
+      return;
     }
 
     let frame = 0;
@@ -48,13 +47,8 @@ export function EditCover(props: EditCoverProps) {
     };
 
     follow();
-    // Shown a frame after it is laid out, so it fades in rather than appearing.
-    const reveal = requestAnimationFrame(() => setShown(true));
 
-    return () => {
-      cancelAnimationFrame(frame);
-      cancelAnimationFrame(reveal);
-    };
+    return () => cancelAnimationFrame(frame);
   }, [props.open, props.target, host]);
 
   if (!box) return null;
@@ -70,12 +64,12 @@ export function EditCover(props: EditCoverProps) {
   ];
 
   return createPortal(
-    <div data-testid="edit-cover" aria-hidden style={{ position: host ? 'absolute' : 'fixed', inset: 0, zIndex: 1000, pointerEvents: 'none', opacity: shown ? 1 : 0, transition: `opacity ${durations.medium}ms` }}>
+    <div data-testid="edit-cover" aria-hidden style={{ position: host ? 'absolute' : 'fixed', inset: 0, zIndex: 1000, pointerEvents: 'none' }}>
       {parts.map((part, index) => (
         <div
           key={index}
           onClick={props.open ? props.onPress : undefined}
-          style={{ position: 'absolute', background: scrim, pointerEvents: props.open ? 'auto' : 'none', ...part }}
+          style={{ position: 'absolute', pointerEvents: props.open ? 'auto' : 'none', ...part }}
         />
       ))}
     </div>,

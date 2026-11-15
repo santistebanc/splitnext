@@ -74,8 +74,11 @@ it, and still reaches whatever was tapped; its own button still toggles it.
 Scrolling downward closes the invite-link dropdown; other dropdowns stay open
 while scrolling. Where you stand follows the invite link with a compact gap in
 both the open and closed states. Renaming the group or a member, adding a person,
-and the join field instead dim everything else as behind a drawer: a tap on the dimmed part
-ends the edit (saving a name) and reaches nothing under it. The split bar's
+and the join field are edited in place: nothing dims, the screen's pinned main
+action steps aside until the edit ends, and a tap anywhere else ends the edit
+(saving a name) and reaches nothing under it. The keyboard's key finishes the
+edit; while Add a person has text, an Add button at the row's end does what
+Enter does. The split bar's
 shares ease to their new width. Reduced motion shows every change at once.
 Long group names, a group's title, names in the balances and a person's
 title, and expense names in the list, a breakdown, and the expense editor take
@@ -147,7 +150,9 @@ Every app screen is a page on every device: a header with a text back action
 named after where it goes (such as ‹ Groups) or Cancel, actions at its end such
 as Activity, Delete, or Save, the large title, and at most one main action, a
 full-width black button pinned at the foot of the screen. Nothing opens as a
-sheet over the page. Keep draft fields mounted when the keyboard
+sheet over the page. Fields suit phone keyboards: no browser autofill, names
+start each word with a capital, and the expense's amount offers Next to the
+description until the expense can be saved, then Done. Keep draft fields mounted when the keyboard
 changes the visible height, allow scrolling above it, and support keyboard
 Next/Done actions. Forms fill the visible area above the keyboard, including
 when the browser pans to the focused field, without leaving a blank gap.

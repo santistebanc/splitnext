@@ -37,6 +37,8 @@ export function AmountInput(props: AmountInputProps) {
       onBlur={props.onBlur}
       placeholder={formatAmount(0, props.currency)}
       inputMode="decimal"
+      enterKeyHint={props.enterKeyHint ?? 'done'}
+      autoComplete="off"
       value={props.value}
       valueIsNumericString
       decimalScale={minorDigits(props.currency)}
@@ -87,7 +89,7 @@ export function AmountInput(props: AmountInputProps) {
       style={{
         flex: 1, minWidth: 0, width: '100%', height: props.height, padding: 0, border: 0,
         boxSizing: 'border-box', background: 'transparent', outline: 'none',
-        color: colors.ink, fontFamily: fonts.mono, fontSize: props.fontSize,
+        color: colors.ink, caretColor: colors.ink, fontFamily: fonts.mono, fontSize: props.fontSize,
         fontWeight: 500, letterSpacing: -0.05 * props.fontSize, textAlign: props.align ?? 'left',
         ...(props.inline && { textAlign: 'right', borderBottom: `${strokes.ink}px solid ${colors.ink}`, letterSpacing: 0 }),
       }}

@@ -20,6 +20,7 @@ import { useActivityFeed } from './useActivityFeed';
 import { SettlementsFooter, SettlementsHeader, SettlementsPanel } from './SettlementsPanel';
 import { GroupHeader, GroupView } from './GroupView';
 import { CompactProgressContext, createCompactProgress } from './pageScroll';
+import { InPlaceEditContext, createInPlaceEditStore, useEditingInPlace } from './inPlaceEdit';
 import { JoinGroup, JoinGroupFooter, type JoinCalls } from './JoinGroup';
 import { type NavigationEntry } from './navigation';
 import { Devtools } from '../devtools/Devtools';
@@ -261,6 +262,9 @@ function ReadyApp(props: AppProps) {
   }, [ui.navigation.revision]);
 
   const compact = useMemo(createCompactProgress, []);
+  const inPlaceEdit = useMemo(createInPlaceEditStore, []);
+  // While a field is edited in place, the keyboard or the field's own action finishes it.
+  const editingInPlace = useEditingInPlace(inPlaceEdit);
 
   const group = state.group;
   const open = Boolean(group?.projected_snapshot);
@@ -367,6 +371,7 @@ function ReadyApp(props: AppProps) {
   return (
     <ActionsProvider value={actions}>
       <CompactProgressContext.Provider value={compact}>
+      <InPlaceEditContext.Provider value={inPlaceEdit}>
         <WithJoinCalls>
           {(join) => {
             const screen = screenFor(join);
@@ -377,7 +382,7 @@ function ReadyApp(props: AppProps) {
                 <Frame
                   status={<SyncStatus online={state.online} reachable={state.reachable} pending={pending} busy={connection.busy} onRetry={retry} retryError={connection.error} />}
                   header={screen.header}
-                  footer={screen.footer}
+                  footer={editingInPlace ? undefined : screen.footer}
                   scrollKey={pageKey}
                   navigationDepth={depth}
                   restoreScroll={ui.navigation.mode === 'restore'}
@@ -398,6 +403,7 @@ function ReadyApp(props: AppProps) {
             );
           }}
         </WithJoinCalls>
+      </InPlaceEditContext.Provider>
       </CompactProgressContext.Provider>
     </ActionsProvider>
   );

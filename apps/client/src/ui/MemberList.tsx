@@ -1,9 +1,9 @@
-import { useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Platform, View, type StyleProp, type TextInput, type TextStyle } from 'react-native';
 import type { ClientReplicaState } from '@splitnext/client';
 import { memberStatus, memberTint, participantMarkers, type ParticipantMarker } from '../model/memberPresentation';
 import type { AppController } from '../model/controller';
-import { Avatar, Dot, ErrorMessage, Input, colors, layout, rules, sizes, type AvatarSize, type FontWeight, type TypeVariant } from '../design';
+import { Avatar, Button, Dot, ErrorMessage, Input, colors, layout, rules, sizes, type AvatarSize, type FontWeight, type TypeVariant } from '../design';
 import { EditCover } from './EditCover';
 import { errorMessage } from './errors';
 import { useActions } from './useActionCall';
@@ -89,6 +89,8 @@ export function MemberNameInput(props: {
         else void actions.dispatch('changeDraft', { field: 'member.name', value }, { origin: 'ui' });
       }}
       autoFocus={props.autoFocus}
+      autoCapitalize="words"
+      autoCorrect={false}
       maxLength={100}
       style={props.style ?? { height: 40, minWidth: 0, paddingHorizontal: 0, ...rules.inkBelow }}
       returnKeyType="done"
@@ -118,7 +120,9 @@ export function MemberNameInput(props: {
  * the name and clears the field while it keeps focus, so several people can
  * be added in a row; Enter on an empty field, or leaving it, finishes. The
  * next name can be typed while earlier ones are still saving; a save holds
- * the member editor, which would otherwise drop that typing.
+ * the member editor, which would otherwise drop that typing. While there is
+ * text, Add at the row's end does what Enter does, so the keyboard's own key
+ * is not the only way to say "add this one".
  */
 export function AddPersonRow() {
   const actions = useActions();
@@ -127,10 +131,23 @@ export function AddPersonRow() {
   const queue = useRef<string[]>([]);
   const draining = useRef(false);
   const focused = useRef(false);
-  // Shown while typing, so the rest dims behind the field as it does for a rename.
+  // Shown while typing: a tap elsewhere ends the add, and the pinned main action steps aside.
   const [adding, setAdding] = useState(false);
   const row = useRef<View>(null);
   const input = useRef<TextInput>(null);
+  const addButton = useRef<View>(null);
+
+  // A press on Add keeps the field focused, so the keyboard stays up for the next name.
+  useEffect(() => {
+    const node: unknown = addButton.current;
+
+    if (Platform.OS !== 'web' || !(node instanceof HTMLElement)) return;
+    const keepFocus = (event: MouseEvent) => event.preventDefault();
+
+    node.addEventListener('mousedown', keepFocus);
+
+    return () => node.removeEventListener('mousedown', keepFocus);
+  });
 
   /** Queues the typed name, if any, and clears the field. */
   function take(): boolean {
@@ -220,6 +237,11 @@ export function AddPersonRow() {
           variant="strong"
           style={{ flex: 1, minWidth: 0, height: sizes.row, paddingHorizontal: 0, borderWidth: 0, backgroundColor: 'transparent' }}
         />
+        {text.trim() ? (
+          <View ref={addButton}>
+            <Button size="compact" label={`Add ${text.trim()}`} onPress={() => { take(); input.current?.focus(); }}>Add</Button>
+          </View>
+        ) : null}
       </View>
       <EditCover open={adding} target={row} onPress={() => input.current?.blur()} />
       <ErrorMessage message={error} />

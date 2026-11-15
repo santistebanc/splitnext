@@ -21,6 +21,8 @@ export type AmountInputProps = {
   editable?: boolean;
   onFocus?: () => void;
   onBlur?: () => void;
+  /** The keyboard's Enter key: Next while another field follows, Done by default. */
+  enterKeyHint?: 'next' | 'done';
 };
 
 /** Native input seam; the web build supplies the caret-aware decimal mask. */
@@ -44,7 +46,7 @@ export function AmountInput(props: AmountInputProps) {
 
         if (value === '' || minor !== null) props.onChangeText(minor === null ? '' : formatAmount(minor, props.currency));
       }}
-      returnKeyType="done"
+      returnKeyType={props.enterKeyHint ?? 'done'}
       onSubmitEditing={props.onSubmitEditing}
       style={[
         { flex: 1, minWidth: 0, color: colors.ink, fontFamily: fonts.mono, fontWeight: '500', letterSpacing: -2.8 },

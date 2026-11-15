@@ -80,5 +80,6 @@ export type InputProps = TextInputProps & { ref?: Ref<TextInput> | undefined; va
 export function Input(props: InputProps) {
   const { variant, weight, style, ...rest } = props;
 
-  return <TextInput placeholderTextColor={colors.faint} {...rest} style={[inputStyle(variant ?? 'large', weight), style]} />;
+  // Fields here never hold addresses, cards or passwords, so the browser's autofill bar stays away unless a field asks for it.
+  return <TextInput placeholderTextColor={colors.faint} autoComplete="off" {...rest} style={[inputStyle(variant ?? 'large', weight), style]} />;
 }

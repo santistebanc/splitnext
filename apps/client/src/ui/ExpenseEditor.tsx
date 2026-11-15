@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { View, type TextInput } from 'react-native';
 import { activeMembers, formatAmount, minorDigits, parseAmount, preferredMember } from '@splitnext/client';
 import { Button, Checkbox, ChevronRightIcon, ErrorMessage, Field, IconButton, Row, Text, Touchable, YouBadge, avatarTints, between, colors, durations, inputStyle, opacities, rules, sizes, withTransition } from '../design';
 import { memberTint } from '../model/memberPresentation';
@@ -194,6 +194,7 @@ function ExpenseSplitRow(props: { replica: Replica; memberId: string; name: stri
 export function ExpenseControls() {
   const draft = useUiState().expense;
   const amount = useRef<AmountInputHandle>(null);
+  const description = useRef<TextInput | null>(null);
   const progress = useCompactProgress();
   const actions = useActions();
   const save = useActionCall();
@@ -214,6 +215,14 @@ export function ExpenseControls() {
 
   function submit(): void {
     if (save.can('saveExpense')) void save.call('saveExpense', {});
+  }
+
+  // Enter in the amount saves once the expense can be saved, and otherwise moves on to what it was for.
+  const amountSaves = save.can('saveExpense');
+
+  function submitAmount(): void {
+    if (amountSaves) submit();
+    else description.current?.focus();
   }
 
   // It wraps onto a second line, so unlike a one-line field it takes a line height.
@@ -240,7 +249,8 @@ export function ExpenseControls() {
             value={draft.amount}
             currency={draft.currency}
             onChangeText={(value) => change('expense.amount', value)}
-            onSubmitEditing={submit}
+            onSubmitEditing={submitAmount}
+            enterKeyHint={amountSaves ? 'done' : 'next'}
             height={between(60, 36, progress)}
             fontSize={between(56, 32, progress) * amountFit}
           />
@@ -249,7 +259,10 @@ export function ExpenseControls() {
       <View style={{ paddingTop: 8 }}>
         <Field
           label="Description"
-          inputRef={morph(shown ? null : descriptionKey)}
+          inputRef={(node: TextInput | null) => {
+            description.current = node;
+            morph(shown ? null : descriptionKey)?.(node);
+          }}
           onFocus={() => setEditingDescription(true)}
           onBlur={() => setEditingDescription(false)}
           value={draft.description}

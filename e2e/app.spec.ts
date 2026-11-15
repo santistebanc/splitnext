@@ -545,7 +545,7 @@ test('uses one large title on every screen and opens the join field in place', a
   await expect(page.getByText('That isn’t a splitnext invite link.', { exact: true })).toBeVisible();
 });
 
-test('dims the rest while a name or the join link is edited, and a tap there only ends it', async ({ page }) => {
+test('hides the main action without dimming while a name or the join link is edited, and a tap elsewhere only ends it', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await createGroup(page, 'Covers', 'Ana');
   await addMember(page, 'Ben');
@@ -565,21 +565,32 @@ test('dims the rest while a name or the join link is edited, and a tap there onl
     return node.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2));
   });
 
-  // Adding a person: a tap on Ben's row adds the typed name instead of opening Ben.
+  /** Whether any part of the cover shades what is under it. */
+  const shaded = () => cover.evaluate((node) => [node, ...node.querySelectorAll('*')].some((part) => {
+    const style = getComputedStyle(part);
+
+    return style.backgroundColor !== 'rgba(0, 0, 0, 0)' && style.backgroundColor !== 'transparent' && style.opacity !== '0';
+  }));
+
+  // Adding a person: nothing dims and Add expense steps aside; a tap on Ben's row adds the typed name instead of opening Ben.
   await field(page, 'Add a person').click();
+  await expect(button(page, 'Add expense')).toHaveCount(0);
   await page.keyboard.type('Dee');
-  await expect(cover).toBeVisible();
+  await expect(cover).toBeAttached();
+  expect(await shaded()).toBe(false);
   expect(await uncovered(field(page, 'Add a person'))).toBe(true);
   await tapOver(person(page, 'Ben'));
   await expect(person(page, 'Dee')).toBeVisible();
   await expect(heading(page, 'Ben')).toHaveCount(0);
   await expect(cover).toHaveCount(0);
+  await expect(button(page, 'Add expense')).toBeVisible();
 
   // The group's name: a tap on Ben's row saves the name instead of opening Ben.
   await expect(cover).toHaveCount(0);
   await button(page, 'Rename group').click();
   await field(page, 'Group name').fill('Covered');
-  await expect(cover).toBeVisible();
+  await expect(cover).toBeAttached();
+  await expect(button(page, 'Add expense')).toHaveCount(0);
   expect(await uncovered(field(page, 'Group name'))).toBe(true);
   await page.screenshot({ path: test.info().outputPath('cover-group-name.png') });
   await tapOver(person(page, 'Ben'));
@@ -591,7 +602,7 @@ test('dims the rest while a name or the join link is edited, and a tap there onl
   await person(page, 'Ben').click();
   await button(page, 'Rename Ben').click();
   await field(page, 'Name').fill('Benny');
-  await expect(cover).toBeVisible();
+  await expect(cover).toBeAttached();
   expect(await uncovered(field(page, 'Name'))).toBe(true);
   await page.screenshot({ path: test.info().outputPath('cover-member-name.png') });
   await tapOver(button(page, 'Back to Covered'));
@@ -601,15 +612,53 @@ test('dims the rest while a name or the join link is edited, and a tap there onl
   await button(page, 'Back to groups').click();
   await motionSettled(page);
 
-  // Join with a link: a tap on New group closes the field without opening New group.
+  // Join with a link: New group steps aside, and a tap where it was closes the field without opening it.
+  const newGroup = (await button(page, 'New group').boundingBox())!;
+
   await button(page, 'Join with an invite link').click();
-  await expect(cover).toBeVisible();
+  await expect(cover).toBeAttached();
+  await expect(button(page, 'New group')).toHaveCount(0);
   expect(await uncovered(field(page, 'Invite link'))).toBe(true);
   await page.screenshot({ path: test.info().outputPath('cover-join-link.png') });
-  await tapOver(button(page, 'New group'));
+  await page.mouse.click(newGroup.x + newGroup.width / 2, newGroup.y + newGroup.height / 2);
   await expect(field(page, 'Invite link')).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'New group' })).toHaveCount(0);
   await expect(cover).toHaveCount(0);
+  await expect(button(page, 'New group')).toBeVisible();
+});
+
+test('adds a person from the Add button at the end of the row, keeping the field open for the next', async ({ page }) => {
+  await createGroup(page, 'Adding', 'Ana');
+  const add = field(page, 'Add a person');
+
+  await add.click();
+  await expect(button(page, /^Add /)).toHaveCount(0);
+  await page.keyboard.type('Eve');
+  await button(page, 'Add Eve').click();
+  await expect(person(page, 'Eve')).toBeAttached();
+  await expect(add).toBeFocused();
+  await expect(add).toHaveValue('');
+  await expect(button(page, /^Add /)).toHaveCount(0);
+});
+
+test('suits phone keyboards: no autofill, capitalized names, and Next from the amount', async ({ page }) => {
+  await createGroup(page, 'Keys', 'Ana');
+  const add = field(page, 'Add a person');
+
+  await expect(add).toHaveAttribute('autocomplete', 'off');
+  await expect(add).toHaveAttribute('autocapitalize', 'words');
+
+  await button(page, 'Add expense').click();
+  const amount = field(page, 'Amount');
+  const description = field(page, 'Description');
+
+  await expect(amount).toHaveAttribute('enterkeyhint', 'next');
+  await expect(description).toHaveAttribute('autocomplete', 'off');
+  await amount.fill('12');
+  await amount.press('Enter');
+  await expect(description).toBeFocused();
+  await description.fill('Lunch');
+  await expect(amount).toHaveAttribute('enterkeyhint', 'done');
 });
 
 test('wraps long names onto more lines while renaming, and Enter still saves', async ({ page }, testInfo) => {
@@ -1547,7 +1596,7 @@ test('adds each name typed while earlier ones are still saving', async ({ page }
   for (const name of ['Ben', 'Cy', 'Dana']) await expect(person(page, name)).toBeVisible();
   await expect(page.getByRole('button', { name: /Show details$/ })).toHaveCount(4);
 
-  // The rest is dimmed while adding; Enter on the empty field finishes.
+  // The cover stays while adding; Enter on the empty field finishes.
   await expect(page.getByTestId('edit-cover')).toBeVisible();
   expect(await add.evaluate((node) => {
     const box = node.getBoundingClientRect();

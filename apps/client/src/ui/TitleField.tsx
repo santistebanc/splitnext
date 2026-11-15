@@ -19,6 +19,8 @@ export type TitleFieldProps = {
    * spans the whole width, but its text breaks into lines where the title's did.
    */
   inset?: number;
+  /** Person names start each word with a capital; group names, only the first. */
+  autoCapitalize?: 'words' | 'sentences';
 };
 
 /**
@@ -59,6 +61,9 @@ export function TitleField(props: TitleFieldProps) {
         multiline
         // The whole name is selected, so typing replaces it.
         selectTextOnFocus
+        autoComplete="off"
+        autoCapitalize={props.autoCapitalize ?? 'sentences'}
+        autoCorrect={props.autoCapitalize !== 'words'}
         accessibilityLabel={props.accessibilityLabel}
         placeholder={props.placeholder}
         placeholderTextColor={colors.faint}
