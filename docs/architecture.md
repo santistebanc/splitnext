@@ -212,8 +212,8 @@ key.
   invite entry route remains available for future native app handoff. A link
   that no longer works shows why and a field to try a different one.
 - The invite sheet explains the link, offers Share link (Copy link where the
-  device cannot share), shows the link to tap and copy, and puts Stop this
-  link working… apart at its foot, which makes a new link after confirming,
+  device cannot share), shows the link to tap and copy, and puts Reset link… apart at its
+  foot, which makes a new link after confirming,
   in the same place, that the old one will stop working.
 - The groups list shows each group as a ruled row with its name, your balance
   (a tick when settled), and a bin that asks in place before

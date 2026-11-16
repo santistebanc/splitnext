@@ -135,7 +135,7 @@ export const betaTerms: LegalDocument = {
     {
       heading: 'Invite links',
       paragraphs: [
-        'Anyone with a group’s invite link can join it and see everything in it. Share it only with people you want in the group, and make a new link from the group if an old one reaches the wrong person.',
+        'Anyone with a group’s invite link can join it and see everything in it. Share it only with people you want in the group, and reset the link under Invite if an old one reaches the wrong person.',
       ],
     },
     {

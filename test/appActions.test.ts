@@ -1194,7 +1194,7 @@ describe('app actions', () => {
 
     expect(await actions.dispatch('regenerateInvite', {})).toMatchObject({
       status: 'needs_confirmation',
-      message: 'Make a new invite link? The old link will stop working. Everyone already in the group keeps their access.',
+      message: 'Reset the invite link? The current link will stop working. Everyone already in the group keeps their access.',
     });
     expect(calls).toEqual([]);
     expect(

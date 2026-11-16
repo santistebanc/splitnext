@@ -97,15 +97,15 @@ export function InvitePanel(props: { app: InvitePanelApp; name?: string }) {
       )}
       {link && copied && !confirming ? <Text accessibilityLiveRegion="polite" variant="caption">✓ Copied</Text> : null}
       {confirming ? (
-        <Confirmation message={confirming.message} confirmLabel={replace.busy ? 'Making a new link…' : 'Make a new link'} busy={replace.busy} onConfirm={confirming.confirm} onCancel={replace.cancel} />
+        <Confirmation message={confirming.message} confirmLabel={replace.busy ? 'Resetting…' : 'Reset link'} busy={replace.busy} onConfirm={confirming.confirm} onCancel={replace.cancel} />
       ) : (
         <Row>
           <TextButton size="small" tone="muted" disabled={!replace.can('regenerateInvite')} onPress={() => { void replace.call('regenerateInvite', {}); }}>
-            Stop this link working…
+            Reset link…
           </TextButton>
         </Row>
       )}
-      {!online && !confirming ? <Text variant="caption" tone="muted">Connect to make a new link.</Text> : null}
+      {!online && !confirming ? <Text variant="caption" tone="muted">Connect to reset the link.</Text> : null}
       <ErrorMessage message={replace.error ?? action.error} />
     </Stack>
   );

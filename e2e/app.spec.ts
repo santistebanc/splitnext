@@ -1650,9 +1650,9 @@ test('renames the group in place, copies the invite link, and replaces it after 
   expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(before);
 
   // Making a new link sits apart at the foot and asks first, in the same place.
-  await panel.getByRole('button', { name: 'Stop this link working…', exact: true }).click();
-  await expect(panel.getByText('Make a new invite link? The old link will stop working. Everyone already in the group keeps their access.', { exact: true })).toBeVisible();
-  await panel.getByRole('button', { name: 'Make a new link', exact: true }).click();
+  await panel.getByRole('button', { name: 'Reset link…', exact: true }).click();
+  await expect(panel.getByText('Reset the invite link? The current link will stop working. Everyone already in the group keeps their access.', { exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: 'Reset link', exact: true }).click();
   await expect(panel.getByTestId('invite-link')).not.toHaveText(before);
   await closeInvite(page);
 });

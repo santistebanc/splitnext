@@ -50,7 +50,7 @@ their name from the people list; Share link as its main button where the device
 can share, Copy link otherwise; the link in the monospaced face, without
 https://, on one line that never wraps, smaller where it would not fit, which
 tapping highlights and copies with https://, then shows Copied below; and, apart
-at the foot, Stop this link working…, which asks first and makes a new link.
+at the foot, Reset link…, which asks first and makes a new link.
 Share also sends the link with https://, and the join field accepts it either
 way.
 Regenerate first asks for
