@@ -67,8 +67,8 @@ test('device lab frontend shows in-page devices live in its own page, each in it
     const otherLive = page.frameLocator(`iframe[data-lab-device="${otherId}"]`);
 
     await live.getByRole('button', { name: 'New group' }).click();
-    await expect(live.getByRole('dialog', { name: 'New group' })).toBeVisible();
-    await expect(otherLive.getByRole('dialog', { name: 'New group' })).toHaveCount(0);
+    await expect(live.getByRole('region', { name: 'New group' })).toBeVisible();
+    await expect(otherLive.getByRole('region', { name: 'New group' })).toHaveCount(0);
     await expect(otherLive.getByRole('button', { name: 'New group' })).toBeVisible();
     await expect(device.locator('.insp-overview')).toContainText('View: create');
     await expect(other.locator('.insp-overview')).toContainText('View: home');
@@ -530,11 +530,11 @@ test('uses one large title on every screen and opens the join field in place', a
   expect(Math.abs(nameBox.y + nameBox.height / 2 - (logo.y + logo.height / 2))).toBeLessThanOrEqual(3);
   await button(page, 'New group').click();
   // New group opens the same sheet as every other, over the groups list, ready to type.
-  await expect(page.getByRole('dialog', { name: 'New group' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'New group' })).toBeVisible();
   await expect(field(page, 'Group name')).toBeFocused();
   await button(page, 'Cancel').click();
   await motionSettled(page);
-  await expect(page.getByRole('dialog', { name: 'New group' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'New group' })).toHaveCount(0);
 
   // Join opens a link field directly under itself, above the mark; a link that
   // is not an invite says so there.
@@ -628,7 +628,7 @@ test('hides the main action without dimming while a name or the join link is edi
   await page.screenshot({ path: test.info().outputPath('cover-join-link.png') });
   await page.mouse.click(newGroup.x + newGroup.width / 2, newGroup.y + newGroup.height / 2);
   await expect(field(page, 'Invite link')).toHaveCount(0);
-  await expect(page.getByRole('dialog', { name: 'New group' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'New group' })).toHaveCount(0);
   await expect(cover).toHaveCount(0);
   await expect(button(page, 'New group')).toBeVisible();
 });
@@ -655,7 +655,7 @@ test('keeps group creation errors and retry above the phone keyboard without los
   await field(page, 'Your name in this group').fill('Ana');
   await page.route('**/groups', (route) => route.request().method() === 'POST' ? route.abort('connectionrefused') : route.continue());
   await button(page, 'Create group').click();
-  const form = page.getByRole('dialog', { name: 'New group', exact: true });
+  const form = page.getByRole('region', { name: 'New group', exact: true });
   const error = form.getByRole('alert').last();
 
   await expect(error).toBeVisible();

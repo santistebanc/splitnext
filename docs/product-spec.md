@@ -218,11 +218,12 @@ valid one opens the join screen. Each group is a ruled row with its name on up
 to two lines, your balance (a green tick when settled, choose who you are when
 unassigned), changes waiting or needing review when there are any, and a bin that asks in place before leaving the group on this
 device. Show N groups you left lists them with Rejoin, and New group is
-pinned at the foot. New group does not leave the list: it opens the same
-sheet as every other, titled New group with Cancel, holding two compact
-labelled fields, Group name (focused) and Your name in this group, and
-Create group, grey until both names are filled and Creating… while it works;
-it stays above an on-screen keyboard. Your name starts as the last name used here, with
+pinned at the foot. New group does not leave the list: it opens a drawer
+upward from the button, just tall enough for New group with Cancel and two
+compact labelled fields, Group name (focused) and Your name in this group, while the screen above
+dims. The button becomes Create group, grey until both names are filled and
+Creating… while it works, and stays above an on-screen keyboard while the
+fields scroll. Your name starts as the last name used here, with
 the names you go by in your other groups offered under it, each once, to use
 with a tap. Cancel, Back, or a tap on the dimmed screen closes it and
 discards the draft.
@@ -341,7 +342,7 @@ new, and Undo or, for removals, Restore where safe.
 Details, forms and Activity are pages with Back to where they were opened.
 Every sheet looks and moves the same: on phones it rises from the foot over a
 page that dims, on wide screens it opens in the middle, and its title row has
-the title and Close (Cancel where closing drops a start, as for New group);
+the title and Close (Cancel where closing drops a start);
 Every row's rule spans the page's column, the same in every list, and the
 header, the page and the footer share one column, whether or not the browser
 shows a scrollbar.

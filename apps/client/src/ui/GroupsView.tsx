@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ScrollView, View, type TextInput } from 'react-native';
+import { View, type TextInput } from 'react-native';
 import { parseInviteLink, type ClientGroupSummary } from '@splitnext/client';
 import { ArrowRightIcon, BrandMark, CheckIcon, Button, Divider, EmptyState, ErrorMessage, Field, IconButton, ListRow, Notice, Row, Stack, Text, TextButton, Touchable, TrashIcon, between, bleedRow, colors, RowRule, rules, sizes, titleStyle } from '../design';
 import { Confirmation } from './ConfirmSheet';
@@ -7,7 +7,7 @@ import type { AppController } from '../model/controller';
 import { balanceColor, signedFigure } from './balance';
 import { CreateGroup, useSubmitCreate } from './CreateGroup';
 import { EditCover } from './EditCover';
-import { Drawer } from './Drawer';
+import { FooterDrawer } from './FooterDrawer';
 import { useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
 import { ScreenHeader } from './ScreenHeader';
@@ -33,32 +33,40 @@ export function GroupsFooter(props: { app: GroupsViewApp }) {
   }
 
   return (
-    <>
-      <ErrorMessage message={action.error} />
-      <Button ref={morph('newgroup')} disabled={!action.can('showCreateGroup')} onPress={() => { void action.call('showCreateGroup', {}); }}>
-        New group
-      </Button>
-      {/* The same sheet as every other, with Cancel since closing drops the new group. */}
-      {creating ? (
-        <Drawer title="New group" closeText="Cancel" busy={busy} onClose={close}>
-          {/* The form scrolls when the keyboard leaves little room, and the button stays at the foot. */}
-          <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled">
-            <CreateGroup app={props.app} />
-            {!online || !reachable ? (
-              <Notice
-                tone="danger"
-                role="alert"
-                message={`Can’t create the group. ${!online ? 'You’re offline.' : 'Splitnext can’t be reached.'} Nothing you typed was lost.`}
-              />
-            ) : null}
-            <ErrorMessage message={create.error} />
-          </ScrollView>
-          <Button busy={busy} disabled={!create.can('submitCreateGroup')} onPress={submit}>
-            {busy ? 'Creating…' : create.error ? 'Try again' : 'Create group'}
+    // The drawer grows up out of the button, which turns into Create group.
+    <FooterDrawer
+      open={creating}
+      title="New group"
+      closeLabel="Cancel"
+      busy={busy}
+      onClose={close}
+      footer={(
+        <>
+          <ErrorMessage message={action.error} />
+          <Button
+            ref={morph('newgroup')}
+            busy={creating && busy}
+            disabled={creating ? !create.can('submitCreateGroup') : !action.can('showCreateGroup')}
+            onPress={() => {
+              if (creating) submit();
+              else void action.call('showCreateGroup', {});
+            }}
+          >
+            {creating ? (busy ? 'Creating…' : create.error ? 'Try again' : 'Create group') : 'New group'}
           </Button>
-        </Drawer>
+        </>
+      )}
+    >
+      <CreateGroup app={props.app} />
+      {!online || !reachable ? (
+        <Notice
+          tone="danger"
+          role="alert"
+          message={`Can’t create the group. ${!online ? 'You’re offline.' : 'Splitnext can’t be reached.'} Nothing you typed was lost.`}
+        />
       ) : null}
-    </>
+      <ErrorMessage message={create.error} />
+    </FooterDrawer>
   );
 }
 

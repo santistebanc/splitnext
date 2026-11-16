@@ -85,7 +85,7 @@ Screens take every color, size, and duration from tokens and build from these
 components rather than their own copies. App chrome that needs the app's
 scrolling or modal plumbing lives in `ui/` on top of them: `ScreenHeader`
 with `BackButton` and `HeaderAction`, `Drawer`, `ConfirmSheet`,
-`Toast`, and `SyncStatus`. Rows that run to the screen's edges for their
+`FooterDrawer`, `Toast`, and `SyncStatus`. Rows that run to the screen's edges for their
 press tint use `bleedRow` and draw their rule with `RowRule`, across the
 column only, like every other list's. `ui/balance.ts` formats balances
 (`signedFigure`, `balanceColor`) and `ui/errors.ts` turns error codes into copy.
@@ -109,10 +109,12 @@ row, with the screen's name small in its middle to return to the top; the
 title and `below` fold away whole, reading full-size progress while they close.
 Compact progress moves between 0 and 1 in one eased 240ms movement
 (`createCompactProgress`); parts outside `ScreenHeader`'s fold, such as the
-expense amount, read the same progress. The groups list pins New group, which opens the create form in a `Drawer`
-(the `create` view, drawn on the groups list); `Drawer` keeps above an
+expense amount, read the same progress. The groups list pins New group, which opens the create form upward above
+itself (the `create` view, drawn on the groups list) and becomes Create group.
+`FooterDrawer` limits its content to the visible height and scrolls its body,
+so the action stays above the keyboard. `Drawer` also keeps above an
 on-screen keyboard through the visible viewport's height, and `busy` holds it
-open while the group is created. `Frame` measures its scrollbar and keeps the
+open while what it holds is saved. `Frame` measures its scrollbar and keeps the
 header and footer that much short of the right edge, so their column stands
 over the page's.
 The join screen pins Open link or Join as the chosen name; the group screen

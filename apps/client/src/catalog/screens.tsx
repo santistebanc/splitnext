@@ -8,6 +8,7 @@ import { ConfirmSheet } from '../ui/ConfirmSheet';
 import { SyncStatus } from '../ui/ConnectionStatus';
 import { CreateGroup } from '../ui/CreateGroup';
 import { Drawer } from '../ui/Drawer';
+import { FooterDrawer } from '../ui/FooterDrawer';
 import { GroupSettings } from '../ui/GroupSettings';
 import { GroupsView } from '../ui/GroupsView';
 import { GroupHeader, GroupView } from '../ui/GroupView';
@@ -50,6 +51,7 @@ function OverlaysPage() {
   const [drawer, setDrawer] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [footer, setFooter] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -67,6 +69,11 @@ function OverlaysPage() {
           <Button variant="secondary" onPress={() => setConfirm(true)}>Ask to confirm</Button>
           <Button variant="secondary" onPress={() => setToast('Ben removed.')}>Show toast</Button>
         </Row>
+      </Example>
+      <Example title="FooterDrawer" note="Rises from a screen's main button, as New group does, and dims what is above it.">
+        <FooterDrawer open={footer} title="New group" closeLabel="Cancel" onClose={() => setFooter(false)} footer={<Button onPress={() => setFooter(!footer)}>{footer ? 'Create group' : 'New group'}</Button>}>
+          <Text variant="body">What the drawer holds.</Text>
+        </FooterDrawer>
       </Example>
       <Example title="SyncStatus" note="A strip above every screen while disconnected; press it for details.">
         <View style={{ marginHorizontal: -24 }}>
