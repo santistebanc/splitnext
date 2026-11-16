@@ -109,8 +109,7 @@ itself (the `create` view, drawn on the groups list) and becomes Create group.
 Creation uses the floating footer so the action stays above the keyboard.
 `FooterDrawer` limits its content to the visible height and scrolls its body.
 The join screen pins Open link or Join as the chosen name; the group screen
-pins Add expense; a person pins Settle up while they are in a planned payment;
-the expense editor pins Save. The repayment form puts Record or Save in its
+pins Add expense; the expense editor pins Save. The repayment form puts Record or Save in its
 header beside Cancel and Delete.
 
 `ScreenMorph` moves screens as the prototype does. It wraps `Frame` and, being
@@ -139,22 +138,23 @@ skip motion when reduced motion is preferred, and native shows changes at once.
 
 A group has one screen (`home`) with People and Expenses together, each in
 full, in the one page scroll. While the expenses section is below the visible
-page, `ExpensesJump` floats over the main action and scrolls it up to just under
-the compact header through `Frame`'s `RevealContext`. `GroupHeader`
-holds ‹ Groups, Invite people and Activity with its
+page, its heading floats at the page's foot through `StickyFoot` (CSS sticky
+positioning on the web, so it moves with the scroll itself), drawn as a button
+that scrolls the section up to just under the compact header through `Frame`'s
+`RevealContext`. `StickyFoot` reports how far the heading has docked over its
+last 72px, and the heading morphs from button to heading by that amount.
+`GroupHeader` holds ‹ Groups and Activity with its
 count as icons, the group's name with a pencil that renames it in place
 through `renameGroup`, then `YourBalance`. The scroll content holds the people
 section and the expense list. Search sits beside the Expenses heading and
 filters only that list. `TitleField` sizes itself from an invisible,
 in-flow copy of the name, with the editable field laid over it, so opening
-and typing never wait for a second layout to set the height. Invite people
-shows `InvitePanel` in a `Reveal` under the name while the view is `invite`,
-so Back closes it. Search keeps its query and filters in
+and typing never wait for a second layout to set the height. Invite, at the
+end of `AddPersonRow`, shows `InviteSheet` (a `Drawer` around `InvitePanel`)
+while the view is `invite`, so Back closes it. Search keeps its query and filters in
 `AppUiState.search`, changed through `searchExpenses` and cleared by
 `closeExpenseSearch` or opening a group; `ExpenseList` filters with
-`matchesSearch` and `expenseEffect` from `model/expenses.ts`. A downward
-content scroll also closes it through `Frame.onScrollDown`; restoration and
-header reflow do not. `Frame`
+`matchesSearch` and `expenseEffect` from `model/expenses.ts`. `Frame`
 holds a thin `SyncStatus` strip above the header across all views while
 offline or unreachable. Tapping it opens a `Drawer` with the connection state,
 locally queued change count, and Retry when online. Reconnecting closes it and
@@ -178,9 +178,7 @@ behind `setBalancesExpanded`, ending with `AddPersonRow`; on Expenses,
 headings when they span more than one month, each led by its payer's avatar and faded when it leaves you out.
 `YourBalance`'s Settle up opens `settle` without a person, a page of its own
 (`SettleUpPlan`): your payments of the plan, then everyone else's folded.
-Tapping a person opens `person` (`PersonDetails`), whose Settle up opens
-`settle` for them, shown as a `FooterDrawer` rising from `SettleUpFooter`
-over `PersonDetails`, so the view keeps its history entry. `FooterDrawer` is the same drawer New group opens from its button. Record there records a planned payment through
+It is the only Settle up; `person` has none. Record there records a planned payment through
 `recordSettlement` at once. Other payments are new entries on the Payment
 tab of Add expense, the repayment form (`settlements`).
 `AppUiState.trail` records the views a page was opened from, so Back, Cancel,
@@ -213,9 +211,10 @@ key.
   installation open that group directly, keeping the selected member. The
   invite entry route remains available for future native app handoff. A link
   that no longer works shows why and a field to try a different one.
-- The invite link shows between two rules with Copy link, native sharing when
-  supported, and Regenerate side by side, which regenerates the invitation
-  after confirming, in the same place, that the old link will stop working.
+- The invite sheet explains the link, offers Share link (Copy link where the
+  device cannot share), shows the link to tap and copy, and puts Stop this
+  link working… apart at its foot, which makes a new link after confirming,
+  in the same place, that the old one will stop working.
 - The groups list shows each group as a ruled row with its name, your balance
   (a tick when settled), and a bin that asks in place before
   leaving; left groups list with Rejoin. Offline captions name the blocked
@@ -259,8 +258,7 @@ key.
   The expense editor has Cancel and Delete in the header and Save in the
   shared pinned footer, a large amount and description that shrink as the
   split scrolls, Paid by opening the names in
-  place, then the split, folded into one Split · Equally row while it is equal
-  between everyone and otherwise a bar of each person's share in their avatar
+  place, then the split, always in full: a bar of each person's share in their avatar
   tint, and one row per person with − and + side by side for whole shares (−
   only above one share or on a fixed amount), an amount that can be fixed in
   place, and a checkbox at the end.

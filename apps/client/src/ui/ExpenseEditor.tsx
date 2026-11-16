@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, type TextInput } from 'react-native';
 import { activeMembers, formatAmount, minorDigits, parseAmount, preferredMember } from '@splitnext/client';
-import { Button, Checkbox, ChevronRightIcon, ErrorMessage, Field, IconButton, Row, Text, Touchable, YouBadge, avatarTints, between, colors, durations, inputStyle, opacities, rules, sizes, withTransition } from '../design';
+import { Button, Checkbox, ErrorMessage, Field, IconButton, Row, Text, Touchable, YouBadge, avatarTints, between, colors, durations, inputStyle, opacities, rules, sizes, withTransition } from '../design';
 import { memberTint } from '../model/memberPresentation';
 import { entryFromDraft, expenseLabel, memberName, moneyLabel, previewAllocation, type ExpenseDraft, type ExpenseDraftPart } from '../model/expenses';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
@@ -325,10 +325,6 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
   const hue = (memberId: string) => avatarTints[memberTint(snapshot, memberId) % avatarTints.length] ?? colors.tint;
   const included = draft.parts.map((part) => part.member_id);
   const sharing = draft.parts.filter((part) => part.kind === 'shares').length;
-  const everyone = activeMembers(snapshot);
-  // The common case: one share each for everyone in the group.
-  const equal = draft.parts.length === everyone.length && draft.parts.every((part) => part.kind === 'shares' && part.shares === 1) && everyone.every((member) => included.includes(member.id));
-  const [splitOpen, setSplitOpen] = useState(!equal);
   const summary = splitSummary(draft, preview);
 
   return (
@@ -344,24 +340,6 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
       />
       <ErrorMessage message={edit.error} />
 
-      {!splitOpen && replica ? (
-        <Touchable
-          accessibilityRole="button"
-          accessibilityLabel={`Split equally between everyone, ${summary}. Change split`}
-          accessibilityState={{ expanded: false }}
-          onPress={() => setSplitOpen(true)}
-          style={[{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: sizes.row }, rules.below]}
-        >
-          <Text variant="body" tone="muted">Split</Text>
-          <Row fill gap={8} justify="end">
-            <Text variant="strong" numberOfLines={1}>Equally</Text>
-            <Text testID="split-summary" variant="caption" tone="muted" numberOfLines={1}>{summary}</Text>
-          </Row>
-          <ChevronRightIcon size={16} color={colors.faint} />
-        </Touchable>
-      ) : null}
-      {splitOpen ? (
-      <>
       <Row paddingTop={16} paddingBottom={4} style={{ minHeight: sizes.touch }}>
         <Text testID="split-summary" variant="caption" weight="semibold" tone={draft.parts.length ? 'muted' : 'danger'}>{summary}</Text>
       </Row>
@@ -386,8 +364,6 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
           replica ? <ExpenseSplitRow key={member.id} replica={replica} memberId={member.id} name={memberName(snapshot, member.id)} you={member.id === you} part={draft.parts.find((part) => part.member_id === member.id)} owed={preview.get(member.id)} currency={draft.currency} hasAmount={hasAmount} sharing={sharing} amountWidth={amountWidth} /> : null
         ))}
       </View>
-      </>
-      ) : null}
 
       {hasAmount && !entry.ok && entry.problem !== 'Describe the expense.' ? <Text variant="caption" tone="danger" weight="semibold" style={{ paddingTop: 12 }}>{entry.problem}</Text> : null}
       {!activeMembers(snapshot).length ? <Text variant="caption" tone="muted">Add a member first.</Text> : null}

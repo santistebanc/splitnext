@@ -38,16 +38,21 @@ installation, saved in localStorage. The default stays editable and survives
 reloads and leaving groups. Creating, joining, selecting a different member,
 or renaming the current preferred member updates this local default.
 Use the same default in the name field when joining or rejoining as someone new.
-After creation, open the group screen. Its People section ends with an inline Add a
-person row, and Invite people, an icon in the header, opens the invite link in
-place under the group's name, so adding names and inviting can happen in either
-order. The groups list shows each group's name and your balance in it. The invite link shows in the monospaced face, without
-https://, on one line that never wraps, smaller where it would not fit, in one
-row between an ink rule and a hairline: a Share icon on its
-left where the device can share, and a Regenerate icon on its right. Tapping the
-link highlights it and copies it, with https://, then shows Copied below.
-Do not show a copy instruction before tapping. Share also sends it with https://, and
-the join field accepts it either way. There is no separate Copy link button.
+After creation, open the group screen. Its People section ends with one row
+for adding a person and Invite, a labeled button at its end, since adding names
+and sending people the link go together. While a name is typed, the row takes a
+person row's shape: an avatar grows in where the plus was, showing the name's
+initials in the tint the person will get, and the name lines up with the names
+above; Add takes Invite's place while there is a name. The groups list shows
+each group's name and your balance in it. Invite opens a sheet: a line saying
+that anyone with the link can join, see the expenses and add their own, picking
+their name from the people list; Share link as its main button where the device
+can share, Copy link otherwise; the link in the monospaced face, without
+https://, on one line that never wraps, smaller where it would not fit, which
+tapping highlights and copies with https://, then shows Copied below; and, apart
+at the foot, Stop this link working…, which asks first and makes a new link.
+Share also sends the link with https://, and the join field accepts it either
+way.
 Regenerate first asks for
 confirmation in the same place, explaining that it creates a new link and the
 old link will stop working while everyone already in the group keeps their
@@ -71,13 +76,11 @@ the page it opens),
 while the rest fades and slides 28px, forward when going deeper and back when
 returning. Add expense opens the new expense as a full-screen sheet that
 rises over the group screen, which stays put and dims; Cancel or Save drops
-it back down. Panels that open in place, such as the invite link, the join field,
-and who paid, grow down into place and shrink away when closed. A tap outside
-an open dropdown (who paid, the invite link, or a leave confirmation) closes
-it, and still reaches whatever was tapped; its own button still toggles it.
-Scrolling downward closes the invite-link dropdown; other dropdowns stay open
-while scrolling. Where you stand follows the invite link with a compact gap in
-both the open and closed states. Renaming the group or a member, adding a person,
+it back down. Panels that open in place, such as the join field and who paid,
+grow down into place and shrink away when closed. A tap outside an open
+dropdown (who paid or a leave confirmation) closes it, and still reaches
+whatever was tapped; its own button still toggles it. Dropdowns stay open
+while scrolling. Renaming the group or a member, adding a person,
 and the join field are edited in place: nothing dims, the screen's pinned main
 action steps aside until the edit ends, and a tap anywhere else ends the edit
 (saving a name) and reaches nothing under it. The keyboard's key finishes the
@@ -232,13 +235,15 @@ name is typed in place as someone new; Join as the chosen name is pinned at
 the foot.
 
 A group opens on one screen with people and expenses together. Its header has
-‹ Groups, Invite people and Activity (with a count of new
+‹ Groups and Activity (with a count of new
 changes and changes to review), then the group's name with a pencil that
 renames it in place, then where you stand. Below it, every person's row
 without a People heading, then Expenses with its count and search, in full, in
-one page scroll. While the expenses start below the screen, a floating
-"Expenses N" button above Add expense scrolls them up to just under the compact
-header. People shows the balances; Expenses shows expenses and
+one page scroll. While the expenses start below the screen, their heading
+floats at the foot above Add expense as an "Expenses N" button, which scrolls
+them up to just under the compact header. Scrolled to by hand, it rides the
+foot until it reaches its place, then turns into the heading there: it slides
+to the left, its fill fades, and search comes in, all following the scroll. People shows the balances; Expenses shows expenses and
 recorded repayments newest first, each opening its editor. A list that spans
 more than one month heads each month (with the year outside the current one);
 a single month has no month heading. An expense row is the
@@ -264,12 +269,7 @@ one line that shows them, each From → To. When nothing is owed it says
 Everyone is settled up. Record always records the plain amount, never the
 grouped figure shown.
 
-Tapping a person opens their details (see above), and their Settle up opens a
-drawer upward from the button, like New group, while the details dim. It has
-Settle up with Close, then the payments in the group's plan that involve
-them, each From → To with its amount and Record, which records it as
-planned. The button gives way to the drawer while it is open. When nothing is
-owed it shows ✓ Settled. Partial and other payments are recorded from Add
+This is the only Settle up; a person's details have none. Partial and other payments are recorded from Add
 expense's Payment tab. The repayment form is a page with Cancel in the header, with Delete beside it
 for a recorded repayment, and Save at the foot. Match the expense editor: Cancel and Delete in the header, the same
 large right-aligned formatted amount field and underline, with no title below
@@ -304,9 +304,7 @@ keystroke. Keep the caret usable for insertion, replacement, and deletion.
 Reject ambiguous or over-precise pasted amounts. Paid by opens the names in
 place, each drawn like its row in the balances: full width, tinted when it is
 you, with the presence marker, the name and "you", and a check on the one who
-paid. Then the split. While it is equal between everyone, it folds into one row,
-Split · Equally with its caption (28.20 each), which unfolds it when tapped;
-an expense split any other way opens unfolded. Unfolded, it shows its caption
+paid. Then the split, always shown in full: its caption
 (28.20 each for an equal split, or 5 people for a custom one), a bar of each
 person's share in their avatar's tint, and one row per person,
 their avatar, the name with "you", − and + side by side for their shares,
@@ -337,8 +335,8 @@ did what, with its detail in the monospaced face, an orange mark when it is
 new, and Undo or, for removals, Restore where safe.
 
 Details, forms and Activity are pages with Back to where they were opened.
-Settle up is a drawer from the details' button; Close, tapping above it, or
-browser Back returns to them. Every screen, and the invite link opened in place, is in browser
+The invite sheet closes with Close, a tap above it, or browser Back. Every
+screen, and the invite sheet, is in browser
 Back/Forward history, and repayment drafts survive screen changes.
 Opening a view afresh starts at the top with its header expanded, including
 reopening a member, Activity, or a new or recorded expense. Back, Cancel, and
@@ -364,8 +362,7 @@ recording requires no recipient approval and never executes a payment.
 Settle up plans the fewest payments that settle the whole group, and may skip
 people in the middle: if Ana owes Ben 20 and Ben owes Cara 20, Ana pays Cara
 20. The plan is exact for up to 14 people with a balance and falls back to a deterministic greedy
-plan above that. A person's Settle up shows only the plan's payments involving
-them. The payments themselves are not listed on the group screen.
+plan above that. The payments themselves are not listed on the group screen.
 
 Record records a planned payment as planned. Any other repayment, such as a
 partial one, is a new entry on the Payment tab of Add expense. A repayment may
@@ -815,7 +812,7 @@ Expenses and settlements are accepted behavior.
 - There is deliberately no participant-level access revocation or moderation
   role. The history-based group recovery path is the escape hatch for abuse.
 
-Compact headers hide the group-name pencil alongside the invite controls.
+Compact headers hide the group-name pencil.
 Tapping any compact screen title returns its view to the top; the expanded group title offers rename again.
 
 Labeled form fields use a Standard-style floating label and underline. Empty,

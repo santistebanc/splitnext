@@ -56,8 +56,6 @@ type FrameProps = {
    * screen opens at rather than a scroll, which takes effect without motion.
    */
   onCompactChange?: ((compact: boolean, instant: boolean) => void) | undefined;
-  /** A downward content scroll, excluding restoration. */
-  onScrollDown?: (() => void) | undefined;
   /** Receives a way to scroll the content, smoothly unless told not to, such as back to the top. */
   scrollControl?: { current: ((y: number, animated?: boolean) => void) | null } | undefined;
 };
@@ -111,6 +109,9 @@ export function Frame(props: FrameProps) {
   // Scrolls caused by switching screens, including late ones from the screen
   // left behind, are neither a person scrolling nor this screen's position.
   const restoring = useRef(false);
+  // A position restored with the header sizes it was saved with, applied
+  // again once the page has those sizes and so its full height.
+  const pending = useRef<number | null>(null);
 
   function follow(y: number, instant: boolean): void {
     const shrink = headerRef.current.shrink;
@@ -138,6 +139,7 @@ export function Frame(props: FrameProps) {
     if (returning && sizes) {
       headerRef.current = sizes;
       setHeader(sizes);
+      pending.current = restored;
     }
 
     scroll.current?.scrollTo({ y: restored, animated: false });
@@ -146,10 +148,17 @@ export function Frame(props: FrameProps) {
 
     const frame = requestAnimationFrame(() => {
       restoring.current = false;
+      pending.current = null;
     });
 
     return () => cancelAnimationFrame(frame);
   }, [scrollKey]);
+
+  // Until the restored sizes apply, the page can be too short to reach the
+  // saved position, so the browser stops short of it.
+  useLayoutEffect(() => {
+    if (pending.current !== null) scroll.current?.scrollTo({ y: pending.current, animated: false });
+  }, [header.full]);
 
   // A header can say what it gives up before it is first seen compact.
   function reportShrink(shrink: number): void {
@@ -227,13 +236,10 @@ export function Frame(props: FrameProps) {
             onScroll={(event) => {
               if (restoring.current) return;
               const y = event.nativeEvent.contentOffset.y;
-              const down = y > scrolled.current;
 
               scrolled.current = y;
               positions.current.set(scrollKey, y);
               follow(y, false);
-
-              if (down) props.onScrollDown?.();
             }}
             scrollEventThrottle={16}
             nativeID="splitnext-page"

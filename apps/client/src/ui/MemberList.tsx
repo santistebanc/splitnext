@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Platform, View, type StyleProp, type TextInput, type TextStyle } from 'react-native';
 import type { ClientReplicaState } from '@splitnext/client';
 import { memberStatus, memberTint, participantMarkers, type ParticipantMarker } from '../model/memberPresentation';
 import type { AppController } from '../model/controller';
-import { Avatar, Button, Dot, ErrorMessage, Input, colors, layout, rules, sizes, type AvatarSize, type FontWeight, type TypeVariant } from '../design';
+import { Avatar, Button, Dot, ErrorMessage, Input, avatarSizes, colors, durations, layout, radii, rules, sizes, strokes, withTransition, type AvatarSize, type FontWeight, type TypeVariant } from '../design';
 import { EditCover } from './EditCover';
 import { errorMessage } from './errors';
 import { useActions } from './useActionCall';
@@ -124,7 +124,20 @@ export function MemberNameInput(props: {
  * text, Add at the row's end does what Enter does, so the keyboard's own key
  * is not the only way to say "add this one".
  */
-export function AddPersonRow() {
+/** The avatar slot of a person being added: an empty ring until a name is typed, then its initials in the tint the person will get. */
+function NewPersonAvatar(props: { name: string; tint: number }) {
+  if (props.name.trim()) return <Avatar name={props.name.trim()} tint={props.tint} />;
+
+  return <View aria-hidden style={{ width: avatarSizes.regular.box, height: avatarSizes.regular.box, borderRadius: radii.round, borderWidth: strokes.ink, borderStyle: 'dashed', borderColor: colors.faint }} />;
+}
+
+/**
+ * Adds people by name. While typing, the row takes a person row's shape: an
+ * avatar grows in where the plus was, showing the name's initials as it is
+ * typed. `end` sits at the row's end while nothing is typed, such as Invite;
+ * `tint` is the next person's avatar color.
+ */
+export function AddPersonRow(props: { end?: ReactNode; tint?: number }) {
   const actions = useActions();
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -210,10 +223,13 @@ export function AddPersonRow() {
     <View>
       {/* The row runs to the column's edges, like the people above it. */}
       <View ref={row} style={[rules.above, { flexDirection: 'row', alignItems: 'center', minHeight: sizes.row, marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter }]}>
+        <View style={withTransition({ width: adding ? avatarSizes.regular.box + 12 : 0, opacity: adding ? 1 : 0, overflow: 'hidden' }, 'width, opacity', durations.medium)}>
+          <NewPersonAvatar name={text} tint={props.tint ?? 0} />
+        </View>
         <MemberNameInput
           inputRef={input}
           name={text}
-          placeholder="+ Add a person"
+          placeholder={adding ? 'Name' : '+ Add a person'}
           label="Add a person"
           onChangeText={(value) => {
             setText(value);
@@ -241,7 +257,7 @@ export function AddPersonRow() {
           <View ref={addButton}>
             <Button size="compact" label={`Add ${text.trim()}`} onPress={() => { take(); input.current?.focus(); }}>Add</Button>
           </View>
-        ) : null}
+        ) : props.end}
       </View>
       <EditCover open={adding} target={row} onPress={() => input.current?.blur()} />
       <ErrorMessage message={error} />

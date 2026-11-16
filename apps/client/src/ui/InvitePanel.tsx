@@ -1,8 +1,9 @@
-import { useRef, useState, type ReactNode } from 'react';
-import { Platform, View, type Text as NativeText } from 'react-native';
+import { useRef, useState } from 'react';
+import { Platform, type Text as NativeText } from 'react-native';
 import { formatInviteLink } from '@splitnext/client';
-import { ErrorMessage, IconButton, RefreshIcon, Row, ShareIcon, Stack, Text, Touchable, colors, sizes, strokes } from '../design';
+import { Button, ErrorMessage, Row, ShareIcon, Stack, Text, TextButton, Touchable, colors, strokes } from '../design';
 import { Confirmation } from './ConfirmSheet';
+import { Drawer } from './Drawer';
 import type { AppController } from '../model/controller';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
@@ -16,23 +17,26 @@ function selectLink(node: NativeText | null): void {
   window.getSelection()?.selectAllChildren(node);
 }
 
-/** A square icon action beside the link. */
-function LinkAction(props: { label: string; disabled: boolean; onPress: () => void; children: ReactNode }) {
+/**
+ * The invite link in a sheet opened from the People list: what the link does,
+ * Share (or Copy where the device cannot share) as its main action, and the
+ * link itself, shown without `https://`, which tapping highlights and copies.
+ * Making a new link sits apart at the foot and asks first, because the old
+ * link stops working.
+ */
+export function InviteSheet(props: { app: InvitePanelApp }) {
+  const actions = useActions();
+  const name = props.app.snapshot().group?.projected_snapshot?.group.name ?? 'the group';
+
   return (
-    <IconButton label={props.label} disabled={props.disabled} onPress={props.onPress}>
-      {props.children}
-    </IconButton>
+    <Drawer title="Invite people" onClose={() => { void actions.dispatch('closePanel', {}, { origin: 'ui' }); }}>
+      <InvitePanel app={props.app} name={name} />
+    </Drawer>
   );
 }
 
-/**
- * The invite link, opened in place under the group's name, between two rules:
- * Share on its left where the device can share, Regenerate on its right, and
- * the link itself, shown without `https://`, which tapping highlights and
- * copies with it. Regenerating asks first in the same place, because the old
- * link stops working.
- */
-export function InvitePanel(props: { app: InvitePanelApp }) {
+/** The sheet's content, also shown on its own in the screen catalog. */
+export function InvitePanel(props: { app: InvitePanelApp; name?: string }) {
   const replica = props.app.snapshot().group;
   const invite = replica?.projected_snapshot?.invite;
   const copied = useUiState().copiedInviteId === invite?.id;
@@ -56,46 +60,52 @@ export function InvitePanel(props: { app: InvitePanelApp }) {
   const [room, setRoom] = useState(0);
   const linkSize = room && shown ? Math.min(15, room / (shown.length * 0.6)) : 15;
 
+  function copy(): void {
+    selectLink(linkText.current);
+    void action.call('copyInviteLink', {});
+  }
+
   return (
-    <Stack role="region" aria-label="Invite people" gap={8} paddingTop={4}>
-      <Row gap={4} style={{ minHeight: sizes.row, borderTopWidth: strokes.ink, borderBottomWidth: strokes.hairline, borderTopColor: colors.ink, borderBottomColor: colors.rule }}>
-        {link && canShare ? (
-          <View style={{ marginLeft: -12 }}>
-            <LinkAction label="Share link" disabled={!action.can('shareInviteLink')} onPress={() => { void action.call('shareInviteLink', {}); }}>
-              <ShareIcon size={18} />
-            </LinkAction>
-          </View>
-        ) : null}
-        {link ? (
-          <Touchable
-            accessibilityRole="button"
-            accessibilityLabel={copied ? 'Link copied' : 'Copy link'}
-            disabled={!action.can('copyInviteLink')}
-            onPress={() => {
-              selectLink(linkText.current);
-              void action.call('copyInviteLink', {});
-            }}
-            onLayout={(event) => setRoom(event.nativeEvent.layout.width)}
-            style={{ flex: 1, minWidth: 0, paddingVertical: 14 }}
-          >
-            <Text ref={linkText} testID="invite-link" selectable numberOfLines={1} variant="figure" style={{ fontSize: linkSize, lineHeight: 21 }}>
-              {shown}
-            </Text>
-          </Touchable>
+    <Stack role="region" aria-label="Invite people" gap={12}>
+      <Text variant="body" tone="muted">
+        Anyone with this link can join {props.name ?? 'the group'}, see its expenses and add their own. They pick their name from the people list.
+      </Text>
+      {link ? (
+        canShare ? (
+          <Button icon={<ShareIcon size={18} color={colors.background} />} disabled={!action.can('shareInviteLink')} onPress={() => { void action.call('shareInviteLink', {}); }}>
+            Share link
+          </Button>
         ) : (
-          <Text variant="body" tone="muted" style={{ flex: 1, paddingVertical: 14 }}>No invite link yet</Text>
-        )}
-        <View style={{ marginRight: -12 }}>
-          <LinkAction label="Regenerate link" disabled={Boolean(confirming) || !replace.can('regenerateInvite')} onPress={() => { void replace.call('regenerateInvite', {}); }}>
-            <RefreshIcon size={18} />
-          </LinkAction>
-        </View>
-      </Row>
+          <Button disabled={!action.can('copyInviteLink')} onPress={copy}>{copied ? 'Copied' : 'Copy link'}</Button>
+        )
+      ) : null}
+      {link ? (
+        <Touchable
+          accessibilityRole="button"
+          accessibilityLabel={copied ? 'Link copied' : 'Copy link'}
+          disabled={!action.can('copyInviteLink')}
+          onPress={copy}
+          onLayout={(event) => setRoom(event.nativeEvent.layout.width)}
+          style={{ minWidth: 0, paddingVertical: 12, borderTopWidth: strokes.hairline, borderBottomWidth: strokes.hairline, borderColor: colors.rule }}
+        >
+          <Text ref={linkText} testID="invite-link" selectable numberOfLines={1} variant="figure" style={{ fontSize: linkSize, lineHeight: 21 }}>
+            {shown}
+          </Text>
+        </Touchable>
+      ) : (
+        <Text variant="body" tone="muted" style={{ paddingVertical: 12 }}>No invite link yet</Text>
+      )}
       {link && copied && !confirming ? <Text accessibilityLiveRegion="polite" variant="caption">✓ Copied</Text> : null}
       {confirming ? (
-        <Confirmation message={confirming.message} confirmLabel={replace.busy ? 'Regenerating…' : 'Regenerate'} busy={replace.busy} onConfirm={confirming.confirm} onCancel={replace.cancel} />
-      ) : null}
-      {!online && !confirming ? <Text variant="caption" tone="muted">Connect to regenerate the link.</Text> : null}
+        <Confirmation message={confirming.message} confirmLabel={replace.busy ? 'Making a new link…' : 'Make a new link'} busy={replace.busy} onConfirm={confirming.confirm} onCancel={replace.cancel} />
+      ) : (
+        <Row>
+          <TextButton size="small" tone="muted" disabled={!replace.can('regenerateInvite')} onPress={() => { void replace.call('regenerateInvite', {}); }}>
+            Stop this link working…
+          </TextButton>
+        </Row>
+      )}
+      {!online && !confirming ? <Text variant="caption" tone="muted">Connect to make a new link.</Text> : null}
       <ErrorMessage message={replace.error ?? action.error} />
     </Stack>
   );

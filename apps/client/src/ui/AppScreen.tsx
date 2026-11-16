@@ -12,13 +12,13 @@ import { ExpenseControls, ExpenseEditor, ExpenseEditorFooter, ExpenseEditorHeade
 import { AddExpenseButton } from './ExpenseList';
 import { ActivityHeader, ActivityPanel } from './ActivityPanel';
 import { PersonDetails, PersonHeader } from './PersonView';
-import { SettleUpFooter, SettleUpPlan } from './SettleUp';
+import { SettleUpPlan } from './SettleUp';
 import { GroupSettings, GroupSettingsFooter } from './GroupSettings';
 import { GroupsFooter, GroupsHeader, GroupsView } from './GroupsView';
 import { Toast } from './Toast';
 import { useActivityFeed } from './useActivityFeed';
 import { SettlementsFooter, SettlementsHeader, SettlementsPanel } from './SettlementsPanel';
-import { ExpensesJump, GroupHeader, GroupView } from './GroupView';
+import { GroupHeader, GroupView } from './GroupView';
 import { CompactProgressContext, createCompactProgress } from './pageScroll';
 import { InPlaceEditContext, createInPlaceEditStore, useEditingInPlace } from './inPlaceEdit';
 import { JoinGroup, JoinGroupFooter, type JoinCalls } from './JoinGroup';
@@ -207,9 +207,8 @@ function ReadyApp(props: AppProps) {
 
   useEffect(() => substrate.observe?.(app, actions), [app, actions, substrate]);
   useActivityFeed(app, state);
-  // A person's Settle up is a drawer rising from their footer; the group's is a page of its own.
-  const settling = ui.view === 'settle' && Boolean(ui.person);
-  const view = settling ? 'person' : ui.view;
+  // Settle up is one page, opened from where you stand on the group screen.
+  const view = ui.view;
   const initialLink = ui.join.link;
 
   const action = useAction();
@@ -337,7 +336,7 @@ function ReadyApp(props: AppProps) {
       case 'settlements':
         return { header: <SettlementsHeader />, body: <SettlementsPanel app={app} replica={group} />, footer: <SettlementsFooter /> };
       case 'person':
-        return { header: <PersonHeader app={app} />, body: <PersonDetails app={app} />, footer: <SettleUpFooter app={app} /> };
+        return { header: <PersonHeader app={app} />, body: <PersonDetails app={app} />, footer: undefined };
       case 'settle':
         return {
           header: <ScreenHeader title="Settle up" start={<BackButton label="Back to group" disabled={!actions.availability('closePanel', {}).available} onPress={() => dispatch('closePanel')} />} />,
@@ -355,7 +354,7 @@ function ReadyApp(props: AppProps) {
         return {
           header: <GroupHeader app={app} />,
           body: <GroupView app={app} />,
-          footer: addsExpenses ? <><ExpensesJump app={app} /><AddExpenseButton /></> : undefined,
+          footer: addsExpenses ? <AddExpenseButton /> : undefined,
         };
     }
   }
@@ -366,7 +365,7 @@ function ReadyApp(props: AppProps) {
   const screenView = view === 'create' ? 'home' : view;
   const pageKey = onGroupScreen ? `group:${group?.group_id}` : `${screenView}:${group?.group_id ?? ''}:${ui.person ?? ''}`;
   // How deep the screen is, so moving deeper slides forward and returning slides back.
-  const depth = !open ? (screenView === 'home' ? 0 : 1) : onGroupScreen ? 1 : 1 + Math.max(1, ui.trail.length - (settling ? 1 : 0));
+  const depth = !open ? (screenView === 'home' ? 0 : 1) : onGroupScreen ? 1 : 1 + Math.max(1, ui.trail.length);
 
   return (
     <ActionsProvider value={actions}>
@@ -388,9 +387,6 @@ function ReadyApp(props: AppProps) {
                   navigationDepth={depth}
                   restoreScroll={ui.navigation.mode === 'restore'}
                   onCompactChange={(next, instant) => compact.set(next ? 1 : 0, instant)}
-                  onScrollDown={() => {
-                    if (actions.ui.snapshot().view === 'invite') void actions.dispatch('closePanel', {}, { origin: 'ui' });
-                  }}
                 >
                   <ViewTransition key={pageKey} mobile={mobile}>
                     <ErrorMessage message={backgroundError} />

@@ -1,16 +1,17 @@
-import { useContext, useEffect, useRef, useState, type RefObject } from 'react';
-import { Platform, View, type TextInput } from 'react-native';
+import { useContext, useRef, useState } from 'react';
+import { View, type TextInput } from 'react-native';
 import { groupNameSchema, preferredMember, repaymentMembers } from '@splitnext/client';
-import { BellIcon, Button, ChevronDownIcon, ChevronUpIcon, CountBadge, ErrorMessage, IconButton, Input, InviteIcon, PencilIcon, Row, SearchIcon, Stack, Tag, Text, TextButton, ToggleChip, Touchable, YouBadge, between, colors, balanceStyle, layout, radii, rules, sizes, titleStyle } from '../design';
+import { BellIcon, Button, ChevronDownIcon, ChevronUpIcon, CountBadge, ErrorMessage, IconButton, Input, InviteIcon, PencilIcon, Row, SearchIcon, Stack, Tag, Text, TextButton, ToggleChip, Touchable, YouBadge, between, colors, balanceStyle, layout, radii, rules, sizes, strokes, titleStyle } from '../design';
 import { attentionCount } from '../model/activity';
 import { hasRecords } from '../model/breakdown';
 import { balanceRows, currentExpenses, memberName, moneyLabel } from '../model/expenses';
 import { balanceColor, signedFigure } from './balance';
 import { ExpenseList } from './ExpenseList';
-import { InvitePanel } from './InvitePanel';
+import { InviteSheet } from './InvitePanel';
 import { AddPersonRow, MemberAvatar, type MemberListApp, type Replica } from './MemberList';
 import { RevealContext, useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
+import { StickyFoot } from './StickyFoot';
 import { EditCover } from './EditCover';
 import { ScreenHeader, BackButton } from './ScreenHeader';
 import { TitleField } from './TitleField';
@@ -113,21 +114,27 @@ function GroupName(props: { name: string; groupId: string }) {
   );
 }
 
-/** Invite people: an icon at the header's end that opens the invite link under the title. */
-function InviteToggle(props: { toggle: RefObject<View | null> }) {
+/** Invite people: beside Add a person, since adding names and sending them the link go together; it opens the link in a sheet. */
+function InviteButton(props: { app: MemberListApp }) {
   const invite = useActionCall();
   const inviting = useUiState().view === 'invite';
 
   return (
-    <IconButton
-      ref={props.toggle}
-      label="Invite people"
-      aria-expanded={inviting}
-      disabled={!invite.can(inviting ? 'closePanel' : 'showInvite', {})}
-      onPress={() => { void invite.call(inviting ? 'closePanel' : 'showInvite', {}); }}
-    >
-      <InviteIcon size={22} />
-    </IconButton>
+    <>
+      <Button
+        size="compact"
+        variant="secondary"
+        label="Invite people"
+        icon={<InviteIcon size={16} />}
+        expanded={inviting}
+        disabled={!invite.can('showInvite', {})}
+        onPress={() => { void invite.call('showInvite', {}); }}
+      >
+        Invite
+      </Button>
+      {inviting ? <InviteSheet app={props.app} /> : null}
+      <ErrorMessage message={invite.error} />
+    </>
   );
 }
 
@@ -248,42 +255,24 @@ function YourBalance(props: { replica: Replica }) {
 }
 
 /**
- * The group screen's fixed top: back to the groups, Invite people and
- * Activity, the group's name, and where you stand.
- * Invite people opens the link in place under the name.
+ * The group screen's fixed top: back to the groups and Activity, the group's
+ * name, and where you stand.
  */
 export function GroupHeader(props: { app: MemberListApp }) {
   const actions = useActions();
-  const inviteToggle = useRef<View>(null);
-  const ui = useUiState();
   const replica = props.app.snapshot().group;
   const snapshot = replica?.projected_snapshot;
   const name = snapshot?.group.name ?? '';
   const open = Boolean(replica && !replica.hidden);
-  const inviting = ui.view === 'invite';
 
   return (
     <ScreenHeader
       start={<BackButton label="Back to groups" disabled={!actions.availability('showGroups', {}).available} onPress={() => { void actions.dispatch('showGroups', {}, { origin: 'ui' }); }} />}
-      end={open ? <><InviteToggle toggle={inviteToggle} /><ActivityLink app={props.app} /></> : undefined}
+      end={open ? <ActivityLink app={props.app} /> : undefined}
       heading={open && replica ? <GroupName name={name} groupId={replica.group_id} /> : undefined}
       compactTitle={open ? name : undefined}
       title={open ? undefined : name}
-      below={open && replica ? (
-        <View>
-          <Reveal
-            toggle={inviteToggle}
-            // A tap elsewhere may open another view; it acts first, and the
-            // link closes only if it is still the view after that.
-            onOutsidePress={() => setTimeout(() => {
-              if (actions.ui.snapshot().view === 'invite') void actions.dispatch('closePanel', {}, { origin: 'ui' });
-            }, 0)}
-          >
-            {inviting ? <View style={{ paddingTop: 8 }}><InvitePanel app={props.app} /></View> : null}
-          </Reveal>
-          <YourBalance replica={replica} />
-        </View>
-      ) : undefined}
+      below={open && replica ? <YourBalance replica={replica} /> : undefined}
     />
   );
 }
@@ -398,7 +387,7 @@ function People(props: { app: MemberListApp; replica: Replica }) {
         </Touchable>
       ) : null}
       {ui.balancesExpanded ? square.map(row) : null}
-      <AddPersonRow />
+      <AddPersonRow end={<InviteButton app={props.app} />} tint={snapshot?.members.length ?? 0} />
     </View>
   );
 }
@@ -430,67 +419,93 @@ export function GroupView(props: GroupViewProps) {
   const entries = currentExpenses(snapshot).length + snapshot.settlements.filter((entry) => entry.status === 'active').length;
 
   return (
-    <Stack gap={12}>
-      <View role="region" aria-label="Group people">
+    // One parent from the top of the page, so the Expenses heading can float at the foot from anywhere above its place.
+    <View>
+      <View role="region" aria-label="Group people" style={{ marginBottom: 12 }}>
         <People app={props.app} replica={replica} />
       </View>
-      <View role="region" aria-label="Group expenses" nativeID={expensesAnchor}>
-        <Row gap={8} style={{ minHeight: sizes.touch, ...rules.below }}>
-          <Text accessibilityRole="header" aria-level={2} variant="strong">Expenses</Text>
-          <Text variant="body" tone="muted" style={{ flex: 1 }}>{entries}</Text>
-          {entries ? <SearchToggle /> : null}
-        </Row>
+      <ExpensesHeading entries={entries} />
+      <View role="region" aria-label="Group expenses">
         <Reveal>{ui.search.open ? <SearchBar /> : null}</Reveal>
         <ExpenseList replica={replica} />
       </View>
-    </Stack>
+    </View>
   );
 }
 
-/** The expenses section's element id, which the jump button watches and scrolls to. */
+/** Where the expenses start, which the floating Expenses button scrolls to. */
 const expensesAnchor = 'group-expenses';
 
+/** How far before its place the floating button starts turning into the heading. */
+const dockRange = 72;
+
+/** A color part of the way from one #rrggbb color to another. */
+function mix(from: string, to: string, part: number): string {
+  const channel = (color: string, index: number) => parseInt(color.slice(1 + index * 2, 3 + index * 2), 16);
+  const parts = [0, 1, 2].map((index) => Math.round(between(channel(from, index), channel(to, index), part)));
+
+  return `rgb(${parts.join(', ')})`;
+}
+
+/** A #rrggbb color seen through, from clear (0) to solid (1), so nothing behind it is covered. */
+function fade(color: string, part: number): string {
+  return `${color}${Math.round(part * 255).toString(16).padStart(2, '0')}`;
+}
+
 /**
- * A floating "Expenses" button over the foot of the group screen, shown only
- * while the expenses start below the visible page; it scrolls them up to just
- * under the compact header.
+ * The Expenses heading. While its place is below the screen it floats at the
+ * foot as a button that scrolls the expenses up under the compact header;
+ * scrolled to, it turns into the heading in place, its count and search
+ * coming in as the button's fill and arrow go.
  */
-export function ExpensesJump(props: { app: MemberListApp }) {
+function ExpensesHeading(props: { entries: number }) {
   const reveal = useContext(RevealContext);
-  const [below, setBelow] = useState(false);
-  const snapshot = props.app.snapshot().group?.projected_snapshot;
-  const entries = snapshot ? currentExpenses(snapshot).length + snapshot.settlements.filter((entry) => entry.status === 'active').length : 0;
-
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const target = document.getElementById(expensesAnchor);
-    const root = document.getElementById('splitnext-page');
-
-    if (!target || !root) return;
-
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry) setBelow(!entry.isIntersecting && entry.boundingClientRect.top >= (entry.rootBounds?.bottom ?? 0));
-    }, { root });
-
-    observer.observe(target);
-
-    return () => observer.disconnect();
-  }, []);
-
-  if (!below || !entries) return null;
 
   return (
-    // Floats just above the main action without taking its place.
-    <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: '100%', alignItems: 'center', paddingBottom: 12 }}>
-      <Touchable
-        accessibilityRole="button"
-        accessibilityLabel={`Show expenses, ${entries}`}
-        onPress={() => reveal?.(expensesAnchor)}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: radii.round, backgroundColor: colors.ink, boxShadow: '0 2px 8px rgba(20, 20, 19, 0.18)' }}
-      >
-        <Text variant="body" weight="semibold" color={colors.background}>{`Expenses ${entries}`}</Text>
-        <ChevronDownIcon size={16} color={colors.background} />
-      </Touchable>
-    </View>
+    <StickyFoot bottom={12} range={dockRange} anchorId={expensesAnchor} held={props.entries > 0}>
+      {(docked) => {
+        const floating = docked < 1;
+        // It keeps its solid fill while it moves into place and loses it only
+        // over the last stretch, so its text never sits on a half-faded grey.
+        const plain = Math.max(0, docked - 0.6) / 0.4;
+
+        return (
+          <Row gap={0} pointerEvents="box-none" style={{ minHeight: sizes.touch, borderBottomWidth: strokes.hairline, borderColor: fade(colors.rule, docked) }}>
+            {/* Equal room either side centers the button; the left room goes as it docks. */}
+            <View pointerEvents="none" style={{ flexGrow: 1 - docked, flexBasis: 0 }} />
+            <Touchable
+              accessibilityRole={floating ? 'button' : 'none'}
+              accessibilityLabel={floating ? `Show expenses, ${props.entries}` : undefined}
+              disabled={!floating}
+              onPress={() => reveal?.(expensesAnchor)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                height: 36,
+                paddingHorizontal: between(14, 0, docked),
+                borderRadius: radii.round,
+                backgroundColor: floating ? `rgba(20, 20, 19, ${1 - plain})` : 'transparent',
+                boxShadow: floating ? `0 2px 8px rgba(20, 20, 19, ${0.18 * (1 - plain)})` : 'none',
+              }}
+            >
+              <Text accessibilityRole="header" aria-level={2} variant="strong" color={mix(colors.background, colors.ink, plain)}>Expenses</Text>
+              <Text variant="body" color={mix(colors.background, colors.muted, plain)}>{props.entries}</Text>
+              {floating ? (
+                <View style={{ width: between(16, 0, docked), marginLeft: between(-2, -8, docked), opacity: 1 - docked, overflow: 'hidden' }}>
+                  <ChevronDownIcon size={16} color={colors.background} />
+                </View>
+              ) : null}
+            </Touchable>
+            <View pointerEvents="none" style={{ flexGrow: 1, flexBasis: 0 }} />
+            {props.entries ? (
+              <View pointerEvents={floating ? 'none' : 'auto'} aria-hidden={floating} style={{ width: between(0, sizes.touch, docked), opacity: docked, overflow: 'hidden', alignItems: 'flex-end' }}>
+                <SearchToggle />
+              </View>
+            ) : null}
+          </Row>
+        );
+      }}
+    </StickyFoot>
   );
 }

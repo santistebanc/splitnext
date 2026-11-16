@@ -186,7 +186,7 @@ export const accessActions = {
     input: empty,
     example: {},
     requires: ['online', 'openGroup'],
-    confirm: () => 'Regenerate the invite link to create a new one. The old link will stop working. Everyone already in the group keeps their access.',
+    confirm: () => 'Make a new invite link? The old link will stop working. Everyone already in the group keeps their access.',
     run: (host) => host.regenerateInvite(),
   }),
   leaveGroup: defineAction({
