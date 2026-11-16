@@ -1,0 +1,14 @@
+{
+  "parts": [
+    {"id": "screens", "name": "App screens", "about": "Groups, expenses, balances and settings", "paths": ["apps/client", "apps/client/src/ui", "apps/client/src/app", "apps/client/src/design", "apps/client/src/catalog"], "links": ["state"]},
+    {"id": "state", "name": "App state", "about": "What the app keeps on the device", "paths": ["apps/client/src/model"], "links": ["sync"]},
+    {"id": "sync", "name": "Sync client", "about": "Offline storage and sending changes", "paths": ["src/client", "packages/client"], "links": ["server"]},
+    {"id": "server", "name": "Server", "about": "Groups, invites and requests", "paths": ["src", "src/routes", "wrangler.jsonc", "worker-configuration.d.ts"], "links": ["rules", "database"]},
+    {"id": "rules", "name": "Expense rules", "about": "Money, splits, balances and commands", "paths": ["src/domain"], "links": []},
+    {"id": "database", "name": "Database changes", "about": "Changes to the stored data", "paths": ["migrations"], "links": []},
+    {"id": "lab", "name": "Dev tools and lab", "about": "Test screens and developer tools", "paths": ["apps/client/src/devtools", "apps/client/src/lab", "apps/client/src/workbench", "lab"], "links": ["screens"]},
+    {"id": "tests", "name": "Tests", "about": "Unit, flow and browser tests", "paths": ["test", "e2e", "verification", "playwright.config.ts", "vitest.config.ts", "vitest.performance.config.ts"], "links": []},
+    {"id": "tooling", "name": "Tooling", "about": "Lint rules, scripts and showcase", "paths": ["tools", "scripts", "showcase", "package.json", "tsconfig.json"], "links": []},
+    {"id": "docs", "name": "Docs", "about": "README, decisions and agent notes", "paths": ["README.md", "docs", "AGENTS.md", "CONTEXT.md"], "links": []}
+  ]
+}
