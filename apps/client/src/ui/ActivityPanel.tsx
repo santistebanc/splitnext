@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { reversibleEffect, undoProblem, type ClientReplicaState } from '@splitnext/client';
-import { Button, EmptyState, ErrorMessage, Row, SectionHeading, Stack, Tag, Text, colors, fonts, hairlineShadow, rules, strokes } from '../design';
+import { Button, EmptyState, ErrorMessage, Row, Stack, Tag, Text, colors, fonts, hairlineShadow, rules, strokes } from '../design';
 import { activityTarget, describeActivity, newActivity, visibleActivity } from '../model/activity';
 import { reviewDetail, reviewTitle } from '../model/notices';
 import { BackHeader } from './BackHeader';
 import type { MemberListApp } from './MemberList';
+import { CompactHeaderContext } from './pageScroll';
 import { StickyTop } from './StickyTop';
 import { dayLabel, timeLabel } from './relativeTime';
 import { useActionCall, useUiState } from './useActionCall';
@@ -41,16 +42,21 @@ function EntryMarker(props: { on: boolean }) {
 }
 
 /**
- * A section's title, such as Today: it stays at the top of the page while its
+ * A section's title, such as Today: it stays under the header while its
  * entries scroll under it, until the next section's title takes its place.
  */
 function DayHeading(props: { title: string; color?: string }) {
   const [pinned, setPinned] = useState(false);
+  // Pinned under the compact header, not behind it.
+  const inset = useContext(CompactHeaderContext).height;
 
   return (
-    <StickyTop onPinnedChange={setPinned}>
-      <View style={{ paddingTop: 8, paddingBottom: 4, backgroundColor: colors.background, boxShadow: hairlineShadow(pinned ? 1 : 0) }}>
-        <SectionHeading title={props.title} {...(props.color !== undefined && { color: props.color })} />
+    <StickyTop top={inset} onPinnedChange={setPinned}>
+      {/* Nothing to tap, so no touch-sized row: just the caption's line. */}
+      <View style={{ paddingTop: 12, paddingBottom: 8, backgroundColor: colors.background, boxShadow: hairlineShadow(pinned ? 1 : 0) }}>
+        <View>
+          <Text accessibilityRole="header" variant="caption" weight="semibold" tone="muted" color={props.color}>{props.title}</Text>
+        </View>
       </View>
     </StickyTop>
   );
