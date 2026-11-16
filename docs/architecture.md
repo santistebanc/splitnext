@@ -127,7 +127,10 @@ before React replaces it: every element marked with `morph(key)` (a ref that
 sets `data-morph`), and a copy of the whole screen. After the update, the copy
 fades and slides 28px out over the new screen while the new screen slides in;
 each key on both screens flies from its old box to its new one, crossfading
-the old and new text as it scales, over the shared 300ms duration. Flying text
+the old and new text as it scales, over the shared 300ms duration. Each
+screen's main footer button is marked `foot`; when neither screen's button
+flies elsewhere, the two pair up, so the button stays solid in place while its
+label crossfades. Flying text
 copies retain explicit font longhands, including tabular numerals; Chromium's
 empty font shorthand must never reset their typography. Background boxes
 scale with transforms rather than animating layout dimensions. Each flying copy keeps its
@@ -153,8 +156,10 @@ full, in the one page scroll. While the expenses section is below the visible
 page, its heading floats at the page's foot through `StickyFoot` (CSS sticky
 positioning on the web, so it moves with the scroll itself), drawn as a button
 that scrolls the section up to just under the compact header through `Frame`'s
-`RevealContext`. `StickyFoot` reports how far the heading has docked over its
-last 72px, and the heading morphs from button to heading by that amount.
+`RevealContext`. `StickyFoot` has two states, docked once the heading reaches
+its place and floating again only 24px below it, and plays a change as one
+eased movement through `createCompactProgress`; the heading morphs from button
+to heading by that progress.
 `GroupHeader` holds ‹ Groups and Activity with its
 count as icons, the group's name with a pencil that renames it in place
 through `renameGroup`. The scroll content holds the people, led by `YourRow`,

@@ -2,6 +2,7 @@ import { Button, ErrorMessage, Field, Stack, Text, TextButton } from '../design'
 import { ConfirmSheet } from './ConfirmSheet';
 import type { MemberListApp } from './MemberList';
 import { useActionCall, useActions, useUiState } from './useActionCall';
+import { morph } from './ScreenMorph';
 
 export type GroupSettingsApp = MemberListApp;
 
@@ -30,7 +31,7 @@ export function GroupSettingsFooter(props: { close?: () => void }) {
   return (
     <>
       <ErrorMessage message={rename.error} />
-      <Button busy={ui.phase === 'saving' || rename.busy} disabled={!rename.can('saveGroupSettings')} onPress={save}>
+      <Button ref={morph(null, { foot: true })} busy={ui.phase === 'saving' || rename.busy} disabled={!rename.can('saveGroupSettings')} onPress={save}>
         {ui.phase === 'saving' || rename.busy ? 'Saving…' : 'Save group name'}
       </Button>
     </>

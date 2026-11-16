@@ -17,7 +17,7 @@ const slide = 28;
 type Box = { x: number; y: number; w: number; h: number };
 
 /** `clips`: text cut short with an ellipsis, which must stay cut while it flies. */
-type Part = { box: Box; clone: HTMLElement; background: string; radius: string; border: string; borderWidth: string; color: string; font: ReturnType<typeof fontStyle>; clips: boolean; whiteSpace: string; textSize: number | null };
+type Part = { key: string | undefined; box: Box; clone: HTMLElement; background: string; radius: string; border: string; borderWidth: string; color: string; font: ReturnType<typeof fontStyle>; clips: boolean; whiteSpace: string; textSize: number | null };
 
 /** Chromium cannot serialize `font` when tabular numerals are set. Keep the
  * longhands so a flying copy never resets to the browser's default font. */
@@ -37,7 +37,10 @@ function clipped(style: CSSStyleDeclaration): boolean {
   return style.textOverflow === 'ellipsis' || (style.webkitLineClamp !== '' && style.webkitLineClamp !== 'none');
 }
 
-type Snapshot = { parts: Map<string, Part>; screen: HTMLElement; scrolled: number };
+type Snapshot = { parts: Map<string, Part>; foot: Part | null; screen: HTMLElement; scrolled: number };
+
+/** Each screen's main button at its foot, which becomes the next screen's. */
+const footSelector = '[data-morph-foot]';
 
 /** A copy of an element that shows what it showed, typed values included. */
 function copy(element: HTMLElement): HTMLElement {
@@ -114,18 +117,21 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
 
     this.finish?.();
     const parts = new Map<string, Part>();
+    let foot: Part | null = null;
 
-    root.querySelectorAll<HTMLElement>('[data-morph]').forEach((element) => {
+    root.querySelectorAll<HTMLElement>(`[data-morph], ${footSelector}`).forEach((element) => {
       const key = element.dataset.morph;
       const box = this.within(element.getBoundingClientRect());
 
-      if (!key || !this.visible(element, box)) return;
+      if (!this.visible(element, box)) return;
       const style = getComputedStyle(element);
+      const part: Part = { key, box, clone: copy(element), background: style.backgroundColor, radius: style.borderRadius, border: style.borderTopColor, borderWidth: style.borderTopWidth, color: style.color, font: fontStyle(style), clips: clipped(style), whiteSpace: style.whiteSpace, textSize: textSize(element, style) };
 
-      parts.set(key, { box, clone: copy(element), background: style.backgroundColor, radius: style.borderRadius, border: style.borderTopColor, borderWidth: style.borderTopWidth, color: style.color, font: fontStyle(style), clips: clipped(style), whiteSpace: style.whiteSpace, textSize: textSize(element, style) });
+      if (key) parts.set(key, part);
+      if (element.dataset.morphFoot !== undefined) foot = part;
     });
 
-    return { parts, screen: copy(root), scrolled: root.querySelector(`#${pageId}`)?.scrollTop ?? 0 };
+    return { parts, foot, screen: copy(root), scrolled: root.querySelector(`#${pageId}`)?.scrollTop ?? 0 };
   }
 
   override componentDidUpdate(previous: Props, _state: Record<string, never>, snapshot: Snapshot | null): void {
@@ -250,7 +256,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
     const root = this.root.current;
 
     if (!root) return () => undefined;
-    const pairs: { element: HTMLElement; from: Part; to: Box; style: CSSStyleDeclaration }[] = [];
+    const pairs: { element: HTMLElement; from: Part; to: Box; style: CSSStyleDeclaration; foot?: boolean }[] = [];
     const steers: (() => void)[] = [];
 
     root.querySelectorAll<HTMLElement>('[data-morph]').forEach((element) => {
@@ -262,15 +268,27 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
     });
 
     const keys = new Set(pairs.map((pair) => pair.element.dataset.morph));
+    // The main buttons at the two screens' feet, when neither flies elsewhere,
+    // become one another: the button stays put and solid while its label changes.
+    const foot = root.querySelector<HTMLElement>(footSelector);
+    const footTo = foot && !overlay.contains(foot) ? this.landing(foot) : null;
+    const footFrom = snapshot.foot;
+
+    if (foot && footTo && footFrom && this.visible(foot, footTo) && !pairs.some((pair) => pair.element === foot) && !(footFrom.key && keys.has(footFrom.key))) {
+      pairs.push({ element: foot, from: footFrom, to: footTo, style: getComputedStyle(foot), foot: true });
+      const oldFoot = old.querySelector<HTMLElement>(footSelector);
+
+      if (oldFoot) oldFoot.style.visibility = 'hidden';
+    }
 
     old.querySelectorAll<HTMLElement>('[data-morph]').forEach((element) => {
       if (keys.has(element.dataset.morph)) element.style.visibility = 'hidden';
     });
 
-    for (const { element, from, to: first, style } of pairs) {
+    for (const { element, from, to: first, style, foot: isFoot } of pairs) {
       const a = from.box;
       // A bar stretches to its new shape; text keeps its proportions and crossfades.
-      const stretch = element.dataset.morphStretch !== undefined;
+      const stretch = isFoot || element.dataset.morphStretch !== undefined;
       // Text grows or shrinks by its font size, not its box: a name on two lines
       // that lands on one would otherwise shrink far past its size and jump back.
       const fromText = from.textSize;
@@ -377,11 +395,15 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
  * Marks a part that appears on two screens, so changing between them flies it
  * across; with `stretch`, such as for a bar, it takes its new shape rather
  * than keeping its proportions. `unclipped` keeps amounts complete while their
- * boxes change size.
+ * boxes change size. `foot` marks a screen's main button at its foot, which
+ * turns into the next screen's main button when no other part claims either.
  */
-export function morph(key: string | null | undefined, options?: { stretch?: boolean; unclipped?: boolean }) {
+export function morph(key: string | null | undefined, options?: { stretch?: boolean; unclipped?: boolean; foot?: boolean }) {
   return (node: MorphTarget) => {
     if (!(node instanceof HTMLElement)) return;
+
+    if (options?.foot) node.dataset.morphFoot = '';
+    else delete node.dataset.morphFoot;
 
     if (key) node.dataset.morph = key;
     else delete node.dataset.morph;

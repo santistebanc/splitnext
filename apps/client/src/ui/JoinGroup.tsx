@@ -6,6 +6,7 @@ import type { AppController } from '../model/controller';
 import { errorMessage } from './errors';
 import { useScreenHost } from './screenHost';
 import { useActions, useUiState, type useActionCall } from './useActionCall';
+import { morph } from './ScreenMorph';
 
 export type JoinGroupApp = Pick<AppController, 'snapshot'>;
 
@@ -49,7 +50,7 @@ export function JoinGroupFooter(props: JoinGroupProps) {
   if (!group)
     return (
       <Button
-       
+        ref={morph(null, { foot: true })}
         busy={ui.phase === 'checking' || props.previewing.busy}
         disabled={!props.previewing.can('checkInvite', { link: link || props.initialLink })}
         onPress={() => checkLink(props, link)}
@@ -65,7 +66,7 @@ export function JoinGroupFooter(props: JoinGroupProps) {
     <>
       <ErrorMessage message={props.joining.error} />
       <Button
-       
+        ref={morph(null, { foot: true })}
         busy={busy}
         disabled={!props.joining.can('submitJoin')}
         onPress={() => {

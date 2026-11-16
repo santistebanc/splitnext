@@ -245,7 +245,8 @@ one page scroll. While the expenses start below the screen, their heading
 floats at the foot above Add expense as an "Expenses N" button, which scrolls
 them up to just under the compact header. Scrolled to by hand, it rides the
 foot until it reaches its place, then turns into the heading there: it slides
-to the left, its fill fades, and search comes in, all following the scroll. People shows the balances; Expenses shows expenses and
+to the left, its fill fades, and search comes in, in one short movement
+whatever the scroll does meanwhile, and back once it is well below its place. People shows the balances; Expenses shows expenses and
 recorded repayments newest first, each opening its editor. A list that spans
 more than one month heads each month (with the year outside the current one);
 a single month has no month heading. An expense row is the
@@ -266,9 +267,9 @@ again, closes it and shows everything. Search opens the full expense list with t
 Opening a group starts at the top with no search.
 
 Settle up beside your balance opens the group's settle-up page: the payments
-of the plan that involve you first, each naming the other person with You pay
-or Pays you, its amount and Record, then everyone else's payments folded into
-one line that shows them, each From → To. When nothing is owed it says
+of the plan that involve you first, then everyone else's payments folded into
+one line that shows them. Every payment reads the same in both lists, as who
+pays whom (You pay Ben, Ben pays you, Cy pays Dan), then its amount and Record. When nothing is owed it says
 Everyone is settled up. Record always records the plain amount, never the
 grouped figure shown.
 

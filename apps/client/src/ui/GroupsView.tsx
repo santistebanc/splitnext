@@ -44,7 +44,7 @@ export function GroupsFooter(props: { app: GroupsViewApp }) {
         <>
           <ErrorMessage message={action.error} />
           <Button
-            ref={morph('newgroup')}
+            ref={morph('newgroup', { foot: true })}
             busy={creating && busy}
             disabled={creating ? !create.can('submitCreateGroup') : !action.can('showCreateGroup')}
             onPress={() => {

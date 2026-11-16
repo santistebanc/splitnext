@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
-import { Row, Text, Touchable, colors, durations, radii, rules, sizes, strokes, withTransition } from '../design';
+import { Row, Text, Touchable, YouBadge, colors, durations, radii, rules, sizes, strokes, withTransition } from '../design';
 import { memberName } from '../model/expenses';
 import { MemberAvatar, type MemberListApp } from './MemberList';
 import { Reveal } from './Reveal';
@@ -20,6 +20,23 @@ export type MemberChoiceProps = {
 
 /** The end of a choice's row: the arrow on the closed choice and room for it in the list, so names above and below end in line. */
 const markSlot = { width: 16, alignItems: 'center' } as const;
+
+/**
+ * A member's name in a choice, with the small "you" after yours as in the
+ * balances, in a room `width` wide so names in a list start in line.
+ */
+function NameWithBadge(props: { name: string; you: boolean; width?: number | undefined; onLayout?: (width: number) => void }) {
+  return (
+    <Row
+      gap={8}
+      style={{ flexShrink: 1, minWidth: 0, width: props.width || undefined, alignSelf: props.onLayout ? 'flex-start' : undefined }}
+      onLayout={props.onLayout ? (event) => props.onLayout?.(event.nativeEvent.layout.width) : undefined}
+    >
+      <Text variant="strong" numberOfLines={1} style={{ flexShrink: 1 }}>{props.name}</Text>
+      {props.you ? <YouBadge /> : null}
+    </Row>
+  );
+}
 
 /**
  * A member's avatar and name in a choice. Yours sits on the tint that marks
@@ -56,7 +73,7 @@ function MemberChoiceRow(props: { app: MemberListApp; memberId: string; you: boo
     >
       <ChosenName you={props.you}>
         {replica ? <MemberAvatar replica={replica} memberId={props.memberId} size="small" /> : null}
-        <Text variant="strong" numberOfLines={1} style={{ flexShrink: 1, width: props.nameWidth || undefined }}>{name}</Text>
+        <NameWithBadge name={name} you={props.you} width={props.nameWidth} />
       </ChosenName>
       <View style={markSlot} />
     </Touchable>
@@ -71,7 +88,7 @@ export function MemberChoice(props: MemberChoiceProps) {
   const snapshot = replica?.projected_snapshot;
   const name = props.value ? memberName(snapshot, props.value) : '';
   const showing = open && !props.disabled;
-  // Every name, measured unseen, so each row's name takes the widest one's
+  // Every name (yours with its "you"), measured unseen, so each row's name takes the widest one's
   // room: the avatars then stand in one column, the names start in line,
   // and the closed choice sits exactly where its row in the list does.
   const [widths, setWidths] = useState<Record<string, number>>({});
@@ -92,28 +109,23 @@ export function MemberChoice(props: MemberChoiceProps) {
         <Row gap={8} style={{ flexShrink: 1, minWidth: 0 }}>
           <ChosenName you={Boolean(props.value) && props.value === props.you}>
             {props.value && replica ? <MemberAvatar replica={replica} memberId={props.value} size="small" /> : null}
-            <Text variant="strong" numberOfLines={1} style={{ flexShrink: 1, width: props.value ? nameWidth || undefined : undefined }}>{props.value ? name : 'Choose'}</Text>
+            {props.value
+              ? <NameWithBadge name={name} you={props.value === props.you} width={nameWidth} />
+              : <Text variant="strong" numberOfLines={1} style={{ flexShrink: 1 }}>Choose</Text>}
           </ChosenName>
           <View style={markSlot}>
             <Text variant="caption" tone="muted" style={withTransition({ transform: [{ rotate: showing ? '180deg' : '0deg' }] }, 'transform', durations.medium)}>▾</Text>
           </View>
         </Row>
       </Touchable>
-      <View aria-hidden pointerEvents="none" style={{ position: 'absolute', opacity: 0, left: 0, top: 0 }}>
+      <View aria-hidden pointerEvents="none" style={{ position: 'absolute', opacity: 0, left: 0, right: 0, top: 0, overflow: 'hidden' }}>
         {props.members.map((memberId) => (
-          <Text
+          <NameWithBadge
             key={memberId}
-            variant="strong"
-            numberOfLines={1}
-            style={{ alignSelf: 'flex-start' }}
-            onLayout={(event) => {
-              const width = event.nativeEvent.layout.width;
-
-              setWidths((current) => (current[memberId] === width ? current : { ...current, [memberId]: width }));
-            }}
-          >
-            {memberName(snapshot, memberId)}
-          </Text>
+            name={memberName(snapshot, memberId)}
+            you={memberId === props.you}
+            onLayout={(width) => setWidths((current) => (current[memberId] === width ? current : { ...current, [memberId]: width }))}
+          />
         ))}
       </View>
       <Reveal toggle={toggle} onOutsidePress={() => setOpen(false)}>

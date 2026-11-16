@@ -53,7 +53,7 @@ export function ExpenseEditorFooter() {
   return (
     <>
       <ErrorMessage message={save.error} />
-      <Button label="Save" busy={save.busy} disabled={!save.can('saveExpense')} onPress={() => { void save.call('saveExpense', {}); }}>
+      <Button ref={morph(null, { foot: true })} label="Save" busy={save.busy} disabled={!save.can('saveExpense')} onPress={() => { void save.call('saveExpense', {}); }}>
         {save.busy ? 'Saving…' : 'Save'}
       </Button>
     </>

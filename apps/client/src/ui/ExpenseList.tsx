@@ -202,7 +202,7 @@ export function AddExpenseButton() {
   return (
     <>
       <ErrorMessage message={add.error} />
-      <Button ref={morph('addexp')} disabled={!add.can('showExpense', {})} onPress={() => { void add.call('showExpense', {}); }}>
+      <Button ref={morph('addexp', { foot: true })} disabled={!add.can('showExpense', {})} onPress={() => { void add.call('showExpense', {}); }}>
         Add expense
       </Button>
     </>

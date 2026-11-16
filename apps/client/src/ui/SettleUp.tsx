@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { formatAmount, memberSettlements, preferredMember, settlementSuggestions } from '@splitnext/client';
 import { Button, ChevronDownIcon, ChevronUpIcon, EmptyState, ErrorMessage, Row, Stack, Text, Touchable, colors, rules, sizes } from '../design';
 import { memberName, moneyLabel } from '../model/expenses';
-import { MemberAvatar, type MemberListApp, type Replica } from './MemberList';
+import type { MemberListApp, Replica } from './MemberList';
 import { useActionCall } from './useActionCall';
 
 /** The payments to settle: one person's, or the whole group's plan. */
@@ -17,27 +17,30 @@ function plannedPayments(app: MemberListApp, person: string | null) {
   return { snapshot, you, payments: person ? memberSettlements(snapshot, person) : settlementSuggestions(snapshot) };
 }
 
-/** One payment of the plan as people say it, with Record, which records it as planned. */
+/**
+ * One payment of the plan as people say it, the same in both lists: who pays
+ * whom ("You pay / Ben", "Ben pays / you", "Cy pays / Dan"), then the
+ * amount and Record, which records it as planned.
+ */
 function PlanPayment(props: { replica: Replica; you: string | undefined; from: string; to: string; amount: number; currency: string; quiet?: boolean }) {
   const record = useActionCall();
   const snapshot = props.replica.projected_snapshot;
   const name = (memberId: string) => (memberId === props.you ? 'You' : memberName(snapshot, memberId));
   const payer = name(props.from);
   const payee = name(props.to);
-  const mine = props.from === props.you || props.to === props.you;
-  // Your own payments name only the other person: “You pay Ben”, “Ben pays you”.
-  const other = props.from === props.you ? props.to : props.from;
   const amount = moneyLabel(props.amount, props.currency);
   const payment = { from: props.from, to: props.to, amount: formatAmount(props.amount, props.currency), currency: props.currency };
 
   return (
     <View>
       <Row gap={12} style={[{ minHeight: sizes.row, paddingVertical: 8 }, rules.above]}>
-        {mine ? <MemberAvatar replica={props.replica} memberId={other} /> : null}
-        {/* The name goes first, on its own line, so a long one cannot push out what the payment is. */}
-        <Stack fill gap={2}>
-          <Text numberOfLines={1} variant="strong">{mine ? name(other) : payer}</Text>
-          <Text numberOfLines={1} variant="caption" tone="muted">{props.from === props.you ? 'You pay' : props.to === props.you ? 'Pays you' : `→ ${payee}`}</Text>
+        {/* The payer and the verb, then the payee, each line cut short on its own so both names always show. */}
+        <Stack fill gap={2} accessibilityLabel={`${payer} ${payer === 'You' ? 'pay' : 'pays'} ${payee === 'You' ? 'you' : payee}`}>
+          <Row gap={4}>
+            <Text numberOfLines={1} variant="strong" style={{ flexShrink: 1 }}>{payer}</Text>
+            <Text numberOfLines={1} variant="body" tone="muted" style={{ flexShrink: 0 }}>{payer === 'You' ? 'pay' : 'pays'}</Text>
+          </Row>
+          <Text numberOfLines={1} variant="strong">{payee === 'You' ? 'you' : payee}</Text>
         </Stack>
         <Text numberOfLines={1} variant="figure">{amount}</Text>
         <Button

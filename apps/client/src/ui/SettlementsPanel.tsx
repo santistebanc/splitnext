@@ -10,6 +10,7 @@ import type { MemberListApp } from './MemberList';
 import { useCompactProgress } from './pageScroll';
 import { HeaderAction, ScreenHeader } from './ScreenHeader';
 import { useActionCall, useActions, useUiState } from './useActionCall';
+import { morph } from './ScreenMorph';
 
 type Snapshot = ClientReplicaState['projected_snapshot'];
 
@@ -91,7 +92,7 @@ export function SettlementsFooter() {
   return (
     <>
       <ErrorMessage message={save.error} />
-      <Button label="Save" busy={save.busy} disabled={!ready} onPress={submit}>
+      <Button ref={morph(null, { foot: true })} label="Save" busy={save.busy} disabled={!ready} onPress={submit}>
         {save.busy ? 'Saving…' : 'Save'}
       </Button>
     </>

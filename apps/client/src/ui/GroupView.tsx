@@ -435,8 +435,8 @@ export function GroupView(props: GroupViewProps) {
 /** Where the expenses start, which the floating Expenses button scrolls to. */
 const expensesAnchor = 'group-expenses';
 
-/** How far before its place the floating button starts turning into the heading. */
-const dockRange = 72;
+/** How far below its place the docked heading must go before it floats again. */
+const dockRange = 24;
 
 /** A color part of the way from one #rrggbb color to another. */
 function mix(from: string, to: string, part: number): string {

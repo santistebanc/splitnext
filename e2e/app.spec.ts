@@ -1531,7 +1531,7 @@ test('explains a balance and settles it with the fewest payments', async ({ page
   await openSettleUp(page);
   await expect(button(page, 'Ben pays you 10.00. Record this payment')).toBeVisible();
 
-  await expect(page.getByRole('list', { name: 'Payments' }).getByText('Pays you', { exact: true })).toHaveCount(2);
+  await expect(page.getByRole('list', { name: 'Payments' }).getByLabel(/ pays you$/)).toHaveCount(2);
   await page.screenshot({ path: test.info().outputPath('settle-up-drawer.png') });
 
   // A partial payment, recorded as a Payment from the group, leaves the rest in the plan.
@@ -2055,14 +2055,16 @@ test('keeps Settle up rows whole with very long names and amounts', async ({ pag
     for (const record of await records.all()) {
       const box = (await record.boundingBox())!;
 
-      // Record is whole and inside the drawer, and each name stays on one line.
+      // Record is whole and inside the drawer.
       expect(box.x + box.width).toBeLessThanOrEqual(area.x + area.width + 0.5);
       expect(await record.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
     }
 
-    for (const name of await drawer.getByText(new RegExp(`^(→ )?${long}$`)).all()) {
+    // Each name keeps a line of its own, so the payee always shows.
+    for (const name of await drawer.getByText(long, { exact: true }).all()) {
       expect((await name.boundingBox())!.height).toBeLessThan(30);
     }
+    await expect(drawer.getByText('Jaqy Gypsy', { exact: true })).toBeVisible();
 
     await page.screenshot({ path: testInfo.outputPath(`settle-up-long-${width}.png`) });
   }
