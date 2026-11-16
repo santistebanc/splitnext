@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
-import { RadioRow, Row, Text, Touchable, YouBadge, durations, rules, sizes, strokes, withTransition } from '../design';
+import { Row, Text, Touchable, YouBadge, durations, rules, sizes, strokes, withTransition } from '../design';
 import { memberName } from '../model/expenses';
 import { MemberAvatar, type MemberListApp } from './MemberList';
 import { Reveal } from './Reveal';
@@ -18,14 +18,32 @@ export type MemberChoiceProps = {
   onChange: (memberId: string) => void;
 };
 
-/** One member in an open choice: the same radio row as choosing who you are when joining. */
+/** The end of a choice's row: the arrow on the closed choice, the check on the chosen name, so names above and below end in line. */
+const markSlot = { width: 16, alignItems: 'center' } as const;
+
+/**
+ * One member in an open choice, drawn like the closed choice above it: at the
+ * row's end, their avatar and name, then a check on the chosen one.
+ */
 function MemberChoiceRow(props: { app: MemberListApp; memberId: string; you: boolean; selected: boolean; onPress: () => void }) {
-  const name = memberName(props.app.snapshot().group?.projected_snapshot, props.memberId);
+  const replica = props.app.snapshot().group;
+  const name = memberName(replica?.projected_snapshot, props.memberId);
 
   return (
-    <RadioRow label={name} accessibilityLabel={`${name}${props.you ? ' (you)' : ''}`} selected={props.selected} onPress={props.onPress}>
+    <Touchable
+      accessibilityRole="radio"
+      accessibilityLabel={`${name}${props.you ? ' (you)' : ''}`}
+      accessibilityState={{ checked: props.selected }}
+      aria-checked={props.selected}
+      feedback="tint"
+      onPress={props.onPress}
+      style={[{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, minHeight: sizes.row }, rules.above]}
+    >
       {props.you ? <YouBadge /> : null}
-    </RadioRow>
+      {replica ? <MemberAvatar replica={replica} memberId={props.memberId} size="small" /> : null}
+      <Text variant="strong" numberOfLines={1} style={{ flexShrink: 1 }}>{name}</Text>
+      <View style={markSlot}>{props.selected ? <Text variant="strong">✓</Text> : null}</View>
+    </Touchable>
   );
 }
 
@@ -53,7 +71,9 @@ export function MemberChoice(props: MemberChoiceProps) {
         <Row gap={8} style={{ flexShrink: 1, minWidth: 0 }}>
           {props.value && replica ? <MemberAvatar replica={replica} memberId={props.value} size="small" /> : null}
           <Text variant="strong" numberOfLines={1} style={{ flexShrink: 1 }}>{props.value ? name : 'Choose'}</Text>
-          <Text variant="caption" tone="muted" style={withTransition({ transform: [{ rotate: showing ? '180deg' : '0deg' }] }, 'transform', durations.medium)}>▾</Text>
+          <View style={markSlot}>
+            <Text variant="caption" tone="muted" style={withTransition({ transform: [{ rotate: showing ? '180deg' : '0deg' }] }, 'transform', durations.medium)}>▾</Text>
+          </View>
         </Row>
       </Touchable>
       <Reveal toggle={toggle} onOutsidePress={() => setOpen(false)}>

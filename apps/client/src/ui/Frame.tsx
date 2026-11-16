@@ -1,7 +1,7 @@
 import { Component, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform, ScrollView, View } from 'react-native';
 import { Row, Tag, Text, colors, layout, sizes } from '../design';
-import { CompactProgressContext, HeaderShrinkContext, PageHeightContext, RevealContext, ScrollToTopContext } from './pageScroll';
+import { CompactHeaderContext, CompactProgressContext, HeaderShrinkContext, PageHeightContext, RevealContext, ScrollToTopContext } from './pageScroll';
 import { useHomepage } from './screenHost';
 import {
   useCompactLayout,
@@ -186,6 +186,7 @@ export function Frame(props: FrameProps) {
 
   const footRoom = floating ? 104 : 32;
   const pageHeight = Math.max(0, pageArea - header.full);
+  const compactHeight = props.header ? Math.max(0, header.full - header.shrink) : 0;
 
   const visibleHeight = useVisibleViewportHeight(
     (mobile || touch) && !homepage,
@@ -254,7 +255,9 @@ export function Frame(props: FrameProps) {
                   <Tag>beta</Tag>
                 </Row>
               ) : null}
-              <PageHeightContext.Provider value={pageHeight - footRoom}>{props.children}</PageHeightContext.Provider>
+              <CompactHeaderContext.Provider value={{ height: compactHeight, room: Math.max(0, pageArea - compactHeight - footRoom) }}>
+                <PageHeightContext.Provider value={pageHeight - footRoom}>{props.children}</PageHeightContext.Provider>
+              </CompactHeaderContext.Provider>
             </View>
           </ScrollView>
         </View>

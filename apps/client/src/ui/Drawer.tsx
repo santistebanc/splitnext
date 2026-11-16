@@ -1,6 +1,8 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, View, type ViewStyle } from 'react-native';
-import { Row, Text, TextButton, colors, layout, scrim } from '../design';
+import { Row, Text, TextButton, colors, durations, layout, scrim, withTransition } from '../design';
+import { Reveal } from './Reveal';
+import { useScreenSize } from './screenHost';
 import { ScreenModal } from './ScreenModal';
 import { useCompactLayout } from './useVisibleViewport';
 
@@ -20,43 +22,80 @@ export const sheet = {
   maxWidth: layout.column,
   alignSelf: 'center',
   backgroundColor: colors.background,
-  paddingTop: 24,
+  paddingTop: 16,
   paddingHorizontal: layout.gutter,
   paddingBottom: 32,
   gap: 12,
 } as const;
 
-const drawerHeight = '88%';
+/** How much of the screen a drawer may take. */
+const drawerShare = 0.88;
 
 const popupHeight = '80%';
+
+/**
+ * Every sheet's title row: its title, and a quiet text action that closes it
+ * (Close, or Cancel where closing drops what was started). Left out when the
+ * sheet's own buttons already close it, as a confirmation's Cancel does.
+ */
+export function SheetTitle(props: { title: string; closeText?: string | null | undefined; closeLabel?: string | undefined; disabled?: boolean | undefined; onClose: () => void }) {
+  const close = props.closeText === undefined ? 'Close' : props.closeText;
+
+  return (
+    <Row gap={8} justify="between">
+      <Text accessibilityRole="header" numberOfLines={1} variant="heading" style={{ flexShrink: 1 }}>{props.title}</Text>
+      {close ? (
+        <TextButton label={props.closeLabel} tone="muted" underline={false} disabled={props.disabled} onPress={props.onClose} style={{ paddingLeft: 16 }}>{close}</TextButton>
+      ) : null}
+    </Row>
+  );
+}
+
+/** The page dimmed under a dialog, fading in as the dialog opens, as under a footer's drawer. */
+function useScrimShown(): boolean {
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setShown(true));
+
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  return shown;
+}
 
 /**
  * A dialog over the screen: a drawer rising from the bottom on phones, a popup
  * in the middle of wider screens. Tapping outside it, Escape, or its close
  * button dismisses it. Content too tall for it scrolls in a child with
  * `flexShrink: 1`. A `full` drawer keeps its whole height, so a list that
- * filters as someone types does not make it jump.
+ * filters as someone types does not make it jump. `closeText` names the
+ * title's close action, or `null` leaves it out.
  */
-export function Drawer(props: { title: string; onClose: () => void; full?: boolean; children: ReactNode }) {
+export function Drawer(props: { title: string; onClose: () => void; full?: boolean; closeText?: string | null; children: ReactNode }) {
   const compact = useCompactLayout();
+  const shown = useScrimShown();
+  // A number rather than a share, since the rising wrapper has no height of its own to take a share of.
+  const drawerHeight = useScreenSize().height * drawerShare;
+
+  const panel = (
+    <View
+      role="dialog"
+      aria-modal
+      aria-label={props.title}
+      style={[sheet, { maxHeight: compact ? drawerHeight : popupHeight }, !compact && { maxWidth: layout.dialog, paddingBottom: 24 }, props.full && { height: compact ? drawerHeight : popupHeight }]}
+    >
+      <SheetTitle title={props.title} closeText={props.closeText} onClose={props.onClose} />
+      {props.children}
+    </View>
+  );
 
   return (
     <ScreenModal onRequestClose={props.onClose}>
-      <View style={overlay(!compact)}>
+      <View style={withTransition({ ...overlay(!compact), backgroundColor: shown ? scrim : 'transparent' }, 'background-color', durations.medium)}>
         <Pressable accessibilityLabel="Close" style={backdrop} onPress={props.onClose} />
-        <View
-          role="dialog"
-          aria-modal
-          aria-label={props.title}
-          style={[sheet, { maxHeight: drawerHeight, paddingTop: 16 }, !compact && { maxWidth: layout.dialog, maxHeight: popupHeight, paddingBottom: 24 }, props.full && { height: compact ? drawerHeight : popupHeight }]}
-        >
-          {/* The same title row as a drawer rising from the footer. */}
-          <Row gap={8} justify="between">
-            <Text accessibilityRole="header" numberOfLines={1} variant="heading" style={{ flexShrink: 1 }}>{props.title}</Text>
-            <TextButton tone="muted" underline={false} onPress={props.onClose} style={{ paddingLeft: 16 }}>Close</TextButton>
-          </Row>
-          {props.children}
-        </View>
+        {/* On phones it rises from the foot, as a footer's drawer does. */}
+        {compact ? <Reveal upward>{panel}</Reveal> : panel}
       </View>
     </ScreenModal>
   );

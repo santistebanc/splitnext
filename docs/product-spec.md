@@ -254,9 +254,10 @@ repayment, puts it first in the expense list. Add expense is pinned at the foot,
 including before the first expense and after the last one is removed. An
 unassigned installation is asked to tap its name in the balances.
 
-Search sits beside the Expenses heading when the group has entries. It opens
-a field below that heading with Involves you and Paid by you filters,
-which show only while searching. It finds every word typed in what an expense
+Search sits beside the Expenses heading when the group has entries. It takes
+the heading's place with a field and Involves you and Paid by you filters,
+rises to just under the compact header, and stays there while the results
+scroll under it; the results take at least a screen, so it can always rise. It finds every word typed in what an expense
 was for, or in a repayment's sentence, ignoring case and accents, and ends the
 results with their count and what they come to for you. Cancel, or Search
 again, closes it and shows everything. Search opens the full expense list with the people summary above it.
@@ -301,10 +302,10 @@ a plain number with no currency (ADR 0025), and what it was for (New expense) un
 shrink as the split scrolls under them. The amount accepts digits and a
 decimal dot or comma, displaying a dot and two fixed decimal places after each
 keystroke. Keep the caret usable for insertion, replacement, and deletion.
-Reject ambiguous or over-precise pasted amounts. Paid by opens the names in
-place, each drawn like its row in the balances: full width, tinted when it is
-you, with the presence marker, the name and "you", and a check on the one who
-paid. Then the split, always shown in full: its caption
+Reject ambiguous or over-precise pasted amounts. Paid by (and a repayment's
+Paid to) opens the names in place, each drawn like the closed choice: at the
+row's end, the small avatar and the name, with "you" before them, and a check
+where the closed choice has its arrow, so the names end in line with it. Then the split, always shown in full: its caption
 (28.20 each for an equal split, or 5 people for a custom one), a bar of each
 person's share in their avatar's tint, and one row per person,
 their avatar, the name with "you", − and + side by side for their shares,
@@ -335,7 +336,11 @@ did what, with its detail in the monospaced face, an orange mark when it is
 new, and Undo or, for removals, Restore where safe.
 
 Details, forms and Activity are pages with Back to where they were opened.
-The invite sheet closes with Close, a tap above it, or browser Back. Every
+Every sheet looks and moves the same: on phones it rises from the foot over a
+page that dims, on wide screens it opens in the middle, and its title row has
+the title and Close (Cancel where closing drops a start, as for New group);
+a confirmation leaves Close out, since its own Cancel closes it. The invite
+sheet closes with Close, a tap above it, or browser Back. Every
 screen, and the invite sheet, is in browser
 Back/Forward history, and repayment drafts survive screen changes.
 Opening a view afresh starts at the top with its header expanded, including

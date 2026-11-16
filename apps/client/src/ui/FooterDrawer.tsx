@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Row, Text, TextButton, colors, durations, scrim, sizes, withTransition } from '../design';
+import { colors, durations, scrim, sizes, withTransition } from '../design';
+import { SheetTitle } from './Drawer';
 import { Reveal } from './Reveal';
 import { useScreenSize } from './screenHost';
 import { useVisibleViewportHeight } from './useVisibleViewport';
@@ -45,12 +46,7 @@ export function FooterDrawer(props: FooterDrawerProps) {
       <Reveal upward>
         {props.open ? (
           <View role="region" aria-label={props.title} style={{ paddingBottom: 8, maxHeight: contentHeight }}>
-            <Row justify="between">
-              <Text accessibilityRole="header" variant="heading">{props.title}</Text>
-              <TextButton label={props.closeLabel} tone="muted" underline={false} disabled={props.busy} onPress={props.onClose} style={{ paddingLeft: 16 }}>
-                {props.closeText ?? 'Cancel'}
-              </TextButton>
-            </Row>
+            <SheetTitle title={props.title} closeText={props.closeText ?? 'Cancel'} closeLabel={props.closeLabel} disabled={props.busy} onClose={props.onClose} />
             <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled">
               {props.children}
             </ScrollView>

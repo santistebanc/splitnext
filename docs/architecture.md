@@ -87,6 +87,9 @@ scrolling or modal plumbing lives in `ui/` on top of them: `ScreenHeader`
 with `BackButton` and `HeaderAction`, `Drawer`, `ConfirmSheet`,
 `FooterDrawer`, `Toast`, and `SyncStatus`. `ui/balance.ts` formats balances
 (`signedFigure`, `balanceColor`) and `ui/errors.ts` turns error codes into copy.
+Every sheet's title row is `SheetTitle`, and every modal sheet is a `Drawer`
+(`ConfirmSheet` is one around `Confirmation`), so they share the panel style,
+the rise from the foot and the fading scrim.
 `withTransition` eases a style property on the web, where views are elements,
 with the shared `easeOut` curve. Recorded repayments use the expense list's
 `RepaymentRow` everywhere. Pressing a control fades it, pressing a row tints
@@ -147,7 +150,9 @@ last 72px, and the heading morphs from button to heading by that amount.
 count as icons, the group's name with a pencil that renames it in place
 through `renameGroup`, then `YourBalance`. The scroll content holds the people
 section and the expense list. Search sits beside the Expenses heading and
-filters only that list. `TitleField` sizes itself from an invisible,
+filters only that list; open, it takes the heading's place in a `StickyTop`
+held under the compact header's height from `CompactHeaderContext`, and the
+list keeps at least that context's `room`. `TitleField` sizes itself from an invisible,
 in-flow copy of the name, with the editable field laid over it, so opening
 and typing never wait for a second layout to set the height. Invite, at the
 end of `AddPersonRow`, shows `InviteSheet` (a `Drawer` around `InvitePanel`)

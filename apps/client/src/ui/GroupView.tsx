@@ -1,4 +1,4 @@
-import { useContext, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { View, type TextInput } from 'react-native';
 import { groupNameSchema, preferredMember, repaymentMembers } from '@splitnext/client';
 import { BellIcon, Button, ChevronDownIcon, ChevronUpIcon, CountBadge, ErrorMessage, IconButton, Input, InviteIcon, PencilIcon, Row, SearchIcon, Stack, Tag, Text, TextButton, ToggleChip, Touchable, YouBadge, between, colors, balanceStyle, layout, radii, rules, sizes, strokes, titleStyle } from '../design';
@@ -9,9 +9,9 @@ import { balanceColor, signedFigure } from './balance';
 import { ExpenseList } from './ExpenseList';
 import { InviteSheet } from './InvitePanel';
 import { AddPersonRow, MemberAvatar, type MemberListApp, type Replica } from './MemberList';
-import { RevealContext, useCompactProgress } from './pageScroll';
-import { Reveal } from './Reveal';
+import { CompactHeaderContext, RevealContext, useCompactProgress } from './pageScroll';
 import { StickyFoot } from './StickyFoot';
+import { StickyTop } from './StickyTop';
 import { EditCover } from './EditCover';
 import { ScreenHeader, BackButton } from './ScreenHeader';
 import { TitleField } from './TitleField';
@@ -154,6 +154,9 @@ function SearchToggle() {
   );
 }
 
+/** About how tall the search and its filters are, which the results' room leaves for them. */
+const searchHeight = 100;
+
 /** What to look for among the expenses, and the filters, which show only while searching. */
 function SearchBar() {
   const actions = useActions();
@@ -161,7 +164,7 @@ function SearchBar() {
   const run = (input: { query?: string; involvesYou?: boolean; paidByYou?: boolean }) => { void actions.dispatch('searchExpenses', input, { origin: 'ui' }); };
 
   return (
-    <Stack gap={8} paddingTop={12}>
+    <Stack gap={8} paddingBottom={8} style={{ backgroundColor: colors.background }}>
       <Row gap={8} style={{ minHeight: sizes.touch, ...rules.inkBelow }}>
         <SearchIcon size={18} color={colors.muted} />
         <Input
@@ -399,7 +402,8 @@ function People(props: { app: MemberListApp; replica: Replica }) {
  */
 export function GroupView(props: GroupViewProps) {
   const action = useActionCall();
-  const ui = useUiState();
+  const searching = useUiState().search.open;
+  const room = useContext(CompactHeaderContext).room;
   const replica = props.app.snapshot().group;
   const snapshot = replica?.projected_snapshot;
 
@@ -425,8 +429,8 @@ export function GroupView(props: GroupViewProps) {
         <People app={props.app} replica={replica} />
       </View>
       <ExpensesHeading entries={entries} />
-      <View role="region" aria-label="Group expenses">
-        <Reveal>{ui.search.open ? <SearchBar /> : null}</Reveal>
+      {/* While searching, the results take at least a screen, so the search can always rise under the header. */}
+      <View role="region" aria-label="Group expenses" style={{ minHeight: searching ? room - searchHeight : 0 }}>
         <ExpenseList replica={replica} />
       </View>
     </View>
@@ -460,6 +464,24 @@ function fade(color: string, part: number): string {
  */
 function ExpensesHeading(props: { entries: number }) {
   const reveal = useContext(RevealContext);
+  const searching = useUiState().search.open;
+  const inset = useContext(CompactHeaderContext).height;
+
+  // Opening search brings it up under the header, with room for what it finds.
+  useEffect(() => {
+    if (searching) reveal?.(expensesAnchor);
+  }, [searching]);
+
+  // While searching, the search takes the heading's place and stays under the header.
+  if (searching)
+    return (
+      <>
+        <View nativeID={expensesAnchor} />
+        <StickyTop top={inset} layer={3}>
+          <SearchBar />
+        </StickyTop>
+      </>
+    );
 
   return (
     <StickyFoot bottom={12} range={dockRange} anchorId={expensesAnchor} held={props.entries > 0}>

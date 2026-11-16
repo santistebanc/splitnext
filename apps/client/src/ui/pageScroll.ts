@@ -96,5 +96,11 @@ export const RevealContext = createContext<((id: string) => void) | null>(null);
 /** Return the current frame to its start from its title. */
 export const ScrollToTopContext = createContext<(() => void) | null>(null);
 
+/**
+ * The compact header's height, which content that sticks to the top stays
+ * under, and the room left below it for the page, before footer clearance.
+ */
+export const CompactHeaderContext = createContext({ height: 0, room: 0 });
+
 /** Space available to page content with the full header, before footer clearance. */
 export const PageHeightContext = createContext(0);
