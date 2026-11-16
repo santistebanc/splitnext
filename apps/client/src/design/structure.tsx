@@ -2,7 +2,7 @@ import type { ReactNode, Ref } from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { Touchable } from './layout';
 import { Text } from './Text';
-import { colors, sizes, strokes, withTransition, durations } from './tokens';
+import { colors, layout, sizes, strokes, withTransition, durations } from './tokens';
 
 /** Rules drawn along one edge, for views that are ruled rather than boxed. */
 export const rules = {
@@ -15,6 +15,18 @@ export const rules = {
   /** An ink line below, as under a large amount. */
   inkBelow: { borderBottomWidth: strokes.ink, borderColor: colors.ink },
 } as const;
+
+/**
+ * A row that runs past the column to the screen's edges, so its press tint
+ * fills the width. Its rule is a `RowRule`, which spans only the column like
+ * every other row's.
+ */
+export const bleedRow = { marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter } as const;
+
+/** The hairline above a `bleedRow`, across the column only. */
+export function RowRule() {
+  return <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: layout.gutter, right: layout.gutter, borderTopWidth: strokes.hairline, borderColor: colors.rule }} />;
+}
 
 /** A horizontal hairline across its parent, or an ink line with `strong`. */
 export function Divider(props: { strong?: boolean | undefined }) {

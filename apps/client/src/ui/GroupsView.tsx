@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react';
-import { View, type TextInput } from 'react-native';
+import { ScrollView, View, type TextInput } from 'react-native';
 import { parseInviteLink, type ClientGroupSummary } from '@splitnext/client';
-import { ArrowRightIcon, BrandMark, CheckIcon, Button, Divider, EmptyState, ErrorMessage, Field, IconButton, ListRow, Notice, Row, Stack, Text, TextButton, Touchable, TrashIcon, between, colors, layout, rules, sizes, titleStyle } from '../design';
+import { ArrowRightIcon, BrandMark, CheckIcon, Button, Divider, EmptyState, ErrorMessage, Field, IconButton, ListRow, Notice, Row, Stack, Text, TextButton, Touchable, TrashIcon, between, bleedRow, colors, RowRule, rules, sizes, titleStyle } from '../design';
 import { Confirmation } from './ConfirmSheet';
 import type { AppController } from '../model/controller';
 import { balanceColor, signedFigure } from './balance';
 import { CreateGroup, useSubmitCreate } from './CreateGroup';
 import { EditCover } from './EditCover';
-import { FooterDrawer } from './FooterDrawer';
+import { Drawer } from './Drawer';
 import { useCompactProgress } from './pageScroll';
 import { Reveal } from './Reveal';
 import { ScreenHeader } from './ScreenHeader';
@@ -33,40 +33,32 @@ export function GroupsFooter(props: { app: GroupsViewApp }) {
   }
 
   return (
-    <FooterDrawer
-      open={creating}
-      title="New group"
-      closeLabel="Back to groups"
-      busy={busy}
-      onClose={close}
-      footer={(
-        <>
-          <ErrorMessage message={action.error} />
-          <Button
-           
-            ref={morph('newgroup')}
-            busy={creating && busy}
-            disabled={creating ? !create.can('submitCreateGroup') : !action.can('showCreateGroup')}
-            onPress={() => {
-              if (creating) submit();
-              else void action.call('showCreateGroup', {});
-            }}
-          >
-            {creating ? (busy ? 'Creating…' : create.error ? 'Try again' : 'Create group') : 'New group'}
+    <>
+      <ErrorMessage message={action.error} />
+      <Button ref={morph('newgroup')} disabled={!action.can('showCreateGroup')} onPress={() => { void action.call('showCreateGroup', {}); }}>
+        New group
+      </Button>
+      {/* The same sheet as every other, with Cancel since closing drops the new group. */}
+      {creating ? (
+        <Drawer title="New group" closeText="Cancel" busy={busy} onClose={close}>
+          {/* The form scrolls when the keyboard leaves little room, and the button stays at the foot. */}
+          <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled">
+            <CreateGroup app={props.app} />
+            {!online || !reachable ? (
+              <Notice
+                tone="danger"
+                role="alert"
+                message={`Can’t create the group. ${!online ? 'You’re offline.' : 'Splitnext can’t be reached.'} Nothing you typed was lost.`}
+              />
+            ) : null}
+            <ErrorMessage message={create.error} />
+          </ScrollView>
+          <Button busy={busy} disabled={!create.can('submitCreateGroup')} onPress={submit}>
+            {busy ? 'Creating…' : create.error ? 'Try again' : 'Create group'}
           </Button>
-        </>
-      )}
-    >
-      <CreateGroup app={props.app} />
-      {!online || !reachable ? (
-        <Notice
-          tone="danger"
-          role="alert"
-          message={`Can’t create the group. ${!online ? 'You’re offline.' : 'Splitnext can’t be reached.'} Nothing you typed was lost.`}
-        />
+        </Drawer>
       ) : null}
-      <ErrorMessage message={create.error} />
-    </FooterDrawer>
+    </>
   );
 }
 
@@ -224,8 +216,9 @@ export function GroupsView(props: GroupsViewProps) {
           disabled={action.busy}
           feedback="tint"
           onPress={() => open(group)}
-          style={[{ paddingVertical: 14, marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter }, rules.above]}
+          style={[{ paddingVertical: 14 }, bleedRow]}
         >
+          <RowRule />
           <Row gap={12} justify="between">
             <Stack fill gap={2} align="start">
               <Text ref={morph(`gname-${group.group_id}`)} numberOfLines={2} variant="headline" style={{ maxWidth: '100%' }}>{group.name}</Text>

@@ -48,8 +48,6 @@ type FrameProps = {
   onStatusLayout?: ((height: number) => void) | undefined;
   /** The screen's one main action, pinned below the content. */
   footer?: ReactNode;
-  /** Whether the footer floats over the content instead of taking its own bar. */
-  floatingFooter?: boolean;
   /**
    * The header turns compact once the content has scrolled past the height it
    * gives up, and full again on the way back. `instant` marks the state a
@@ -104,7 +102,26 @@ export function Frame(props: FrameProps) {
   const scrolled = useRef(0);
   const compact = useRef(false);
   const homepage = useHomepage();
-  const floating = Boolean(props.footer && props.floatingFooter);
+  // A scrollbar's width, which the header and footer leave at their right so
+  // their column stands exactly over the page's.
+  const [scrollbar, setScrollbar] = useState(0);
+
+  // A scrollbar comes and goes with the content's height, without a layout
+  // event of its own, so the page's box is watched, before the first paint.
+  useLayoutEffect(() => {
+    const node: unknown = Platform.OS === 'web' ? scroll.current?.getScrollableNode() : null;
+
+    if (!(node instanceof HTMLElement)) return;
+    const measure = () => setScrollbar(node.offsetWidth - node.clientWidth);
+    const observer = new ResizeObserver(measure);
+
+    measure();
+    observer.observe(node);
+
+    if (node.firstElementChild) observer.observe(node.firstElementChild);
+
+    return () => observer.disconnect();
+  }, []);
 
   // Scrolls caused by switching screens, including late ones from the screen
   // left behind, are neither a person scrolling nor this screen's position.
@@ -184,7 +201,7 @@ export function Frame(props: FrameProps) {
     scroll.current?.scrollTo({ y: Math.max(0, y - compactHeight), animated: true });
   }
 
-  const footRoom = floating ? 104 : 32;
+  const footRoom = 32;
   const pageHeight = Math.max(0, pageArea - header.full);
   const compactHeight = props.header ? Math.max(0, header.full - header.shrink) : 0;
 
@@ -203,10 +220,13 @@ export function Frame(props: FrameProps) {
     <RevealContext.Provider value={reveal}>
       <View style={[page, visibleHeight !== null && { maxHeight: visibleHeight }]}>
         {props.status ? <View onLayout={(event) => props.onStatusLayout?.(event.nativeEvent.layout.height)}>{props.status}</View> : null}
-        <View style={page} onLayout={(event) => setPageArea(event.nativeEvent.layout.height)}>
+        <View
+          style={page}
+          onLayout={(event) => setPageArea(event.nativeEvent.layout.height)}
+        >
           {props.header ? (
             <View
-              style={{ position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: colors.background, zIndex: 5 }}
+              style={{ position: 'absolute', top: 0, left: 0, right: scrollbar, backgroundColor: colors.background, zIndex: 5 }}
               onLayout={(event) => {
                 const height = event.nativeEvent.layout.height;
                 const shown = progress.get();
@@ -262,19 +282,9 @@ export function Frame(props: FrameProps) {
           </ScrollView>
         </View>
         {props.footer ? (
-          floating ? (
-            <View
-              pointerEvents="box-none"
-              style={{ position: 'absolute', left: 0, right: 0, bottom: 24, zIndex: 6 }}
-            >
-              <View pointerEvents="box-none" style={[column, { gap: 12 }]}>{props.footer}</View>
-            </View>
-          ) : (
-            // Above the header, so a drawer opening from the foot can dim the whole screen.
-            <View style={{ zIndex: 6, backgroundColor: colors.background, paddingTop: 12, paddingBottom: 16 }}>
-              <View style={[column, { gap: 12 }]}>{props.footer}</View>
-            </View>
-          )
+          <View style={{ zIndex: 6, backgroundColor: colors.background, paddingTop: 12, paddingBottom: 16, paddingRight: scrollbar }}>
+            <View style={[column, { gap: 12 }]}>{props.footer}</View>
+          </View>
         ) : null}
       </View>
     </RevealContext.Provider>

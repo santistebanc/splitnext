@@ -22,7 +22,7 @@ export { initials } from './initials';
 
 export { CountBadge, Dot, EmptyState, ErrorMessage, Notice, Skeleton, Tag, YouBadge } from './feedback';
 
-export { BalanceBar, Divider, ListRow, SectionHeading, rules } from './structure';
+export { BalanceBar, Divider, ListRow, RowRule, SectionHeading, bleedRow, rules } from './structure';
 
 export { BrandMark } from './BrandMark';
 

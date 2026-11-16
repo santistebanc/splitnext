@@ -1,7 +1,7 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import { View, type TextInput } from 'react-native';
 import { groupNameSchema, preferredMember, repaymentMembers } from '@splitnext/client';
-import { BellIcon, Button, ChevronDownIcon, ChevronUpIcon, CountBadge, ErrorMessage, IconButton, Input, InviteIcon, PencilIcon, Row, SearchIcon, Stack, Tag, Text, TextButton, ToggleChip, Touchable, YouBadge, between, colors, balanceStyle, layout, radii, rules, sizes, strokes, titleStyle } from '../design';
+import { BellIcon, Button, ChevronDownIcon, ChevronUpIcon, CountBadge, ErrorMessage, IconButton, Input, InviteIcon, PencilIcon, Row, SearchIcon, Stack, Tag, Text, TextButton, ToggleChip, Touchable, YouBadge, between, colors, balanceStyle, bleedRow, radii, RowRule, rules, sizes, strokes, titleStyle } from '../design';
 import { attentionCount } from '../model/activity';
 import { hasRecords } from '../model/breakdown';
 import { balanceRows, currentExpenses, memberName, moneyLabel } from '../model/expenses';
@@ -195,11 +195,11 @@ function yourStanding(amount: number | undefined): string {
 }
 
 /**
- * Where you stand, first on the group: what you owe or get back, large, with
- * Settle up beside it while a payment of the plan involves you. Tapping the
- * figure opens your details. It folds away with the rest of the header.
+ * Your own row, first among the people: drawn like theirs, but tinted, a
+ * little larger, with what your balance means under your name, and Settle up
+ * beside it while a payment of the plan involves you. It opens your details.
  */
-function YourBalance(props: { replica: Replica }) {
+function YourRow(props: { replica: Replica }) {
   const open = useActionCall();
   const settle = useActionCall();
   const snapshot = props.replica.projected_snapshot;
@@ -208,59 +208,52 @@ function YourBalance(props: { replica: Replica }) {
   if (!you || !snapshot) return null;
   const balances = balancesByMember(props.replica).get(you.id) ?? [];
   const name = memberName(snapshot, you.id);
+  const recorded = hasRecords(snapshot, you.id);
   const amounts = balances.map((entry) => signedFigure(entry.amount, entry.currency));
-
-  // Until an expense names you, a quiet line still opens your details, such as to rename yourself.
-  if (!hasRecords(snapshot, you.id))
-    return (
-      <View>
-        <Touchable
-          accessibilityRole="button"
-          accessibilityLabel={`${name} (you), no expenses yet. Show details`}
-          disabled={!open.can('showPerson', { memberId: you.id })}
-          onPress={() => { void open.call('showPerson', { memberId: you.id }); }}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: sizes.touch }}
-        >
-          <MemberAvatar replica={props.replica} memberId={you.id} size="small" />
-          <Text variant="body" weight="semibold" numberOfLines={2} style={{ flex: 1, minWidth: 0 }}>{name}</Text>
-          <YouBadge />
-        </Touchable>
-        <ErrorMessage message={open.error} />
-      </View>
-    );
 
   return (
     <View testID="your-balance">
-      <Row gap={12} align="end" style={{ paddingTop: 8 }}>
+      <View style={[bleedRow, { backgroundColor: colors.tint, paddingVertical: 10, gap: 4 }]}>
         <Touchable
           accessibilityRole="button"
-          accessibilityLabel={`${name} (you), ${amounts.join(', ') || 'settled'}. Show details`}
+          accessibilityLabel={`${name} (you), ${recorded ? amounts.join(', ') || 'settled' : 'no expenses yet'}. Show details`}
           disabled={!open.can('showPerson', { memberId: you.id })}
           onPress={() => { void open.call('showPerson', { memberId: you.id }); }}
-          style={{ flex: 1, minWidth: 0 }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: sizes.touch }}
         >
-          <Text variant="caption" weight="semibold" tone="muted">{yourStanding(balances[0]?.amount)}</Text>
-          {balances.map((entry) => (
-            <Text key={entry.currency} ref={morph(`gamt-${props.replica.group_id}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} color={balanceColor(entry.amount)} style={balanceStyle(36)}>
-              {moneyLabel(Math.abs(entry.amount), entry.currency)}
-            </Text>
-          ))}
+          <MemberAvatar replica={props.replica} memberId={you.id} />
+          <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
+            <Row gap={8}>
+              <Text ref={morph(`pname-${props.replica.group_id}-${you.id}`)} numberOfLines={1} variant="strong" style={{ flexShrink: 1 }}>{name}</Text>
+              <YouBadge />
+            </Row>
+            <Text variant="caption" weight="semibold" tone="muted">{recorded ? yourStanding(balances[0]?.amount) : 'No expenses yet'}</Text>
+          </Stack>
+          {recorded ? (
+            <Stack gap={4} align="end" style={{ flexShrink: 0 }}>
+              {balances.map((entry) => (
+                <Text key={entry.currency} ref={morph(`gamt-${props.replica.group_id}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} color={balanceColor(entry.amount)} style={balanceStyle(22)}>
+                  {signedFigure(entry.amount, entry.currency)}
+                </Text>
+              ))}
+            </Stack>
+          ) : null}
         </Touchable>
+        {/* On its own line under your figure, so a narrow screen keeps your name whole. */}
         {settle.can('showSettleUp', { memberId: you.id }) ? (
-          <Button size="compact" label="Settle up" onPress={() => { void settle.call('showSettleUp', {}); }} style={{ marginBottom: 2 }}>
-            Settle up
-          </Button>
+          <Row justify="end">
+            <Button size="compact" label="Settle up" onPress={() => { void settle.call('showSettleUp', {}); }}>
+              Settle up
+            </Button>
+          </Row>
         ) : null}
-      </Row>
+      </View>
       <ErrorMessage message={open.error ?? settle.error} />
     </View>
   );
 }
 
-/**
- * The group screen's fixed top: back to the groups and Activity, the group's
- * name, and where you stand.
- */
+/** The group screen's fixed top: back to the groups and Activity, and the group's name. */
 export function GroupHeader(props: { app: MemberListApp }) {
   const actions = useActions();
   const replica = props.app.snapshot().group;
@@ -275,7 +268,6 @@ export function GroupHeader(props: { app: MemberListApp }) {
       heading={open && replica ? <GroupName name={name} groupId={replica.group_id} /> : undefined}
       compactTitle={open ? name : undefined}
       title={open ? undefined : name}
-      below={open && replica ? <YourBalance replica={replica} /> : undefined}
     />
   );
 }
@@ -309,7 +301,7 @@ function orderedMembers<Member extends { id: string }>(members: readonly Member[
 }
 
 /** A row running to the column's edges, so its pressed tint does too. */
-const fullRow = { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: sizes.touch + 6, paddingVertical: 6, marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter } as const;
+const fullRow = { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: sizes.touch + 6, paddingVertical: 6, ...bleedRow } as const;
 
 /** One person: their avatar, their name, and their balance, which opens their details. */
 function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: string; removed: boolean; balances: { currency: string; amount: number }[]; recorded: boolean }) {
@@ -325,8 +317,9 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
         accessibilityLabel={`${name}${props.removed ? ', removed' : ''}, ${amounts.join(', ') || (props.recorded ? 'settled' : 'no expenses yet')}. Show details`}
         disabled={!open.can('showPerson', { memberId: props.memberId })}
         onPress={() => { void open.call('showPerson', { memberId: props.memberId }); }}
-        style={[fullRow, rules.above]}
+        style={fullRow}
       >
+        <RowRule />
         <MemberAvatar replica={props.replica} memberId={props.memberId} app={props.app} />
         <Row gap={8} fill>
           <Text ref={morph(`pname-${props.replica.group_id}-${props.memberId}`)} numberOfLines={2} variant="strong" style={{ flexShrink: 1 }}>{name}</Text>
@@ -368,6 +361,7 @@ function People(props: { app: MemberListApp; replica: Replica }) {
 
   return (
     <View role="region" aria-label="Balances">
+      <YourRow replica={props.replica} />
       {open.map(row)}
       {square.length ? (
         <Touchable
@@ -376,8 +370,9 @@ function People(props: { app: MemberListApp; replica: Replica }) {
           accessibilityLabel={`${square.length} settled: ${square.map((member) => memberName(snapshot, member.id)).join(', ')}`}
           aria-expanded={ui.balancesExpanded}
           onPress={() => { void actions.dispatch('setBalancesExpanded', { expanded: !ui.balancesExpanded }, { origin: 'ui' }); }}
-          style={[fullRow, rules.above]}
+          style={fullRow}
         >
+          <RowRule />
           <Row style={{ minWidth: 30 }}>
             {square.slice(0, 3).map((member, index) => (
               <View key={member.id} style={{ marginLeft: index ? -8 : 0, borderRadius: radii.round, borderWidth: 2, borderColor: colors.background }}>

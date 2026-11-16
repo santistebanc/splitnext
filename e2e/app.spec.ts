@@ -67,8 +67,8 @@ test('device lab frontend shows in-page devices live in its own page, each in it
     const otherLive = page.frameLocator(`iframe[data-lab-device="${otherId}"]`);
 
     await live.getByRole('button', { name: 'New group' }).click();
-    await expect(live.getByRole('button', { name: 'Back to groups' })).toBeVisible();
-    await expect(otherLive.getByRole('button', { name: 'Back to groups' })).toHaveCount(0);
+    await expect(live.getByRole('dialog', { name: 'New group' })).toBeVisible();
+    await expect(otherLive.getByRole('dialog', { name: 'New group' })).toHaveCount(0);
     await expect(otherLive.getByRole('button', { name: 'New group' })).toBeVisible();
     await expect(device.locator('.insp-overview')).toContainText('View: create');
     await expect(other.locator('.insp-overview')).toContainText('View: home');
@@ -327,8 +327,13 @@ async function addExpense(page: Page, description: string, amount: string, payer
   await field(page, 'Amount').fill(amount);
 
   if (payer) {
-    await button(page, /^Paid by .*Change payer$/).click();
-    await page.getByRole('radio', { name: new RegExp(`^${escaped(payer)}( \\(you\\))?$`) }).click();
+    const toggle = button(page, /^Paid by .*Change payer$/);
+
+    // The chosen payer is on the closed choice, not among the names it opens.
+    if (!new RegExp(`^Paid by ${escaped(payer)}( \\(you\\))?\\. `).test(await toggle.getAttribute('aria-label') ?? '')) {
+      await toggle.click();
+      await page.getByRole('radio', { name: new RegExp(`^${escaped(payer)}( \\(you\\))?$`) }).click();
+    }
   }
 
   await field(page, 'Description').fill(description);
@@ -524,13 +529,12 @@ test('uses one large title on every screen and opens the join field in place', a
   expect(nameBox.x - (logo.x + logo.width)).toBeLessThan(20);
   expect(Math.abs(nameBox.y + nameBox.height / 2 - (logo.y + logo.height / 2))).toBeLessThanOrEqual(3);
   await button(page, 'New group').click();
-  // New group opens upward from its button, over the groups list, ready to type.
-  await expect(page.getByRole('region', { name: 'New group' })).toBeVisible();
+  // New group opens the same sheet as every other, over the groups list, ready to type.
+  await expect(page.getByRole('dialog', { name: 'New group' })).toBeVisible();
   await expect(field(page, 'Group name')).toBeFocused();
-  await expect(heading(page, 'Your groups')).toBeVisible();
-  await button(page, 'Back to groups').click();
+  await button(page, 'Cancel').click();
   await motionSettled(page);
-  await expect(page.getByRole('region', { name: 'New group' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'New group' })).toHaveCount(0);
 
   // Join opens a link field directly under itself, above the mark; a link that
   // is not an invite says so there.
@@ -624,7 +628,7 @@ test('hides the main action without dimming while a name or the join link is edi
   await page.screenshot({ path: test.info().outputPath('cover-join-link.png') });
   await page.mouse.click(newGroup.x + newGroup.width / 2, newGroup.y + newGroup.height / 2);
   await expect(field(page, 'Invite link')).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'New group' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'New group' })).toHaveCount(0);
   await expect(cover).toHaveCount(0);
   await expect(button(page, 'New group')).toBeVisible();
 });
@@ -651,7 +655,7 @@ test('keeps group creation errors and retry above the phone keyboard without los
   await field(page, 'Your name in this group').fill('Ana');
   await page.route('**/groups', (route) => route.request().method() === 'POST' ? route.abort('connectionrefused') : route.continue());
   await button(page, 'Create group').click();
-  const form = page.getByRole('region', { name: 'New group', exact: true });
+  const form = page.getByRole('dialog', { name: 'New group', exact: true });
   const error = form.getByRole('alert').last();
 
   await expect(error).toBeVisible();
@@ -672,7 +676,7 @@ test('keeps group creation errors and retry above the phone keyboard without los
 
     return box.y >= 0 && box.y + box.height <= 380;
   }).toBe(true);
-  const cancel = button(page, 'Back to groups');
+  const cancel = button(page, 'Cancel');
 
   expect(await cancel.evaluate((node) => {
     const box = node.getBoundingClientRect();
@@ -908,6 +912,7 @@ test('folds the rename pencil away with the header', async ({ page }) => {
 
   // The expenses are long enough to scroll the group's header compact.
   await showSection(page, 'Expenses');
+  await scroller.evaluate((node) => { node.scrollTop = 0; });
 
   for (const pencil of ['Rename group', 'Rename Ben']) {
     if (pencil === 'Rename Ben') {
@@ -1095,7 +1100,7 @@ test('shows each balance and your balance on the groups list', async ({ page }) 
 test('records, changes, and removes an expense with plain-number balances', async ({ page }) => {
   await createGroup(page, 'Trip', 'Ana');
   await addMember(page, 'Ben');
-  await expect(page.getByText('No expenses yet', { exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Group expenses' }).getByText('No expenses yet', { exact: true })).toBeVisible();
   await expect(button(page, 'Add the first expense')).toHaveCount(0);
   const addButton = button(page, 'Add expense');
   await expect(addButton).toBeVisible();
@@ -1170,7 +1175,7 @@ test('records, changes, and removes an expense with plain-number balances', asyn
   await expect(timestamp).toHaveText(/^Last updated (just now|\d+m ago)$/);
   await button(page, 'Delete Dinner · 40.00').click();
   // The expenses say there are none; Add expense stays where it was.
-  await expect(page.getByText('No expenses yet', { exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Group expenses' }).getByText('No expenses yet', { exact: true })).toBeVisible();
   await expect(addButton).toBeVisible();
   await motionSettled(page);
   expect(await addButton.boundingBox()).toEqual(addPosition);
@@ -1275,7 +1280,7 @@ test('groups the digits of large amounts in threes, as typed and as shown', asyn
   await button(page, 'Save').click();
   await expect(button(page, `Change Flights · ${grouped('4 321.00')}`)).toBeVisible();
   // What the expense does to you shows under it; Ben's balance is with everyone's.
-  await expect(page.getByText(grouped('+2 160.50'), { exact: true })).toBeVisible();
+  await expect(button(page, /^Change Flights · /).getByText(grouped('+2 160.50'), { exact: true })).toBeVisible();
   await showSection(page, 'People');
   await expect(page.getByText(grouped('−2 160.50'), { exact: true })).toBeVisible();
 });
@@ -1582,15 +1587,15 @@ test('opens who paid in place and keeps the choice', async ({ page }, testInfo) 
   await expect(payers).toBeVisible();
   const you = payers.getByRole('radio', { name: 'Ana (you)', exact: true });
 
-  await expect(you).toBeChecked();
-  await expect(you.getByText('you', { exact: true })).toBeVisible();
-  await expect(payers.getByRole('radio', { name: 'Ben', exact: true }).getByText('you', { exact: true })).toHaveCount(0);
+  // The chosen payer stays on the closed choice and is not listed again.
+  await expect(you).toHaveCount(0);
+  await expect(payers.getByRole('radio')).toHaveCount(1);
   await payers.getByRole('radio', { name: 'Ben', exact: true }).click();
   await expect(payers).toHaveCount(0);
   await expect(button(page, 'Paid by Ben. Change payer')).toBeVisible();
   await button(page, 'Paid by Ben. Change payer').click();
   await expect(you).not.toBeChecked();
-  await expect(you.getByText('you', { exact: true })).toBeVisible();
+  await expect(payers.getByRole('radio', { name: 'Ben', exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('expense-payer-you.png') });
   await you.click();
   await expect(button(page, 'Paid by Ana (you). Change payer')).toBeVisible();
@@ -2115,7 +2120,7 @@ test('uses expense-style amount, member rows, and footer in the repayment editor
   await expect(button(page, 'Paid by Benjamin Alexander. Change payer')).toBeVisible();
   await expect(button(page, 'Paid to Ana (you). Change recipient')).toBeVisible();
   await from.click();
-  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(3);
+  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(2);
   await from.click();
   await expect(page.getByRole('radiogroup', { name: 'Paid by' })).toHaveCount(0);
   await amount.fill('7.50');
@@ -2893,12 +2898,12 @@ test('closes each dropdown on a tap outside it, and still lets that tap act', as
   await button(page, 'Add expense').click();
   await field(page, 'Amount').fill('10');
   await page.getByRole('button', { name: /^Paid by / }).click();
-  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(2);
+  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(1);
   await field(page, 'Description').click();
   await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(0);
   await expect(field(page, 'Description')).toBeFocused();
   await page.getByRole('button', { name: /^Paid by / }).click();
-  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(2);
+  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(1);
   await page.getByRole('button', { name: /^Paid by / }).click();
   await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(0);
   await button(page, 'Cancel').click();
@@ -2936,7 +2941,7 @@ test('closes panels in place without the content returning at the end', async ({
   const payer = page.getByRole('button', { name: /^Paid by / });
 
   await payer.click();
-  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(2);
+  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(1);
   await page.waitForTimeout(500);
 
   // Every frame of closing, until well after the movement ends.
@@ -2969,7 +2974,7 @@ test('closes panels in place without the content returning at the end', async ({
   await page.waitForTimeout(80);
   await payer.click();
   await page.waitForTimeout(600);
-  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(2);
+  await expect(page.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio')).toHaveCount(1);
   await expect(page.getByRole('radio', { name: /^Ben/ })).toBeVisible();
 });
 

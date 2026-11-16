@@ -4,7 +4,7 @@ import { Row, Text, TextButton, colors, durations, layout, scrim, withTransition
 import { Reveal } from './Reveal';
 import { useScreenSize } from './screenHost';
 import { ScreenModal } from './ScreenModal';
-import { useCompactLayout } from './useVisibleViewport';
+import { useCompactLayout, useVisibleViewportHeight } from './useVisibleViewport';
 
 /** Fills its parent, for a backdrop behind a dialog. */
 export const backdrop = { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 } as const;
@@ -70,13 +70,18 @@ function useScrimShown(): boolean {
  * button dismisses it. Content too tall for it scrolls in a child with
  * `flexShrink: 1`. A `full` drawer keeps its whole height, so a list that
  * filters as someone types does not make it jump. `closeText` names the
- * title's close action, or `null` leaves it out.
+ * title's close action, or `null` leaves it out; `busy` keeps it open, as
+ * while what it holds is being saved. It stays above an on-screen keyboard.
  */
-export function Drawer(props: { title: string; onClose: () => void; full?: boolean; closeText?: string | null; children: ReactNode }) {
+export function Drawer(props: { title: string; onClose: () => void; full?: boolean; closeText?: string | null; busy?: boolean | undefined; children: ReactNode }) {
   const compact = useCompactLayout();
   const shown = useScrimShown();
+  const screen = useScreenSize().height;
+  // The part of the screen the keyboard leaves, where the drawer rises from.
+  const visible = useVisibleViewportHeight(compact) ?? screen;
   // A number rather than a share, since the rising wrapper has no height of its own to take a share of.
-  const drawerHeight = useScreenSize().height * drawerShare;
+  const drawerHeight = visible * drawerShare;
+  const close = () => { if (!props.busy) props.onClose(); };
 
   const panel = (
     <View
@@ -85,15 +90,15 @@ export function Drawer(props: { title: string; onClose: () => void; full?: boole
       aria-label={props.title}
       style={[sheet, { maxHeight: compact ? drawerHeight : popupHeight }, !compact && { maxWidth: layout.dialog, paddingBottom: 24 }, props.full && { height: compact ? drawerHeight : popupHeight }]}
     >
-      <SheetTitle title={props.title} closeText={props.closeText} onClose={props.onClose} />
+      <SheetTitle title={props.title} closeText={props.closeText} disabled={props.busy} onClose={close} />
       {props.children}
     </View>
   );
 
   return (
-    <ScreenModal onRequestClose={props.onClose}>
-      <View style={withTransition({ ...overlay(!compact), backgroundColor: shown ? scrim : 'transparent' }, 'background-color', durations.medium)}>
-        <Pressable accessibilityLabel="Close" style={backdrop} onPress={props.onClose} />
+    <ScreenModal onRequestClose={close}>
+      <View style={[withTransition({ ...overlay(!compact), backgroundColor: shown ? scrim : 'transparent' }, 'background-color', durations.medium), compact && { maxHeight: visible }]}>
+        <Pressable accessibilityLabel="Close" style={backdrop} onPress={close} />
         {/* On phones it rises from the foot, as a footer's drawer does. */}
         {compact ? <Reveal upward>{panel}</Reveal> : panel}
       </View>

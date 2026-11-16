@@ -3,7 +3,7 @@ import { Platform, View, type StyleProp, type TextInput, type TextStyle } from '
 import type { ClientReplicaState } from '@splitnext/client';
 import { memberStatus, memberTint, participantMarkers, type ParticipantMarker } from '../model/memberPresentation';
 import type { AppController } from '../model/controller';
-import { Avatar, Button, Dot, ErrorMessage, Input, avatarSizes, colors, durations, layout, radii, rules, sizes, strokes, withTransition, type AvatarSize, type FontWeight, type TypeVariant } from '../design';
+import { Avatar, Button, Dot, ErrorMessage, Input, RowRule, avatarSizes, bleedRow, colors, durations, radii, rules, sizes, strokes, withTransition, type AvatarSize, type FontWeight, type TypeVariant } from '../design';
 import { EditCover } from './EditCover';
 import { errorMessage } from './errors';
 import { useActions } from './useActionCall';
@@ -221,8 +221,9 @@ export function AddPersonRow(props: { end?: ReactNode; tint?: number }) {
 
   return (
     <View>
-      {/* The row runs to the column's edges, like the people above it. */}
-      <View ref={row} style={[rules.above, { flexDirection: 'row', alignItems: 'center', minHeight: sizes.row, marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter }]}>
+      {/* The row runs to the screen's edges, like the people above it, with its rule across the column. */}
+      <View ref={row} style={[{ flexDirection: 'row', alignItems: 'center', minHeight: sizes.row }, bleedRow]}>
+        <RowRule />
         <View style={withTransition({ width: adding ? avatarSizes.regular.box + 12 : 0, opacity: adding ? 1 : 0, overflow: 'hidden' }, 'width, opacity', durations.medium)}>
           <NewPersonAvatar name={text} tint={props.tint ?? 0} />
         </View>

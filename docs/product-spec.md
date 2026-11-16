@@ -107,13 +107,14 @@ Keep rejected/superseded changes for review as described below. Add expense is
 the primary group action and does not require invitation acceptance. See
 [the app plan](./app-product-plan.md) for product direction.
 
-Where you stand leads the group screen, under its name: You owe, You get back
-or You're settled over your balance as a large bold figure, with Settle up
-beside it while a payment of the group's plan involves you; tapping the figure
-opens your details. Before any expense or repayment names you, a quiet line
-with your avatar, your name and "you" opens your details instead. The balance becomes a complete compact row as the page scrolls.
+Your own row leads the people list, drawn like the others but on the tint
+that marks you, a little larger: your avatar, your name with "you", under it
+You owe, You get back or You're settled (or No expenses yet before anything
+names you), your balance, and Settle up on a line under it while a payment
+of the group's plan involves you. It opens your details. The header above
+it holds only the group's name.
 
-The People section lists everyone else with their balance, from most negative to
+The People section then lists everyone else with their balance, from most negative to
 most positive (owing first, then owed), then people in no current expense or
 repayment yet. Each row is your avatar-sized initials, the name on up to two
 lines, and the signed figure; there are no balance bars, the figure's colour
@@ -217,11 +218,11 @@ valid one opens the join screen. Each group is a ruled row with its name on up
 to two lines, your balance (a green tick when settled, choose who you are when
 unassigned), changes waiting or needing review when there are any, and a bin that asks in place before leaving the group on this
 device. Show N groups you left lists them with Rejoin, and New group is
-pinned at the foot. New group does not leave the list: it opens a drawer
-upward from the button, just tall enough for New group with Cancel and two
-compact labelled fields, Group name (focused) and Your name in this group, while the screen above
-dims. The button becomes Create group, grey until both names are filled and
-Creating… while it works. Your name starts as the last name used here, with
+pinned at the foot. New group does not leave the list: it opens the same
+sheet as every other, titled New group with Cancel, holding two compact
+labelled fields, Group name (focused) and Your name in this group, and
+Create group, grey until both names are filled and Creating… while it works;
+it stays above an on-screen keyboard. Your name starts as the last name used here, with
 the names you go by in your other groups offered under it, each once, to use
 with a tap. Cancel, Back, or a tap on the dimmed screen closes it and
 discards the draft.
@@ -237,7 +238,7 @@ the foot.
 A group opens on one screen with people and expenses together. Its header has
 ‹ Groups and Activity (with a count of new
 changes and changes to review), then the group's name with a pencil that
-renames it in place, then where you stand. Below it, every person's row
+renames it in place. Below it, your row and every other person's
 without a People heading, then Expenses with its count and search, in full, in
 one page scroll. While the expenses start below the screen, their heading
 floats at the foot above Add expense as an "Expenses N" button, which scrolls
@@ -304,8 +305,10 @@ decimal dot or comma, displaying a dot and two fixed decimal places after each
 keystroke. Keep the caret usable for insertion, replacement, and deletion.
 Reject ambiguous or over-precise pasted amounts. Paid by (and a repayment's
 Paid to) opens the names in place, each drawn like the closed choice: at the
-row's end, the small avatar and the name, with "you" before them, and a check
-where the closed choice has its arrow, so the names end in line with it. Then the split, always shown in full: its caption
+row's end, the small avatar and the name, every name as wide as the widest,
+so the avatars stand in a column and the names start in line with the
+closed choice. The chosen person is left out, being on the closed choice;
+you are on the same tint pill that marks your own row. Then the split, always shown in full: its caption
 (28.20 each for an equal split, or 5 people for a custom one), a bar of each
 person's share in their avatar's tint, and one row per person,
 their avatar, the name with "you", − and + side by side for their shares,
@@ -339,6 +342,9 @@ Details, forms and Activity are pages with Back to where they were opened.
 Every sheet looks and moves the same: on phones it rises from the foot over a
 page that dims, on wide screens it opens in the middle, and its title row has
 the title and Close (Cancel where closing drops a start, as for New group);
+Every row's rule spans the page's column, the same in every list, and the
+header, the page and the footer share one column, whether or not the browser
+shows a scrollbar.
 a confirmation leaves Close out, since its own Cancel closes it. The invite
 sheet closes with Close, a tap above it, or browser Back. Every
 screen, and the invite sheet, is in browser

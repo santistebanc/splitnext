@@ -85,7 +85,9 @@ Screens take every color, size, and duration from tokens and build from these
 components rather than their own copies. App chrome that needs the app's
 scrolling or modal plumbing lives in `ui/` on top of them: `ScreenHeader`
 with `BackButton` and `HeaderAction`, `Drawer`, `ConfirmSheet`,
-`FooterDrawer`, `Toast`, and `SyncStatus`. `ui/balance.ts` formats balances
+`Toast`, and `SyncStatus`. Rows that run to the screen's edges for their
+press tint use `bleedRow` and draw their rule with `RowRule`, across the
+column only, like every other list's. `ui/balance.ts` formats balances
 (`signedFigure`, `balanceColor`) and `ui/errors.ts` turns error codes into copy.
 Every sheet's title row is `SheetTitle`, and every modal sheet is a `Drawer`
 (`ConfirmSheet` is one around `Confirmation`), so they share the panel style,
@@ -107,10 +109,12 @@ row, with the screen's name small in its middle to return to the top; the
 title and `below` fold away whole, reading full-size progress while they close.
 Compact progress moves between 0 and 1 in one eased 240ms movement
 (`createCompactProgress`); parts outside `ScreenHeader`'s fold, such as the
-expense amount, read the same progress. The groups list pins New group, which opens the create form upward above
-itself (the `create` view, drawn on the groups list) and becomes Create group.
-Creation uses the floating footer so the action stays above the keyboard.
-`FooterDrawer` limits its content to the visible height and scrolls its body.
+expense amount, read the same progress. The groups list pins New group, which opens the create form in a `Drawer`
+(the `create` view, drawn on the groups list); `Drawer` keeps above an
+on-screen keyboard through the visible viewport's height, and `busy` holds it
+open while the group is created. `Frame` measures its scrollbar and keeps the
+header and footer that much short of the right edge, so their column stands
+over the page's.
 The join screen pins Open link or Join as the chosen name; the group screen
 pins Add expense; the expense editor pins Save. The repayment form puts Record or Save in its
 header beside Cancel and Delete.
@@ -126,7 +130,10 @@ copies retain explicit font longhands, including tabular numerals; Chromium's
 empty font shorthand must never reset their typography. Background boxes
 scale with transforms rather than animating layout dimensions. Each flying copy keeps its
 endpoint layout width so names retain their line breaks and right-aligned
-amounts scale about their right edge and follow a straight path. Depth from
+amounts scale about their right edge and follow a straight path. Parts are
+measured a frame after the change and again each frame of the flight, and
+the flying copies are steered to where their part has moved, as when a header
+settles or a scrollbar appears, so they land on it. Depth from
 `AppScreen` picks the direction. With `sheet`, a new expense instead rises over a still copy of
 the group screen kept under a shade in an underlay, and falls away over the
 returning screen, without flying parts. The screen container never scrolls.
@@ -148,7 +155,7 @@ that scrolls the section up to just under the compact header through `Frame`'s
 last 72px, and the heading morphs from button to heading by that amount.
 `GroupHeader` holds ‹ Groups and Activity with its
 count as icons, the group's name with a pencil that renames it in place
-through `renameGroup`, then `YourBalance`. The scroll content holds the people
+through `renameGroup`. The scroll content holds the people, led by `YourRow`,
 section and the expense list. Search sits beside the Expenses heading and
 filters only that list; open, it takes the heading's place in a `StickyTop`
 held under the compact header's height from `CompactHeaderContext`, and the
@@ -181,7 +188,7 @@ full-width rows of `MemberAvatar`, name and figure, settled people folded
 behind `setBalancesExpanded`, ending with `AddPersonRow`; on Expenses,
 `ExpenseList` with expenses and repayments newest first, under month
 headings when they span more than one month, each led by its payer's avatar and faded when it leaves you out.
-`YourBalance`'s Settle up opens `settle` without a person, a page of its own
+`YourRow`'s Settle up opens `settle` without a person, a page of its own
 (`SettleUpPlan`): your payments of the plan, then everyone else's folded.
 It is the only Settle up; `person` has none. Record there records a planned payment through
 `recordSettlement` at once. Other payments are new entries on the Payment
@@ -235,8 +242,8 @@ key.
   show focus by their caret.
 - The balances list everyone else with a balance or still active, settled
   people folded into one line, and end with an Add a person field that adds on
-  blur without confirm/cancel controls; your own balance leads the screen in
-  `YourBalance`. People without current records keep a blank amount.
+  blur without confirm/cancel controls; your own balance leads the list in
+  `YourRow`. People without current records keep a blank amount.
   Person details show their avatar and the balance large with Owes, Gets back,
   Settled, or No expenses yet. They rename inline and remove someone else
   immediately. Which member is you changes only by leaving the group and

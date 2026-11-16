@@ -162,7 +162,20 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
     // Where parts land is measured a frame later: the new screen settles its
     // own header first, such as growing back to full size from the compact
     // one the old screen was scrolled to. It is still invisible meanwhile.
-    const frame = requestAnimationFrame(() => this.fly(snapshot, overlay, old, animations, landed));
+    let frame = requestAnimationFrame(() => {
+      const follow = this.fly(snapshot, overlay, old, animations, landed);
+
+      // The new screen can still move after it is first measured, such as
+      // its header settling or a scrollbar appearing: each frame, the flying
+      // parts are steered to where their part now is, so they land on it.
+      const step = () => {
+        follow();
+        frame = requestAnimationFrame(step);
+      };
+
+      frame = requestAnimationFrame(step);
+    });
+
     const timer = setTimeout(() => this.finish?.(), duration + 60);
 
     this.finish = () => {
@@ -216,24 +229,36 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
     };
   }
 
-  /** Flies each part shown on both screens from where it was to where it has landed. */
-  private fly(snapshot: Snapshot, overlay: HTMLDivElement, old: HTMLElement, animations: Animation[], landed: HTMLElement[]): void {
-    const root = this.root.current;
-
+  /** Where a part of the new screen sits once the screen stops sliding in. */
+  private landing(element: HTMLElement): Box | null {
     const content = this.content.current;
 
-    if (!root || !(content instanceof HTMLElement)) return;
-    const pairs: { element: HTMLElement; from: Part; to: Box; style: CSSStyleDeclaration }[] = [];
+    if (!(content instanceof HTMLElement)) return null;
     // The new screen has already begun sliding in; parts land where they sit once it stops.
     const shift = this.within(content.getBoundingClientRect());
+    const sliding = this.within(element.getBoundingClientRect());
+
+    return { ...sliding, x: sliding.x - shift.x, y: sliding.y - shift.y };
+  }
+
+  /**
+   * Flies each part shown on both screens from where it was to where it has
+   * landed, and returns a step that steers them again to where those parts
+   * have moved since.
+   */
+  private fly(snapshot: Snapshot, overlay: HTMLDivElement, old: HTMLElement, animations: Animation[], landed: HTMLElement[]): () => void {
+    const root = this.root.current;
+
+    if (!root) return () => undefined;
+    const pairs: { element: HTMLElement; from: Part; to: Box; style: CSSStyleDeclaration }[] = [];
+    const steers: (() => void)[] = [];
 
     root.querySelectorAll<HTMLElement>('[data-morph]').forEach((element) => {
       if (overlay.contains(element)) return;
       const from = element.dataset.morph ? snapshot.parts.get(element.dataset.morph) : undefined;
-      const sliding = this.within(element.getBoundingClientRect());
-      const to = { ...sliding, x: sliding.x - shift.x, y: sliding.y - shift.y };
+      const to = this.landing(element);
 
-      if (from && this.visible(element, to)) pairs.push({ element, from, to, style: getComputedStyle(element) });
+      if (from && to && this.visible(element, to)) pairs.push({ element, from, to, style: getComputedStyle(element) });
     });
 
     const keys = new Set(pairs.map((pair) => pair.element.dataset.morph));
@@ -242,7 +267,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
       if (keys.has(element.dataset.morph)) element.style.visibility = 'hidden';
     });
 
-    for (const { element, from, to, style } of pairs) {
+    for (const { element, from, to: first, style } of pairs) {
       const a = from.box;
       // A bar stretches to its new shape; text keeps its proportions and crossfades.
       const stretch = element.dataset.morphStretch !== undefined;
@@ -250,50 +275,86 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
       // that lands on one would otherwise shrink far past its size and jump back.
       const fromText = from.textSize;
       const toText = textSize(element, style);
-      const scale = !stretch && fromText && toText ? toText / fromText : to.h / a.h;
-      const sx = to.w / a.w;
+      const unclipped = element.dataset.morphUnclipped !== undefined;
       const base = { position: 'absolute', margin: '0', background: 'transparent', borderColor: 'transparent', transformOrigin: '0 0', boxSizing: 'border-box', visibility: 'visible', transition: 'none', overflow: 'visible' };
       const box = document.createElement('div');
 
       element.style.visibility = 'hidden';
       landed.push(element);
-      box.style.cssText = `position:absolute;left:0;top:0;width:${a.w}px;height:${a.h}px;transform-origin:0 0;box-sizing:border-box;border-style:solid;border-width:${from.borderWidth};`;
-      overlay.appendChild(box);
-      animations.push(box.animate([
-        { transform: `translate(${a.x}px,${a.y}px) scale(1,1)`, backgroundColor: from.background, borderRadius: from.radius, borderColor: from.border },
-        { transform: `translate(${to.x}px,${to.y}px) scale(${sx},${to.h / a.h})`, backgroundColor: style.backgroundColor, borderRadius: style.borderRadius, borderColor: style.borderTopColor },
-      ], { duration, easing: easeOut, fill: 'forwards' }));
 
       // Each copy keeps its endpoint layout while it scales and crossfades.
       // Resizing it as well rewraps names and bends the path of right-aligned
       // amounts (their changing width is multiplied by the changing scale).
-      const unclipped = element.dataset.morphUnclipped !== undefined;
       // Amounts align to their right edge, including an editor's full-width
       // input. Its left edge is not where the visible figure starts.
-      const travelX = to.x - a.x + (unclipped ? to.w - a.w : 0);
       const origin = unclipped ? '100% 0' : '0 0';
 
+      const frames = (to: Box) => {
+        const scale = !stretch && fromText && toText ? toText / fromText : to.h / a.h;
+        const sx = to.w / a.w;
+        const travelX = to.x - a.x + (unclipped ? to.w - a.w : 0);
+
+        return {
+          box: [
+            { transform: `translate(${a.x}px,${a.y}px) scale(1,1)`, backgroundColor: from.background, borderRadius: from.radius, borderColor: from.border },
+            { transform: `translate(${to.x}px,${to.y}px) scale(${sx},${to.h / a.h})`, backgroundColor: style.backgroundColor, borderRadius: style.borderRadius, borderColor: style.borderTopColor },
+          ],
+          leaving: stretch
+            // Fades only once the arriving copy is mostly in, so the bar never
+            // thins out midway, and gone by the end, so nothing of it pops away.
+            ? [{ transform: 'none', opacity: 1 }, { opacity: 1, offset: 0.4 }, { transform: `translate(${to.x - a.x}px,${to.y - a.y}px) scale(${sx},${scale})`, opacity: 0 }]
+            : [{ transform: 'none', opacity: 1 }, { opacity: 0, offset: 0.45 }, { transform: `translate(${travelX}px,${to.y - a.y}px) scale(${scale})`, opacity: 0 }],
+          // The arriving copy sits where the part first landed; a later move is part of its path.
+          arriving: (() => {
+            const dx = to.x - first.x;
+            const dy = to.y - first.y;
+            const end = `translate(${dx + (unclipped ? to.w - first.w : 0)}px,${dy}px)`;
+
+            return stretch
+              ? [{ transform: `translate(${a.x - first.x}px,${a.y - first.y}px) scale(${1 / sx},${1 / scale})`, opacity: 0 }, { opacity: 1, offset: 0.6 }, { transform: end, opacity: 1 }]
+              : [{ transform: `translate(${-(first.x - a.x + (unclipped ? first.w - a.w : 0))}px,${a.y - first.y}px) scale(${1 / scale})`, opacity: 0 }, { opacity: 0, offset: 0.3 }, { transform: end, opacity: 1 }];
+          })(),
+        };
+      };
+
+      const start = frames(first);
       const cut = (clips: boolean) => (unclipped ? { overflow: 'visible', textOverflow: 'clip' } : clips ? { overflow: 'hidden', textOverflow: 'ellipsis' } : {});
+
+      box.style.cssText = `position:absolute;left:0;top:0;width:${a.w}px;height:${a.h}px;transform-origin:0 0;box-sizing:border-box;border-style:solid;border-width:${from.borderWidth};`;
+      overlay.appendChild(box);
+      const boxMotion = box.animate(start.box, { duration, easing: easeOut, fill: 'forwards' });
+
       const leaving = from.clone;
 
       Object.assign(leaving.style, base, cut(from.clips), from.font, { transformOrigin: origin, whiteSpace: unclipped ? 'nowrap' : from.whiteSpace, left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px`, color: from.color });
       overlay.appendChild(leaving);
-      animations.push(leaving.animate(stretch
-        // Fades only once the arriving copy is mostly in, so the bar never
-        // thins out midway, and gone by the end, so nothing of it pops away.
-        ? [{ transform: 'none', opacity: 1 }, { opacity: 1, offset: 0.4 }, { transform: `translate(${to.x - a.x}px,${to.y - a.y}px) scale(${sx},${scale})`, opacity: 0 }]
-        : [{ transform: 'none', opacity: 1 }, { opacity: 0, offset: 0.45 }, { transform: `translate(${travelX}px,${to.y - a.y}px) scale(${scale})`, opacity: 0 }], { duration, easing: easeOut, fill: 'forwards' }));
+      const leavingMotion = leaving.animate(start.leaving, { duration, easing: easeOut, fill: 'forwards' });
 
       const arriving = copy(element);
 
       arriving.dataset.morphArriving = '';
 
-      Object.assign(arriving.style, base, cut(clipped(style)), fontStyle(style), { transformOrigin: origin, whiteSpace: unclipped ? 'nowrap' : style.whiteSpace, left: `${to.x}px`, top: `${to.y}px`, width: `${to.w}px`, height: `${to.h}px`, color: style.color });
+      Object.assign(arriving.style, base, cut(clipped(style)), fontStyle(style), { transformOrigin: origin, whiteSpace: unclipped ? 'nowrap' : style.whiteSpace, left: `${first.x}px`, top: `${first.y}px`, width: `${first.w}px`, height: `${first.h}px`, color: style.color });
       overlay.appendChild(arriving);
-      animations.push(arriving.animate(stretch
-        ? [{ transform: `translate(${a.x - to.x}px,${a.y - to.y}px) scale(${1 / sx},${1 / scale})`, opacity: 0 }, { opacity: 1, offset: 0.6 }, { transform: 'none', opacity: 1 }]
-        : [{ transform: `translate(${-travelX}px,${a.y - to.y}px) scale(${1 / scale})`, opacity: 0 }, { opacity: 0, offset: 0.3 }, { transform: 'none', opacity: 1 }], { duration, easing: easeOut, fill: 'forwards' }));
+      const arrivingMotion = arriving.animate(start.arriving, { duration, easing: easeOut, fill: 'forwards' });
+
+      animations.push(boxMotion, leavingMotion, arrivingMotion);
+      let last = first;
+
+      steers.push(() => {
+        const to = this.landing(element);
+
+        if (!to || (Math.abs(to.x - last.x) < 0.5 && Math.abs(to.y - last.y) < 0.5 && Math.abs(to.w - last.w) < 0.5)) return;
+        last = to;
+        const next = frames(to);
+
+        for (const [motion, keyframes] of [[boxMotion, next.box], [leavingMotion, next.leaving], [arrivingMotion, next.arriving]] as const) {
+          if (motion.effect instanceof KeyframeEffect) motion.effect.setKeyframes(keyframes);
+        }
+      });
     }
+
+    return () => steers.forEach((steer) => steer());
   }
 
   override componentWillUnmount(): void {

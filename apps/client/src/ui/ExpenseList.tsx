@@ -3,7 +3,7 @@ import { preferredMember, type ClientReplicaState, type Expense, type Settlement
 import { currentExpenses, expenseEffect, expenseLabel, matchesSearch, memberName, moneyLabel, monthHeading } from '../model/expenses';
 import type { UiState } from '../model/uiState';
 import { needsReview } from '../model/notices';
-import { Button, Dot, EmptyState, ErrorMessage, Row, Stack, Text, Touchable, colors, layout, opacities, rules, sizes } from '../design';
+import { Button, Dot, EmptyState, ErrorMessage, Row, Stack, Text, Touchable, bleedRow, colors, opacities, RowRule, rules, sizes } from '../design';
 import { balanceColor, signedFigure } from './balance';
 import { MemberAvatar } from './MemberList';
 import { morph } from './ScreenMorph';
@@ -127,8 +127,9 @@ function EntryRow(props: { replica: Replica; payer: string | undefined; label: s
         accessibilityLabel={props.label}
         disabled={props.disabled}
         onPress={props.onPress}
-        style={[{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: sizes.row, paddingVertical: 8, marginHorizontal: -layout.gutter, paddingHorizontal: layout.gutter }, rules.above]}
+        style={[{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: sizes.row, paddingVertical: 8 }, bleedRow]}
       >
+        <RowRule />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, opacity: involved ? 1 : opacities.disabled }}>
           {props.payer ? <MemberAvatar replica={props.replica} memberId={props.payer} /> : null}
           <Row gap={8} fill>

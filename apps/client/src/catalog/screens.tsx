@@ -8,7 +8,6 @@ import { ConfirmSheet } from '../ui/ConfirmSheet';
 import { SyncStatus } from '../ui/ConnectionStatus';
 import { CreateGroup } from '../ui/CreateGroup';
 import { Drawer } from '../ui/Drawer';
-import { FooterDrawer } from '../ui/FooterDrawer';
 import { GroupSettings } from '../ui/GroupSettings';
 import { GroupsView } from '../ui/GroupsView';
 import { GroupHeader, GroupView } from '../ui/GroupView';
@@ -51,7 +50,6 @@ function OverlaysPage() {
   const [drawer, setDrawer] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [footer, setFooter] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -70,11 +68,6 @@ function OverlaysPage() {
           <Button variant="secondary" onPress={() => setToast('Ben removed.')}>Show toast</Button>
         </Row>
       </Example>
-      <Example title="FooterDrawer" note="Rises from a screen's main button, as New group does, and dims what is above it.">
-        <FooterDrawer open={footer} title="New group" closeLabel="Close" onClose={() => setFooter(false)} footer={<Button onPress={() => setFooter(!footer)}>{footer ? 'Create group' : 'New group'}</Button>}>
-          <Text variant="body">What the drawer holds.</Text>
-        </FooterDrawer>
-      </Example>
       <Example title="SyncStatus" note="A strip above every screen while disconnected; press it for details.">
         <View style={{ marginHorizontal: -24 }}>
           <SyncStatus online={false} reachable={false} pending={2} busy={false} onRetry={() => undefined} />
@@ -89,10 +82,9 @@ function OverlaysPage() {
       {confirm ? <ConfirmSheet title="Leave this group?" message="You can rejoin it later from the groups you left." confirmLabel="Leave group" busy={false} onConfirm={() => setConfirm(false)} onCancel={() => setConfirm(false)} /> : null}
       <Toast message={toast} action={{ text: 'Undo', onPress: () => setToast(null) }} />
       <Props rows={[
-        ['Drawer: title, onClose, full?, children', '', 'Tapping outside, Escape, or its close button dismisses it; full keeps its whole height.'],
+        ['Drawer: title, onClose, full?, closeText?, busy?, children', '', 'Every sheet: tapping outside, Escape, or its close action dismisses it; full keeps its whole height; busy keeps it open.'],
         ['ConfirmSheet: title, message, confirmLabel, busy, onConfirm, onCancel', '', 'An action’s confirmation, with Cancel beside the button that confirms it.'],
         ['Toast: message, action?', 'string | null', 'A dark message at the foot, with one action such as Undo.'],
-        ['FooterDrawer: open, title, closeLabel, closeText?, busy?, onClose, footer, children', '', 'The footer stays below; busy keeps it open.'],
         ['SyncStatus: online, reachable, pending, busy, onRetry, retryError?', '', 'Shows nothing while connected.'],
       ]} />
     </Stack>
