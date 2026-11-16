@@ -342,7 +342,8 @@ new, and Undo or, for removals, Restore where safe.
 
 Details, forms and Activity are pages with Back to where they were opened.
 Every sheet looks and moves the same: on phones it rises from the foot over a
-page that dims, on wide screens it opens in the middle, and its title row has
+page that dims and falls back on closing, as New group's drawer does, on wide
+screens it fades in and out in the middle, and its title row has
 the title and Close (Cancel where closing drops a start);
 Every row's rule spans the page's column, the same in every list, and the
 header, the page and the footer share one column, whether or not the browser

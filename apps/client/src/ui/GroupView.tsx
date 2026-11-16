@@ -132,7 +132,7 @@ function InviteButton(props: { app: MemberListApp }) {
       >
         Invite
       </Button>
-      {inviting ? <InviteSheet app={props.app} /> : null}
+      <InviteSheet open={inviting} app={props.app} />
       <ErrorMessage message={invite.error} />
     </>
   );

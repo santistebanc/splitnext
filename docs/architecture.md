@@ -91,7 +91,9 @@ column only, like every other list's. `ui/balance.ts` formats balances
 (`signedFigure`, `balanceColor`) and `ui/errors.ts` turns error codes into copy.
 Every sheet's title row is `SheetTitle`, and every modal sheet is a `Drawer`
 (`ConfirmSheet` is one around `Confirmation`), so they share the panel style,
-the rise from the foot and the fading scrim.
+the rise from the foot and the fading scrim. Callers keep a `Drawer` rendered
+and set `open`; it rises a frame after opening and holds its last content while
+it falls away, like `FooterDrawer`'s `Reveal`.
 `withTransition` eases a style property on the web, where views are elements,
 with the shared `easeOut` curve. Recorded repayments use the expense list's
 `RepaymentRow` everywhere. Pressing a control fades it, pressing a row tints

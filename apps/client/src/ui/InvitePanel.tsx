@@ -24,12 +24,12 @@ function selectLink(node: NativeText | null): void {
  * Making a new link sits apart at the foot and asks first, because the old
  * link stops working.
  */
-export function InviteSheet(props: { app: InvitePanelApp }) {
+export function InviteSheet(props: { open: boolean; app: InvitePanelApp }) {
   const actions = useActions();
   const name = props.app.snapshot().group?.projected_snapshot?.group.name ?? 'the group';
 
   return (
-    <Drawer title="Invite people" onClose={() => { void actions.dispatch('closePanel', {}, { origin: 'ui' }); }}>
+    <Drawer open={props.open} title="Invite people" onClose={() => { void actions.dispatch('closePanel', {}, { origin: 'ui' }); }}>
       <InvitePanel app={props.app} name={name} />
     </Drawer>
   );

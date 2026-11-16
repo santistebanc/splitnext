@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pressable, View, type ViewStyle } from 'react-native';
 import { Row, Text, TextButton, colors, durations, layout, scrim, withTransition } from '../design';
 import { Reveal } from './Reveal';
@@ -51,17 +51,30 @@ export function SheetTitle(props: { title: string; closeText?: string | null | u
   );
 }
 
-/** The page dimmed under a dialog, fading in as the dialog opens, as under a footer's drawer. */
-function useScrimShown(): boolean {
-  const [shown, setShown] = useState(false);
+/**
+ * Whether a dialog is on the page and whether it is up. It goes up a frame
+ * after it arrives, so it can rise, and stays on the page while it falls
+ * away after closing.
+ */
+function useRaised(open: boolean): { mounted: boolean; raised: boolean } {
+  const [mounted, setMounted] = useState(open);
+  const [raised, setRaised] = useState(false);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => setShown(true));
+    if (open) {
+      setMounted(true);
+      const frame = requestAnimationFrame(() => setRaised(true));
 
-    return () => cancelAnimationFrame(frame);
-  }, []);
+      return () => cancelAnimationFrame(frame);
+    }
 
-  return shown;
+    setRaised(false);
+    const timer = setTimeout(() => setMounted(false), durations.medium + 40);
+
+    return () => clearTimeout(timer);
+  }, [open]);
+
+  return { mounted, raised };
 }
 
 /**
@@ -72,16 +85,20 @@ function useScrimShown(): boolean {
  * filters as someone types does not make it jump. `closeText` names the
  * title's close action, or `null` leaves it out; `busy` keeps it open, as
  * while what it holds is being saved. It stays above an on-screen keyboard.
+ * Keep it rendered and set `open`, so it rises on opening and falls away on
+ * closing, as New group's drawer does; it holds what it showed until it has gone.
  */
-export function Drawer(props: { title: string; onClose: () => void; full?: boolean; closeText?: string | null; busy?: boolean | undefined; children: ReactNode }) {
+export function Drawer(props: { open?: boolean | undefined; title: string; onClose: () => void; full?: boolean; closeText?: string | null; busy?: boolean | undefined; children: ReactNode }) {
+  const open = props.open ?? true;
   const compact = useCompactLayout();
-  const shown = useScrimShown();
+  const { mounted, raised: shown } = useRaised(open);
+  const held = useRef<ReactNode>(null);
   const screen = useScreenSize().height;
   // The part of the screen the keyboard leaves, where the drawer rises from.
   const visible = useVisibleViewportHeight(compact) ?? screen;
   // A number rather than a share, since the rising wrapper has no height of its own to take a share of.
   const drawerHeight = visible * drawerShare;
-  const close = () => { if (!props.busy) props.onClose(); };
+  const close = () => { if (!props.busy && open) props.onClose(); };
 
   const panel = (
     <View
@@ -95,12 +112,19 @@ export function Drawer(props: { title: string; onClose: () => void; full?: boole
     </View>
   );
 
+  if (open) held.current = panel;
+
+  if (!mounted) return null;
+
   return (
     <ScreenModal onRequestClose={close}>
-      <View style={[withTransition({ ...overlay(!compact), backgroundColor: shown ? scrim : 'transparent' }, 'background-color', durations.medium), compact && { maxHeight: visible }]}>
+      {/* While it falls away, taps already reach the screen below. */}
+      <View pointerEvents={open ? 'auto' : 'none'} style={[withTransition({ ...overlay(!compact), backgroundColor: shown ? scrim : 'transparent' }, 'background-color', durations.medium), compact && { maxHeight: visible }]}>
         <Pressable accessibilityLabel="Close" style={backdrop} onPress={close} />
-        {/* On phones it rises from the foot, as a footer's drawer does. */}
-        {compact ? <Reveal upward>{panel}</Reveal> : panel}
+        {/* On phones it rises from the foot and falls back, as New group's drawer does; on wide screens it fades. */}
+        {compact
+          ? <Reveal upward>{shown ? held.current : null}</Reveal>
+          : <View style={[{ width: '100%', alignItems: 'center' }, withTransition({ opacity: shown ? 1 : 0, transform: [{ translateY: shown ? 0 : 8 }] }, 'opacity, transform', durations.medium)]}>{held.current}</View>}
       </View>
     </ScreenModal>
   );

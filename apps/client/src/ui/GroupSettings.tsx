@@ -69,16 +69,15 @@ export function GroupSettings(props: GroupSettingsProps) {
         Leave group
       </TextButton>
       <ErrorMessage message={leave.error} />
-      {leave.confirmation ? (
-        <ConfirmSheet
-          title="Leave this group?"
-          message={leave.confirmation.message}
-          confirmLabel="Leave group"
-          busy={leave.busy}
-          onConfirm={leave.confirmation.confirm}
-          onCancel={leave.cancel}
-        />
-      ) : null}
+      <ConfirmSheet
+        open={Boolean(leave.confirmation)}
+        title="Leave this group?"
+        message={leave.confirmation?.message ?? ''}
+        confirmLabel="Leave group"
+        busy={leave.busy}
+        onConfirm={() => leave.confirmation?.confirm()}
+        onCancel={leave.cancel}
+      />
     </Stack>
   );
 }

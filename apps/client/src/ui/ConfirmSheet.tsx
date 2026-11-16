@@ -2,6 +2,8 @@ import { Button, Row, Stack, Text } from '../design';
 import { Drawer } from './Drawer';
 
 type ConfirmSheetProps = {
+  /** Keep it rendered and set this, so it rises and falls away like every sheet. */
+  open?: boolean | undefined;
   title: string;
   /** The action's own confirmation message, from the action layer. */
   message: string;
@@ -37,7 +39,7 @@ export function Confirmation(props: Omit<ConfirmSheetProps, 'title'>) {
 /** A sheet asking the person to approve an action that returned a confirmation; its Cancel closes it, so its title has no Close. */
 export function ConfirmSheet(props: ConfirmSheetProps) {
   return (
-    <Drawer title={props.title} closeText={null} onClose={props.onCancel}>
+    <Drawer open={props.open} title={props.title} closeText={null} onClose={props.onCancel}>
       <Confirmation {...props} />
     </Drawer>
   );

@@ -62,7 +62,7 @@ function OverlaysPage() {
 
   return (
     <Stack gap={32}>
-      <Usage code={'<Drawer title="Connection" onClose={close}>…</Drawer>\n<ConfirmSheet title="Leave this group?" message={message} confirmLabel="Leave group" busy={busy} onConfirm={leave} onCancel={cancel} />\n<Toast message="Ben removed." />'} />
+      <Usage code={'<Drawer open={open} title="Connection" onClose={close}>…</Drawer>\n<ConfirmSheet title="Leave this group?" message={message} confirmLabel="Leave group" busy={busy} onConfirm={leave} onCancel={cancel} />\n<Toast message="Ben removed." />'} />
       <Example title="Drawer, ConfirmSheet, and Toast" note="A drawer rises from the foot on phones and is a popup on wider screens.">
         <Row gap={12} wrap>
           <Button variant="secondary" onPress={() => setDrawer(true)}>Open drawer</Button>
@@ -80,16 +80,14 @@ function OverlaysPage() {
           <SyncStatus online={false} reachable={false} pending={2} busy={false} onRetry={() => undefined} />
         </View>
       </Example>
-      {drawer ? (
-        <Drawer title="Connection" onClose={() => setDrawer(false)}>
-          <Text variant="body">Changes saved here sync automatically when you reconnect.</Text>
-          <Button onPress={() => setDrawer(false)}>Retry</Button>
-        </Drawer>
-      ) : null}
-      {confirm ? <ConfirmSheet title="Leave this group?" message="You can rejoin it later from the groups you left." confirmLabel="Leave group" busy={false} onConfirm={() => setConfirm(false)} onCancel={() => setConfirm(false)} /> : null}
+      <Drawer open={drawer} title="Connection" onClose={() => setDrawer(false)}>
+        <Text variant="body">Changes saved here sync automatically when you reconnect.</Text>
+        <Button onPress={() => setDrawer(false)}>Retry</Button>
+      </Drawer>
+      <ConfirmSheet open={confirm} title="Leave this group?" message="You can rejoin it later from the groups you left." confirmLabel="Leave group" busy={false} onConfirm={() => setConfirm(false)} onCancel={() => setConfirm(false)} />
       <Toast message={toast} action={{ text: 'Undo', onPress: () => setToast(null) }} />
       <Props rows={[
-        ['Drawer: title, onClose, full?, closeText?, busy?, children', '', 'Every sheet: tapping outside, Escape, or its close action dismisses it; full keeps its whole height; busy keeps it open.'],
+        ['Drawer: open?, title, onClose, full?, closeText?, busy?, children', '', 'Every sheet: kept rendered, it rises on open and falls away on close; tapping outside, Escape, or its close action dismisses it; full keeps its whole height; busy keeps it open.'],
         ['ConfirmSheet: title, message, confirmLabel, busy, onConfirm, onCancel', '', 'An action’s confirmation, with Cancel beside the button that confirms it.'],
         ['Toast: message, action?', 'string | null', 'A dark message at the foot, with one action such as Undo.'],
         ['SyncStatus: online, reachable, pending, busy, onRetry, retryError?', '', 'Shows nothing while connected.'],

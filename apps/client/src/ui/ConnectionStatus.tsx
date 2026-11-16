@@ -34,14 +34,12 @@ export function SyncStatus(props: { online: boolean; reachable: boolean; pending
         <WifiIcon off size={14} color={colors.muted} strokeWidth={2} />
         <Text numberOfLines={1} variant="meta" tone="muted" weight="semibold" style={{ flexShrink: 1 }}>{label}</Text>
       </Touchable>
-      {expanded ? (
-        <Drawer title="Connection" onClose={() => setExpanded(false)}>
-          <Text role="status" accessibilityLiveRegion="polite" variant="strong">{label}</Text>
-          <Text variant="body">Changes saved here sync automatically when you reconnect.</Text>
-          <ErrorMessage message={props.retryError ?? null} />
-          {props.online ? <Button disabled={props.busy} onPress={props.onRetry}>Retry</Button> : null}
-        </Drawer>
-      ) : null}
+      <Drawer open={expanded} title="Connection" onClose={() => setExpanded(false)}>
+        <Text role="status" accessibilityLiveRegion="polite" variant="strong">{label}</Text>
+        <Text variant="body">Changes saved here sync automatically when you reconnect.</Text>
+        <ErrorMessage message={props.retryError ?? null} />
+        {props.online ? <Button disabled={props.busy} onPress={props.onRetry}>Retry</Button> : null}
+      </Drawer>
     </>
   );
 }

@@ -1,8 +1,9 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useContext, useRef, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { Row, Text, Touchable, YouBadge, colors, durations, radii, rules, sizes, strokes, withTransition } from '../design';
 import { memberName } from '../model/expenses';
 import { MemberAvatar, type MemberListApp } from './MemberList';
+import { CompactHeaderContext } from './pageScroll';
 import { Reveal } from './Reveal';
 
 export type MemberChoiceProps = {
@@ -80,6 +81,24 @@ function MemberChoiceRow(props: { app: MemberListApp; memberId: string; you: boo
   );
 }
 
+/**
+ * Scrolls the page just enough to show a closed choice again after a name
+ * was picked further down its list, keeping it clear of the compact header
+ * that the page scrolls under.
+ */
+function bringIntoView(target: unknown, headerHeight: number): void {
+  if (!(target instanceof HTMLElement)) return;
+  const page = target.closest<HTMLElement>('#splitnext-page');
+
+  if (!page) return;
+  const box = target.getBoundingClientRect();
+  const area = page.getBoundingClientRect();
+  const top = area.top + headerHeight;
+
+  if (box.top < top) page.scrollBy({ top: box.top - top, behavior: 'smooth' });
+  else if (box.bottom > area.bottom) page.scrollBy({ top: box.bottom - area.bottom, behavior: 'smooth' });
+}
+
 /** A labelled member row that opens the names in place, as for who paid. */
 export function MemberChoice(props: MemberChoiceProps) {
   const [open, setOpen] = useState(false);
@@ -88,6 +107,7 @@ export function MemberChoice(props: MemberChoiceProps) {
   const snapshot = replica?.projected_snapshot;
   const name = props.value ? memberName(snapshot, props.value) : '';
   const showing = open && !props.disabled;
+  const headerHeight = useContext(CompactHeaderContext).height;
   // Every name (yours with its "you"), measured unseen, so each row's name takes the widest one's
   // room: the avatars then stand in one column, the names start in line,
   // and the closed choice sits exactly where its row in the list does.
@@ -143,6 +163,7 @@ export function MemberChoice(props: MemberChoiceProps) {
                 onPress={() => {
                   setOpen(false);
                   props.onChange(memberId);
+                  bringIntoView(toggle.current, headerHeight);
                 }}
               />
             ))}
