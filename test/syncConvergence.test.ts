@@ -77,7 +77,6 @@ const expenseEntry = {
   participants: fc.uniqueArray(pick, { minLength: 1, maxLength: 4 }),
   exact: fc.option(fc.nat({ max: 50 })),
   total: fc.integer({ min: 1, max: 1_000 }),
-  currency: fc.constantFrom('EUR', 'JPY'),
 };
 
 /** One generator per group command; members are picked from the sender's projection. */
@@ -90,10 +89,10 @@ const commandArbitrary = fc.oneof(
   fc.record({ type: fc.constant('member.restore' as const), member: pick }),
   fc.record({ type: fc.constant('preference.set' as const), member: pick }),
   fc.record({ type: fc.constant('group.leave' as const) }),
-  fc.record({ type: fc.constant('settlement.edit' as const), settlement: pick, from: pick, to: pick, amount: fc.integer({ min: 1, max: 2000 }), currency: fc.constantFrom('EUR', 'JPY') }),
+  fc.record({ type: fc.constant('settlement.edit' as const), settlement: pick, from: pick, to: pick, amount: fc.integer({ min: 1, max: 2000 }) }),
   fc.record({ type: fc.constant('settlement.remove' as const), settlement: pick }),
   fc.record({ type: fc.constant('settlement.restore' as const), settlement: pick }),
-  fc.record({ type: fc.constant('settlement.record' as const), from: pick, to: pick, amount: fc.integer({ min: 1, max: 2000 }), currency: fc.constantFrom('EUR', 'JPY') }),
+  fc.record({ type: fc.constant('settlement.record' as const), from: pick, to: pick, amount: fc.integer({ min: 1, max: 2000 }) }),
   fc.record({ type: fc.constant('expense.record' as const), ...expenseEntry }),
   fc.record({ type: fc.constant('expense.edit' as const), expense: pick, ...expenseEntry }),
   fc.record({ type: fc.constant('expense.remove' as const), expense: pick }),
@@ -153,7 +152,7 @@ function intentFor(command: CommandStep, snapshot: GroupSnapshot, history: reado
       const to = member(command.to);
 
       if (!from || !to) return null;
-      const payload = { from_member_id: from, to_member_id: to, amount: command.amount, currency: command.currency };
+      const payload = { from_member_id: from, to_member_id: to, amount: command.amount };
 
       if (command.type === 'settlement.record') return { type: command.type, payload };
       const current = snapshot.settlements[command.settlement % Math.max(1, snapshot.settlements.length)];
@@ -181,7 +180,7 @@ function intentFor(command: CommandStep, snapshot: GroupSnapshot, history: reado
       const exact = command.exact !== null && rest.length && first ? Math.min(command.exact, command.total) : null;
 
       const entry = {
-        description: 'Expense', currency: command.currency, total: command.total, paid_by: payer,
+        description: 'Expense', total: command.total, paid_by: payer,
         parts: participants.map((memberId) =>
           memberId === first && exact !== null
             ? { kind: 'exact' as const, member_id: memberId, amount: exact }

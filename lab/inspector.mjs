@@ -21,7 +21,7 @@ function drafts(ui) {
 
     const filled = Object.entries(value).filter(
       ([key, field]) =>
-        !["currency", "expectedVersion", "expectedName", "mode", "revision"].includes(key) &&
+        !["expectedVersion", "expectedName", "mode", "revision"].includes(key) &&
         field !== "" &&
         field !== null &&
         field !== false &&
@@ -89,7 +89,7 @@ function overview(state) {
           "Latest expenses",
           rows(expenses, (e) => [
             h("span", "", e.description),
-            muted(money({ amount: e.total, currency: e.currency })),
+            muted(money(e.total)),
             muted(e.paid?.map((p) => members.get(p.member_id) ?? "?").join(", ") ?? ""),
           ]),
         ),

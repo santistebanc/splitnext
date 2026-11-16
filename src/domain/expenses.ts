@@ -4,12 +4,10 @@ import type { LedgerMember } from './members';
 import {
   allocate,
   balances,
-  currencyCodeSchema,
   minorAmountSchema,
   type AllocationError,
   type AllocationPart,
-  type CurrencyBalances,
-  type CurrencyCode,
+  type Balances,
   type RoundingBurden,
 } from './money';
 import type { GroupSnapshot } from './sync';
@@ -32,7 +30,6 @@ const allocationSchema = z.object({ member_id: identifierSchema, amount: minorAm
 /** What a person enters for an expense; the group allocates it. */
 export const expenseEntrySchema = z.object({
   description: expenseDescriptionSchema,
-  currency: currencyCodeSchema,
   total: minorAmountSchema.min(1),
   paid_by: identifierSchema,
   parts: z.array(allocationPartSchema).min(1).max(100),
@@ -44,7 +41,6 @@ export type ExpenseEntry = z.output<typeof expenseEntrySchema>;
 export function entryOf(payload: ExpenseEntry): ExpenseEntry {
   return {
     description: payload.description,
-    currency: payload.currency,
     total: payload.total,
     paid_by: payload.paid_by,
     parts: payload.parts,
@@ -54,7 +50,6 @@ export function entryOf(payload: ExpenseEntry): ExpenseEntry {
 export const expenseSchema = z.object({
   id: identifierSchema,
   description: z.string(),
-  currency: currencyCodeSchema,
   total: minorAmountSchema,
   /** One payer for now; a list so several payers fit without a new model. */
   paid: z.array(allocationSchema),
@@ -84,19 +79,18 @@ export function memberHasRecords(snapshot: GroupSnapshot, memberId: string): boo
 }
 
 /**
- * The extra minor units each member has absorbed in a currency, counted from
+ * The extra hundredths each member has absorbed, counted from
  * the expenses that are not removed, so removing, restoring, or editing one
  * changes it exactly. An edit leaves out the expense it replaces.
  */
 export function roundingBurden(
   snapshot: GroupSnapshot,
-  currency: CurrencyCode,
   exceptExpenseId?: string,
 ): RoundingBurden {
   const burden: RoundingBurden = {};
 
   for (const expense of snapshot.expenses) {
-    if (expense.status === 'removed' || expense.currency !== currency || expense.id === exceptExpenseId) continue;
+    if (expense.status === 'removed' || expense.id === exceptExpenseId) continue;
 
     for (const memberId of expense.extras) burden[memberId] = (burden[memberId] ?? 0) + 1;
   }
@@ -117,7 +111,6 @@ export function sameEntry(expense: Expense, entry: ExpenseEntry): boolean {
 
   return (
     expense.description === entry.description &&
-    expense.currency === entry.currency &&
     expense.total === entry.total &&
     expense.paid.length === 1 &&
     expense.paid[0]?.member_id === entry.paid_by &&
@@ -125,13 +118,13 @@ export function sameEntry(expense: Expense, entry: ExpenseEntry): boolean {
   );
 }
 
-/** Allocates an entry against the group's current rounding burden in its currency. */
+/** Allocates an entry against the group's current rounding burden. */
 export function allocateEntry(snapshot: GroupSnapshot, entry: ExpenseEntry, exceptExpenseId?: string): AllocatedEntry {
   const known = new Set(snapshot.members.map((member) => member.id));
 
   if (!expenseMemberIds(entry).every((memberId) => known.has(memberId))) return { ok: false, error: 'member_not_found' };
 
-  const burden = roundingBurden(snapshot, entry.currency, exceptExpenseId);
+  const burden = roundingBurden(snapshot, exceptExpenseId);
   const result = allocate(entry.total, entry.parts, burden);
 
   if (!result.ok) return result;
@@ -170,7 +163,7 @@ export function keepNamedMembers(snapshot: GroupSnapshot, memberIds: readonly st
   return { members, hidden };
 }
 
-/** Balances per currency from the expenses that are not removed; currencies never combine. */
-export function groupBalances(snapshot: GroupSnapshot): Record<CurrencyCode, CurrencyBalances> {
+/** Each member's one balance from the expenses and repayments that are not removed. */
+export function groupBalances(snapshot: GroupSnapshot): Balances {
   return balances(snapshot.expenses.filter((expense) => expense.status === 'active'), snapshot.settlements.filter((record) => record.status === 'active'));
 }

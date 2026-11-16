@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, type TextInput } from 'react-native';
-import { activeMembers, formatAmount, minorDigits, parseAmount, preferredMember } from '@splitnext/client';
+import { activeMembers, amountDigits, formatAmount, parseAmount, preferredMember } from '@splitnext/client';
 import { Button, Checkbox, ErrorMessage, Field, IconButton, Row, Text, Touchable, YouBadge, avatarTints, between, colors, durations, inputStyle, opacities, rules, sizes, withTransition } from '../design';
 import { memberTint } from '../model/memberPresentation';
 import { entryFromDraft, expenseLabel, memberName, moneyLabel, previewAllocation, type ExpenseDraft, type ExpenseDraftPart } from '../model/expenses';
@@ -69,7 +69,7 @@ function splitSummary(draft: ExpenseDraft, preview: Map<string, number>): string
   if (draft.parts.some((part) => part.kind === 'exact' || part.shares !== 1)) return people;
   const each = preview.get(draft.parts[0]!.member_id);
 
-  return each !== undefined ? `${moneyLabel(each, draft.currency)} each` : 'Enter an amount to split';
+  return each !== undefined ? `${moneyLabel(each)} each` : 'Enter an amount to split';
 }
 
 /** A − or + beside a person's shares, with a full touch target. */
@@ -87,16 +87,16 @@ function ShareStep(props: { sign: '−' | '+'; label: string; disabled: boolean;
  * rest, and at the end whether they share it.
  * `sharing` counts the people dividing the rest by shares.
  */
-function ExpenseSplitRow(props: { replica: Replica; memberId: string; name: string; you: boolean; part: ExpenseDraftPart | undefined; owed: number | undefined; currency: string; hasAmount: boolean; sharing: number; amountWidth: number }) {
+function ExpenseSplitRow(props: { replica: Replica; memberId: string; name: string; you: boolean; part: ExpenseDraftPart | undefined; owed: number | undefined; hasAmount: boolean; sharing: number; amountWidth: number }) {
   const edit = useActionCall();
   const [editing, setEditing] = useState(false);
   const input = useRef<AmountInputHandle>(null);
   const fixed = props.part?.kind === 'exact';
   const included = Boolean(props.part);
   const shares = props.part?.kind === 'shares' ? props.part.shares : 1;
-  const value = props.part?.kind === 'exact' ? props.part.amount : formatAmount(props.owed ?? 0, props.currency);
-  const parsed = parseAmount(value, props.currency);
-  const shown = parsed === null ? value : moneyLabel(parsed, props.currency);
+  const value = props.part?.kind === 'exact' ? props.part.amount : formatAmount(props.owed ?? 0);
+  const parsed = parseAmount(value);
+  const shown = parsed === null ? value : moneyLabel(parsed);
   const fixing = { memberId: props.memberId, amount: value };
   const member = { memberId: props.memberId };
   const canFix = props.hasAmount && edit.can('setExpenseFixedAmount', fixing);
@@ -144,12 +144,11 @@ function ExpenseSplitRow(props: { replica: Replica; memberId: string; name: stri
                 inputRef={input}
                 label={`Amount for ${props.name}`}
                 value={value}
-                currency={props.currency}
                 height={40}
                 fontSize={15}
                 editable={edit.can('setExpenseFixedAmount', { memberId: props.memberId, amount: '' })}
                 onChangeText={(amount) => {
-                  if (!fixed && (!amount.trim() || parseAmount(amount, props.currency) === props.owed)) return;
+                  if (!fixed && (!amount.trim() || parseAmount(amount) === props.owed)) return;
                   void edit.call('setExpenseFixedAmount', { memberId: props.memberId, amount });
                 }}
                 onFocus={() => setEditing(true)}
@@ -235,7 +234,7 @@ export function ExpenseControls() {
   // The amount as shown, grouped in threes, fits the width: up to "999,999.99"
   // at full size, and longer figures in proportion.
   const whole = Math.max(1, (draft.amount.split('.')[0] ?? '').length);
-  const shownLength = whole + Math.floor((whole - 1) / 3) + 1 + minorDigits(draft.currency);
+  const shownLength = whole + Math.floor((whole - 1) / 3) + 1 + amountDigits;
   const amountFit = Math.min(1, 10 / shownLength);
 
   return (
@@ -247,7 +246,6 @@ export function ExpenseControls() {
             inputRef={amount}
             align="right"
             value={draft.amount}
-            currency={draft.currency}
             onChangeText={(value) => change('expense.amount', value)}
             onSubmitEditing={submitAmount}
             enterKeyHint={amountSaves ? 'done' : 'next'}
@@ -314,13 +312,13 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
   const [amountWidth, setAmountWidth] = useState(0);
 
   const widestAmount = draft.parts.map((part) => {
-    const plain = part.kind === 'exact' ? part.amount : formatAmount(preview.get(part.member_id) ?? 0, draft.currency);
-    const parsed = parseAmount(plain, draft.currency);
+    const plain = part.kind === 'exact' ? part.amount : formatAmount(preview.get(part.member_id) ?? 0);
+    const parsed = parseAmount(plain);
 
-    return parsed === null ? plain : moneyLabel(parsed, draft.currency);
+    return parsed === null ? plain : moneyLabel(parsed);
   }).reduce((widest, value) => value.length > widest.length ? value : widest, '');
 
-  const total = parseAmount(draft.amount, draft.currency) ?? 0;
+  const total = parseAmount(draft.amount) ?? 0;
   const hasAmount = total > 0;
   const hue = (memberId: string) => avatarTints[memberTint(snapshot, memberId) % avatarTints.length] ?? colors.tint;
   const included = draft.parts.map((part) => part.member_id);
@@ -361,7 +359,7 @@ export function ExpenseEditor(props: ExpenseEditorProps) {
       <View style={{ paddingTop: 8 }}>
         <Text aria-hidden pointerEvents="none" numberOfLines={1} onLayout={(event) => setAmountWidth(Math.ceil(event.nativeEvent.layout.width))} variant="figure" style={{ position: 'absolute', opacity: 0 }}>{widestAmount}</Text>
         {members.map((member) => (
-          replica ? <ExpenseSplitRow key={member.id} replica={replica} memberId={member.id} name={memberName(snapshot, member.id)} you={member.id === you} part={draft.parts.find((part) => part.member_id === member.id)} owed={preview.get(member.id)} currency={draft.currency} hasAmount={hasAmount} sharing={sharing} amountWidth={amountWidth} /> : null
+          replica ? <ExpenseSplitRow key={member.id} replica={replica} memberId={member.id} name={memberName(snapshot, member.id)} you={member.id === you} part={draft.parts.find((part) => part.member_id === member.id)} owed={preview.get(member.id)} hasAmount={hasAmount} sharing={sharing} amountWidth={amountWidth} /> : null
         ))}
       </View>
 

@@ -21,7 +21,7 @@ describe('expense sync commands', () => {
     const expenseId = createIdentifier();
 
     const entry = {
-      description: 'Dinner', currency: 'EUR', total: 1001, paid_by: santi,
+      description: 'Dinner', total: 1001, paid_by: santi,
       parts: [{ kind: 'shares', member_id: santi, shares: 1 }],
     };
 
@@ -60,7 +60,7 @@ describe('expense sync commands', () => {
         command_id: createIdentifier(),
         type: 'expense.record',
         payload: {
-          expense_id: createIdentifier(), description: 'Dinner', currency: 'euro', total: 10.5,
+          expense_id: createIdentifier(), description: 'Dinner', total: 10.5,
           paid_by: fixture.created.member.id, parts: [],
         },
       },

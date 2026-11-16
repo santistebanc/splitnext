@@ -6,7 +6,6 @@ import { affectsBalances } from '../apps/client/src/model/activity';
 const lunch: Expense = {
   id: 'expense-1',
   description: 'Lunch',
-  currency: 'EUR',
   total: 2000,
   paid: [{ member_id: 'ana', amount: 2000 }],
   parts: [{ member_id: 'ana', kind: 'shares', shares: 1 }, { member_id: 'ben', kind: 'shares', shares: 1 }],

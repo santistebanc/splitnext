@@ -51,7 +51,7 @@ export function sourceOptions(
       return (group?.activity ?? []).map((event) => ({ value: event.id, label: event.change.action }));
     case 'settlement':
     case 'removedSettlement':
-      return (snapshot?.settlements ?? []).filter((entry) => entry.status === (source === 'settlement' ? 'active' : 'removed')).map((entry) => ({ value: entry.id, label: `${entry.amount} ${entry.currency}` }));
+      return (snapshot?.settlements ?? []).filter((entry) => entry.status === (source === 'settlement' ? 'active' : 'removed')).map((entry) => ({ value: entry.id, label: `${entry.amount}` }));
     case 'repaymentMember':
       return repaymentMembers(snapshot).map((member) => ({ value: member.id, label: label(member) }));
     case 'member':

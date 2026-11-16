@@ -1,5 +1,5 @@
 import { preferredMember, repaymentMembers, type InvitePreview } from '@splitnext/client';
-import { draftForExpense, noCurrency, type ExpenseDraft } from './expenses';
+import { draftForExpense, type ExpenseDraft } from './expenses';
 import type { AppState } from './controller';
 import {
   enterView,
@@ -70,7 +70,7 @@ type UiContext = {
   create: { name: string; yourName: string };
   settings: { name: string; expectedName: string };
   expense: ExpenseDraft;
-  repayment: { from: string; to: string; amount: string; currency: string; settlementId: string | null; expectedVersion: number | null; manual: boolean };
+  repayment: { from: string; to: string; amount: string; settlementId: string | null; expectedVersion: number | null; manual: boolean };
   /**
    * The kind a new entry started as once it has switched between expense and
    * repayment, when both drafts belong to it; null otherwise.
@@ -149,8 +149,8 @@ export class AppUiState {
       navigation: { revision: 0, mode: 'replace' },
       create: { name: '', yourName: readName() ?? '' },
       settings: { name, expectedName: name },
-      expense: draftForExpense(null, null, noCurrency),
-      repayment: { from: '', to: '', amount: '', currency: noCurrency, settlementId: null, expectedVersion: null, manual: false },
+      expense: draftForExpense(null, null),
+      repayment: { from: '', to: '', amount: '', settlementId: null, expectedVersion: null, manual: false },
       entryStart: null,
       join: {
         link: initialLink,
@@ -284,7 +284,7 @@ export class AppUiState {
         confirmation: null,
         memberEdit: null,
         trail: this.trailTo('expense'),
-        expense: draftForExpense(snapshot, expense, noCurrency, this.readApp().group?.session?.identity.id),
+        expense: draftForExpense(snapshot, expense, this.readApp().group?.session?.identity.id),
         entryStart: null,
       },
     );
@@ -310,11 +310,11 @@ export class AppUiState {
       const kept = entryLinked && repayment.to !== from && members.some((member) => member.id === repayment.to) ? repayment.to : '';
       const to = kept || (you && you !== from ? you : members.find((member) => member.id !== from)?.id ?? '');
 
-      this.show('settlements', 'replace', { trail, with: { entryStart, repayment: { from, to, amount: expense.amount, currency: expense.currency, settlementId: null, expectedVersion: null, manual: true } } });
+      this.show('settlements', 'replace', { trail, with: { entryStart, repayment: { from, to, amount: expense.amount, settlementId: null, expectedVersion: null, manual: true } } });
     } else {
-      const base = entryLinked ? expense : draftForExpense(snapshot, null, noCurrency, group?.session?.identity.id);
+      const base = entryLinked ? expense : draftForExpense(snapshot, null, group?.session?.identity.id);
 
-      this.show('expense', 'replace', { trail, with: { entryStart, expense: { ...base, amount: repayment.amount, currency: repayment.currency, paidBy: repayment.from || base.paidBy } } });
+      this.show('expense', 'replace', { trail, with: { entryStart, expense: { ...base, amount: repayment.amount, paidBy: repayment.from || base.paidBy } } });
     }
   }
 

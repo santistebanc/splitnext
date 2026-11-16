@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { NumericFormat } from 'react-number-format';
-import { formatAmount, minorDigits } from '@splitnext/client';
+import { amountDigits, formatAmount } from '@splitnext/client';
 import { digitGroupSeparator } from '../model/expenses';
 import { colors, fonts, strokes } from '../design';
 import type { AmountInputProps } from './AmountInput';
@@ -35,13 +35,13 @@ export function AmountInput(props: AmountInputProps) {
         if (props.inline) event.currentTarget.select();
       }}
       onBlur={props.onBlur}
-      placeholder={formatAmount(0, props.currency)}
+      placeholder={formatAmount(0)}
       inputMode="decimal"
       enterKeyHint={props.enterKeyHint ?? 'done'}
       autoComplete="off"
       value={props.value}
       valueIsNumericString
-      decimalScale={minorDigits(props.currency)}
+      decimalScale={amountDigits}
       fixedDecimalScale
       decimalSeparator="."
       allowedDecimalSeparators={['.', ',']}
@@ -95,7 +95,7 @@ export function AmountInput(props: AmountInputProps) {
         const text = plainDecimal(event.clipboardData.getData('text'));
 
         // Reject ambiguous or over-precise pasted amounts rather than changing their meaning.
-        if (!/^\d*(?:[.,]\d*)?$/.test(text) || (text.split(/[.,]/)[1]?.length ?? 0) > minorDigits(props.currency)) event.preventDefault();
+        if (!/^\d*(?:[.,]\d*)?$/.test(text) || (text.split(/[.,]/)[1]?.length ?? 0) > amountDigits) event.preventDefault();
       }}
       onKeyDown={(event) => {
         remember(event);

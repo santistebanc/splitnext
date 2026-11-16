@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { inverseIntent, undoProblem, undoExplanation, memberHasRecords, repaymentMembers, allocate, currencyCodeSchema, expenseDescriptionSchema, groupNameSchema, memberLabel, memberNameSchema, nameOrdinals, parseAmount, requiresServerDecision } from '@splitnext/client';
-import { balanceRows, entryFromDraft, equalParts, noCurrency } from '../expenses';
+import { inverseIntent, undoProblem, undoExplanation, memberHasRecords, repaymentMembers, allocate, expenseDescriptionSchema, groupNameSchema, memberLabel, memberNameSchema, nameOrdinals, parseAmount, requiresServerDecision } from '@splitnext/client';
+import { balanceRows, entryFromDraft, equalParts } from '../expenses';
 import { requireSettlement, unavailable, editorLock, defineAction, openSnapshot, requireExpense, requireExpenseEntry, expenseResource, requireMember, requireRemovedMember, requireNotice, requireName, memberResource, noticeResources, empty, choice, suggested } from './define';
 
 /** Changes to the shared ledger; they can queue offline. */
@@ -31,13 +31,13 @@ export const ledgerActions = {
     unavailable: ({ state, ui }) => {
       const draft = ui.repayment;
 
-      return ui.view === 'settlements' && draft.settlementId && draft.from !== draft.to && currencyCodeSchema.safeParse(draft.currency).success && [draft.from, draft.to].every((id) => openSnapshot(state)?.members.some((member) => member.id === id)) && (parseAmount(draft.amount, draft.currency) ?? 0) > 0 ? requireSettlement(state, draft.settlementId) : unavailable('invalid_input', 'Open a repayment and enter a positive amount.');
+      return ui.view === 'settlements' && draft.settlementId && draft.from !== draft.to && [draft.from, draft.to].every((id) => openSnapshot(state)?.members.some((member) => member.id === id)) && (parseAmount(draft.amount) ?? 0) > 0 ? requireSettlement(state, draft.settlementId) : unavailable('invalid_input', 'Open a repayment and enter a positive amount.');
     },
     run: async (host, input, ui) => {
       const draft = ui.snapshot().repayment;
 
       if (!draft.settlementId || !draft.expectedVersion) throw new Error('settlement_not_found');
-      await host.submit({ type: 'settlement.edit', payload: { settlement_id: draft.settlementId, expected_version: draft.expectedVersion, from_member_id: draft.from, to_member_id: draft.to, currency: draft.currency, amount: parseAmount(draft.amount, draft.currency) ?? 0 } });
+      await host.submit({ type: 'settlement.edit', payload: { settlement_id: draft.settlementId, expected_version: draft.expectedVersion, from_member_id: draft.from, to_member_id: draft.to, amount: parseAmount(draft.amount) ?? 0 } });
       ui.changeRepayment({ amount: '', settlementId: null, expectedVersion: null });
     },
   }),
@@ -55,19 +55,17 @@ export const ledgerActions = {
   }),
   recordSettlement: defineAction({
     group: 'Ledger changes', description: 'Record money already repaid outside Splitnext.',
-    input: z.object({ from: choice('repaymentMember', 'Who paid.'), to: choice('repaymentMember', 'Who received it.'), amount: z.string(), currency: currencyCodeSchema.optional().meta({ description: 'Only for settling a balance recorded with a real currency before amounts became plain numbers.' }) }),
+    input: z.object({ from: choice('repaymentMember', 'Who paid.'), to: choice('repaymentMember', 'Who received it.'), amount: z.string() }),
     example: { from: 'member-1', to: 'member-2', amount: '10.00' }, requires: ['openGroup'],
     unavailable: ({ state }, input) => {
       if (!input) return repaymentMembers(openSnapshot(state)).length > 1 ? null : unavailable('member_not_found', 'Add another member first.');
       const members = repaymentMembers(openSnapshot(state));
 
-      return input.from !== input.to && members.some((member) => member.id === input.from) && members.some((member) => member.id === input.to) && (parseAmount(input.amount, input.currency ?? noCurrency) ?? 0) > 0
+      return input.from !== input.to && members.some((member) => member.id === input.from) && members.some((member) => member.id === input.to) && (parseAmount(input.amount) ?? 0) > 0
         ? null : unavailable('invalid_input', 'Choose two different members and a positive amount.');
     },
     run: async (host, input) => {
-      const currency = input.currency ?? noCurrency;
-
-      await host.submit({ type: 'settlement.record', payload: { from_member_id: input.from, to_member_id: input.to, currency, amount: parseAmount(input.amount, currency) ?? 0 } });
+      await host.submit({ type: 'settlement.record', payload: { from_member_id: input.from, to_member_id: input.to, amount: parseAmount(input.amount) ?? 0 } });
     },
   }),
   saveMemberEdit: defineAction({
@@ -186,8 +184,8 @@ export const ledgerActions = {
 
       if (missing || !input) return missing;
 
-      // Only a zero balance in every currency lets someone go.
-      return balanceRows(openSnapshot(state)).some(({ rows }) => rows.some((row) => row.member.id === input.memberId && row.amount !== 0))
+      // Only a zero balance lets someone go.
+      return balanceRows(openSnapshot(state)).some((row) => row.member.id === input.memberId && row.amount !== 0)
         ? unavailable('member_has_balance', 'Settle up with this person first.')
         : null;
     },
@@ -271,8 +269,7 @@ export const ledgerActions = {
         type: 'expense.record',
         payload: {
           description: input.description,
-          currency: noCurrency,
-          total: parseAmount(input.amount, noCurrency) ?? 0,
+          total: parseAmount(input.amount) ?? 0,
           paid_by: input.paidBy,
           parts: equalParts(openSnapshot(host.snapshot())),
         },
@@ -296,7 +293,7 @@ export const ledgerActions = {
 
       if (blocked || !input || !expense) return blocked;
 
-      return allocate(parseAmount(input.amount, expense.currency) ?? 0, expense.parts).ok
+      return allocate(parseAmount(input.amount) ?? 0, expense.parts).ok
         ? null
         : unavailable('invalid_input', 'The new amount does not fit how this expense is split.');
     },
@@ -311,8 +308,7 @@ export const ledgerActions = {
           expense_id: expense.id,
           expected_version: expense.version,
           description: input.description,
-          currency: expense.currency,
-          total: parseAmount(input.amount, expense.currency) ?? 0,
+          total: parseAmount(input.amount) ?? 0,
           paid_by: input.paidBy,
           parts: expense.parts,
         },

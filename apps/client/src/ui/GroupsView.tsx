@@ -166,21 +166,15 @@ export function WelcomeView() {
 
 /** Your balance and how it compares with your other groups, or why there is none. */
 function GroupBalance(props: { group: ClientGroupSummary }) {
-  const balances = props.group.stored_locally ? props.group.you_balances : undefined;
+  const balance = props.group.stored_locally ? props.group.you_balance : undefined;
 
-  if (balances === null) return <Text variant="figure" tone="muted">choose who you are</Text>;
+  if (balance === null) return <Text variant="figure" tone="muted">choose who you are</Text>;
 
-  if (balances === undefined) return <Text variant="figure" tone="muted">—</Text>;
+  if (balance === undefined) return <Text variant="figure" tone="muted">—</Text>;
 
-  if (!balances.length) return <View accessibilityLabel="settled"><CheckIcon size={18} color={colors.owed} /></View>;
+  if (!balance) return <View accessibilityLabel="settled"><CheckIcon size={18} color={colors.owed} /></View>;
 
-  return (
-    <Stack gap={8} align="end">
-      {balances.map(({ currency, amount }) => (
-        <Text key={currency} ref={morph(`gamt-${props.group.group_id}-${currency}`, { unclipped: true })} variant="figure" color={balanceColor(amount)}>{signedFigure(amount, currency)}</Text>
-      ))}
-    </Stack>
-  );
+  return <Text ref={morph(`gamt-${props.group.group_id}`, { unclipped: true })} variant="figure" color={balanceColor(balance)}>{signedFigure(balance)}</Text>;
 }
 
 /** Your groups as ruled rows with your balance in each, then the groups you left. */

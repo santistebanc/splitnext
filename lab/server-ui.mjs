@@ -442,9 +442,7 @@ function groupCard(group) {
   const snapshot = group.snapshot ?? {};
   const members = snapshot.members ?? [];
   const expenses = snapshot.expenses ?? [];
-  const totals = new Map();
-
-  for (const expense of expenses) totals.set(expense.currency, (totals.get(expense.currency) ?? 0) + expense.total);
+  const total = expenses.reduce((sum, expense) => sum + expense.total, 0);
   const names = h("div", "insp-chips");
 
   for (const member of members) names.append(chip(member.display_name, member.status === "active" ? "good" : undefined));
@@ -462,7 +460,7 @@ function groupCard(group) {
       [
         "Expenses",
         expenses.length
-          ? `${plural(expenses.length, "expense")}, ${[...totals].map(([currency, amount]) => money({ amount, currency })).join(" + ")}`
+          ? `${plural(expenses.length, "expense")}, ${money(total)}`
           : "none",
       ],
       ["Repayments", String(snapshot.settlements?.length ?? 0)],

@@ -64,8 +64,8 @@ export type ClientGroupSummary = {
   member_count: number | null;
   /** The member this identity calls “you” in the local copy, if any. */
   you_name: string | null;
-  /** Nonzero balances of you; null until a local preferred member is known. */
-  you_balances: { currency: string; amount: number }[] | null;
+  /** Your balance; null until a local preferred member is known. */
+  you_balance: number | null;
 };
 
 /** One coherent local document read, with only the requested full replicas. */
@@ -605,13 +605,6 @@ function summariesFrom(document: ClientStorageDocument): ClientGroupSummary[] {
         const active = activeMembers(projection);
         const you = preferredMember(projection, session.identity.id);
         const balances = groupBalances(projection);
-        const youBalances: { currency: string; amount: number }[] = [];
-
-        for (const currency of Object.keys(balances).sort()) {
-          const amount = you ? balances[currency]?.[you.id] ?? 0 : 0;
-
-          if (amount) youBalances.push({ currency, amount });
-        }
 
         return {
           group_id: replica.group_id,
@@ -621,7 +614,7 @@ function summariesFrom(document: ClientStorageDocument): ClientGroupSummary[] {
           pending_commands: replica.outbox.length,
           member_count: active.length,
           you_name: you?.display_name ?? null,
-          you_balances: you ? youBalances : null,
+          you_balance: you ? balances[you.id] ?? 0 : null,
         };
       })
     : [];
@@ -639,7 +632,7 @@ function summariesFrom(document: ClientStorageDocument): ClientGroupSummary[] {
         pending_commands: 0,
         member_count: null,
         you_name: null,
-        you_balances: null,
+        you_balance: null,
       }),
     );
 

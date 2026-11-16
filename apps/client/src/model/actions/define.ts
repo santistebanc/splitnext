@@ -1,7 +1,6 @@
 import type { ActionExecutions, PendingExecution } from '../executions';
 import { z } from 'zod';
 import { activeMembers, expenseDescriptionSchema, parseAmount, type JsonValue } from '@splitnext/client';
-import { noCurrency } from '../expenses';
 import type { ActionInvocation, AppController, AppState } from '../controller';
 import type { AppUiState, SeenStorage, UiState } from '../uiState';
 import type { ValueSource } from '../actionInputs';
@@ -416,7 +415,7 @@ export function requireExpenseEntry(input?: { description: string; amount: strin
 
   return (
     requireName(expenseDescriptionSchema, input.description, 'description') ??
-    (parseAmount(input.amount, noCurrency) ? null : unavailable('invalid_input', 'Enter an amount, such as 12.50.'))
+    (parseAmount(input.amount) ? null : unavailable('invalid_input', 'Enter an amount, such as 12.50.'))
   );
 }
 

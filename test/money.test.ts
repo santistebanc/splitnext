@@ -5,7 +5,6 @@ import {
   balances,
   expenseBalances,
   formatAmount,
-  minorDigits,
   parseAmount,
   type AllocationPart,
   type LedgerExpense,
@@ -16,7 +15,7 @@ import {
 /**
  * Properties of the money module: every split sums exactly to its total in
  * whole minor units, each share stays within one unit of its exact amount,
- * rounding extras rotate fairly, and balances net to zero per currency.
+ * rounding extras rotate fairly, and balances net to zero.
  */
 
 const members = ['ana', 'ben', 'cy', 'dee', 'eli', 'fay'];
@@ -143,83 +142,67 @@ describe('money allocation', () => {
 });
 
 describe('money amounts', () => {
-  it('uses each currency’s minor unit', () => {
-    expect([minorDigits('EUR'), minorDigits('JPY'), minorDigits('KWD')]).toEqual([2, 0, 3]);
-    expect(parseAmount('12.5', 'EUR')).toBe(1250);
-    expect(parseAmount('12.505', 'EUR')).toBeNull();
-    expect(parseAmount('1200', 'JPY')).toBe(1200);
-    expect(parseAmount('12.5', 'JPY')).toBeNull();
-    expect(parseAmount('1.234', 'KWD')).toBe(1234);
-    expect(parseAmount('-1', 'EUR')).toBeNull();
-    expect(parseAmount('1e3', 'EUR')).toBeNull();
-    expect(parseAmount('0.1', 'EUR')).toBe(10);
-    expect(formatAmount(5, 'EUR')).toBe('0.05');
-    expect(formatAmount(1200, 'JPY')).toBe('1200');
+  it('takes plain amounts with two decimals', () => {
+    expect(parseAmount('12.5')).toBe(1250);
+    expect(parseAmount('12.505')).toBeNull();
+    expect(parseAmount('1200')).toBe(120000);
+    expect(parseAmount('-1')).toBeNull();
+    expect(parseAmount('1e3')).toBeNull();
+    expect(parseAmount('0.1')).toBe(10);
+    expect(formatAmount(5)).toBe('0.05');
+    expect(formatAmount(120000)).toBe('1200.00');
   });
 
-  it('formats and parses back to the same minor units', () => {
+  it('formats and parses back to the same hundredths', () => {
     fc.assert(
-      fc.property(fc.nat({ max: 1e12 }), fc.constantFrom('EUR', 'JPY', 'KWD', 'USD'), (minor, currency) => {
-        expect(parseAmount(formatAmount(minor, currency), currency)).toBe(minor);
+      fc.property(fc.nat({ max: 1e12 }), (minor) => {
+        expect(parseAmount(formatAmount(minor))).toBe(minor);
       }),
     );
   });
 });
 
 describe('balances', () => {
-  const currencyArbitrary = fc.constantFrom('EUR', 'USD', 'JPY');
-
   const expenseArbitrary = fc
-    .record({ currency: currencyArbitrary, payer: fc.constantFrom(...members), parts: partsArbitrary, extra: fc.integer({ min: 1, max: 100_000 }) })
-    .map(({ currency, payer, parts, extra }) => {
+    .record({ payer: fc.constantFrom(...members), parts: partsArbitrary, extra: fc.integer({ min: 1, max: 100_000 }) })
+    .map(({ payer, parts, extra }) => {
       const total = exactTotal(parts) + extra;
       const result = allocate(total, parts);
 
       if (!result.ok) throw new Error(result.error);
 
-      const expense = { currency, paid: [{ member_id: payer, amount: total }], allocations: result.allocations } satisfies LedgerExpense;
+      const expense = { paid: [{ member_id: payer, amount: total }], allocations: result.allocations } satisfies LedgerExpense;
 
       return { expense, total };
     });
 
   const settlementArbitrary = fc.record({
-    currency: currencyArbitrary,
     from_member_id: fc.constantFrom(...members),
     to_member_id: fc.constantFrom(...members),
     amount: fc.integer({ min: 1, max: 10_000 }),
   });
 
-  it('net to zero in every currency and never mix currencies', () => {
+  it('net to zero', () => {
     fc.assert(
       fc.property(fc.array(expenseArbitrary, { maxLength: 20 }), fc.array(settlementArbitrary, { maxLength: 10 }), (entries, settlements: LedgerSettlement[]) => {
         for (const { expense, total } of entries) expect(expenseBalances(expense, total)).toBe(true);
 
         const result = balances(entries.map((entry) => entry.expense), settlements);
 
-        for (const [currency, perMember] of Object.entries(result)) {
-          expect(Object.values(perMember).reduce((sum, amount) => sum + amount, 0), currency).toBe(0);
-
-          // Each currency's balances come only from its own expenses and settlements.
-          const own = balances(
-            entries.flatMap((entry) => (entry.expense.currency === currency ? [entry.expense] : [])),
-            settlements.filter((settlement) => settlement.currency === currency),
-          );
-
-          expect(own[currency] ?? {}).toEqual(perMember);
-        }
+        expect(Object.values(result).reduce((sum, amount) => sum + amount, 0)).toBe(0);
       }),
     );
   });
 
-  it('keeps balances separate per currency, as in the product spec example', () => {
+  it('gives each member one balance, as in the product spec example', () => {
     const result = balances(
       [
-        { currency: 'EUR', paid: [{ member_id: 'santi', amount: 6000 }], allocations: [{ member_id: 'santi', amount: 3000 }, { member_id: 'robin', amount: 3000 }] },
-        { currency: 'USD', paid: [{ member_id: 'robin', amount: 4000 }], allocations: [{ member_id: 'santi', amount: 2000 }, { member_id: 'robin', amount: 2000 }] },
+        { paid: [{ member_id: 'santi', amount: 6000 }], allocations: [{ member_id: 'santi', amount: 3000 }, { member_id: 'robin', amount: 3000 }] },
+        { paid: [{ member_id: 'robin', amount: 4000 }], allocations: [{ member_id: 'santi', amount: 2000 }, { member_id: 'robin', amount: 2000 }] },
       ],
-      [{ currency: 'EUR', from_member_id: 'robin', to_member_id: 'santi', amount: 1000 }],
+      [{ from_member_id: 'robin', to_member_id: 'santi', amount: 1000 }],
     );
 
-    expect(result).toEqual({ EUR: { santi: 2000, robin: -2000 }, USD: { robin: 2000, santi: -2000 } });
+    expect(result).toEqual({ santi: 0, robin: 0 });
   });
 });

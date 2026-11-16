@@ -2064,6 +2064,7 @@ test('keeps Settle up rows whole with very long names and amounts', async ({ pag
     for (const name of await drawer.getByText(long, { exact: true }).all()) {
       expect((await name.boundingBox())!.height).toBeLessThan(30);
     }
+
     await expect(drawer.getByText('Jaqy Gypsy', { exact: true })).toBeVisible();
 
     await page.screenshot({ path: testInfo.outputPath(`settle-up-long-${width}.png`) });

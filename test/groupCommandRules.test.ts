@@ -44,7 +44,7 @@ function member(memberId: string, name: string, status: LedgerMember['status'] =
 
 function expense(expenseId: string, detail: Partial<Expense>): Expense {
   return {
-    id: expenseId, description: 'Dinner', currency: 'EUR', total: 1000,
+    id: expenseId, description: 'Dinner', total: 1000,
     paid: [{ member_id: ana, amount: 1000 }],
     parts: [{ kind: 'shares', member_id: ana, shares: 1 }, { kind: 'shares', member_id: ben, shares: 1 }],
     allocations: [{ member_id: ana, amount: 500 }, { member_id: ben, amount: 500 }],
@@ -91,7 +91,7 @@ const restore = (memberId: string): GroupCommand =>
 
 /** Ana pays, shared equally by the given members. */
 const entry = (total: number, members: string[], description = 'Dinner') => ({
-  description, currency: 'EUR', total, paid_by: ana,
+  description, total, paid_by: ana,
   parts: members.map((memberId) => ({ kind: 'shares' as const, member_id: memberId, shares: 1 })),
 });
 
@@ -135,7 +135,7 @@ const memberState = (detail: Partial<LedgerMember>): ServerState => ({ kind: 'me
 
 const expenseState = (detail: Partial<Expense>): ServerState => ({ kind: 'expense', expense: detail });
 
-const repayment = (from: string, to: string): GroupCommand => ({ command_id: commandId, type: 'settlement.record', payload: { settlement_id: id('repayment'), from_member_id: from, to_member_id: to, currency: 'EUR', amount: 300 } });
+const repayment = (from: string, to: string): GroupCommand => ({ command_id: commandId, type: 'settlement.record', payload: { settlement_id: id('repayment'), from_member_id: from, to_member_id: to, amount: 300 } });
 
 const rows: Row[] = [
   { situation: 'records a separate repayment', command: repayment(ben, ana), status: 'applied', reason: null, state: { kind: 'settlement', settlement: { amount: 300 } } },
@@ -223,8 +223,8 @@ describe('group command rules', () => {
 });
 
 const settlementFixture = { ...snapshot, settlements: [
-  { id: id('repayment-active'), from_member_id: ben, to_member_id: ana, currency: 'EUR', amount: 300, status: 'active' as const, version: 2, created_at: at, updated_at: at },
-  { id: id('repayment-removed'), from_member_id: ben, to_member_id: ana, currency: 'EUR', amount: 300, status: 'removed' as const, version: 3, created_at: at, updated_at: at },
+  { id: id('repayment-active'), from_member_id: ben, to_member_id: ana, amount: 300, status: 'active' as const, version: 2, created_at: at, updated_at: at },
+  { id: id('repayment-removed'), from_member_id: ben, to_member_id: ana, amount: 300, status: 'removed' as const, version: 3, created_at: at, updated_at: at },
 ] };
 
 const settlementRows: { type: 'settlement.edit' | 'settlement.remove' | 'settlement.restore'; record: string; version?: number; amount?: number; status: string; reason: string | null }[] = [
@@ -243,7 +243,7 @@ const settlementRows: { type: 'settlement.edit' | 'settlement.remove' | 'settlem
 
 it.each(settlementRows)('$type $record version $version amount $amount produces $status', (row) => {
   const payload = { settlement_id: id(`repayment-${row.record}`) };
-  const command: GroupCommand = row.type === 'settlement.edit' ? { command_id: commandId, type: row.type, payload: { ...payload, from_member_id: ben, to_member_id: ana, currency: 'EUR', amount: row.amount ?? 200, expected_version: row.version ?? 1 } } : { command_id: commandId, type: row.type, payload };
+  const command: GroupCommand = row.type === 'settlement.edit' ? { command_id: commandId, type: row.type, payload: { ...payload, from_member_id: ben, to_member_id: ana, amount: row.amount ?? 200, expected_version: row.version ?? 1 } } : { command_id: commandId, type: row.type, payload };
   const result = applyGroupCommand(settlementFixture, me, command, later);
   expect({ status: result.status, reason: result.reason }).toEqual({ status: row.status, reason: row.reason });
 });
@@ -325,11 +325,11 @@ it('rejects duplicate repayment identifiers and invalid edited member references
   const existing = settlementFixture.settlements[0];
 
   if (!existing) throw new Error('missing fixture');
-  const recorded = applyGroupCommand(settlementFixture, me, { command_id: commandId, type: 'settlement.record', payload: { settlement_id: existing.id, from_member_id: ben, to_member_id: ana, amount: 300, currency: 'EUR' } }, later);
+  const recorded = applyGroupCommand(settlementFixture, me, { command_id: commandId, type: 'settlement.record', payload: { settlement_id: existing.id, from_member_id: ben, to_member_id: ana, amount: 300 } }, later);
   expect(recorded.reason).toBe('settlement_id_exists');
 
   for (const [recipient, reason] of [[ben, 'settlement_invalid'], [id('unknown-member'), 'member_not_found']] as const) {
-    const edited = applyGroupCommand(settlementFixture, me, { command_id: commandId, type: 'settlement.edit', payload: { settlement_id: existing.id, expected_version: existing.version, from_member_id: ben, to_member_id: recipient, amount: 200, currency: 'EUR' } }, later);
+    const edited = applyGroupCommand(settlementFixture, me, { command_id: commandId, type: 'settlement.edit', payload: { settlement_id: existing.id, expected_version: existing.version, from_member_id: ben, to_member_id: recipient, amount: 200 } }, later);
     expect(edited.status).toBe('rejected');
     expect(edited.reason).toBe(reason);
   }

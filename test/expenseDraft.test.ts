@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { allocate, type AllocationPart, type Expense } from '../src/client';
-import { canExcludeExpensePart, decreaseExpenseShare, draftForExpense, expenseEffect, matchesSearch, monthHeading, entryFromDraft, fixExpenseAmount, groupDigits, increaseExpenseShare, moneyLabel, noCurrency, previewAllocation, type ExpenseDraft } from '../apps/client/src/model/expenses';
+import { canExcludeExpensePart, decreaseExpenseShare, draftForExpense, expenseEffect, matchesSearch, monthHeading, entryFromDraft, fixExpenseAmount, groupDigits, increaseExpenseShare, moneyLabel, previewAllocation, type ExpenseDraft } from '../apps/client/src/model/expenses';
 import { scenarioReplica } from '../apps/client/src/workbench/memberListFixture';
 
 const replica = scenarioReplica({ members: ['Ana', 'Ben', 'Cy'], you: 'Ana', others: [], presence: 'realtime', othersOnline: false, connection: 'online' });
@@ -10,7 +10,7 @@ const snapshot = replica.projected_snapshot!;
 const [ana, ben, cy] = snapshot.members.map((member) => member.id);
 
 function draft(): ExpenseDraft {
-  return { ...draftForExpense(snapshot, null, 'EUR', replica.session?.identity.id), description: 'Dinner', amount: '100.00' };
+  return { ...draftForExpense(snapshot, null, replica.session?.identity.id), description: 'Dinner', amount: '100.00' };
 }
 
 function weighted(): ExpenseDraft {
@@ -49,14 +49,14 @@ describe('expense draft', () => {
     const parts: AllocationPart[] = [{ kind: 'exact', member_id: ana!, amount: 2000 }, { kind: 'shares', member_id: ben!, shares: 3 }, { kind: 'shares', member_id: cy!, shares: 2 }];
 
     const expense: Expense = {
-      id: 'expense______________', version: 2, description: 'Dinner', currency: 'EUR', total: 10000,
+      id: 'expense______________', version: 2, description: 'Dinner', total: 10000,
       paid: [{ member_id: ana!, amount: 10000 }], parts, allocations: [], extras: [], status: 'active', created_at: '2026-10-20T12:00:00.000Z', updated_at: '2026-10-20T12:00:00.000Z',
     };
 
-    const value = draftForExpense(snapshot, expense, 'USD');
+    const value = draftForExpense(snapshot, expense);
     const entry = entryFromDraft(value);
 
-    expect(value).toMatchObject({ expenseId: expense.id, expectedVersion: 2, currency: 'EUR' });
+    expect(value).toMatchObject({ expenseId: expense.id, expectedVersion: 2 });
     expect(entry).toMatchObject({ ok: true, entry: { parts } });
     expect(amounts(value)).toEqual([2000, 4800, 3200]);
   });
@@ -103,9 +103,9 @@ describe('expense draft', () => {
     expect(entryFromDraft(value).ok).toBe(true);
   });
 
-  it('uses the currency precision and allocates every minor unit exactly once', () => {
-    for (const [currency, amount, fixed] of [['JPY', '100', '20'], ['KWD', '100.001', '20.001']] as const) {
-      const value = { ...weighted(), currency, amount };
+  it('takes two decimals and allocates every hundredth exactly once', () => {
+    for (const [amount, fixed] of [['100', '20'], ['100.01', '20.01']] as const) {
+      const value = { ...weighted(), amount };
 
       value.parts = fixExpenseAmount(value, cy!, fixed);
       const entry = entryFromDraft(value);
@@ -121,18 +121,18 @@ describe('expense draft', () => {
 
 describe('amounts as people read them', () => {
   it('groups whole digits in threes with commas, and drafts stay plain', () => {
-    const shown = (minor: number) => moneyLabel(minor, noCurrency);
+    const shown = (minor: number) => moneyLabel(minor);
 
     expect([1, 99_999, 100_000, 123_456_789, 4_825_000].map(shown)).toEqual(['0.01', '999.99', '1,000.00', '1,234,567.89', '48,250.00']);
     expect(groupDigits('1200')).toBe('1,200');
-    expect(moneyLabel(123_456_789, noCurrency)).not.toContain(' ');
+    expect(moneyLabel(123_456_789)).not.toContain(' ');
 
     const expense: Expense = {
-      id: 'expense______________', version: 1, description: 'Yacht', currency: noCurrency, total: 123_456_789,
+      id: 'expense______________', version: 1, description: 'Yacht', total: 123_456_789,
       paid: [{ member_id: ana!, amount: 123_456_789 }], parts: [{ kind: 'shares', member_id: ana!, shares: 1 }], allocations: [], extras: [], status: 'active', created_at: '2026-10-20T12:00:00.000Z', updated_at: '2026-10-20T12:00:00.000Z',
     };
 
-    expect(draftForExpense(snapshot, expense, noCurrency).amount).toBe('1234567.89');
+    expect(draftForExpense(snapshot, expense).amount).toBe('1234567.89');
   });
 });
 

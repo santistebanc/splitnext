@@ -15,22 +15,18 @@ import { BackButton, ScreenHeader } from './ScreenHeader';
 import { morph } from './ScreenMorph';
 import { useActionCall, useActions, useUiState } from './useActionCall';
 
-/** A person's balance in each recorded currency, settled zeros included. */
-function personBalances(snapshot: Parameters<typeof balanceRows>[0] | undefined, memberId: string) {
-  return balanceRows(snapshot).flatMap(({ currency, rows }) => {
-    const row = rows.find((entry) => entry.member.id === memberId);
-
-    return row ? [{ currency, amount: row.amount }] : [];
-  });
+/** A person's balance, settled zero included; undefined when no record names them. */
+function personBalance(snapshot: Parameters<typeof balanceRows>[0] | undefined, memberId: string): number | undefined {
+  return balanceRows(snapshot).find((entry) => entry.member.id === memberId)?.amount;
 }
 
 /** A balance as a large figure under what it means. */
-export function BalanceFigure(props: { amount: number; currency: string; label: string; size: number; morph?: string | null }) {
+export function BalanceFigure(props: { amount: number; label: string; size: number; morph?: string | null }) {
   return (
     <Stack gap={2}>
       <Text variant="caption" weight="semibold" tone="muted">{props.label}</Text>
       <Text ref={morph(props.morph, { unclipped: true })} numberOfLines={1} color={balanceColor(props.amount)} style={balanceStyle(props.size)}>
-        {moneyLabel(Math.abs(props.amount), props.currency)}
+        {moneyLabel(Math.abs(props.amount))}
       </Text>
     </Stack>
   );
@@ -58,9 +54,8 @@ export function PersonHeader(props: { app: MemberListApp }) {
   const you = preferredMember(snapshot, replica?.session?.identity.id)?.id;
   const isYou = Boolean(memberId) && memberId === you;
   const active = member?.status === 'active';
-  const balances = memberId ? personBalances(snapshot, memberId) : [];
-  const first = balances[0];
-  const recorded = memberId && snapshot ? memberBreakdown(snapshot, memberId).length > 0 : false;
+  const balance = memberId ? personBalance(snapshot, memberId) : undefined;
+  const recorded = memberId && snapshot ? memberBreakdown(snapshot, memberId).rows.length > 0 : false;
   const participants = replica && memberId ? participantMarkers(replica, memberId, props.app.client.presence(replica.group_id), state.online && state.reachable) : [];
 
   const nameField = useRef<TextInput>(null);
@@ -72,7 +67,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
     if (save.can('saveMemberEdit')) void save.call('saveMemberEdit', {});
   }
 
-  const label = !first ? (recorded ? 'Settled' : 'No expenses yet') : first.amount > 0 ? 'Gets back' : first.amount < 0 ? 'Owes' : 'Settled';
+  const label = balance === undefined ? (recorded ? 'Settled' : 'No expenses yet') : balance > 0 ? 'Gets back' : balance < 0 ? 'Owes' : 'Settled';
 
   return (
     <>
@@ -120,7 +115,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
           <Stack gap={8}>
             <Text variant="caption" tone="muted" style={{ paddingTop: 8 }}>{active ? presenceText(participants) : 'Removed · still in balances until settled'}</Text>
             <View style={{ paddingTop: 12 }}>
-              <BalanceFigure amount={first?.amount ?? 0} currency={first?.currency ?? 'XXX'} label={label} size={36} morph={replica && memberId && first ? (isYou ? `gamt-${replica.group_id}-${first.currency}` : `pamt-${replica.group_id}-${memberId}-${first.currency}`) : null} />
+              <BalanceFigure amount={balance ?? 0} label={label} size={36} morph={replica && memberId && balance !== undefined ? (isYou ? `gamt-${replica.group_id}` : `pamt-${replica.group_id}-${memberId}`) : null} />
             </View>
           </Stack>
         )}
@@ -172,16 +167,16 @@ export function PersonDetails(props: { app: MemberListApp }) {
       )}
       <ErrorMessage message={remove.error ?? restore.error} />
 
-      {breakdown.map((group) => (
-        <View key={group.currency} role="list" aria-label="Expenses and repayments">
-          <Text accessibilityRole="header" variant="meta" weight="semibold" tone="muted" style={{ paddingBottom: 4 }}>{group.rows.length === 1 ? '1 record' : `${group.rows.length} records`}</Text>
-          {group.rows.map((row) => {
+      {breakdown.rows.length > 0 ? (
+        <View role="list" aria-label="Expenses and repayments">
+          <Text accessibilityRole="header" variant="meta" weight="semibold" tone="muted" style={{ paddingBottom: 4 }}>{breakdown.rows.length === 1 ? '1 record' : `${breakdown.rows.length} records`}</Text>
+          {breakdown.rows.map((row) => {
             const title = row.kind === 'expense' ? row.title : repaymentTitle(replica, { from_member_id: row.from, to_member_id: row.to });
 
             return (
               <ListRow
                 key={row.id}
-                label={`${title}, ${signedFigure(row.amount, group.currency)}`}
+                label={`${title}, ${signedFigure(row.amount)}`}
                 disabled={row.kind === 'expense' ? !open.can('showExpense', { expenseId: row.id }) : !open.can('showSettlement', { settlementId: row.id })}
                 onPress={() => {
                   if (row.kind === 'expense') void open.call('showExpense', { expenseId: row.id });
@@ -189,16 +184,16 @@ export function PersonDetails(props: { app: MemberListApp }) {
                 }}
               >
                 <Text ref={morph(row.kind === 'expense' ? `etitle-${row.id}` : null)} numberOfLines={2} variant="body" weight="semibold" style={{ flex: 1, minWidth: 0 }}>{title}</Text>
-                <Text ref={morph(row.kind === 'expense' ? `eamt-${row.id}` : null, { unclipped: true })} numberOfLines={1} variant="figure" color={balanceColor(row.amount)}>{signedFigure(row.amount, group.currency)}</Text>
+                <Text ref={morph(row.kind === 'expense' ? `eamt-${row.id}` : null, { unclipped: true })} numberOfLines={1} variant="figure" color={balanceColor(row.amount)}>{signedFigure(row.amount)}</Text>
               </ListRow>
             );
           })}
           <Row gap={12} style={[{ minHeight: sizes.row }, rules.inkAbove]}>
             <Text variant="strong" style={{ flex: 1 }}>Balance</Text>
-            <Text numberOfLines={1} variant="figure" color={balanceColor(group.total)}>{signedFigure(group.total, group.currency)}</Text>
+            <Text numberOfLines={1} variant="figure" color={balanceColor(breakdown.total)}>{signedFigure(breakdown.total)}</Text>
           </Row>
         </View>
-      ))}
+      ) : null}
       <ErrorMessage message={open.error} />
     </Stack>
   );

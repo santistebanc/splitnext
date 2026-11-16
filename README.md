@@ -79,15 +79,13 @@ How it fits together, and the rules each part keeps, is in
   served Instrument Sans and Geist Mono fonts, and morphing screen changes on
   the web. Theme assets are precached with the app shell
   for offline reloads; changing a theme asset invalidates that cache.
-- Amounts are plain numbers with two decimals, never shown with a currency,
-  and shown with their digits grouped in threes, such as 1,234.50.
-  Expenses and repayments record the no-currency code XXX, and the ledger keeps
-  any older real-currency records separate; see
+- Amounts are plain numbers with two decimals and no currency, shown with
+  their digits grouped in threes, such as 1,234.50; see
   [ADR 0025](./docs/adr/0025-deal-in-plain-numbers-without-currency.md).
 - Expenses use the pure, property-tested money module, `src/domain/money.ts`:
-  whole minor units per currency, allocation by
+  whole hundredths, allocation by
   exact amounts and shares, rounding extras that rotate by accumulated burden,
-  and balances that net to zero per currency; see
+  and one balance per member, netting to zero; see
   [ADR 0017](./docs/adr/0017-allocate-money-in-whole-minor-units-with-burden-fair-rounding.md).
 
 Repayments, cached Activity, safe undo and the Activity count are

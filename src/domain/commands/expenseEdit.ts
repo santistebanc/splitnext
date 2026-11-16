@@ -83,7 +83,6 @@ export const expenseEdit = defineCommand<EditExpenseCommand, IntentOf<EditExpens
     const expense = {
       ...current,
       description: entry.description,
-      currency: entry.currency,
       total: entry.total,
       ...allocated.recorded,
       version: current.version + 1,

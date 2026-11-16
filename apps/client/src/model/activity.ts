@@ -53,7 +53,6 @@ export function newActivity(replica: ClientReplicaState | null, seen: number | u
 /** Whether an expense edit changes what anyone owes: its amount, who paid, or how it is split. */
 function changesShares(before: Expense, after: Expense): boolean {
   return before.total !== after.total
-    || before.currency !== after.currency
     || JSON.stringify(before.paid) !== JSON.stringify(after.paid)
     || JSON.stringify(before.parts) !== JSON.stringify(after.parts)
     || JSON.stringify(before.allocations) !== JSON.stringify(after.allocations)
@@ -106,16 +105,16 @@ export function actorLabel(event: AuditEvent, replica: ClientReplicaState): stri
 }
 
 function split(expense: Expense): string {
-  return `${moneyLabel(expense.total, expense.currency)} · split between ${expense.parts.length}`;
+  return `${moneyLabel(expense.total)} · split between ${expense.parts.length}`;
 }
 
-function payment(snapshot: Snapshot, entry: Settlement, amount = moneyLabel(entry.amount, entry.currency)): Prose {
+function payment(snapshot: Snapshot, entry: Settlement, amount = moneyLabel(entry.amount)): Prose {
   return prose(reference(memberName(snapshot, entry.from_member_id)), ' paid ', reference(memberName(snapshot, entry.to_member_id)), ` ${amount}`);
 }
 
 function edited(before: Expense, after: Expense): Prose {
-  if (before.total !== after.total || before.currency !== after.currency)
-    return `Amount ${moneyLabel(before.total, before.currency)} → ${moneyLabel(after.total, after.currency)}`;
+  if (before.total !== after.total)
+    return `Amount ${moneyLabel(before.total)} → ${moneyLabel(after.total)}`;
 
   if (before.description !== after.description) return prose('Was ', reference(before.description));
 
@@ -158,7 +157,7 @@ export function describeActivity(event: AuditEvent, replica: ClientReplicaState)
     case 'expense.removed': return entry('expense', prose('removed ', reference(change.after.description)), split(change.after));
     case 'expense.restored': return entry('expense', prose('restored ', reference(change.after.expense.description)), split(change.after.expense));
     case 'settlement.recorded': return entry('repayment', 'recorded a repayment', payment(snapshot, change.after.settlement));
-    case 'settlement.edited': return entry('repayment', 'changed a repayment', payment(snapshot, change.after.settlement, `${moneyLabel(change.before.amount, change.before.currency)} → ${moneyLabel(change.after.settlement.amount, change.after.settlement.currency)}`));
+    case 'settlement.edited': return entry('repayment', 'changed a repayment', payment(snapshot, change.after.settlement, `${moneyLabel(change.before.amount)} → ${moneyLabel(change.after.settlement.amount)}`));
     case 'settlement.removed': return entry('repayment', 'removed a repayment', payment(snapshot, change.after));
     case 'settlement.restored': return entry('repayment', 'restored a repayment', payment(snapshot, change.after.settlement));
     case 'preference.changed': return entry('people', 'changed who they are');

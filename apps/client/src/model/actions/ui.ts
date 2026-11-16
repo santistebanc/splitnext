@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { formatAmount, formatInviteLink, repaymentMembers, settlementSuggestions } from '@splitnext/client';
 import { newActivity } from '../activity';
-import { canExcludeExpensePart, decreaseExpenseShare, fixExpenseAmount, increaseExpenseShare, noCurrency } from '../expenses';
+import { canExcludeExpensePart, decreaseExpenseShare, fixExpenseAmount, increaseExpenseShare } from '../expenses';
 import { closedSearch, draftFields, groupViews, personFits, viewFits, viewNames } from '../uiState';
 import { workflowGuard, type WorkflowIntent } from '../workflow';
 import { requireSettlement, unavailable, editorLock, navigationLock, defineAction, openSnapshot, requireExpense, requireOpenable, requireMember, requireNotice, requireJoin, joinMembers, requireConfirmation, requireInvite, memberResource, noticeResources, empty, choice, type ActionHost, type ActionPlatform } from './define';
@@ -85,7 +85,7 @@ export const uiActions = {
       const entry = openSnapshot(host.snapshot())?.settlements.find((item) => item.id === input.settlementId);
 
       if (!entry) throw new Error('settlement_not_found');
-      ui.changeRepayment({ manual: false, settlementId: entry.id, expectedVersion: entry.version, from: entry.from_member_id, to: entry.to_member_id, currency: entry.currency, amount: formatAmount(entry.amount, entry.currency) });
+      ui.changeRepayment({ manual: false, settlementId: entry.id, expectedVersion: entry.version, from: entry.from_member_id, to: entry.to_member_id, amount: formatAmount(entry.amount) });
       ui.show('settlements');
     },
   }),
@@ -95,9 +95,9 @@ export const uiActions = {
   }),
   prepareRepayment: defineAction({
     workflow: 'draft', group: 'UI', description: 'Review a suggested or manual repayment.',
-    input: z.object({ from: choice('repaymentMember', 'Who paid.'), to: choice('repaymentMember', 'Who received it.'), amount: z.string(), currency: z.string().optional(), keepEditing: z.boolean().optional(), manual: z.boolean().optional() }),
+    input: z.object({ from: choice('repaymentMember', 'Who paid.'), to: choice('repaymentMember', 'Who received it.'), amount: z.string(), keepEditing: z.boolean().optional(), manual: z.boolean().optional() }),
     example: { from: 'member-1', to: 'member-2', amount: '10.00' }, requires: ['openGroup'],
-    run: async (host, input, ui) => ui.changeRepayment({ ...input, currency: input.currency ?? noCurrency, manual: input.manual ?? false, settlementId: input.keepEditing ? ui.snapshot().repayment.settlementId : null, expectedVersion: input.keepEditing ? ui.snapshot().repayment.expectedVersion : null }),
+    run: async (host, input, ui) => ui.changeRepayment({ ...input, manual: input.manual ?? false, settlementId: input.keepEditing ? ui.snapshot().repayment.settlementId : null, expectedVersion: input.keepEditing ? ui.snapshot().repayment.expectedVersion : null }),
   }),
   switchEntryKind: defineAction({
     workflow: 'navigate', group: 'UI', description: 'Switch a new entry between an expense and a repayment, carrying over the amount and who paid.',

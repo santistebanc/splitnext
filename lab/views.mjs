@@ -37,8 +37,8 @@ export function ago(time) {
 }
 
 // Amounts are in minor units.
-export const money = ({ amount, currency }) =>
-  `${amount < 0 ? "−" : ""}${(Math.abs(amount) / 100).toFixed(2)} ${currency}`;
+export const money = (amount) =>
+  `${amount < 0 ? "−" : ""}${(Math.abs(amount) / 100).toFixed(2)}`;
 
 export const plural = (count, one, many = one + "s") => `${count} ${count === 1 ? one : many}`;
 

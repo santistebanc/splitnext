@@ -530,7 +530,7 @@ operations remain available without opening an editor, including offline.
   input is a conflict. The creation request includes a client-generated invite
   id and token. Retries reuse them and cannot restore a link replaced later.
 - A group can be renamed. It is never closed or deleted.
-- Groups have no currency or currency setting, and amounts never show one: the
+- There are no currencies anywhere, in groups, expenses, or repayments: the
   app deals in plain numbers with two decimals (ADR 0025). Wherever an amount
   is shown or typed, its whole digits are grouped in threes by commas, such as
   1,234,567.89. Pasted figures may include grouping commas or spaces. Stored and sent amounts stay plain.
@@ -563,7 +563,7 @@ operations remain available without opening an editor, including offline.
   for a member no expense or repayment names; it does not offer hiding.
   Hidden and deleted members are both kept in the group:
   historical references remain valid, and neither is offered for new activity.
-  A hidden member still appears in a currency's balances while it is not zero.
+  A hidden member still appears in the balances while it is not zero.
 - An expense that arrives after its member was removed still applies; a
   deleted member it names becomes hidden.
 - Restoring a hidden or deleted member makes it active again.
@@ -773,10 +773,8 @@ Expenses and settlements are accepted behavior.
 - Each expense records a required description, its amount, its payer, and
   its allocations. It has no expense date; the list shows expenses newest
   recorded first. A group with no current expenses or repayments shows no
-  expense list at all: no heading and no empty-state text. Expense entry has
-  no currency choice: new expenses and
-  repayments record the ISO 4217 no-currency code XXX, so every amount has
-  two decimal places (ADR 0025).
+  expense list at all: no heading and no empty-state text. There are no
+  currencies: every amount is a plain number with two decimal places (ADR 0025).
 - Entry starts with the person's you member as payer, when they have one, and
   every active member sharing equally.
 - Any participant may record, edit, remove, or restore any expense.
@@ -787,10 +785,7 @@ Expenses and settlements are accepted behavior.
   saw, since restoring undoes it. A removed expense is kept and can be
   restored exactly as recorded, with its original allocation. Restoring will
   be offered through the group's Activity; there is no removed-expense list.
-- Each member has one balance. The ledger still keeps balances per recorded
-  code, so data recorded with a real currency before ADR 0025 stays separate
-  from plain amounts and is shown as a second unlabelled figure; there is no
-  conversion.
+- Each member has one balance, shown as one figure.
 - A recorded settlement includes its amount and reduces the balance it
   settles.
 - The first expense version has one payer, but the persisted model and money
@@ -803,12 +798,11 @@ Expenses and settlements are accepted behavior.
 - All allocation, validation, and deterministic minor-unit rounding lives
   behind one pure money module. API routes, UI code, and persistence adapters do
   not reproduce that logic.
-- Final integer-minor-unit allocations are persisted with the expense, using
-  that currency's precision. Balances must sum to zero separately in each
-  currency; currencies cannot share a rounding burden.
+- Final allocations in whole hundredths are persisted with the expense.
+  Balances must sum to zero.
 - Rounding distributes unavoidable extra minor units fairly over time:
-  each expense records which members absorbed one, a member's burden in a
-  currency counts those across that currency's current expenses, and new
+  each expense records which members absorbed one, a member's burden counts
+  those across the group's current expenses, and new
   extras go to members with the lowest burden there (ADR 0019). Removing,
   restoring, or editing an expense therefore changes the burden exactly.
 - Expense mutations follow the same offline command, outcome, audit, and

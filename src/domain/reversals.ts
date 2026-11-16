@@ -107,7 +107,7 @@ export function inverseIntent(event: AuditEvent): CommandIntent | null {
     const paidBy = old.paid[0]?.member_id;
 
     return paidBy
-      ? { type: 'expense.edit', payload: { expense_id, expected_version: after.expense.version, description: old.description, currency: old.currency, total: old.total, paid_by: paidBy, parts: old.parts } }
+      ? { type: 'expense.edit', payload: { expense_id, expected_version: after.expense.version, description: old.description, total: old.total, paid_by: paidBy, parts: old.parts } }
       : null;
   }
 
@@ -119,7 +119,7 @@ export function inverseIntent(event: AuditEvent): CommandIntent | null {
     if (before.settlement.status === 'removed') return { type: 'settlement.remove', payload: { settlement_id } };
     const old = before.settlement;
 
-    return { type: 'settlement.edit', payload: { settlement_id, expected_version: after.settlement.version, from_member_id: old.from_member_id, to_member_id: old.to_member_id, currency: old.currency, amount: old.amount } };
+    return { type: 'settlement.edit', payload: { settlement_id, expected_version: after.settlement.version, from_member_id: old.from_member_id, to_member_id: old.to_member_id, amount: old.amount } };
   }
 
   return null;

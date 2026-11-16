@@ -86,22 +86,20 @@ function found(replica: Replica, entry: Entry, search: UiState['search'], you: s
 
 /** Under a search's results: how many, and what they come to for you. */
 function SearchTotal(props: { replica: Replica; entries: Entry[]; you: string | undefined }) {
-  const totals = new Map<string, number>();
+  let total: number | null = null;
 
   for (const entry of props.entries) {
-    const currency = entry.kind === 'expense' ? entry.expense.currency : entry.settlement.currency;
-
     const effect = entry.kind === 'expense'
       ? expenseEffect(entry.expense, props.you)
       : props.you === entry.settlement.from_member_id ? entry.settlement.amount : props.you === entry.settlement.to_member_id ? -entry.settlement.amount : null;
 
-    if (effect !== null) totals.set(currency, (totals.get(currency) ?? 0) + effect);
+    if (effect !== null) total = (total ?? 0) + effect;
   }
 
   return (
     <Row gap={12} style={[{ minHeight: sizes.row }, rules.above]}>
       <Text variant="body" weight="semibold" tone="muted" style={{ flex: 1 }}>{props.entries.length === 1 ? '1 result' : `${props.entries.length} results`}</Text>
-      {[...totals].map(([currency, amount]) => <Text key={currency} variant="figure" color={balanceColor(amount)}>{signedFigure(amount, currency)}</Text>)}
+      {total !== null ? <Text variant="figure" color={balanceColor(total)}>{signedFigure(total)}</Text> : null}
     </Row>
   );
 }
@@ -116,7 +114,7 @@ function ReviewDot() {
  * amount, with what it does to you under it when that is not nothing. A row
  * that leaves you out entirely is quiet.
  */
-function EntryRow(props: { replica: Replica; payer: string | undefined; label: string; title: string; amount: string; effect: number | null; currency: string; quiet?: boolean; review: boolean; disabled: boolean; onPress: () => void; error: string | null; morph?: string }) {
+function EntryRow(props: { replica: Replica; payer: string | undefined; label: string; title: string; amount: string; effect: number | null; quiet?: boolean; review: boolean; disabled: boolean; onPress: () => void; error: string | null; morph?: string }) {
   const involved = props.effect !== null;
 
   return (
@@ -138,7 +136,7 @@ function EntryRow(props: { replica: Replica; payer: string | undefined; label: s
           </Row>
           <Stack gap={2} align="end" style={{ flexShrink: 0 }}>
             <Text ref={morph(props.morph && `eamt-${props.morph}`, { unclipped: true })} variant="figure" tone={props.quiet ? 'muted' : 'ink'}>{props.amount}</Text>
-            {props.effect ? <Text variant="figureSmall" color={balanceColor(props.effect)}>{signedFigure(props.effect, props.currency)}</Text> : null}
+            {props.effect ? <Text variant="figureSmall" color={balanceColor(props.effect)}>{signedFigure(props.effect)}</Text> : null}
           </Stack>
         </View>
       </Touchable>
@@ -158,9 +156,8 @@ function ExpenseRow(props: { replica: Replica; expense: Expense; you: string | u
       label={`Change ${expenseLabel(expense)}`}
       morph={expense.id}
       title={expense.description}
-      amount={moneyLabel(expense.total, expense.currency)}
+      amount={moneyLabel(expense.total)}
       effect={expenseEffect(expense, props.you)}
-      currency={expense.currency}
       review={needsReview(props.replica, 'expense', expense.id)}
       disabled={!open.can('showExpense', { expenseId: expense.id })}
       onPress={() => { void open.call('showExpense', { expenseId: expense.id }); }}
@@ -181,11 +178,10 @@ export function RepaymentRow(props: { replica: Replica; settlement: Settlement; 
     <EntryRow
       replica={props.replica}
       payer={entry.from_member_id}
-      label={`Change repayment: ${title} ${moneyLabel(entry.amount, entry.currency)}`}
+      label={`Change repayment: ${title} ${moneyLabel(entry.amount)}`}
       title={title}
-      amount={moneyLabel(entry.amount, entry.currency)}
+      amount={moneyLabel(entry.amount)}
       effect={effect}
-      currency={entry.currency}
       quiet
       review={needsReview(props.replica, 'settlement', entry.id)}
       disabled={!open.can('showSettlement', { settlementId: entry.id })}

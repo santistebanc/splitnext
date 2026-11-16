@@ -468,14 +468,12 @@ export { memberNameSchema, type LedgerMember } from '../domain/members';
 
 export {
   allocate,
+  amountDigits,
   balances,
-  currencyCodeSchema,
   formatAmount,
-  minorDigits,
   parseAmount,
   type AllocationPart,
-  type CurrencyBalances,
-  type CurrencyCode,
+  type Balances,
 } from '../domain/money';
 
 export { expenseDescriptionSchema, groupBalances, memberHasRecords, roundingBurden, type Expense, type ExpenseEntry } from '../domain/expenses';

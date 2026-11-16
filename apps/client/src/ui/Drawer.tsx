@@ -56,7 +56,7 @@ export function SheetTitle(props: { title: string; closeText?: string | null | u
  * after it arrives, so it can rise, and stays on the page while it falls
  * away after closing.
  */
-function useRaised(open: boolean): { mounted: boolean; raised: boolean } {
+function useRaised(open: boolean) {
   const [mounted, setMounted] = useState(open);
   const [raised, setRaised] = useState(false);
 

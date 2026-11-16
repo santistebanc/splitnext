@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { identifierSchema } from './ids';
-import { currencyCodeSchema, minorAmountSchema } from './money';
+import { minorAmountSchema } from './money';
 import type { GroupSnapshot } from './sync';
 import { groupBalances } from './expenses';
 
@@ -8,7 +8,6 @@ import { groupBalances } from './expenses';
 export const settlementEntrySchema = z.object({
   from_member_id: identifierSchema,
   to_member_id: identifierSchema,
-  currency: currencyCodeSchema,
   amount: minorAmountSchema.min(1),
 });
 
@@ -25,7 +24,7 @@ export const settlementSchema = settlementEntrySchema.extend({
 export type Settlement = z.output<typeof settlementSchema>;
 
 export function settlementEntry(value: SettlementEntry): SettlementEntry {
-  return { from_member_id: value.from_member_id, to_member_id: value.to_member_id, currency: value.currency, amount: value.amount };
+  return { from_member_id: value.from_member_id, to_member_id: value.to_member_id, amount: value.amount };
 }
 
 export function settlementProblem(snapshot: GroupSnapshot, entry: SettlementEntry) {
@@ -41,16 +40,16 @@ export function repaymentMembers(snapshot: GroupSnapshot | null | undefined) {
   if (!snapshot) return [];
   const balances = groupBalances(snapshot);
 
-  return snapshot.members.filter((member) => member.status === 'active' || Object.values(balances).some((currency) => currency[member.id]));
+  return snapshot.members.filter((member) => member.status === 'active' || balances[member.id]);
 }
 
-/** Above this many unsettled members in one currency, the plan stops searching for the fewest payments. */
+/** Above this many unsettled members, the plan stops searching for the fewest payments. */
 const exactPlanLimit = 14;
 
 type Balance = { id: string; amount: number };
 
 /** Greedy transfers that settle balances summing to zero, at most one fewer than there are members. */
-function greedyTransfers(currency: string, entries: readonly Balance[]): SettlementEntry[] {
+function greedyTransfers(entries: readonly Balance[]): SettlementEntry[] {
   const result: SettlementEntry[] = [];
   const debtors = entries.flatMap((entry) => (entry.amount < 0 ? [{ id: entry.id, amount: -entry.amount }] : []));
   const creditors = entries.flatMap((entry) => (entry.amount > 0 ? [{ ...entry }] : []));
@@ -62,7 +61,7 @@ function greedyTransfers(currency: string, entries: readonly Balance[]): Settlem
 
       if (!creditor) break;
       const amount = Math.min(debtor.amount, creditor.amount);
-      result.push({ currency, from_member_id: debtor.id, to_member_id: creditor.id, amount });
+      result.push({ from_member_id: debtor.id, to_member_id: creditor.id, amount });
       debtor.amount -= amount;
       creditor.amount -= amount;
 
@@ -117,7 +116,7 @@ const plans = new WeakMap<GroupSnapshot, SettlementEntry[]>();
 
 /**
  * The group-wide settle-up plan: transfers that bring every balance to zero,
- * per currency, with as few payments as possible. A payment may skip people in
+ * with as few payments as possible. A payment may skip people in
  * the middle, such as Ana paying Cara directly. Deterministic for a snapshot;
  * very large groups fall back to a greedy plan.
  */
@@ -125,26 +124,23 @@ export function settlementSuggestions(snapshot: GroupSnapshot): SettlementEntry[
   const cached = plans.get(snapshot);
 
   if (cached) return cached;
-  const result: SettlementEntry[] = [];
-  const balances = groupBalances(snapshot);
-
-  for (const currency of Object.keys(balances).sort()) result.push(...planTransfers(currency, balances[currency] ?? {}));
+  const result = planTransfers(groupBalances(snapshot));
 
   plans.set(snapshot, result);
 
   return result;
 }
 
-/** Fewest transfers settling one currency's balances, which must sum to zero. */
-export function planTransfers(currency: string, balances: Readonly<Record<string, number>>): SettlementEntry[] {
+/** Fewest transfers settling balances, which must sum to zero. */
+export function planTransfers(balances: Readonly<Record<string, number>>): SettlementEntry[] {
   const entries = Object.entries(balances)
     .filter(([, amount]) => amount !== 0)
     .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
     .map(([id, amount]) => ({ id, amount }));
 
-  if (entries.length > exactPlanLimit) return greedyTransfers(currency, entries);
+  if (entries.length > exactPlanLimit) return greedyTransfers(entries);
 
-  return zeroSumSets(entries).flatMap((set) => greedyTransfers(currency, set));
+  return zeroSumSets(entries).flatMap((set) => greedyTransfers(set));
 }
 
 /** The plan's payments that a member makes or receives, which settle that member completely. */

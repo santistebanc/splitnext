@@ -47,7 +47,7 @@ export function reviewTitle(notice: Notice): string {
     case 'member.restore':
       return `Restoring ${subject(notice)}`;
     case 'settlement.record':
-      return `Your repayment of ${moneyLabel(command.payload.amount, command.payload.currency)}`;
+      return `Your repayment of ${moneyLabel(command.payload.amount)}`;
     case 'settlement.edit':
       return 'Your change to a repayment';
     case 'settlement.remove':
@@ -78,10 +78,10 @@ function currentResult(notice: Notice): string | null {
   if (current?.kind === 'expense')
     return current.expense.status === 'removed'
       ? 'removed'
-      : `${moneyLabel(current.expense.total, current.expense.currency)}, split between ${current.expense.parts.length}`;
+      : `${moneyLabel(current.expense.total)}, split between ${current.expense.parts.length}`;
 
   if (current?.kind === 'settlement')
-    return current.settlement.status === 'removed' ? 'removed' : moneyLabel(current.settlement.amount, current.settlement.currency);
+    return current.settlement.status === 'removed' ? 'removed' : moneyLabel(current.settlement.amount);
 
   if (current?.kind === 'member')
     return current.member.status === 'active' ? `called “${current.member.display_name}”` : 'removed';
@@ -106,7 +106,7 @@ function reason(notice: Notice): string {
   }
 }
 
-/** Why the change was not applied and where things stand: "Someone else changed it first. It’s now 36.00 EUR, split between 6." */
+/** Why the change was not applied and where things stand: "Someone else changed it first. It’s now 36.00, split between 6." */
 export function reviewDetail(notice: Notice): string {
   const now = currentResult(notice);
 

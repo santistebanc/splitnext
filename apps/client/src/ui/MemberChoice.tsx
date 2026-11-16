@@ -86,7 +86,7 @@ function MemberChoiceRow(props: { app: MemberListApp; memberId: string; you: boo
  * was picked further down its list, keeping it clear of the compact header
  * that the page scrolls under.
  */
-function bringIntoView(target: unknown, headerHeight: number): void {
+function bringIntoView(target: View | null, headerHeight: number): void {
   if (!(target instanceof HTMLElement)) return;
   const page = target.closest<HTMLElement>('#splitnext-page');
 

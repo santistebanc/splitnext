@@ -132,7 +132,7 @@ export function fixtureGroups(
       pending_commands: 0,
       member_count: entry.index + 2,
       you_name: entry.left ? null : 'Ana',
-      you_balances: entry.left ? null : [],
+      you_balance: entry.left ? null : 0,
     }),
   );
 }

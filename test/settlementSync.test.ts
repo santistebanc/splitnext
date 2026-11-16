@@ -19,7 +19,7 @@ it('retains stale repayment edits as notices and restores exactly across devices
   if (!ana || !ben || !added.projected_snapshot) throw new Error('missing members');
   await b.joinGroup(groupId, { kind: 'existing', member_id: ana.id }, added.projected_snapshot.invite.token);
   const settlementId = createIdentifier();
-  const entry = { from_member_id: ben.id, to_member_id: ana.id, currency: 'EUR', amount: 300 };
+  const entry = { from_member_id: ben.id, to_member_id: ana.id, amount: 300 };
 
   await a.submit(groupId, { type: 'settlement.record', payload: { ...entry, settlement_id: settlementId } });
   await b.syncGroup(groupId);
@@ -57,7 +57,7 @@ it('authoritatively rejects a stale offline reversal and retains its notice', as
   if (!ana || !ben || !added.projected_snapshot) throw new Error('missing members');
   await b.joinGroup(groupId, { kind: 'existing', member_id: ben.id }, added.projected_snapshot.invite.token);
   const settlementId = createIdentifier();
-  const entry = { from_member_id: ben.id, to_member_id: ana.id, currency: 'EUR', amount: 300 };
+  const entry = { from_member_id: ben.id, to_member_id: ana.id, amount: 300 };
   await a.submit(groupId, { type: 'settlement.record', payload: { ...entry, settlement_id: settlementId } });
   await b.syncGroup(groupId);
   const history = await b.activity(groupId);

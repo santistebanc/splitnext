@@ -65,7 +65,6 @@ export const expenseRecord = defineCommand<RecordExpenseCommand, IntentOf<Record
     const expense = {
       id: command.payload.expense_id,
       description: entry.description,
-      currency: entry.currency,
       total: entry.total,
       ...allocated.recorded,
       status: 'active' as const,

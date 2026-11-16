@@ -206,17 +206,16 @@ function YourRow(props: { replica: Replica }) {
   const you = preferredMember(snapshot, props.replica.session?.identity.id);
 
   if (!you || !snapshot) return null;
-  const balances = balancesByMember(props.replica).get(you.id) ?? [];
+  const balance = balancesByMember(props.replica).get(you.id) ?? 0;
   const name = memberName(snapshot, you.id);
   const recorded = hasRecords(snapshot, you.id);
-  const amounts = balances.map((entry) => signedFigure(entry.amount, entry.currency));
 
   return (
     <View testID="your-balance">
       <View style={[bleedRow, { backgroundColor: colors.tint, paddingVertical: 10, gap: 4 }]}>
         <Touchable
           accessibilityRole="button"
-          accessibilityLabel={`${name} (you), ${recorded ? amounts.join(', ') || 'settled' : 'no expenses yet'}. Show details`}
+          accessibilityLabel={`${name} (you), ${recorded ? (balance ? signedFigure(balance) : 'settled') : 'no expenses yet'}. Show details`}
           disabled={!open.can('showPerson', { memberId: you.id })}
           onPress={() => { void open.call('showPerson', { memberId: you.id }); }}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: sizes.touch }}
@@ -227,16 +226,12 @@ function YourRow(props: { replica: Replica }) {
               <Text ref={morph(`pname-${props.replica.group_id}-${you.id}`)} numberOfLines={1} variant="strong" style={{ flexShrink: 1 }}>{name}</Text>
               <YouBadge />
             </Row>
-            <Text variant="caption" weight="semibold" tone="muted">{recorded ? yourStanding(balances[0]?.amount) : 'No expenses yet'}</Text>
+            <Text variant="caption" weight="semibold" tone="muted">{recorded ? yourStanding(balance) : 'No expenses yet'}</Text>
           </Stack>
           {recorded ? (
-            <Stack gap={4} align="end" style={{ flexShrink: 0 }}>
-              {balances.map((entry) => (
-                <Text key={entry.currency} ref={morph(`gamt-${props.replica.group_id}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} color={balanceColor(entry.amount)} style={balanceStyle(22)}>
-                  {signedFigure(entry.amount, entry.currency)}
-                </Text>
-              ))}
-            </Stack>
+            <Text ref={morph(`gamt-${props.replica.group_id}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(balance))} numberOfLines={1} color={balanceColor(balance)} style={[balanceStyle(22), { flexShrink: 0 }]}>
+              {signedFigure(balance)}
+            </Text>
           ) : null}
         </Touchable>
         {/* On its own line under your figure, so a narrow screen keeps your name whole. */}
@@ -272,15 +267,9 @@ export function GroupHeader(props: { app: MemberListApp }) {
   );
 }
 
-/** Balances in each person's recorded currencies, including settled zeros. */
-function balancesByMember(replica: Replica): Map<string, { currency: string; amount: number }[]> {
-  const result = new Map<string, { currency: string; amount: number }[]>();
-
-  for (const { currency, rows } of balanceRows(replica.projected_snapshot))
-    for (const { member, amount } of rows)
-      result.set(member.id, [...(result.get(member.id) ?? []), { currency, amount }]);
-
-  return result;
+/** Each person's balance, including settled zeros. */
+function balancesByMember(replica: Replica): Map<string, number> {
+  return new Map(balanceRows(replica.projected_snapshot).map(({ member, amount }) => [member.id, amount]));
 }
 
 /**
@@ -288,12 +277,8 @@ function balancesByMember(replica: Replica): Map<string, { currency: string; amo
  * top, then settled people, then those owed most, and last the people in no
  * expense or repayment yet. Ties keep the order people were added.
  */
-function orderedMembers<Member extends { id: string }>(members: readonly Member[], owing: Map<string, { amount: number }[]>, recorded: (memberId: string) => boolean): Member[] {
-  const balance = (memberId: string) => {
-    const amounts = (owing.get(memberId) ?? []).map((entry) => entry.amount);
-
-    return Math.min(...amounts, 0) || Math.max(...amounts, 0);
-  };
+function orderedMembers<Member extends { id: string }>(members: readonly Member[], owing: Map<string, number>, recorded: (memberId: string) => boolean): Member[] {
+  const balance = (memberId: string) => owing.get(memberId) ?? 0;
 
   return members.toSorted((left, right) =>
     Number(recorded(right.id)) - Number(recorded(left.id)) ||
@@ -304,17 +289,17 @@ function orderedMembers<Member extends { id: string }>(members: readonly Member[
 const fullRow = { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: sizes.touch + 6, paddingVertical: 6, ...bleedRow } as const;
 
 /** One person: their avatar, their name, and their balance, which opens their details. */
-function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: string; removed: boolean; balances: { currency: string; amount: number }[]; recorded: boolean }) {
+function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: string; removed: boolean; balance: number | undefined; recorded: boolean }) {
   const open = useActionCall();
   const name = memberName(props.replica.projected_snapshot, props.memberId);
-  const amounts = props.balances.map((entry) => signedFigure(entry.amount, entry.currency));
+  const amount = props.balance !== undefined ? signedFigure(props.balance) : '';
 
   return (
     <View>
       <Touchable
         feedback="tint"
         accessibilityRole="button"
-        accessibilityLabel={`${name}${props.removed ? ', removed' : ''}, ${amounts.join(', ') || (props.recorded ? 'settled' : 'no expenses yet')}. Show details`}
+        accessibilityLabel={`${name}${props.removed ? ', removed' : ''}, ${amount || (props.recorded ? 'settled' : 'no expenses yet')}. Show details`}
         disabled={!open.can('showPerson', { memberId: props.memberId })}
         onPress={() => { void open.call('showPerson', { memberId: props.memberId }); }}
         style={fullRow}
@@ -325,13 +310,11 @@ function PersonRow(props: { app: MemberListApp; replica: Replica; memberId: stri
           <Text ref={morph(`pname-${props.replica.group_id}-${props.memberId}`)} numberOfLines={2} variant="strong" style={{ flexShrink: 1 }}>{name}</Text>
           {props.removed ? <Tag>removed</Tag> : null}
         </Row>
-        <Stack gap={4} align="end" style={{ flexShrink: 0 }}>
-          {props.balances.map((entry) => (
-            <Text key={entry.currency} ref={morph(`pamt-${props.replica.group_id}-${props.memberId}-${entry.currency}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(entry.amount), entry.currency)} numberOfLines={1} variant="figure" color={balanceColor(entry.amount)}>
-              {signedFigure(entry.amount, entry.currency)}
-            </Text>
-          ))}
-        </Stack>
+        {props.balance !== undefined ? (
+          <Text ref={morph(`pamt-${props.replica.group_id}-${props.memberId}`, { unclipped: true })} accessibilityLabel={moneyLabel(Math.abs(props.balance))} numberOfLines={1} variant="figure" color={balanceColor(props.balance)} style={{ flexShrink: 0 }}>
+            {signedFigure(props.balance)}
+          </Text>
+        ) : null}
       </Touchable>
       <ErrorMessage message={open.error} />
     </View>
@@ -351,12 +334,12 @@ function People(props: { app: MemberListApp; replica: Replica }) {
   const recorded = (memberId: string) => hasRecords(snapshot, memberId);
   // Removed people stay while they owe or are owed.
   const members = orderedMembers(repaymentMembers(snapshot).filter((member) => member.id !== you?.id), owing, recorded);
-  const settled = (memberId: string) => recorded(memberId) && (owing.get(memberId) ?? []).every((entry) => entry.amount === 0);
+  const settled = (memberId: string) => recorded(memberId) && !owing.get(memberId);
   const open = members.filter((member) => !settled(member.id));
   const square = members.filter((member) => settled(member.id));
 
   const row =(member: (typeof members)[number]) => (
-    <PersonRow key={member.id} app={props.app} replica={props.replica} memberId={member.id} removed={member.status !== 'active'} balances={owing.get(member.id) ?? []} recorded={recorded(member.id)} />
+    <PersonRow key={member.id} app={props.app} replica={props.replica} memberId={member.id} removed={member.status !== 'active'} balance={owing.get(member.id)} recorded={recorded(member.id)} />
   );
 
   return (

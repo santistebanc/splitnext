@@ -26,8 +26,8 @@ it('maps canonical record targets to existing actions without granting availabil
 });
 
 it('separates repayment member names from ordinary payment prose', () => {
-  // SAFETY: This formatter only reads the settlement member IDs, amount and currency.
-  const event = { actor_identity_id: 'me', change: { action: 'settlement.recorded', after: { settlement: { from_member_id: 'a', to_member_id: 'b', amount: 100, currency: 'XXX' } } } } as AuditEvent;
+  // SAFETY: This formatter only reads the settlement member IDs and amount.
+  const event = { actor_identity_id: 'me', change: { action: 'settlement.recorded', after: { settlement: { from_member_id: 'a', to_member_id: 'b', amount: 100 } } } } as AuditEvent;
   // SAFETY: Name lookup reads only member IDs and names; attribution matches the identity.
   const replica = { session: { identity: { id: 'me' } }, projected_snapshot: { members: [{ id: 'a', display_name: 'paid' }, { id: 'b', display_name: 'paid' }] } } as ClientReplicaState;
   const entry = describeActivity(event, replica);

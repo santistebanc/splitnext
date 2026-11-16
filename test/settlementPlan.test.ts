@@ -51,29 +51,29 @@ describe('settle-up plan', () => {
   it('settles everyone with the fewest positive payments', () => {
     fc.assert(
       fc.property(balancesArbitrary, (balances) => {
-        const transfers = planTransfers('EUR', balances);
+        const transfers = planTransfers(balances);
 
         expect(Object.values(settle(balances, transfers)).every((amount) => amount === 0)).toBe(true);
         expect(transfers.every((transfer) => transfer.amount > 0 && transfer.from_member_id !== transfer.to_member_id)).toBe(true);
         expect(transfers).toHaveLength(fewestPayments(balances));
-        expect(planTransfers('EUR', balances)).toEqual(transfers);
+        expect(planTransfers(balances)).toEqual(transfers);
       }),
     );
   });
 
   it('pays across the middle and keeps matching debts together', () => {
     // Jonas owes 60 and Santi is owed 60, while Ana owes Carlos 50 separately.
-    const transfers = planTransfers('USD', { carlos: 50, ana: -50, jonas: -60, santi: 60 });
+    const transfers = planTransfers({ carlos: 50, ana: -50, jonas: -60, santi: 60 });
 
     expect(transfers).toEqual([
-      { currency: 'USD', from_member_id: 'ana', to_member_id: 'carlos', amount: 50 },
-      { currency: 'USD', from_member_id: 'jonas', to_member_id: 'santi', amount: 60 },
+      { from_member_id: 'ana', to_member_id: 'carlos', amount: 50 },
+      { from_member_id: 'jonas', to_member_id: 'santi', amount: 60 },
     ]);
   });
 
   it('still settles groups too large to search exhaustively', () => {
     const balances = Object.fromEntries(Array.from({ length: 20 }, (_, index) => [`m${index}`, index % 2 ? 7 : -7]));
 
-    expect(Object.values(settle(balances, planTransfers('EUR', balances))).every((amount) => amount === 0)).toBe(true);
+    expect(Object.values(settle(balances, planTransfers(balances))).every((amount) => amount === 0)).toBe(true);
   });
 });

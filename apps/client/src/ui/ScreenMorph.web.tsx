@@ -128,6 +128,7 @@ export class ScreenMorph extends Component<Props, Record<string, never>> {
       const part: Part = { key, box, clone: copy(element), background: style.backgroundColor, radius: style.borderRadius, border: style.borderTopColor, borderWidth: style.borderTopWidth, color: style.color, font: fontStyle(style), clips: clipped(style), whiteSpace: style.whiteSpace, textSize: textSize(element, style) };
 
       if (key) parts.set(key, part);
+
       if (element.dataset.morphFoot !== undefined) foot = part;
     });
 

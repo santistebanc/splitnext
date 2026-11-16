@@ -8,7 +8,7 @@ import type { GroupSnapshot } from '../src/domain/sync';
 
 /**
  * A person's details list every expense and repayment behind their balance;
- * the rows of each currency add up exactly to that balance.
+ * the rows add up exactly to that balance.
  */
 
 const id = (label: string) => label.padEnd(22, '_');
@@ -16,8 +16,6 @@ const id = (label: string) => label.padEnd(22, '_');
 const me = id('identity-me');
 
 const members = ['ana', 'ben', 'cy', 'dee'].map((name) => id(`member-${name}`));
-
-const currencies = ['EUR', 'USD'] as const;
 
 function start(): GroupSnapshot {
   const at = '2026-01-01T00:00:00.000Z';
@@ -39,14 +37,12 @@ const memberArbitrary = fc.constantFrom(...members);
 const stepArbitrary = fc.oneof(
   fc.record({
     kind: fc.constant('expense' as const),
-    currency: fc.constantFrom(...currencies),
     total: fc.integer({ min: 1, max: 10_000 }),
     payer: memberArbitrary,
     shares: fc.array(fc.integer({ min: 0, max: 3 }), { minLength: members.length, maxLength: members.length }),
   }),
   fc.record({
     kind: fc.constant('settlement' as const),
-    currency: fc.constantFrom(...currencies),
     amount: fc.integer({ min: 1, max: 5_000 }),
     from: memberArbitrary,
     to: memberArbitrary,
@@ -67,14 +63,14 @@ function command(snapshot: GroupSnapshot, step: Step, index: number): GroupComma
     });
 
     return parts.length
-      ? { command_id, type: 'expense.record', payload: { expense_id: id(`expense-${index}`), description: `Expense ${index}`, currency: step.currency, total: step.total, paid_by: step.payer, parts } }
+      ? { command_id, type: 'expense.record', payload: { expense_id: id(`expense-${index}`), description: `Expense ${index}`, total: step.total, paid_by: step.payer, parts } }
       : null;
   }
 
   if (step.kind === 'settlement')
     return step.from === step.to
       ? null
-      : { command_id, type: 'settlement.record', payload: { settlement_id: id(`settlement-${index}`), from_member_id: step.from, to_member_id: step.to, currency: step.currency, amount: step.amount } };
+      : { command_id, type: 'settlement.record', payload: { settlement_id: id(`settlement-${index}`), from_member_id: step.from, to_member_id: step.to, amount: step.amount } };
 
   const active = snapshot.expenses.filter((expense) => expense.status === 'active');
   const expense = active[step.index % Math.max(active.length, 1)];
@@ -83,14 +79,14 @@ function command(snapshot: GroupSnapshot, step: Step, index: number): GroupComma
 }
 
 describe('member breakdown', () => {
-  it('shows settled zeros only in currencies the person has records in', () => {
+  it('shows settled zeros only for people with records', () => {
     let snapshot = start();
     const [ana, ben, cy, dee] = members;
 
     const commands: GroupCommand[] = [
-      { command_id: id('dinner-command'), type: 'expense.record', payload: { expense_id: id('dinner'), description: 'Dinner', currency: 'EUR', total: 1000, paid_by: ana!, parts: [{ kind: 'shares', member_id: ana!, shares: 1 }, { kind: 'shares', member_id: ben!, shares: 1 }] } },
-      { command_id: id('repayment-command'), type: 'settlement.record', payload: { settlement_id: id('repayment'), from_member_id: ben!, to_member_id: ana!, currency: 'EUR', amount: 500 } },
-      { command_id: id('train-command'), type: 'expense.record', payload: { expense_id: id('train'), description: 'Train', currency: 'USD', total: 2000, paid_by: cy!, parts: [{ kind: 'shares', member_id: cy!, shares: 1 }] } },
+      { command_id: id('dinner-command'), type: 'expense.record', payload: { expense_id: id('dinner'), description: 'Dinner', total: 1000, paid_by: ana!, parts: [{ kind: 'shares', member_id: ana!, shares: 1 }, { kind: 'shares', member_id: ben!, shares: 1 }] } },
+      { command_id: id('repayment-command'), type: 'settlement.record', payload: { settlement_id: id('repayment'), from_member_id: ben!, to_member_id: ana!, amount: 500 } },
+      { command_id: id('train-command'), type: 'expense.record', payload: { expense_id: id('train'), description: 'Train', total: 2000, paid_by: cy!, parts: [{ kind: 'shares', member_id: cy!, shares: 1 }] } },
     ];
 
     for (const entry of commands) {
@@ -100,14 +96,11 @@ describe('member breakdown', () => {
       snapshot = result.snapshot;
     }
 
-    expect(balanceRows(snapshot).map(({ currency, rows }) => ({ currency, balances: rows.map(({ member, amount }) => [member.id, amount]) }))).toEqual([
-      { currency: 'EUR', balances: [[ana, 0], [ben, 0]] },
-      { currency: 'USD', balances: [[cy, 0]] },
-    ]);
+    expect(balanceRows(snapshot).map(({ member, amount }) => [member.id, amount])).toEqual([[ana, 0], [ben, 0], [cy, 0]]);
     expect(hasRecords(snapshot, dee!)).toBe(false);
   });
 
-  it('adds up to the balance in every currency', () => {
+  it('adds up to the balance', () => {
     fc.assert(
       fc.property(fc.array(stepArbitrary, { maxLength: 25 }), (steps) => {
         let snapshot = start();
@@ -129,18 +122,15 @@ describe('member breakdown', () => {
           const breakdown = memberBreakdown(snapshot, memberId, () => 'Someone');
 
           // Settled people have records; people in no expense or repayment yet have none.
-          expect(hasRecords(snapshot, memberId)).toBe(breakdown.length > 0);
-          expect(displayed.flatMap(({ currency, rows }) => rows.filter((row) => row.member.id === memberId).map((row) => [currency, row.amount])))
-            .toEqual(breakdown.map(({ currency, total }) => [currency, total]));
+          const { rows, total } = breakdown;
 
-          for (const { currency, rows, total } of breakdown) {
-            expect(rows.reduce((sum, row) => sum + row.amount, 0)).toBe(total);
-            expect(total).toBe(balances[currency]?.[memberId] ?? 0);
-            expect(rows.map((row) => row.at)).toEqual(rows.map((row) => row.at).sort().reverse());
-          }
+          expect(hasRecords(snapshot, memberId)).toBe(rows.length > 0);
+          expect(displayed.filter((row) => row.member.id === memberId).map((row) => row.amount)).toEqual(rows.length ? [total] : []);
+          expect(rows.reduce((sum, row) => sum + row.amount, 0)).toBe(total);
+          expect(total).toBe(balances[memberId] ?? 0);
+          expect(rows.map((row) => row.at)).toEqual(rows.map((row) => row.at).sort().reverse());
 
-          for (const [currency, amounts] of Object.entries(balances))
-            if (amounts[memberId]) expect(breakdown.some((entry) => entry.currency === currency)).toBe(true);
+          if (balances[memberId]) expect(rows.length).toBeGreaterThan(0);
         }
       }),
       { numRuns: 200 },

@@ -1,56 +1,41 @@
 import { z } from 'zod';
 
 /**
- * The money rules every expense, balance, and settlement must use: integer
- * amounts in a currency's minor unit, allocation by exact amounts and shares,
- * deterministic rounding that spreads unavoidable extra units fairly over
- * time, and balances kept separately per currency. See ADR 0007, ADR 0014,
- * and ADR 0017. Nothing outside this module reproduces these rules.
+ * The money rules every expense, balance, and settlement must use: plain
+ * amounts with two decimals, kept as whole hundredths, allocation by exact
+ * amounts and shares, deterministic rounding that spreads unavoidable extra
+ * hundredths fairly over time, and one balance per member. There are no
+ * currencies (ADR 0025). See ADR 0007, ADR 0014, and ADR 0017. Nothing outside
+ * this module reproduces these rules.
  */
 
-/** An ISO 4217 currency code, such as EUR. */
-export const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/);
+/** Decimal places of every amount. */
+export const amountDigits = 2;
 
-export type CurrencyCode = z.output<typeof currencyCodeSchema>;
-
-/** ISO 4217 currencies whose minor unit is not two decimal places. */
-const minorDigitExceptions = new Map([
-  ...['BIF', 'CLP', 'DJF', 'GNF', 'ISK', 'JPY', 'KMF', 'KRW', 'PYG', 'RWF', 'UGX', 'UYI', 'VND', 'VUV', 'XAF', 'XOF', 'XPF']
-    .map((code): [string, number] => [code, 0]),
-  ...['BHD', 'IQD', 'JOD', 'KWD', 'LYD', 'OMR', 'TND'].map((code): [string, number] => [code, 3]),
-]);
-
-/** Decimal places of a currency's minor unit: 2 for EUR, 0 for JPY, 3 for KWD. */
-export function minorDigits(currency: CurrencyCode): number {
-  return minorDigitExceptions.get(currency) ?? 2;
-}
-
-/** An amount in a currency's minor unit, such as cents; never fractional. */
+/** An amount in hundredths, such as 1250 for 12.50; never fractional. */
 export const minorAmountSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 
 /**
- * Reads a decimal amount as entered, such as "12.5" EUR, into minor units
- * without floating point. More decimals than the currency has are invalid.
+ * Reads a decimal amount as entered, such as "12.5", into hundredths without
+ * floating point. More than two decimals are invalid.
  */
-export function parseAmount(text: string, currency: CurrencyCode): number | null {
-  const digits = minorDigits(currency);
+export function parseAmount(text: string): number | null {
   const match = /^(\d+)(?:\.(\d*))?$/.exec(text.trim());
 
   if (!match) return null;
   const [, whole = '', fraction = ''] = match;
 
-  if (fraction.length > digits) return null;
-  const minor = BigInt(whole) * 10n ** BigInt(digits) + BigInt(fraction.padEnd(digits, '0') || '0');
+  if (fraction.length > amountDigits) return null;
+  const minor = BigInt(whole) * 10n ** BigInt(amountDigits) + BigInt(fraction.padEnd(amountDigits, '0') || '0');
 
   return minor <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(minor) : null;
 }
 
-/** Writes minor units as a plain decimal, such as 1250 EUR as "12.50". */
-export function formatAmount(minor: number, currency: CurrencyCode): string {
-  const digits = minorDigits(currency);
-  const text = String(minor).padStart(digits + 1, '0');
+/** Writes hundredths as a plain decimal, such as 1250 as "12.50". */
+export function formatAmount(minor: number): string {
+  const text = String(minor).padStart(amountDigits + 1, '0');
 
-  return digits ? `${text.slice(0, -digits)}.${text.slice(-digits)}` : text;
+  return `${text.slice(0, -amountDigits)}.${text.slice(-amountDigits)}`;
 }
 
 /** How one member takes part in an expense. */
@@ -60,7 +45,7 @@ export type AllocationPart =
 
 export type Allocation = { member_id: string; amount: number };
 
-/** Extra minor units each member has absorbed from rounding, in one currency. */
+/** Extra hundredths each member has absorbed from rounding. */
 export type RoundingBurden = Record<string, number>;
 
 export type AllocationError =
@@ -80,8 +65,8 @@ export type AllocationResult =
  * Splits a total in minor units: exact parts take their amounts and the
  * remainder is divided by shares. Each share part receives the floor or the
  * ceiling of its exact proportional amount. The few extra units needed to
- * reach the total go to eligible members with the lowest accumulated burden
- * in this currency, then the largest fractional remainder, then member id,
+ * reach the total go to eligible members with the lowest accumulated burden,
+ * then the largest fractional remainder, then member id,
  * so equal splits rotate extras over time. The result is independent of the
  * order of parts and returns the updated burden.
  */
@@ -152,51 +137,46 @@ export function allocate(
   };
 }
 
-/** What one expense contributes to balances: who paid and who owes, in one currency. */
+/** What one expense contributes to balances: who paid and who owes. */
 export type LedgerExpense = {
-  currency: CurrencyCode;
   /** One payer for now; a list so several payers fit without a new model. */
   paid: Allocation[];
   allocations: Allocation[];
 };
 
-/** A recorded repayment that reduces balances in its own currency only. */
+/** A recorded repayment that reduces balances. */
 export type LedgerSettlement = {
-  currency: CurrencyCode;
   from_member_id: string;
   to_member_id: string;
   amount: number;
 };
 
-/** Net amount per member in one currency: positive is owed to them, negative they owe. */
-export type CurrencyBalances = Record<string, number>;
+/** Net amount per member: positive is owed to them, negative they owe. */
+export type Balances = Record<string, number>;
 
-/** Balances per currency; amounts in different currencies are never combined. */
+/** Each member's one balance from the expenses and repayments given. */
 export function balances(
   expenses: readonly LedgerExpense[],
   settlements: readonly LedgerSettlement[] = [],
-): Record<CurrencyCode, CurrencyBalances> {
-  const byCurrency: Record<CurrencyCode, CurrencyBalances> = {};
+) {
+  const result: Balances = {};
 
-  function add(currency: CurrencyCode, memberId: string, amount: number): void {
-    const currencyBalances = byCurrency[currency] ?? {};
-
-    currencyBalances[memberId] = (currencyBalances[memberId] ?? 0) + amount;
-    byCurrency[currency] = currencyBalances;
+  function add(memberId: string, amount: number): void {
+    result[memberId] = (result[memberId] ?? 0) + amount;
   }
 
   for (const expense of expenses) {
-    for (const payment of expense.paid) add(expense.currency, payment.member_id, payment.amount);
+    for (const payment of expense.paid) add(payment.member_id, payment.amount);
 
-    for (const share of expense.allocations) add(expense.currency, share.member_id, -share.amount);
+    for (const share of expense.allocations) add(share.member_id, -share.amount);
   }
 
   for (const settlement of settlements) {
-    add(settlement.currency, settlement.from_member_id, settlement.amount);
-    add(settlement.currency, settlement.to_member_id, -settlement.amount);
+    add(settlement.from_member_id, settlement.amount);
+    add(settlement.to_member_id, -settlement.amount);
   }
 
-  return byCurrency;
+  return result;
 }
 
 /** An expense is balanced when what was paid and what is owed both equal its total. */

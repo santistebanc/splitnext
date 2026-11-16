@@ -22,14 +22,14 @@ function plannedPayments(app: MemberListApp, person: string | null) {
  * whom ("You pay / Ben", "Ben pays / you", "Cy pays / Dan"), then the
  * amount and Record, which records it as planned.
  */
-function PlanPayment(props: { replica: Replica; you: string | undefined; from: string; to: string; amount: number; currency: string; quiet?: boolean }) {
+function PlanPayment(props: { replica: Replica; you: string | undefined; from: string; to: string; amount: number; quiet?: boolean }) {
   const record = useActionCall();
   const snapshot = props.replica.projected_snapshot;
   const name = (memberId: string) => (memberId === props.you ? 'You' : memberName(snapshot, memberId));
   const payer = name(props.from);
   const payee = name(props.to);
-  const amount = moneyLabel(props.amount, props.currency);
-  const payment = { from: props.from, to: props.to, amount: formatAmount(props.amount, props.currency), currency: props.currency };
+  const amount = moneyLabel(props.amount);
+  const payment = { from: props.from, to: props.to, amount: formatAmount(props.amount) };
 
   return (
     <View>
@@ -73,7 +73,7 @@ export function SettleUpPlan(props: { app: MemberListApp }) {
   const rest = payments.filter((entry) => entry.from_member_id !== you && entry.to_member_id !== you);
 
   const row =(entry: (typeof payments)[number], quiet: boolean) => (
-    <PlanPayment key={`${entry.currency}:${entry.from_member_id}:${entry.to_member_id}`} replica={replica} you={you} from={entry.from_member_id} to={entry.to_member_id} amount={entry.amount} currency={entry.currency} quiet={quiet} />
+    <PlanPayment key={`${entry.from_member_id}:${entry.to_member_id}`} replica={replica} you={you} from={entry.from_member_id} to={entry.to_member_id} amount={entry.amount} quiet={quiet} />
   );
 
   if (!payments.length) return <EmptyState tone="settled" title="Everyone is settled up" />;

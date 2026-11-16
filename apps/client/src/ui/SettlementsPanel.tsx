@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { View } from 'react-native';
-import { minorDigits, parseAmount, preferredMember, repaymentMembers, settlementSuggestions, type ClientReplicaState } from '@splitnext/client';
+import { amountDigits, parseAmount, preferredMember, repaymentMembers, settlementSuggestions, type ClientReplicaState } from '@splitnext/client';
 import { Button, ErrorMessage, Stack, Text, between, rules } from '../design';
 import { memberName, moneyLabel } from '../model/expenses';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
@@ -47,7 +47,7 @@ export function SettlementsHeader() {
   const progress = useCompactProgress();
   const amount = useRef<AmountInputHandle>(null);
   const whole = Math.max(1, (draft.amount.split('.')[0] ?? '').length);
-  const shownLength = whole + Math.floor((whole - 1) / 3) + 1 + minorDigits(draft.currency);
+  const shownLength = whole + Math.floor((whole - 1) / 3) + 1 + amountDigits;
   const amountFit = Math.min(1, 10 / shownLength);
 
   useEffect(() => {
@@ -76,7 +76,7 @@ export function SettlementsHeader() {
       {/* No padding below: the header ends right at the amount's underline. */}
       <View>
         <View style={{ marginTop: between(12, 0, progress), paddingBottom: between(10, 6, progress), ...rules.inkBelow, flexDirection: 'row' }}>
-          <AmountInput inputRef={amount} align="right" value={draft.amount} currency={draft.currency} onChangeText={(value) => {
+          <AmountInput inputRef={amount} align="right" value={draft.amount} onChangeText={(value) => {
             void actions.dispatch('changeDraft', { field: 'repayment.amount', value }, { origin: 'ui' });
           }} onSubmitEditing={submit} height={between(60, 36, progress)} fontSize={between(56, 32, progress) * amountFit} />
         </View>
@@ -109,9 +109,9 @@ export function SettlementsPanel(props: { app: MemberListApp; replica: ClientRep
   const you = preferredMember(snapshot, props.replica.session?.identity.id)?.id;
   const eligible = new Set(repaymentMembers(snapshot).map((member) => member.id));
   const members = snapshot.members.filter((member) => eligible.has(member.id) || (draft.settlementId && [draft.from, draft.to].includes(member.id)));
-  const input = { from: draft.from, to: draft.to, amount: draft.amount, currency: draft.currency, keepEditing: Boolean(draft.settlementId), manual: true };
-  const owed = settlementSuggestions(snapshot).find((entry) => entry.from_member_id === draft.from && entry.to_member_id === draft.to && entry.currency === draft.currency);
-  const full = owed && parseAmount(draft.amount, draft.currency) === owed.amount;
+  const input = { from: draft.from, to: draft.to, amount: draft.amount, keepEditing: Boolean(draft.settlementId), manual: true };
+  const owed = settlementSuggestions(snapshot).find((entry) => entry.from_member_id === draft.from && entry.to_member_id === draft.to);
+  const full = owed && parseAmount(draft.amount) === owed.amount;
 
   return (
     <Stack gap={16} paddingBottom={24}>
@@ -134,7 +134,7 @@ export function SettlementsPanel(props: { app: MemberListApp; replica: ClientRep
         {owed
           ? full
             ? `Full amount ${personName(snapshot, owed.from_member_id, you)} ${owed.from_member_id === you ? 'owe' : 'danger'}. Paid outside splitnext.`
-            : `${personName(snapshot, owed.from_member_id, you, true)} ${owed.from_member_id === you ? 'owe' : 'danger'} ${moneyLabel(owed.amount, owed.currency)}. Paid outside splitnext.`
+            : `${personName(snapshot, owed.from_member_id, you, true)} ${owed.from_member_id === you ? 'owe' : 'danger'} ${moneyLabel(owed.amount)}. Paid outside splitnext.`
           : 'Paid outside splitnext.'}
       </Text>
       <ErrorMessage message={action.error} />

@@ -8,7 +8,6 @@ export type AmountInputHandle = { focus: (options?: FocusOptions) => void };
 export type AmountInputProps = {
   inputRef: RefObject<AmountInputHandle | null>;
   value: string;
-  currency: string;
   height: number;
   fontSize: number;
   align?: 'left' | 'right';
@@ -35,16 +34,16 @@ export function AmountInput(props: AmountInputProps) {
       selectTextOnFocus={props.inline}
       onFocus={props.onFocus}
       onBlur={props.onBlur}
-      placeholder={formatAmount(0, props.currency)}
+      placeholder={formatAmount(0)}
       placeholderTextColor={colors.faint}
       inputMode="decimal"
       value={props.value}
       onChangeText={(value) => {
         if (!/^\d*(?:[.,]\d*)?$/.test(value)) return;
         const decimal = value.replace(',', '.');
-        const minor = parseAmount(decimal.startsWith('.') ? `0${decimal}` : decimal, props.currency);
+        const minor = parseAmount(decimal.startsWith('.') ? `0${decimal}` : decimal);
 
-        if (value === '' || minor !== null) props.onChangeText(minor === null ? '' : formatAmount(minor, props.currency));
+        if (value === '' || minor !== null) props.onChangeText(minor === null ? '' : formatAmount(minor));
       }}
       returnKeyType={props.enterKeyHint ?? 'done'}
       onSubmitEditing={props.onSubmitEditing}

@@ -23,12 +23,6 @@ export function currentExpenses(snapshot: Snapshot): Expense[] {
   return (snapshot?.expenses ?? []).filter((expense) => expense.status === 'active').reverse();
 }
 
-/**
- * The ISO 4217 code for no currency. Amounts are plain numbers with two
- * decimals, so every new expense and repayment records this code.
- */
-export const noCurrency = 'XXX';
-
 /** What separates groups of three digits: a comma. */
 export const digitGroupSeparator = ',';
 
@@ -44,14 +38,14 @@ export function groupDigits(plain: string): string {
   return fraction === undefined ? grouped : `${grouped}.${fraction}`;
 }
 
-/** An amount as people read it, such as "1,234.50", never with a currency. */
-export function moneyLabel(amount: number, currency: string): string {
-  return groupDigits(formatAmount(amount, currency));
+/** An amount as people read it, such as "1,234.50". */
+export function moneyLabel(amount: number): string {
+  return groupDigits(formatAmount(amount));
 }
 
 /** An expense as people refer to it, such as "Dinner · 42.50". */
-export function expenseLabel(expense: Pick<Expense, 'description' | 'total' | 'currency'>): string {
-  return `${expense.description} · ${moneyLabel(expense.total, expense.currency)}`;
+export function expenseLabel(expense: Pick<Expense, 'description' | 'total'>): string {
+  return `${expense.description} · ${moneyLabel(expense.total)}`;
 }
 
 /** One share for every active member, the default split. */
@@ -70,7 +64,6 @@ export type ExpenseDraft = {
   expectedVersion: number | null;
   description: string;
   amount: string;
-  currency: string;
   paidBy: string | null;
   parts: ExpenseDraftPart[];
 };
@@ -82,7 +75,6 @@ export type ExpenseDraft = {
 export function draftForExpense(
   snapshot: Snapshot | null,
   expense: Expense | null,
-  currency: string,
   identityId?: string,
 ): ExpenseDraft {
   if (!expense) {
@@ -91,7 +83,6 @@ export function draftForExpense(
       expectedVersion: null,
       description: '',
       amount: '',
-      currency,
       paidBy: preferredMember(snapshot, identityId)?.id ?? null,
       parts: equalParts(snapshot),
     };
@@ -101,10 +92,9 @@ export function draftForExpense(
     expenseId: expense.id,
     expectedVersion: expense.version,
     description: expense.description,
-    amount: formatAmount(expense.total, expense.currency),
-    currency: expense.currency,
+    amount: formatAmount(expense.total),
     paidBy: expense.paid[0]?.member_id ?? null,
-    parts: expense.parts.map((part) => part.kind === 'exact' ? { ...part, amount: formatAmount(part.amount, expense.currency) } : { ...part }),
+    parts: expense.parts.map((part) => part.kind === 'exact' ? { ...part, amount: formatAmount(part.amount) } : { ...part }),
   };
 }
 
@@ -121,9 +111,9 @@ function normalizeShares(parts: ExpenseDraftPart[]): ExpenseDraftPart[] {
 
 /** The nearest whole share count above a fixed person's current proportion. */
 function sharesFromFixed(draft: ExpenseDraft, fixed: Extract<ExpenseDraftPart, { kind: 'exact' }>): number {
-  const amount = parseAmount(fixed.amount, draft.currency) ?? 0;
-  const total = parseAmount(draft.amount, draft.currency) ?? 0;
-  const otherFixed = draft.parts.reduce((sum, part) => part.kind === 'exact' && part !== fixed ? sum + (parseAmount(part.amount, draft.currency) ?? 0) : sum, 0);
+  const amount = parseAmount(fixed.amount) ?? 0;
+  const total = parseAmount(draft.amount) ?? 0;
+  const otherFixed = draft.parts.reduce((sum, part) => part.kind === 'exact' && part !== fixed ? sum + (parseAmount(part.amount) ?? 0) : sum, 0);
   const shares = draft.parts.reduce((sum, part) => part.kind === 'shares' ? sum + part.shares : sum, 0);
   const remaining = total - otherFixed - amount;
 
@@ -176,9 +166,9 @@ export function entryFromDraft(draft: ExpenseDraft): DraftEntry {
 
   if (!description.success) return fail('Describe the expense.');
 
-  const total = parseAmount(draft.amount, draft.currency);
+  const total = parseAmount(draft.amount);
 
-  if (!total) return fail(`Enter an amount, such as ${formatAmount(1250, draft.currency)}.`);
+  if (!total) return fail(`Enter an amount, such as ${formatAmount(1250)}.`);
 
   if (!draft.paidBy) return fail('Choose who paid.');
 
@@ -190,7 +180,7 @@ export function entryFromDraft(draft: ExpenseDraft): DraftEntry {
       if (!Number.isInteger(part.shares) || part.shares <= 0 || part.shares > 1_000_000) return fail('Use between 1 and 1000000 whole shares.');
       parts.push(part);
     } else {
-      const amount = parseAmount(part.amount, draft.currency);
+      const amount = parseAmount(part.amount);
 
       if (amount === null) return fail('Enter each amount as a number.');
       parts.push({ kind: 'exact', member_id: part.member_id, amount });
@@ -209,7 +199,7 @@ export function entryFromDraft(draft: ExpenseDraft): DraftEntry {
 
   return {
     ok: true,
-    entry: { description: description.data, currency: draft.currency, total, paid_by: draft.paidBy, parts },
+    entry: { description: description.data, total, paid_by: draft.paidBy, parts },
   };
 }
 
@@ -222,7 +212,7 @@ export function previewAllocation(snapshot: Snapshot, draft: ExpenseDraft): Map<
   const result = entryFromDraft({ ...draft, description: draft.description.trim() || 'Expense' });
 
   if (!result.ok || !snapshot) return new Map();
-  const burden = roundingBurden(snapshot, result.entry.currency, draft.expenseId ?? undefined);
+  const burden = roundingBurden(snapshot, draft.expenseId ?? undefined);
   const allocated = allocate(result.entry.total, result.entry.parts, burden);
 
   return new Map(allocated.ok ? allocated.allocations.map((entry) => [entry.member_id, entry.amount]) : []);
@@ -238,22 +228,17 @@ export function memberName(snapshot: Snapshot, memberId: string): string {
 export type BalanceRow = { member: LedgerMember; amount: number };
 
 /**
- * Each currency's balances for people named in its current records, including
- * settled zeros. Hidden people stay only while not settled. Positive is owed.
+ * Balances of the people named in current records, including settled zeros.
+ * Hidden people stay only while not settled. Positive is owed.
  */
-export function balanceRows(snapshot: Snapshot): { currency: string; rows: BalanceRow[] }[] {
-  const byCurrency = snapshot ? groupBalances(snapshot) : {};
+export function balanceRows(snapshot: Snapshot): BalanceRow[] {
+  const balances = snapshot ? groupBalances(snapshot) : {};
 
-  return Object.keys(byCurrency)
-    .sort()
-    .map((currency) => ({
-      currency,
-      rows: (snapshot?.members ?? []).flatMap((member) => {
-        const amount = byCurrency[currency]?.[member.id];
+  return (snapshot?.members ?? []).flatMap((member) => {
+    const amount = balances[member.id];
 
-        return amount !== undefined && (member.status === 'active' || (member.status === 'hidden' && amount !== 0)) ? [{ member, amount }] : [];
-      }),
-    }));
+    return amount !== undefined && (member.status === 'active' || (member.status === 'hidden' && amount !== 0)) ? [{ member, amount }] : [];
+  });
 }
 
 /**
