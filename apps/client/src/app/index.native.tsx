@@ -1,1 +1,3 @@
-export { AppScreen as default } from '../ui/AppScreen';
+import { Redirect } from 'expo-router';
+
+export default function NativeHome() { return <Redirect href="/app" />; }
