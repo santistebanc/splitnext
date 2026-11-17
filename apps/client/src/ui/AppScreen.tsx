@@ -80,6 +80,9 @@ export function AppScreen(props: ScreenProps) {
         if (cancelled) current.dispose();
         else setController(current);
       } catch (cause) {
+        // The screen shows a general message for unknown causes; keep the real one in the device log.
+        console.error('Startup failed', cause);
+
         if (!cancelled)
           setError(
             errorMessage(
