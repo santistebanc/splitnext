@@ -235,8 +235,8 @@ describe('app actions', () => {
     const { host, state, calls } = createHost({ open: false });
 
     state.groups.push(
-      { group_id: 'savedGroup____________', name: 'Lisbon', status: 'active', stored_locally: true, pending_commands: 0, member_count: 2, you_name: 'Ana', you_balances: [] },
-      { group_id: 'listedGroup___________', name: 'Porto', status: 'active', stored_locally: false, pending_commands: 0, member_count: null, you_name: null, you_balances: null },
+      { group_id: 'savedGroup____________', name: 'Lisbon', status: 'active', stored_locally: true, pending_commands: 0, member_count: 2, you_name: 'Ana', you_balance: 0 },
+      { group_id: 'listedGroup___________', name: 'Porto', status: 'active', stored_locally: false, pending_commands: 0, member_count: null, you_name: null, you_balance: null },
     );
     const actions = createDispatcher(host);
 
