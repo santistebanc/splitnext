@@ -1030,6 +1030,37 @@ test('uses the app brand for the browser icon and install theme', async ({ page,
   }
 });
 
+test('uses shared vector checks and toast controls in the design catalog', async ({ page }, testInfo) => {
+  for (const width of [390, 1100]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/components?page=choices');
+    const choice = page.getByRole('checkbox', { name: 'Shares this expense', exact: true });
+
+    await expect(choice).toBeVisible();
+    await expect(choice.locator('svg')).toHaveCount(1);
+    await choice.click();
+    await expect(choice.locator('svg')).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath(`choices-${width}.png`) });
+    await page.goto('/components?page=feedback');
+    const settled = page.getByText('Everyone is settled up', { exact: true });
+
+    await expect(settled).toBeVisible();
+    await expect(settled.locator('..').locator('svg')).toHaveCount(1);
+    await page.screenshot({ path: testInfo.outputPath(`feedback-${width}.png`) });
+    await page.goto('/components?page=icons');
+    await expect(page.getByText('Icons and mark', { exact: true }).last()).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`icons-${width}.png`) });
+  }
+
+  await page.goto('/components?page=overlays');
+  await button(page, 'Show toast').click();
+  await expect(page.getByRole('status').filter({ has: page.getByTestId('toast') })).toHaveText('Ben removed.Undo');
+  await expect(page.getByTestId('toast')).toHaveCSS('font-family', '"Instrument Sans"');
+  await page.screenshot({ path: testInfo.outputPath('toast.png') });
+  await button(page, 'Undo').click();
+  await expect(page.getByTestId('toast')).toHaveCount(0);
+});
+
 test('keeps the fixed theme and group-list branding when offline', async ({ page, context }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
