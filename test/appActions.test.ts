@@ -71,6 +71,7 @@ function createHost(setup: Setup = {}) {
 
       return record([command.type, ...values.map((value) => JSON.stringify(value).replace(/^"|"$/g, ''))].join(' '));
     },
+    leaveGroup: (groupId) => record(`leaveGroup ${groupId ?? state.group?.group_id ?? '-'}`),
     regenerateInvite: () => record('regenerateInvite'),
     retryNotice: (id) => record(`retryNotice ${id}`),
     dismissNotice: (id) => record(`dismissNotice ${id}`),
@@ -230,6 +231,21 @@ describe('app actions', () => {
     expect(actions.state().ui.memberEdit).toBeNull();
   });
 
+  it('leaves a group saved on this device without opening it', async () => {
+    const { host, state, calls } = createHost({ open: false });
+
+    state.groups.push(
+      { group_id: 'savedGroup____________', name: 'Lisbon', status: 'active', stored_locally: true, pending_commands: 0, member_count: 2, you_name: 'Ana', you_balances: [] },
+      { group_id: 'listedGroup___________', name: 'Porto', status: 'active', stored_locally: false, pending_commands: 0, member_count: null, you_name: null, you_balances: null },
+    );
+    const actions = createDispatcher(host);
+
+    expect(await actions.dispatch('leaveGroup', { groupId: 'listedGroup___________' }, { confirmed: true })).toMatchObject({ status: 'failed', error: 'group_not_found' });
+    expect(await actions.dispatch('leaveGroup', {}, { confirmed: true })).toMatchObject({ status: 'failed', error: 'no_open_group' });
+    expect(await actions.dispatch('leaveGroup', { groupId: 'savedGroup____________' }, { confirmed: true })).toMatchObject({ status: 'done' });
+    expect(calls).toEqual(['leaveGroup savedGroup____________']);
+  });
+
   it('finishes a leave without moving the view another running step decides', async () => {
     const { host } = createHost();
     const leaving = deferred<void>();
@@ -237,7 +253,7 @@ describe('app actions', () => {
 
     const actions = createDispatcher({
       ...host,
-      submit: (intent) => (intent.type === 'group.leave' ? leaving.promise : host.submit(intent)),
+      leaveGroup: () => leaving.promise,
       createGroup: () => creating.promise,
     });
 
