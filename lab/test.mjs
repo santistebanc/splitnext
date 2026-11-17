@@ -87,7 +87,8 @@ test('a host report is acknowledged before awaiting a gate result on the same ch
 
   try {
     await loseCommittedResponse(lab, {
-      device: 'a', groupId: 'group', name: 'Changed', timeoutMs: 150,
+      // Generous, so a slow event write on a busy host is not taken for the deadlock this test catches.
+      device: 'a', groupId: 'group', name: 'Changed', timeoutMs: 2000,
       action: () => (pending = (async () => {
         await lab.event('response.received', { device: 'a', method: 'POST', path: '/groups/group/sync' });
         acknowledged.resolve();
