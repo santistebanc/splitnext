@@ -88,6 +88,7 @@ export class AppController {
       openJoinedGroup: (groupId, isCurrent) => this.openJoinedGroup(groupId, isCurrent, invocation),
       showGroups: () => this.showGroups(),
       submit: (intent) => this.submit(intent, invocation),
+      leaveGroup: (groupId) => this.leaveGroup(groupId, invocation),
       regenerateInvite: () => this.regenerateInvite(invocation),
       retryNotice: (commandId) => this.retryNotice(commandId, invocation),
       dismissNotice: (commandId) => this.dismissNotice(commandId, invocation),
@@ -342,6 +343,18 @@ export class AppController {
     const opening = this.opening;
 
     await this.settle(await this.client.submit(this.groupId(invocation), intent, invocation?.id), opening);
+  }
+
+  /**
+   * Leaves a group on this installation: the open one, or a saved one named
+   * by id. Naming it saves the leave without opening the group first, which
+   * would wait for the server, so a page closed at once still keeps it.
+   */
+  async leaveGroup(groupId?: string, invocation?: ActionInvocation): Promise<void> {
+    const opening = this.opening;
+    const target = groupId ?? this.groupId(invocation);
+
+    await this.settle(await this.client.submit(target, { type: 'group.leave', payload: {} }, invocation?.id), opening);
   }
 
   async retryNotice(commandId: string, invocation?: ActionInvocation): Promise<void> {

@@ -2108,6 +2108,17 @@ test('leaves from the groups list after confirming and rejoins as an existing me
   await expect(button(page, /^Ana, /)).toBeVisible();
 });
 
+test('keeps a leave when the page reloads at once after Leave', async ({ page }) => {
+  await createGroup(page, 'Lisbon', 'Ana');
+  await button(page, 'Back to groups').click();
+  await motionSettled(page);
+  await button(page, 'Leave Lisbon').click();
+  await button(page, 'Leave').click();
+  await page.reload();
+  await expect(button(page, 'Show 1 group you left')).toBeVisible();
+  await expect(button(page, 'Leave Lisbon')).toHaveCount(0);
+});
+
 test('keeps Settle up rows whole with very long names and amounts', async ({ page }, testInfo) => {
   const long = 'Wolfgang Amadeus Schwarzenegger-Müller';
 

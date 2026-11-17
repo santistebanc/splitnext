@@ -23,6 +23,7 @@ export type ActionHost = Pick<
   | 'openJoinedGroup'
   | 'showGroups'
   | 'submit'
+  | 'leaveGroup'
   | 'regenerateInvite'
   | 'retryNotice'
   | 'dismissNotice'
