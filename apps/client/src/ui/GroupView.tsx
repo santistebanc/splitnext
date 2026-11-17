@@ -281,7 +281,8 @@ function balancesByMember(replica: Replica): Map<string, number> {
 function orderedMembers<Member extends { id: string }>(members: readonly Member[], owing: Map<string, number>, recorded: (memberId: string) => boolean): Member[] {
   const balance = (memberId: string) => owing.get(memberId) ?? 0;
 
-  return members.toSorted((left, right) =>
+  // Not toSorted: the phone app's JavaScript engine (Hermes) lacks it.
+  return [...members].sort((left, right) =>
     Number(recorded(right.id)) - Number(recorded(left.id)) ||
     balance(left.id) - balance(right.id));
 }
