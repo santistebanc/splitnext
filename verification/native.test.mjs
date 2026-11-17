@@ -5,11 +5,32 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { SqliteClientStorage } from '../apps/client/src/native/storage.ts';
 import { createNativeNavigation } from '../apps/client/src/native/navigation.ts';
 import { nativeAmountDraft } from '../apps/client/src/native/amount.ts';
 import { encodeBinary } from '../apps/client/src/native/base64.ts';
 import { createIncomingLinks, normalizeSystemLink } from '../apps/client/src/native/incomingLinks.ts';
+
+test('Android autolinking builds SQLite for the selected architecture instead of using the ARM-only archive', () => {
+  const require = createRequire(import.meta.url);
+  const moduleRoot = path.dirname(require.resolve('expo-modules-autolinking/package.json'));
+  const result = spawnSync(process.execPath, [path.join(moduleRoot, 'bin/expo-modules-autolinking.js'), 'resolve', '--platform', 'android', '--json'], {
+    cwd: fileURLToPath(new URL('../apps/client', import.meta.url)),
+    encoding: 'utf8',
+    timeout: 30_000,
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.error?.message);
+  const resolved = JSON.parse(result.stdout);
+  const sqlite = resolved.modules.find((module) => module.packageName === 'expo-sqlite');
+
+  assert.ok(sqlite, 'SQLite must be linked into the Android app');
+  for (const project of sqlite.projects) {
+    assert.ok(resolved.configuration?.buildFromSource?.some((pattern) => new RegExp(`^(?:${pattern})$`).test(project.name)), `${project.name} must compile its native library for the target ABI`);
+  }
+});
 
 test('native system links survive route setup and repeat delivery allows a blocked action to retry', () => {
   assert.equal(normalizeSystemLink('splitnext://j#abcdefghijkl'), 'splitnext:///j#abcdefghijkl');

@@ -3,6 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "main": "index.ts",
+  "expo": {
+    "autolinking": {
+      "android": {
+        "buildFromSource": ["expo-sqlite"]
+      }
+    }
+  },
   "scripts": {
     "dev": "EXPO_PUBLIC_API_URL=http://localhost:8787 expo start --web --port 8081",
     "build": "node ../../scripts/brand-assets.mjs --check && expo export --platform web",

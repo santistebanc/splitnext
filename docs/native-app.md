@@ -22,6 +22,10 @@ Regenerate native projects after config or module
 changes. The font files are static instances of the web fonts; their licenses
 are in `assets/fonts`. `npm run assets:brand` also generates the launcher icon.
 
+Android compiles SQLite from source: its prebuilt archive contains only ARM64.
+Before device tests, check that the APK includes `libexpo-sqlite.so` for each
+packaged architecture. A successful build alone does not prove this.
+
 The native storage tests use real SQLite through Node. They check reopen,
 concurrent updates, rollback, and retry. They do not prove expo-sqlite behavior
 or operating-system durability. Bundle export does not prove a signed binary
