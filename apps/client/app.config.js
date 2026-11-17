@@ -17,6 +17,8 @@ module.exports = {
   expo: {
     ...expo,
     backgroundColor: colors.background,
+    primaryColor: colors.ink,
+    splash: { backgroundColor: colors.background },
     plugins: expo.plugins.map((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-build-properties'
       ? [plugin[0], { ...plugin[1], android: { ...plugin[1].android, usesCleartextTraffic: localHttpApi } }]
       : plugin),
