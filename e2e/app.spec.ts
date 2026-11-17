@@ -205,6 +205,19 @@ async function expectWholeTextSelected(target: Locator) {
     node.value.length > 0 && node.selectionStart === 0 && node.selectionEnd === node.value.length)).toBe(true);
 }
 
+/**
+ * NumericFormat moves the caret a tick after each keystroke, which can undo a
+ * selection made at once, so select again until the selection stays.
+ */
+async function selectInAmount(target: Locator, start: number, end: number) {
+  await expect.poll(() => target.evaluate(async (input: HTMLInputElement, range: { from: number; to: number }) => {
+    input.setSelectionRange(range.from, range.to);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    return [input.selectionStart, input.selectionEnd];
+  }, { from: start, to: end })).toEqual([start, end]);
+}
+
 function heading(page: Page, name: string) {
   return page.getByRole('heading', { name, exact: true });
 }
@@ -1276,7 +1289,7 @@ test('keeps the expense amount formatted while typing and accepts dots or commas
   await expect(amount).toHaveValue('123.56');
   await amount.press('Backspace');
   await expect(amount).toHaveValue('123.50');
-  await amount.evaluate((input: HTMLInputElement) => input.setSelectionRange(1, 2));
+  await selectInAmount(amount, 1, 2);
   await amount.pressSequentially('9');
   await expect(amount).toHaveValue('193.50');
   await field(page, 'Description').fill('Lunch');
@@ -1321,7 +1334,7 @@ test('groups the digits of large amounts in threes, as typed and as shown', asyn
   await expect(amount).toHaveValue(grouped('1 234 567.80'));
 
   // Typing in the middle of a grouped figure keeps its place, and the groups move.
-  await amount.evaluate((input: HTMLInputElement) => input.setSelectionRange(1, 1));
+  await selectInAmount(amount, 1, 1);
   await amount.pressSequentially('0');
   await expect(amount).toHaveValue(grouped('10 234 567.80'));
   await amount.pressSequentially('x');
