@@ -202,12 +202,21 @@ export function GroupsView(props: GroupsViewProps) {
     void action.call('openGroup', { groupId: group.group_id });
   }
 
-  // Leaving waits for the group to open: a call made from inside another's
-  // callback would find the control still busy and be dropped.
+  // A group saved here is left directly: opening it first would wait for the
+  // server, and closing the page meanwhile would lose the leave.
   async function leave(group: ClientGroupSummary): Promise<void> {
     let opened = false;
 
     setTarget(group.group_id);
+
+    if (group.stored_locally) {
+      await action.call('leaveGroup', { groupId: group.group_id }, () => setLeaving(null), true);
+
+      return;
+    }
+
+    // Otherwise it waits for the group to open: a call made from inside
+    // another's callback would find the control still busy and be dropped.
     await action.call('openGroup', { groupId: group.group_id }, () => { opened = true; });
 
     if (opened) await action.call('leaveGroup', {}, () => setLeaving(null), true);

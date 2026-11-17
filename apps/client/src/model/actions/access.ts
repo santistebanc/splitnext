@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { groupNameSchema, identifierSchema, inviteTokenSchema, memberNameSchema, parseInviteLink, type InvitePreview } from '@splitnext/client';
 import { createGroupInputSchema, memberChoiceSchema, performCreate, performJoin } from '../operations';
-import { unavailable, editorLock, defineAction, requireJoin, joinMembers, requireName, empty, suggested } from './define';
+import { unavailable, editorLock, defineAction, requireJoin, joinMembers, requireName, empty, suggested, choice } from './define';
 
 export type InviteCheck =
   | { opened: true }
@@ -191,18 +191,32 @@ export const accessActions = {
   }),
   leaveGroup: defineAction({
     waitsFor: () => [editorLock],
-    holds: ({ state }) => [`access:${state.group?.group_id}`],
+    holds: ({ state }, input) => [`access:${input?.groupId ?? state.group?.group_id}`],
     group: 'Access & sync',
     description:
-      'Leave the open group on this installation. It can be rejoined later.',
-    input: empty,
+      'Leave a group on this installation: the open one, or a saved one named by groupId. It can be rejoined later.',
+    input: z.object({
+      groupId: choice('group', 'A group saved on this installation; the open group when left out.').optional(),
+    }),
     example: {},
-    requires: ['online', 'openGroup'],
+    requires: ['online'],
+    unavailable: ({ state }, input) => {
+      if (input === undefined)
+        return state.group || state.groups.some((group) => group.stored_locally) ? null : unavailable('no_open_group', 'Open a group first.');
+
+      if (input.groupId === undefined || input.groupId === state.group?.group_id)
+        return state.group ? null : unavailable('no_open_group', 'Open a group first.');
+
+      // Leaving is saved on the device first, so the group must be stored here.
+      const saved = state.groups.find((group) => group.group_id === input.groupId);
+
+      return saved?.stored_locally ? null : unavailable('group_not_found', 'Choose a group saved on this device.');
+    },
     confirm: () => 'Leave this group?',
     run: async (host, input, ui) => {
       const navigation = ui.snapshot().navigation.revision;
 
-      await host.submit({ type: 'group.leave', payload: {} });
+      await host.leaveGroup(input.groupId);
       ui.showAfter(navigation, 'home');
     },
   }),
