@@ -10,6 +10,7 @@ import { randomUUID } from 'expo-crypto';
 import { createAppRuntime } from '../model/runtime';
 import { SqliteClientStorage } from '../native/storage';
 import { createNativeNavigation } from '../native/navigation';
+import { incomingLinks } from '../native/incomingLinks';
 import type { AppSubstrate } from './substrate';
 
 const history = createNativeNavigation();
@@ -68,7 +69,7 @@ export const defaultSubstrate: AppSubstrate = {
       throw error;
     });
 
-    history.setUrl(await Linking.getInitialURL() ?? '');
+    history.setUrl(incomingLinks.url() || await Linking.getInitialURL() || '');
     online = await Network.getNetworkStateAsync().then(connected, () => true);
 
     return createAppRuntime({
@@ -145,7 +146,7 @@ export const defaultSubstrate: AppSubstrate = {
       return history.back();
     });
 
-    const links = Linking.addEventListener('url', ({ url }) => {
+    const stopLinks = incomingLinks.subscribe((url) => {
       if (parseInviteLink(url)) {
         history.setUrl(url);
         void actions.dispatch('showJoinGroup', { link: url }, { origin: 'link' }).then((result) => {
@@ -155,6 +156,6 @@ export const defaultSubstrate: AppSubstrate = {
       }
     });
 
-    return () => { back.remove(); links.remove(); };
+    return () => { back.remove(); stopLinks(); };
   },
 };

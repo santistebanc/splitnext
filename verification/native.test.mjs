@@ -8,6 +8,40 @@ import { createRequire } from 'node:module';
 import { SqliteClientStorage } from '../apps/client/src/native/storage.ts';
 import { createNativeNavigation } from '../apps/client/src/native/navigation.ts';
 import { nativeAmountDraft } from '../apps/client/src/native/amount.ts';
+import { encodeBinary } from '../apps/client/src/native/base64.ts';
+import { createIncomingLinks, normalizeSystemLink } from '../apps/client/src/native/incomingLinks.ts';
+
+test('native system links survive route setup and repeat delivery allows a blocked action to retry', () => {
+  assert.equal(normalizeSystemLink('splitnext://j#abcdefghijkl'), 'splitnext:///j#abcdefghijkl');
+  assert.equal(normalizeSystemLink('/j#abcdefghijkl'), 'https://native.invalid/j#abcdefghijkl');
+  assert.equal(normalizeSystemLink('https://example.test/j#abcdefghijkl'), 'https://example.test/j#abcdefghijkl');
+  const links = createIncomingLinks();
+  const cold = 'splitnext:///j#abcdefghijkl';
+  const warm = 'splitnext:///j#mnopqrstuvwx';
+
+  links.receive(cold);
+  assert.equal(links.url(), cold);
+  const received = [];
+  const stop = links.subscribe((url) => received.push(url));
+
+  links.receive(warm);
+  links.receive(warm);
+  assert.deepEqual(received, [warm, warm]);
+  assert.equal(links.url(), warm);
+  stop();
+  links.receive(cold);
+  assert.deepEqual(received, [warm, warm]);
+});
+
+test('native identifier encoding matches the shared byte format', () => {
+  for (const size of [0, 1, 2, 3, 16, 32, 256]) {
+    const binary = String.fromCharCode(...Array.from({ length: size }, (_, index) => index % 256));
+
+    assert.equal(encodeBinary(binary), btoa(binary));
+  }
+
+  assert.throws(() => encodeBinary('\u0100'), /InvalidCharacterError/);
+});
 
 test('native HTTP transport is enabled only for an explicit HTTP test endpoint', () => {
   const require = createRequire(import.meta.url);

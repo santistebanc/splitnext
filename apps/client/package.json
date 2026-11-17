@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@splitnext/client": "*",
+    "base64-js": "^1.5.1",
     "expo": "~57.0.28",
     "expo-build-properties": "~57.0.23",
     "expo-clipboard": "~57.0.2",
