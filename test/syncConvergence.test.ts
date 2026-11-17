@@ -289,6 +289,24 @@ function storageFailure(): Error {
   return new DOMException('The quota has been exceeded.', 'QuotaExceededError');
 }
 
+const laterTasks: Array<() => void> = [];
+let laterChannel: MessageChannel | null = null;
+
+/**
+ * Runs `task` in a later event-loop task, in order, like a socket event.
+ * Not setTimeout(0): workerd 1.20261110 treats a zero delay as 1 ms, which
+ * Windows rounds up to its ~15 ms timer tick. With hundreds of realtime events
+ * per run, that made this test take about ten minutes on Windows.
+ */
+function later(task: () => void): void {
+  if (!laterChannel) {
+    laterChannel = new MessageChannel();
+    laterChannel.port1.onmessage = () => laterTasks.shift()?.();
+  }
+  laterTasks.push(task);
+  laterChannel.port2.postMessage(null);
+}
+
 /** Realtime connections per group, announcing revisions like the server does. */
 class RealtimeHub {
   private readonly sockets = new Map<string, Set<RealtimeSocketHandlers>>();
@@ -302,21 +320,21 @@ class RealtimeHub {
     group.add(handlers);
 
     // Every connection starts with the current revision, so it catches up.
-    setTimeout(() => {
+    later(() => {
       if (!group.has(handlers)) return;
       handlers.open();
       this.send(handlers, groupId);
-    }, 0);
+    });
 
     return {
       close: () => {
-        if (group.delete(handlers)) setTimeout(() => handlers.close(1000, 'unsubscribed'), 0);
+        if (group.delete(handlers)) later(() => handlers.close(1000, 'unsubscribed'));
       },
     };
   }
 
   announce(groupId: string): void {
-    for (const handlers of this.sockets.get(groupId) ?? []) setTimeout(() => this.send(handlers, groupId), 0);
+    for (const handlers of this.sockets.get(groupId) ?? []) later(() => this.send(handlers, groupId));
   }
 
   private send(handlers: RealtimeSocketHandlers, groupId: string): void {
