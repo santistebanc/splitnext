@@ -5,7 +5,7 @@
   "main": "index.ts",
   "scripts": {
     "dev": "EXPO_PUBLIC_API_URL=http://localhost:8787 expo start --web --port 8081",
-    "build": "expo export --platform web",
+    "build": "node ../../scripts/brand-assets.mjs --check && expo export --platform web",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import type { JsonValue } from '@splitnext/client';
-import { colors, strokes, textStyle } from '../design';
+import { colors, radii, sizes, strokes, textStyle } from '../design';
 import { sourceOptions, type ValueOption } from '../model/actionInputs';
 import {
   exampleAt,
@@ -300,29 +300,25 @@ const fs = StyleSheet.create({
   field: { gap: 4 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   label: {
-    color: colors.ink,
-    fontSize: 13,
+    ...textStyle('figureSmall'),
     fontWeight: '600',
-    fontFamily: 'monospace',
   },
   tag: {
-    color: colors.muted,
-    fontSize: 11,
+    ...textStyle('meta', 'muted'),
     borderWidth: 1,
     borderColor: colors.rule,
-    borderRadius: 3,
+    borderRadius: radii.chip,
     paddingHorizontal: 4,
   },
   input: {
-    minHeight: 38,
+    minHeight: sizes.touch,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderWidth: 1,
     borderColor: colors.rule,
-    borderRadius: 4,
+    borderRadius: radii.control,
     backgroundColor: colors.background,
-    color: colors.ink,
-    fontSize: 14,
+    ...textStyle('body'),
   },
   disabled: { color: colors.muted, backgroundColor: colors.background },
   dropdown: {
@@ -331,14 +327,14 @@ const fs = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
-  value: { color: colors.ink, fontSize: 14, flexShrink: 1 },
-  caret: { color: colors.muted, fontSize: 12 },
-  hint: { color: colors.muted, fontSize: 11, fontFamily: 'monospace' },
+  value: { ...textStyle('body'), flexShrink: 1 },
+  caret: { ...textStyle('meta', 'muted') },
+  hint: { ...textStyle('figureSmall', 'muted') },
   menu: {
     marginTop: 4,
     borderWidth: 1,
     borderColor: colors.rule,
-    borderRadius: 4,
+    borderRadius: radii.control,
     backgroundColor: colors.background,
     overflow: 'hidden',
   },

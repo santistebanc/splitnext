@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Outcome } from '../model/actions';
 import { actionGroups, type ActionGroup } from '../model/actions';
 import type { LoggedDispatch, LoggedEvent } from '../model/diagnosticsLog';
-import { Button, TextButton, colors, opacities, strokes, textStyle } from '../design';
+import { Button, CloseIcon, IconButton, TextButton, colors, opacities, radii, sizes, strokes, textStyle } from '../design';
 import { useActions, useUiState } from '../ui/useActionCall';
 import { useCompactLayout } from '../ui/useVisibleViewport';
 import { ActionForm } from './ActionForm';
@@ -119,9 +119,9 @@ function DevtoolsPanel(props: PanelProps) {
             </Pressable>
           ))}
         </View>
-        <TextButton underline={false} label="Close devtools" onPress={props.close} style={{ paddingHorizontal: 14 }}>
-          ×
-        </TextButton>
+        <IconButton label="Close devtools" onPress={props.close}>
+          <CloseIcon />
+        </IconButton>
       </View>
       <ScrollView contentContainerStyle={ds.body}>
         {tab === 'actions' ? (
@@ -549,9 +549,9 @@ const ds = StyleSheet.create({
     position: 'absolute',
     left: 16,
     bottom: 16,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: sizes.control,
+    height: sizes.control,
+    borderRadius: radii.round,
     backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
@@ -563,7 +563,7 @@ const ds = StyleSheet.create({
     zIndex: 20,
     backgroundColor: colors.background,
     borderColor: colors.rule,
-    shadowColor: '#000000',
+    shadowColor: colors.ink,
     shadowOpacity: 0.12,
     shadowRadius: 16,
   },
@@ -587,12 +587,12 @@ const ds = StyleSheet.create({
   },
   tabs: { flexDirection: 'row', gap: 4 },
   tab: { paddingHorizontal: 10, paddingVertical: 12 },
-  tabSelected: { borderBottomWidth: 2, borderColor: colors.positive },
-  tabText: { color: colors.muted, fontSize: 14, fontWeight: '500' },
+  tabSelected: { borderBottomWidth: strokes.focus, borderColor: colors.ink },
+  tabText: { ...textStyle('caption', 'muted'), fontWeight: '600' },
   tabTextSelected: { color: colors.ink },
   body: { padding: 12 },
   section: { gap: 10 },
-  previewLabel: { color: colors.muted, fontSize: 12, fontWeight: '600' },
+  previewLabel: { ...textStyle('meta', 'muted'), fontWeight: '600' },
   groupTabs: { flexGrow: 0, borderBottomWidth: 1, borderColor: colors.rule },
   groupTabsContent: { gap: 8 },
   groupTab: {
@@ -602,25 +602,23 @@ const ds = StyleSheet.create({
     borderBottomWidth: 2,
     borderColor: 'transparent',
   },
-  groupTabSelected: { borderColor: colors.positive },
-  groupTabText: { color: colors.muted, fontSize: 13, fontWeight: '500' },
-  groupTabTextSelected: { color: colors.positive, fontWeight: '700' },
+  groupTabSelected: { borderColor: colors.ink },
+  groupTabText: { ...textStyle('caption', 'muted') },
+  groupTabTextSelected: { color: colors.ink, fontWeight: '700' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   chip: {
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderWidth: 1,
     borderColor: colors.rule,
-    borderRadius: 4,
+    borderRadius: radii.chip,
   },
-  unavailable: { opacity: 0.45 },
-  mono: { color: colors.ink, fontSize: 12, fontFamily: 'monospace' },
+  unavailable: { opacity: opacities.disabled },
+  mono: { ...textStyle('figureSmall') },
   code: {
-    color: colors.ink,
-    fontSize: 12,
-    fontFamily: 'monospace',
+    ...textStyle('figureSmall'),
     backgroundColor: colors.background,
-    borderRadius: 4,
+    borderRadius: radii.chip,
     padding: 10,
   },
   failed: { color: colors.danger },

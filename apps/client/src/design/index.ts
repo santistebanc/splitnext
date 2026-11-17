@@ -26,4 +26,6 @@ export { BalanceBar, Divider, ListRow, RowRule, SectionHeading, bleedRow, rules 
 
 export { BrandMark } from './BrandMark';
 
+export { ToastContent, type ToastProps } from './ToastContent';
+
 export * from './icons';

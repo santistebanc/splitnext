@@ -211,7 +211,7 @@ function IconsPage() {
           ))}
         </Gallery>
       </Example>
-      <Example title="BrandMark" note="The split-S of the favicon; it stands beside the name on the groups list.">
+      <Example title="BrandMark" note="The split-S of the favicon; both use the same paths and ink-on-paper palette. Run npm run assets:brand after changing the mark or palette.">
         <Gallery>
           {[22, 34, 64].map((size) => (
             <Specimen key={size} name={`size ${size}`} width={80}>

@@ -999,6 +999,37 @@ test('flies a group’s name to the list at its font size, even when it unwraps'
   await page.emulateMedia({ reducedMotion: 'reduce' });
 });
 
+test('uses the app brand for the browser icon and install theme', async ({ page, request }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/icon.svg');
+  await page.locator('svg').screenshot({ path: testInfo.outputPath('brand-icon.png') });
+  const icon = await (await request.get('/icon.svg')).text();
+  const manifest = await (await request.get('/manifest.webmanifest')).json();
+
+  await page.goto('/app');
+  await expect(page.getByTestId('splitnext-logo')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('brand-app.png') });
+  const mark = page.getByTestId('splitnext-logo');
+  const background = await mark.locator(':scope > rect').getAttribute('fill');
+  const foreground = await mark.locator('path').first().getAttribute('fill');
+
+  expect(icon).toContain(`fill="${background}"`);
+  expect(icon).toContain(`fill="${foreground}"`);
+
+  for (const path of await mark.locator('path').evaluateAll((paths) => paths.map((path) => path.getAttribute('d')))) {
+    expect(icon).toContain(`d="${path}"`);
+  }
+
+  expect(manifest.background_color).toBe('#f6f5f1');
+  expect(manifest.theme_color).toBe('#f6f5f1');
+
+  for (const route of ['/', '/privacy', '/terms', '/j']) {
+    await page.goto(route);
+    await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/icon.svg');
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', manifest.theme_color);
+  }
+});
+
 test('keeps the fixed theme and group-list branding when offline', async ({ page, context }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { View, type DimensionValue } from 'react-native';
-import { AlertIcon, WarningIcon } from './icons';
+import { AlertIcon, CheckIcon, WarningIcon } from './icons';
 import { Text } from './Text';
 import { colors, radii, strokes } from './tokens';
 
@@ -39,7 +39,10 @@ export function ErrorMessage(props: { message: string | null }) {
 export function EmptyState(props: { title: string; text?: string | undefined; tone?: 'settled' | undefined }) {
   return (
     <View style={{ paddingVertical: 16, gap: 4, borderTopWidth: strokes.hairline, borderColor: colors.rule }}>
-      <Text variant="headline" tone={props.tone === 'settled' ? 'owed' : 'ink'}>{props.tone === 'settled' ? '✓ ' : ''}{props.title}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        {props.tone === 'settled' ? <CheckIcon size={20} color={colors.owed} /> : null}
+        <Text variant="headline" tone={props.tone === 'settled' ? 'owed' : 'ink'} style={{ flexShrink: 1 }}>{props.title}</Text>
+      </View>
       {props.text ? <Text variant="body" tone="muted">{props.text}</Text> : null}
     </View>
   );

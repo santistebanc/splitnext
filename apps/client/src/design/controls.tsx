@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { Touchable } from './layout';
 import { Text } from './Text';
+import { CheckIcon } from './icons';
 import { colors, radii, sizes, strokes } from './tokens';
 
 /** A round marker that thickens when chosen. */
@@ -45,7 +46,7 @@ export function RadioRow(props: { label: string; selected: boolean; onPress: () 
 export function CheckMark(props: { checked: boolean }) {
   return (
     <View style={[{ width: 18, height: 18, borderWidth: strokes.ink, borderColor: colors.ink, alignItems: 'center', justifyContent: 'center' }, props.checked && { backgroundColor: colors.ink }]}>
-      {props.checked ? <Text variant="count" tone="inverse">✓</Text> : null}
+      {props.checked ? <CheckIcon size={12} color={colors.background} /> : null}
     </View>
   );
 }

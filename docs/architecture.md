@@ -81,6 +81,11 @@ knows nothing about groups or money; `ui/` composes it into screens.
   `Skeleton`, `ListRow`, `SectionHeading`, `Divider` and `rules`,
   `BalanceBar`, `Avatar`, `Tabs`, `ToggleChip`, outline icons, and `BrandMark`.
 
+Browser assets share the mark's paths (`design/brand.ts`) and palette.
+`npm run assets:brand` generates the favicon and install manifest; builds and
+fast checks reject stale copies. `ToastContent` shares toast text, actions,
+and styling between platform hosts. Check marks use the outline icon family.
+
 Screens take every color, size, and duration from tokens and build from these
 components rather than their own copies. App chrome that needs the app's
 scrolling or modal plumbing lives in `ui/` on top of them: `ScreenHeader`

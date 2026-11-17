@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { View, type TextInput } from 'react-native';
 import { groupNameSchema, preferredMember, repaymentMembers } from '@splitnext/client';
 import { BellIcon, Button, ChevronDownIcon, ChevronUpIcon, CountBadge, ErrorMessage, IconButton, Input, InviteIcon, PencilIcon, Row, SearchIcon, Stack, Tag, Text, TextButton, ToggleChip, Touchable, YouBadge, between, colors, balanceStyle, bleedRow, radii, RowRule, rules, sizes, strokes, titleStyle } from '../design';
+import { inkAlpha } from '../design';
 import { attentionCount } from '../model/activity';
 import { hasRecords } from '../model/breakdown';
 import { balanceRows, currentExpenses, memberName, moneyLabel } from '../model/expenses';
@@ -485,8 +486,8 @@ function ExpensesHeading(props: { entries: number }) {
                 height: 36,
                 paddingHorizontal: between(14, 0, docked),
                 borderRadius: radii.round,
-                backgroundColor: floating ? `rgba(20, 20, 19, ${1 - plain})` : 'transparent',
-                boxShadow: floating ? `0 2px 8px rgba(20, 20, 19, ${0.18 * (1 - plain)})` : 'none',
+                backgroundColor: floating ? inkAlpha(1 - plain) : 'transparent',
+                boxShadow: floating ? `0 2px 8px ${inkAlpha(0.18 * (1 - plain))}` : 'none',
               }}
             >
               <Text accessibilityRole="header" aria-level={2} variant="strong" color={mix(colors.background, colors.ink, plain)}>Expenses</Text>

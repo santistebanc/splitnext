@@ -15,6 +15,8 @@
     "minimatch": "11.0.8"
   },
   "scripts": {
+    "assets:brand": "node scripts/brand-assets.mjs",
+    "assets:brand:check": "node scripts/brand-assets.mjs --check",
     "dev": "node scripts/check-dev-port.mjs && npm run db:migrate:local && npm run frontend:build && wrangler dev --port 8787 --var ENABLE_DEBUG_INSPECTION:true",
     "deploy": "npm run frontend:build && wrangler deploy",
     "deploy:staging": "node scripts/deploy.mjs staging",
@@ -36,7 +38,7 @@
     "showcase": "npm run frontend:build && node showcase/build.mjs clean && playwright test -c showcase/playwright.config.ts && node showcase/build.mjs",
     "showcase:page": "node showcase/build.mjs",
     "check:fast": "npm run check:fast:steady && npm run test:performance",
-    "check:fast:steady": "node scripts/check-text.mjs && npm run verify:check && npm run types:check && npm run lint && npm run typecheck && npm run app:typecheck && wrangler deploy --dry-run --outdir .wrangler/dry-run && npm run lab:test && npm test",
+    "check:fast:steady": "node scripts/check-text.mjs && npm run assets:brand:check && npm run verify:check && npm run types:check && npm run lint && npm run typecheck && npm run app:typecheck && wrangler deploy --dry-run --outdir .wrangler/dry-run && npm run lab:test && npm test",
     "check": "npm run frontend:check && npm run check:fast && npm run test:e2e",
     "check:steady": "npm run frontend:check && npm run check:fast:steady && npm run test:e2e:steady",
     "check:timing": "npm run test:performance && npm run test:e2e:timing",

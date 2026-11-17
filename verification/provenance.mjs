@@ -27,7 +27,7 @@ export async function buildInputs() {
   const source = await sourceIdentity();
 
   const inputs = Object.fromEntries(Object.entries(source.files).filter(([file]) =>
-    /^(src\/(?!generated\/)|apps\/client\/(?!dist\/|\.expo\/)|packages\/|scripts\/(prepare-app\.mjs|service-worker\.js)$)/.test(file) ||
+    /^(src\/(?!generated\/)|apps\/client\/(?!dist\/|\.expo\/)|packages\/|scripts\/(prepare-app\.mjs|brand-assets\.mjs|service-worker\.js)$)/.test(file) ||
     /^(package(-lock)?\.json|wrangler.*\.jsonc|tsconfig\.json)$/.test(file)));
 
   if (!Object.entries(inputs).some(([file, value]) => file.startsWith('src/') && value !== 'deleted')) throw new Error('missing_production_sources');

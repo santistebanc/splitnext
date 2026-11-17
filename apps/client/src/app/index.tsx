@@ -1,5 +1,5 @@
 import { Link, router } from 'expo-router';
-import { Button, Row, Stack, Text, colors, layout, typeScale } from '../design';
+import { ArrowRightIcon, Button, Row, Stack, Text, colors, layout, typeScale } from '../design';
 import { supportEmail } from '../legal';
 import { Frame } from '../ui/Frame';
 import { useCompactLayout } from '../ui/useVisibleViewport';
@@ -23,7 +23,7 @@ export default function Homepage() {
             account needed, and it keeps working offline.
           </Text>
           <Row gap={12} wrap>
-            <Button onPress={() => router.push('/app')}>Open app →</Button>
+            <Button icon={<ArrowRightIcon color={colors.background} />} onPress={() => router.push('/app')}>Open app</Button>
           </Row>
         </Stack>
         <Stack gap={8}>
