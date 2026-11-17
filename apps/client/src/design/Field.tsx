@@ -1,5 +1,5 @@
 import { useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from 'react';
-import { Pressable, TextInput, View, type TextInputProps } from 'react-native';
+import { Pressable, TextInput, View, type TextInputProps, type TextInputInstance } from 'react-native';
 import { Text, inputStyle } from './Text';
 import { TextLine } from './TextLine';
 import { colors, durations, opacities, sizes, strokes, typeScale, withTransition } from './tokens';
@@ -13,13 +13,13 @@ export type FieldProps = TextInputProps & {
   trailing?: ReactNode | undefined;
   /** Optional read layer, such as a two-line title with an ellipsis. */
   displayValue?: ReactNode | undefined;
-  inputRef?: Ref<TextInput> | undefined;
+  inputRef?: Ref<TextInputInstance> | undefined;
 };
 
 /** The labelled, underlined text field: its label floats up on focus or once it has text. */
 export function Field(props: FieldProps) {
   const { label, hideLabel, hint, error, trailing, displayValue, inputRef, ...input } = props;
-  const field = useRef<TextInput>(null);
+  const field = useRef<TextInputInstance>(null);
 
   useImperativeHandle(inputRef, () => field.current!, []);
   const [focused, setFocused] = useState(false);

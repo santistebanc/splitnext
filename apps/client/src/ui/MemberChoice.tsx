@@ -1,5 +1,5 @@
 import { useContext, useRef, useState, type ReactNode } from 'react';
-import { View } from 'react-native';
+import { View, type ViewInstance } from 'react-native';
 import { Row, Text, Touchable, YouBadge, colors, durations, radii, rules, sizes, strokes, withTransition } from '../design';
 import { memberName } from '../model/expenses';
 import { MemberAvatar, type MemberListApp } from './MemberList';
@@ -86,7 +86,7 @@ function MemberChoiceRow(props: { app: MemberListApp; memberId: string; you: boo
  * was picked further down its list, keeping it clear of the compact header
  * that the page scrolls under.
  */
-function bringIntoView(target: View | null, headerHeight: number): void {
+function bringIntoView(target: ViewInstance | null, headerHeight: number): void {
   if (!(target instanceof HTMLElement)) return;
   const page = target.closest<HTMLElement>('#splitnext-page');
 
@@ -102,7 +102,7 @@ function bringIntoView(target: View | null, headerHeight: number): void {
 /** A labelled member row that opens the names in place, as for who paid. */
 export function MemberChoice(props: MemberChoiceProps) {
   const [open, setOpen] = useState(false);
-  const toggle = useRef<View>(null);
+  const toggle = useRef<ViewInstance>(null);
   const replica = props.app.snapshot().group;
   const snapshot = replica?.projected_snapshot;
   const name = props.value ? memberName(snapshot, props.value) : '';

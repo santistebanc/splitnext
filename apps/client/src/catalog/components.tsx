@@ -235,7 +235,7 @@ function FieldPage() {
         ['hint?, error?', 'string', 'A line under it; an error turns the line and underline orange.'],
         ['trailing?', 'ReactNode', 'An action at its end, such as Paste.'],
         ['displayValue?', 'ReactNode', 'A read layer over the input, such as a two-line title with an ellipsis.'],
-        ['inputRef?', 'Ref<TextInput>', 'Reaches the input, as to focus it.'],
+        ['inputRef?', 'Ref<TextInputInstance>', 'Reaches the input, as to focus it.'],
         ['figure?', 'boolean', 'A large monospaced figure.'],
         ['…', 'TextInputProps', 'Everything a TextInput takes; editable={false} shows it read only.'],
       ]} />
@@ -467,7 +467,7 @@ function BalanceBarPage() {
         ['amount, max', 'number', 'The balance, and the largest shown beside it.'],
         ['track?', 'boolean', 'A short strip on a track, rather than in a row.'],
         ['height?', 'number', 'The strip’s height.'],
-        ['stripRef?', 'Ref<View>', 'Reaches the strip, as to fly it between screens.'],
+        ['stripRef?', 'Ref<ViewInstance>', 'Reaches the strip, as to fly it between screens.'],
       ]} />
     </Stack>
   );

@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef, useState } from 'react';
-import { View, type TextInput } from 'react-native';
+import { View, type TextInputInstance } from 'react-native';
 import { groupNameSchema, preferredMember, repaymentMembers } from '@splitnext/client';
 import { BellIcon, Button, ChevronDownIcon, ChevronUpIcon, CountBadge, ErrorMessage, IconButton, Input, InviteIcon, PencilIcon, Row, SearchIcon, Stack, Tag, Text, TextButton, ToggleChip, Touchable, YouBadge, between, colors, balanceStyle, bleedRow, radii, RowRule, rules, sizes, strokes, titleStyle } from '../design';
 import { inkAlpha } from '../design';
@@ -57,7 +57,7 @@ function GroupName(props: { name: string; groupId: string }) {
   // A saved name shows until the group's own catches up, so the old one never flashes back.
   const [saved, setSaved] = useState<{ from: string; to: string } | null>(null);
   const [fullTitleHeight, setFullTitleHeight] = useState(0);
-  const input = useRef<TextInput>(null);
+  const input = useRef<TextInputInstance>(null);
 
   if (saved && saved.from !== props.name) setSaved(null);
 

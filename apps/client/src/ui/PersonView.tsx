@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { View, type TextInput } from 'react-native';
+import { View, type TextInputInstance } from 'react-native';
 import { memberHasRecords, preferredMember } from '@splitnext/client';
 import { Button, ErrorMessage, IconButton, ListRow, PencilIcon, Row, Stack, Text, avatarSizes, balanceStyle, rules, sizes, titleStyle } from '../design';
 import { memberBreakdown } from '../model/breakdown';
@@ -58,7 +58,7 @@ export function PersonHeader(props: { app: MemberListApp }) {
   const recorded = memberId && snapshot ? memberBreakdown(snapshot, memberId).rows.length > 0 : false;
   const participants = replica && memberId ? participantMarkers(replica, memberId, props.app.client.presence(replica.group_id), state.online && state.reachable) : [];
 
-  const nameField = useRef<TextInput>(null);
+  const nameField = useRef<TextInputInstance>(null);
   const [youWidth, setYouWidth] = useState(0);
   const [nameHeight, setNameHeight] = useState(0);
   const actions = useActions();

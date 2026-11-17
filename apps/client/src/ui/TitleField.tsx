@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { Platform, Text, TextInput, View, type TextInputKeyPressEvent, type TextStyle } from 'react-native';
+import { Platform, Text, TextInput, View, type TextInputKeyPressEvent, type TextStyle, type TextInputInstance } from 'react-native';
 import { colors } from '../design';
 
 export type TitleFieldProps = {
@@ -11,7 +11,7 @@ export type TitleFieldProps = {
   /** Leaving the field, by Enter, a tap elsewhere, or Escape unless `onEscape` takes it. */
   onBlur: () => void;
   onEscape?: () => void;
-  inputRef: RefObject<TextInput | null>;
+  inputRef: RefObject<TextInputInstance | null>;
   /** The title's own text style, with the underline that marks it as a field. */
   style: TextStyle;
   /**

@@ -1,5 +1,5 @@
 import type { Ref } from 'react';
-import { Pressable, View, type PressableProps, type StyleProp, type ViewProps, type ViewStyle } from 'react-native';
+import { Pressable, View, type PressableProps, type StyleProp, type ViewProps, type ViewStyle, type ViewInstance } from 'react-native';
 import { colors, opacities, sizes, type Space } from './tokens';
 
 const alignments = { start: 'flex-start', center: 'center', end: 'flex-end', stretch: 'stretch', baseline: 'baseline' } as const;
@@ -7,7 +7,7 @@ const alignments = { start: 'flex-start', center: 'center', end: 'flex-end', str
 const justifications = { start: 'flex-start', center: 'center', end: 'flex-end', between: 'space-between' } as const;
 
 export type BoxProps = ViewProps & {
-  ref?: Ref<View> | undefined;
+  ref?: Ref<ViewInstance> | undefined;
   /** Space between children, from the spacing scale. */
   gap?: Space | undefined;
   /** Padding on every side, then per axis and per edge; later ones win. */
@@ -42,7 +42,7 @@ function boxStyle(props: BoxProps, direction: 'row' | 'column'): StyleProp<ViewS
   ];
 }
 
-function viewProps(props: BoxProps): ViewProps & { ref?: Ref<View> | undefined } {
+function viewProps(props: BoxProps): ViewProps & { ref?: Ref<ViewInstance> | undefined } {
   const { gap: _gap, padding: _padding, paddingX: _x, paddingY: _y, paddingTop: _top, paddingBottom: _bottom, align: _align, justify: _justify, fill: _fill, wrap: _wrap, style: _style, ...rest } = props;
 
   return rest;
@@ -59,7 +59,7 @@ export function Row(props: BoxProps) {
 }
 
 export type TouchableProps = Omit<PressableProps, 'style'> & {
-  ref?: Ref<View> | undefined;
+  ref?: Ref<ViewInstance> | undefined;
   style?: StyleProp<ViewStyle> | undefined;
   /**
    * How it answers a press: fading, the default; tinting the row behind it,

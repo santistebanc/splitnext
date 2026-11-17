@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { TextInput } from 'react-native';
+import type { TextInputInstance } from 'react-native';
 import { Chip, Field, Row, Stack, durations } from '../design';
 import type { AppController } from '../model/controller';
 import { useFieldFocused } from './screenHost';
@@ -26,8 +26,8 @@ export function CreateGroup(props: CreateGroupProps) {
   const ui = useUiState();
   const { name, yourName: person } = ui.create;
   const actions = useActions();
-  const personInput = useRef<TextInput>(null);
-  const nameInput = useRef<TextInput>(null);
+  const personInput = useRef<TextInputInstance>(null);
+  const nameInput = useRef<TextInputInstance>(null);
   const fieldFocused = useFieldFocused();
 
   // Opening dismisses the keyboard after this form's effects, so focus waits a

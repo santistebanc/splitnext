@@ -1,5 +1,5 @@
 import type { ReactNode, Ref } from 'react';
-import { ActivityIndicator, View, type Insets, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, View, type Insets, type StyleProp, type ViewStyle, type ViewInstance } from 'react-native';
 import { Touchable } from './layout';
 import { Text, type Tone } from './Text';
 import { colors, opacities, radii, sizes, strokes } from './tokens';
@@ -31,7 +31,7 @@ export type ButtonProps = {
   /** For a button that shows or hides more below it. */
   expanded?: boolean | undefined;
   hitSlop?: Insets | number | undefined;
-  ref?: Ref<View> | undefined;
+  ref?: Ref<ViewInstance> | undefined;
   style?: StyleProp<ViewStyle> | undefined;
 };
 
@@ -82,7 +82,7 @@ export type TextButtonProps = {
   label?: string | undefined;
   expanded?: boolean | undefined;
   hitSlop?: Insets | number | undefined;
-  ref?: Ref<View> | undefined;
+  ref?: Ref<ViewInstance> | undefined;
   style?: StyleProp<ViewStyle> | undefined;
 };
 

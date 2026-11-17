@@ -1,5 +1,5 @@
 import type { Ref } from 'react';
-import { Text as NativeText, TextInput, type TextInputProps, type TextProps as NativeTextProps } from 'react-native';
+import { Text as NativeText, TextInput, type TextInputProps, type TextProps as NativeTextProps, type TextInputInstance, type TextInstance } from 'react-native';
 import { colors, fontWeights, typeScale, type FontWeight, type TypeVariant } from './tokens';
 import { TextLine } from './TextLine';
 
@@ -19,7 +19,7 @@ export const tones = {
 export type Tone = keyof typeof tones;
 
 export type TextProps = NativeTextProps & {
-  ref?: Ref<NativeText> | undefined;
+  ref?: Ref<TextInstance> | undefined;
   /** A step of the type ramp; left out only by text nested in another. */
   variant?: TypeVariant | undefined;
   tone?: Tone | undefined;
@@ -72,7 +72,7 @@ export function inputStyle(variant: TypeVariant, weight?: FontWeight) {
   return { fontFamily, fontSize, fontWeight: weight ? fontWeights[weight] : fontWeight, color: colors.ink };
 }
 
-export type InputProps = TextInputProps & { ref?: Ref<TextInput> | undefined; variant?: TypeVariant | undefined; weight?: FontWeight | undefined };
+export type InputProps = TextInputProps & { ref?: Ref<TextInputInstance> | undefined; variant?: TypeVariant | undefined; weight?: FontWeight | undefined };
 
 /**
  * A bare text input in a step of the type ramp, without a label or underline

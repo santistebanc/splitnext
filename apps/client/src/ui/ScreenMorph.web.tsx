@@ -1,9 +1,9 @@
 import { Component, createRef, type ReactNode } from 'react';
-import type { Text, TextInput, View } from 'react-native';
+import type { HostInstance } from 'react-native';
 import { durations, easeOut, scrim } from '../design';
 
 /** What a morph mark attaches to: on the web, React Native's views are elements. */
-type MorphTarget = HTMLElement | View | Text | TextInput | null;
+type MorphTarget = HTMLElement | HostInstance | null;
 
 /** How long a change of screen takes; parts that appear on both screens fly for all of it. */
 const duration = durations.medium;

@@ -1,5 +1,5 @@
 import { Component, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Platform, ScrollView, View } from 'react-native';
+import { Platform, ScrollView, View, type ScrollViewInstance } from 'react-native';
 import { Row, Tag, Text, colors, layout, sizes } from '../design';
 import { CompactHeaderContext, CompactProgressContext, HeaderShrinkContext, PageHeightContext, RevealContext, ScrollToTopContext } from './pageScroll';
 import { useHomepage } from './screenHost';
@@ -81,7 +81,7 @@ export function Frame(props: FrameProps) {
   const headerRef = useRef(header);
   const mobile = useCompactLayout();
   const touch = useTouchInput();
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
   const control = props.scrollControl;
 
   headerRef.current = header;

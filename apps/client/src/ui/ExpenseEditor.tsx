@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, type TextInput } from 'react-native';
+import { View, type TextInputInstance } from 'react-native';
 import { activeMembers, amountDigits, formatAmount, parseAmount, preferredMember } from '@splitnext/client';
 import { Button, Checkbox, ErrorMessage, Field, IconButton, Row, Text, Touchable, YouBadge, avatarTints, between, colors, durations, inputStyle, opacities, rules, sizes, withTransition } from '../design';
 import { memberTint } from '../model/memberPresentation';
@@ -193,7 +193,7 @@ function ExpenseSplitRow(props: { replica: Replica; memberId: string; name: stri
 export function ExpenseControls() {
   const draft = useUiState().expense;
   const amount = useRef<AmountInputHandle>(null);
-  const description = useRef<TextInput | null>(null);
+  const description = useRef<TextInputInstance | null>(null);
   const progress = useCompactProgress();
   const actions = useActions();
   const save = useActionCall();
@@ -257,7 +257,7 @@ export function ExpenseControls() {
       <View style={{ paddingTop: 8 }}>
         <Field
           label="Description"
-          inputRef={(node: TextInput | null) => {
+          inputRef={(node: TextInputInstance | null) => {
             description.current = node;
             morph(shown ? null : descriptionKey)?.(node);
           }}

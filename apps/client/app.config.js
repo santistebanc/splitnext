@@ -18,10 +18,13 @@ module.exports = {
     ...expo,
     backgroundColor: colors.background,
     primaryColor: colors.ink,
-    splash: { backgroundColor: colors.background },
-    plugins: expo.plugins.map((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-build-properties'
-      ? [plugin[0], { ...plugin[1], android: { ...plugin[1].android, usesCleartextTraffic: localHttpApi } }]
-      : plugin),
+    plugins: [
+      ...expo.plugins.map((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-build-properties'
+        ? [plugin[0], { ...plugin[1], android: { ...plugin[1].android, usesCleartextTraffic: localHttpApi } }]
+        : plugin),
+      // The launch screen uses the app's paper colour, not the default white.
+      ['expo-splash-screen', { backgroundColor: colors.background }],
+    ],
     ios,
   },
 };

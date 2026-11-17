@@ -8,9 +8,9 @@
     "packages/*"
   ],
   "overrides": {
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "react-native": "0.86.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.1",
     "decode-uri-component": "0.5.1",
     "minimatch": "11.0.8"
   },
@@ -76,7 +76,7 @@
   "dependencies": {
     "@hono/zod-openapi": "^1.6.3",
     "@scalar/hono-api-reference": "^0.12.1",
-    "expo-server": "~57.0.3",
+    "expo-server": "~58.1.0",
     "hono": "^4.13.7",
     "zod": "^4.6.5"
   }

@@ -1,5 +1,5 @@
 import { useImperativeHandle, useLayoutEffect, useRef } from 'react';
-import { TextInput } from 'react-native';
+import { TextInput, type TextInputInstance } from 'react-native';
 import type { TextLineProps } from './TextLine';
 
 /**
@@ -30,7 +30,7 @@ function asOneLine(element: HTMLTextAreaElement): void {
  */
 export function TextLine(props: TextLineProps) {
   const { ref, onChangeText, ...rest } = props;
-  const field = useRef<TextInput>(null);
+  const field = useRef<TextInputInstance>(null);
 
   useImperativeHandle(ref, () => field.current!, []);
 

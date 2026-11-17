@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Platform, type Text as NativeText } from 'react-native';
+import { Platform, type TextInstance } from 'react-native';
 import { formatInviteLink } from '@splitnext/client';
 import { Button, ErrorMessage, Row, ShareIcon, Stack, Text, TextButton, Touchable, colors, strokes } from '../design';
 import { Confirmation } from './ConfirmSheet';
@@ -10,7 +10,7 @@ import { useActionCall, useActions, useUiState } from './useActionCall';
 export type InvitePanelApp = Pick<AppController, 'snapshot'>;
 
 /** Selects the link's text on the web, so copying shows what was copied. */
-function selectLink(node: NativeText | null): void {
+function selectLink(node: TextInstance | null): void {
   // On the web a text ref is its element.
   if (Platform.OS !== 'web' || !(node instanceof Node)) return;
 
@@ -42,7 +42,7 @@ export function InvitePanel(props: { app: InvitePanelApp; name?: string }) {
   const copied = useUiState().copiedInviteId === invite?.id;
   const actions = useActions();
   const canShare = actions.capabilities.shareLink;
-  const linkText = useRef<NativeText>(null);
+  const linkText = useRef<TextInstance>(null);
   const action = useActionCall();
   const replace = useActionCall();
   const online = props.app.snapshot().online;

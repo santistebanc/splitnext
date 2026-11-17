@@ -1,5 +1,5 @@
 import type { ReactNode, Ref } from 'react';
-import { View, type StyleProp, type ViewStyle } from 'react-native';
+import { View, type StyleProp, type ViewStyle, type ViewInstance } from 'react-native';
 import { Touchable } from './layout';
 import { Text } from './Text';
 import { colors, layout, sizes, strokes, withTransition, durations } from './tokens';
@@ -68,7 +68,7 @@ export function ListRow(props: { label: string; onPress: () => void; disabled?: 
  * running the row's full height. `stripRef` reaches the strip itself, such as
  * to fly it between screens.
  */
-export function BalanceBar(props: { amount: number; max: number; height?: number | undefined; track?: boolean | undefined; stripRef?: Ref<View> | undefined }) {
+export function BalanceBar(props: { amount: number; max: number; height?: number | undefined; track?: boolean | undefined; stripRef?: Ref<ViewInstance> | undefined }) {
   const share = props.max > 0 ? Math.min(1, Math.abs(props.amount) / props.max) : 0;
   const width = `${share * 100}%` as const;
   const half = { flex: 1, flexDirection: 'row' } as const;

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { View, type TextInput } from 'react-native';
+import { View, type TextInputInstance, type ViewInstance } from 'react-native';
 import { parseInviteLink, type ClientGroupSummary } from '@splitnext/client';
 import { ArrowRightIcon, BrandMark, CheckIcon, Button, Divider, EmptyState, ErrorMessage, Field, IconButton, ListRow, Notice, Row, Stack, Text, TextButton, Touchable, TrashIcon, between, bleedRow, colors, RowRule, rules, sizes, titleStyle } from '../design';
 import { Confirmation } from './ConfirmSheet';
@@ -80,9 +80,9 @@ export function GroupsHeader() {
   const [open, setOpen] = useState(false);
   const [link, setLink] = useState('');
   const [invalid, setInvalid] = useState(false);
-  const field = useRef<TextInput>(null);
-  const joinToggle = useRef<View>(null);
-  const joinPanel = useRef<View>(null);
+  const field = useRef<TextInputInstance>(null);
+  const joinToggle = useRef<ViewInstance>(null);
+  const joinPanel = useRef<ViewInstance>(null);
 
   function close(): void {
     setOpen(false);
@@ -186,7 +186,7 @@ export function GroupsView(props: GroupsViewProps) {
   const [target, setTarget] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<string | null>(null);
   // The open confirmation's own trash button, which toggles it.
-  const leaveToggle = useRef<View>(null);
+  const leaveToggle = useRef<ViewInstance>(null);
   const action = useActionCall();
   const active = state.groups.filter((group) => group.status === 'active');
   const left = state.groups.filter((group) => group.status === 'left');

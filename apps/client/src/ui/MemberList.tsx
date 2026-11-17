@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { Platform, View, type StyleProp, type TextInput, type TextStyle } from 'react-native';
+import { Platform, View, type StyleProp, type TextStyle, type TextInputInstance, type ViewInstance } from 'react-native';
 import type { ClientReplicaState } from '@splitnext/client';
 import { memberStatus, memberTint, participantMarkers, type ParticipantMarker } from '../model/memberPresentation';
 import type { AppController } from '../model/controller';
@@ -68,10 +68,10 @@ export function MemberNameInput(props: {
   weight?: FontWeight;
   style?: StyleProp<TextStyle>;
   /** The field itself, for whatever has to reach it, such as the cover around it. */
-  inputRef?: RefObject<TextInput | null>;
+  inputRef?: RefObject<TextInputInstance | null>;
 }) {
   const actions = useActions();
-  const own = useRef<TextInput>(null);
+  const own = useRef<TextInputInstance>(null);
   const input = props.inputRef ?? own;
 
   return (
@@ -146,9 +146,9 @@ export function AddPersonRow(props: { end?: ReactNode; tint?: number }) {
   const focused = useRef(false);
   // Shown while typing: a tap elsewhere ends the add, and the pinned main action steps aside.
   const [adding, setAdding] = useState(false);
-  const row = useRef<View>(null);
-  const input = useRef<TextInput>(null);
-  const addButton = useRef<View>(null);
+  const row = useRef<ViewInstance>(null);
+  const input = useRef<TextInputInstance>(null);
+  const addButton = useRef<ViewInstance>(null);
 
   // A press on Add keeps the field focused, so the keyboard stays up for the next name.
   useEffect(() => {
