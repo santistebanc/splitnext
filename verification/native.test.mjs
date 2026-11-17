@@ -16,6 +16,7 @@ import { createIncomingLinks, normalizeSystemLink } from '../apps/client/src/nat
 test('Android autolinking builds SQLite for the selected architecture instead of using the ARM-only archive', () => {
   const require = createRequire(import.meta.url);
   const moduleRoot = path.dirname(require.resolve('expo-modules-autolinking/package.json'));
+
   const result = spawnSync(process.execPath, [path.join(moduleRoot, 'bin/expo-modules-autolinking.js'), 'resolve', '--platform', 'android', '--json'], {
     cwd: fileURLToPath(new URL('../apps/client', import.meta.url)),
     encoding: 'utf8',
@@ -27,6 +28,7 @@ test('Android autolinking builds SQLite for the selected architecture instead of
   const sqlite = resolved.modules.find((module) => module.packageName === 'expo-sqlite');
 
   assert.ok(sqlite, 'SQLite must be linked into the Android app');
+
   for (const project of sqlite.projects) {
     assert.ok(resolved.configuration?.buildFromSource?.some((pattern) => new RegExp(`^(?:${pattern})$`).test(project.name)), `${project.name} must compile its native library for the target ABI`);
   }
