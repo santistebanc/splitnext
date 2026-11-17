@@ -40,10 +40,12 @@ test('CI semantics reject missing gates, unbounded jobs and duplicate heavy scen
   assert.deepEqual(ciSemantics(workflow), []);
 
   for (const change of [
-    (copy) => { copy.jobs.check.steps = copy.jobs.check.steps.filter((step) => step.id !== 'checks'); },
-    (copy) => { delete copy.jobs.browser['timeout-minutes']; },
-    (copy) => { copy.jobs.browser.steps.push({ run: 'npm run verify:expense-recovery' }); },
-    (copy) => { copy.jobs.browser.steps = copy.jobs.browser.steps.filter((step) => !step.uses?.startsWith('actions/upload-artifact')); },
+    (copy) => { copy.jobs.check.with.stages = copy.jobs.check.with.stages.split('\n').filter((line) => !line.startsWith('checks:')).join('\n'); },
+    (copy) => { delete copy.jobs.browser.with['timeout-minutes']; },
+    (copy) => { copy.jobs.browser.with.stages += 'expense: npm run verify:expense-recovery\n'; },
+    (copy) => { delete copy.jobs.browser.with['evidence-path']; },
+    (copy) => { copy.jobs.check.uses = copy.jobs.check.uses.replace(/@.*/, '@main'); },
+    (copy) => { copy.jobs.check.with.result = 'echo done'; },
   ]) {
     const copy = structuredClone(workflow);
 

@@ -22,12 +22,53 @@ export async function catalog() {
   return catalogSchema.parse(JSON.parse(await readFile('verification/features.json', 'utf8')));
 }
 
+const sharedChecks = /^santistebanc\/skills\/\.github\/workflows\/app-checks\.yml@([0-9a-f]{40})$/;
+
+/**
+ * One shape for both kinds of job: steps written here, or a call to the shared
+ * app checks (skills docs/app-ci.md), whose stages, result command and evidence
+ * upload always run as the shared workflow defines them.
+ */
+function jobView(job) {
+  if (!job.uses) {
+    const steps = job.steps ?? [];
+
+    return {
+      timeout: job['timeout-minutes'],
+      gates: steps.filter((step) => step.id).map((step) => ({ id: step.id, run: step.run ?? '' })),
+      runs: steps.map((step) => step.run ?? ''),
+      node: steps.some((step) => step.uses?.startsWith('actions/setup-node@') && step.with?.['node-version-file'] === '.nvmrc'),
+      summary: steps.some((step) => step.run === 'node scripts/verification-ci-result.mjs' && step.if === 'always()'),
+      uploads: steps.filter((step) => step.uses?.startsWith('actions/upload-artifact@')).map((step) => ({ path: step.with?.path, always: step.if === 'always()' })),
+      pinned: true,
+    };
+  }
+
+  const input = job.with ?? {};
+
+  const gates = String(input.stages ?? '').split('\n').filter((line) => line.trim()).map((line) => {
+    const at = line.indexOf(':');
+
+    return { id: line.slice(0, at).trim(), run: line.slice(at + 1).trim() };
+  });
+
+  return {
+    timeout: input['timeout-minutes'],
+    gates,
+    runs: gates.map((gate) => gate.run),
+    node: (input['node-version-file'] ?? '.nvmrc') === '.nvmrc',
+    summary: /(^|\s)node scripts\/verification-ci-result\.mjs$/.test(input.result ?? ''),
+    uploads: input['evidence-path'] === undefined ? [] : [{ path: input['evidence-path'], always: true }],
+    pinned: sharedChecks.test(job.uses),
+  };
+}
+
 export function artifactBoundary(workflow) {
   const errors = [];
 
   for (const job of Object.values(workflow.jobs))
-    for (const step of job.steps ?? [])
-      if (step.uses?.startsWith('actions/upload-artifact@') && step.with?.path !== '.wrangler/verification/public/')
+    for (const upload of jobView(job).uploads)
+      if (upload.path !== '.wrangler/verification/public/')
         errors.push('CI artifacts must upload only .wrangler/verification/public/');
 
   return errors;
@@ -37,23 +78,25 @@ export function ciSemantics(workflow) {
   const errors = [];
 
   for (const [name, commands] of Object.entries({ check: { contracts: 'verify:check', checks: 'check:fast' }, browser: { build: 'frontend:build', browsers: 'test:e2e' } })) {
-    const job = workflow.jobs[name];
+    const job = workflow.jobs[name] && jobView(workflow.jobs[name]);
 
-    if (!job || !Number.isInteger(job['timeout-minutes']) || job['timeout-minutes'] < 1 || job['timeout-minutes'] > 45) {
+    if (!job || !Number.isInteger(job.timeout) || job.timeout < 1 || job.timeout > 45) {
       errors.push(`${name}: missing bounded CI job`);
       continue;
     }
 
+    if (!job.pinned) errors.push(`${name}: shared checks must be pinned to a commit`);
+
     for (const [id, script] of Object.entries(commands))
-      if (!job.steps.some((step) => step.id === id && step.run?.includes(`npm run ${script}`))) errors.push(`${name}: missing ${id} gate`);
+      if (!job.gates.some((gate) => gate.id === id && gate.run.includes(`npm run ${script}`))) errors.push(`${name}: missing ${id} gate`);
 
-    if (!job.steps.some((step) => step.uses?.startsWith('actions/setup-node@') && step.with?.['node-version-file'] === '.nvmrc')) errors.push(`${name}: Node must follow .nvmrc`);
+    if (!job.node) errors.push(`${name}: Node must follow .nvmrc`);
 
-    if (!job.steps.some((step) => step.run === 'node scripts/verification-ci-result.mjs' && step.if === 'always()')) errors.push(`${name}: failure summary must run always`);
+    if (!job.summary) errors.push(`${name}: failure summary must run always`);
 
-    if (!job.steps.some((step) => step.uses?.startsWith('actions/upload-artifact@') && step.if === 'always()')) errors.push(`${name}: evidence upload must run always`);
+    if (!job.uploads.some((upload) => upload.always)) errors.push(`${name}: evidence upload must run always`);
 
-    if (job.steps.some((step) => /verify:expense-recovery|verify.*run expense-recovery/.test(step.run ?? ''))) errors.push(`${name}: expense scenario already runs in e2e`);
+    if (job.runs.some((run) => /verify:expense-recovery|verify.*run expense-recovery/.test(run))) errors.push(`${name}: expense scenario already runs in e2e`);
   }
 
   return errors;
