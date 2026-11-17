@@ -5,13 +5,20 @@ Use the existing Expo app in `apps/client`. Keep the API and ledger rules shared
 Set `EXPO_PUBLIC_API_URL` in the app's `.env.local` to a local test Worker URL
 that the device can reach. Set `EXPO_PUBLIC_APP_URL` when shared invite links
 need a different web origin. These values are public and embedded at build time;
-do not put secrets in them. A native installation has its own identity. It does
-not inherit a browser's groups or pending changes; join with an invite link.
+do not put secrets in them.
+
+An explicit HTTP API URL enables HTTP in that test binary; unset or HTTPS
+URLs keep the platform transport restrictions. Regenerate native projects
+when changing this setting, as well as rebuilding the JavaScript bundle.
+A native installation has its own identity. It does not inherit a browser's
+groups or pending changes; join with an invite link.
 
 `npm run native:bundle` checks Android and iOS JavaScript bundles and their
 module graphs. `npm run native:android` builds locally with an Android SDK and
 JDK. `npm run native:ios` needs macOS and Xcode. Expo generates the ignored
-native projects from app configuration. Regenerate them after config or module
+native projects from app configuration. Android pins CMake 3.31.6 for a Ninja
+version that supports long Windows paths; install it with the Android SDK tools.
+Regenerate native projects after config or module
 changes. The font files are static instances of the web fonts; their licenses
 are in `assets/fonts`. `npm run assets:brand` also generates the launcher icon.
 

@@ -4,9 +4,32 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { SqliteClientStorage } from '../apps/client/src/native/storage.ts';
 import { createNativeNavigation } from '../apps/client/src/native/navigation.ts';
 import { nativeAmountDraft } from '../apps/client/src/native/amount.ts';
+
+test('native HTTP transport is enabled only for an explicit HTTP test endpoint', () => {
+  const require = createRequire(import.meta.url);
+  const file = require.resolve('../apps/client/app.config.js');
+  const original = process.env.EXPO_PUBLIC_API_URL;
+
+  try {
+    for (const url of ['', 'https://example.test', 'http://localhost:8787']) {
+      process.env.EXPO_PUBLIC_API_URL = url;
+      delete require.cache[file];
+      const { expo } = require(file);
+      const properties = expo.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-build-properties')[1];
+
+      assert.equal(properties.android.usesCleartextTraffic, url.startsWith('http://'));
+      assert.equal(Boolean(expo.ios.infoPlist?.NSAppTransportSecurity?.NSAllowsArbitraryLoads), url.startsWith('http://'));
+    }
+  } finally {
+    if (original === undefined) delete process.env.EXPO_PUBLIC_API_URL;
+    else process.env.EXPO_PUBLIC_API_URL = original;
+    delete require.cache[file];
+  }
+});
 
 test('native amount entry accepts typing, decimal commas, and backspace without rounding the draft', () => {
   for (const draft of ['', '1', '12', '12.', '12.3', '12.34', '12.3', '12.', '12', '1', '']) assert.equal(nativeAmountDraft(draft), draft);
