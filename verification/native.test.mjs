@@ -115,6 +115,19 @@ test('native storage retains queued work after close and reopen, without lost co
   } finally { database.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
+test('native storage can open again after a temporary initialization failure', async () => {
+  const database = connection(':memory:');
+  const initialize = database.adapter.execAsync;
+
+  try {
+    database.adapter.execAsync = async () => { throw new Error('storage full'); };
+
+    await assert.rejects(new SqliteClientStorage(database.adapter, 'installation').read(), /storage full/);
+    database.adapter.execAsync = initialize;
+    assert.equal(await new SqliteClientStorage(database.adapter, 'installation').read(), null);
+  } finally { database.close(); }
+});
+
 test('native storage does not report success after a failed write, and permits retry', async () => {
   const database = connection(':memory:');
   const storage = new SqliteClientStorage(database.adapter, 'installation');

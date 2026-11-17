@@ -23,6 +23,11 @@ export class SqliteClientStorage implements ClientStorageAdapter {
     this.key = key;
     this.ready = initializations.get(database) ?? database.execAsync('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; CREATE TABLE IF NOT EXISTS replica_documents (key TEXT PRIMARY KEY, value TEXT NOT NULL);');
     initializations.set(database, this.ready);
+    const ready = this.ready;
+
+    void ready.catch(() => {
+      if (initializations.get(database) === ready) initializations.delete(database);
+    });
   }
 
   async read(): Promise<string | null> {
