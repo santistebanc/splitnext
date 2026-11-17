@@ -1,0 +1,8 @@
+import { getRandomValues, randomUUID } from 'expo-crypto';
+
+// The shared SDK uses Web Crypto's secure random primitives, never Math.random.
+if (!globalThis.crypto) Object.defineProperty(globalThis, 'crypto', { value: {} });
+
+if (!globalThis.crypto.getRandomValues) Object.defineProperty(globalThis.crypto, 'getRandomValues', { value: getRandomValues });
+
+if (!globalThis.crypto.randomUUID) Object.defineProperty(globalThis.crypto, 'randomUUID', { value: randomUUID });

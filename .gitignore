@@ -10,3 +10,8 @@ src/generated/
 test-results/
 playwright-report/
 showcase/out/
+
+apps/client/android/
+apps/client/ios/
+apps/client/native-dist/
+apps/client/.env.local

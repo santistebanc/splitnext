@@ -4,7 +4,73 @@
     "slug": "splitnext",
     "scheme": "splitnext",
     "userInterfaceStyle": "light",
-    "web": { "bundler": "metro", "output": "server" },
-    "plugins": [["expo-router", { "unstable_useServerRendering": true }]]
+    "web": {
+      "bundler": "metro",
+      "output": "server"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "unstable_useServerRendering": true
+        }
+      ],
+      "expo-sqlite",
+      "expo-secure-store",
+      [
+        "expo-font",
+        {
+          "ios": {
+            "fonts": [
+              "./assets/fonts/instrument-sans-400.ttf",
+              "./assets/fonts/instrument-sans-600.ttf",
+              "./assets/fonts/instrument-sans-700.ttf",
+              "./assets/fonts/geist-mono-500.ttf"
+            ]
+          },
+          "android": {
+            "fonts": [
+              {
+                "fontFamily": "Instrument Sans",
+                "fontDefinitions": [
+                  {
+                    "path": "./assets/fonts/instrument-sans-400.ttf",
+                    "weight": 400
+                  },
+                  {
+                    "path": "./assets/fonts/instrument-sans-600.ttf",
+                    "weight": 600
+                  },
+                  {
+                    "path": "./assets/fonts/instrument-sans-700.ttf",
+                    "weight": 700
+                  }
+                ]
+              },
+              {
+                "fontFamily": "Geist Mono",
+                "fontDefinitions": [
+                  {
+                    "path": "./assets/fonts/geist-mono-500.ttf",
+                    "weight": 500
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expo-status-bar"
+    ],
+    "icon": "./assets/icon.png",
+    "ios": {
+      "bundleIdentifier": "online.splitnext.app",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "online.splitnext.app",
+      "allowBackup": false,
+      "softwareKeyboardLayoutMode": "resize"
+    }
   }
 }

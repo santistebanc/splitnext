@@ -1,6 +1,7 @@
 import { memberLabel, previewFromSnapshot } from '@splitnext/client';
 import { useEffect } from 'react';
 import { View } from 'react-native';
+import { readClipboard } from './clipboard';
 import { Button, ErrorMessage, Field, Input, Notice, RadioMark, RadioRow, Row, Stack, Tag, Text, TextButton, Touchable, rules, sizes, titleStyle } from '../design';
 import type { AppController } from '../model/controller';
 import { errorMessage } from './errors';
@@ -117,7 +118,7 @@ function LinkEntry(props: JoinGroupProps) {
             onPress={() => {
               // Clipboard reads need permission and a secure page; a refusal leaves the field as it is.
               void Promise.resolve()
-                .then(() => (host ? host.readClipboard() : navigator.clipboard.readText()))
+                .then(() => (host ? host.readClipboard() : readClipboard()))
                 .then(setLink, () => undefined);
             }}
           >

@@ -50,7 +50,10 @@
     "verify": "node scripts/verify.mjs",
     "verify:check": "node --test verification/*.test.mjs && node scripts/verify.mjs check",
     "test:performance": "vitest run -c vitest.performance.config.ts",
-    "verify:expense-recovery": "node scripts/verify.mjs run expense-recovery"
+    "verify:expense-recovery": "node scripts/verify.mjs run expense-recovery",
+    "native:bundle": "npm run native:bundle --workspace @splitnext/app && node scripts/check-native-bundles.mjs",
+    "native:android": "npm run android --workspace @splitnext/app",
+    "native:ios": "npm run ios --workspace @splitnext/app"
   },
   "devDependencies": {
     "@babel/parser": "7.29.9",
@@ -64,6 +67,7 @@
     "motion-panels": "^0.6.1",
     "oxlint": "1.83.0",
     "oxlint-tsgolint": "7.0.2001",
+    "sharp": "0.35.5",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11",
     "wrangler": "^4.131.2",

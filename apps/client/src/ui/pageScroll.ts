@@ -1,4 +1,5 @@
 import { createContext, useContext, useSyncExternalStore } from 'react';
+import { Platform } from 'react-native';
 import { between } from '../design/tokens';
 
 export { between };
@@ -53,7 +54,7 @@ export function createCompactProgress() {
       frame = null;
       const from = store.get();
 
-      if (instant || from === target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      if (instant || from === target || Platform.OS !== 'web' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         store.set(target);
 
         return;

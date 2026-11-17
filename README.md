@@ -92,10 +92,11 @@ Repayments, cached Activity, safe undo and the Activity count are
 implemented. Their agreed behavior is in
 [the product specification](./docs/product-spec.md#agreed-feature-port-from-the-earlier-app).
 
-Only the web build of the app exists so far. The Expo app has native
-variants of a few components, but no native build has been made, its storage
-would need a SQLite adapter at the SDK's storage seam, and nothing tests it:
-every app test drives the shared model or the web build.
+The same Expo app now has Android and iOS entry points, SQLite replica storage,
+secure installation credentials, native navigation, sharing, and connection
+handling. `npm run native:bundle` exports both native bundles and rejects
+browser-only dependencies. Device acceptance and signed distribution builds
+are separate from these source checks; see [native development](docs/native-app.md).
 
 ## Quickstart
 

@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { LEFT_S_PATH, RIGHT_S_PATH } from '../apps/client/src/design/brand.ts';
 import { colors } from '../apps/client/src/design/tokens.ts';
+import sharp from 'sharp';
 
 // Static browser assets use the same paths and palette as the app's BrandMark.
 const icon = `<svg xmlns="http://www.w3.org/2000/svg" width="104" height="104" viewBox="0 0 104 104" fill="none">
@@ -26,11 +27,19 @@ const manifest = JSON.stringify({
   icons: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
 }, null, 2) + '\n';
 
-for (const [name, content] of [['icon.svg', icon], ['manifest.webmanifest', manifest]]) {
-  const path = new URL(`../apps/client/public/${name}`, import.meta.url);
+const nativeIcon = await sharp(Buffer.from(icon)).resize(1024, 1024).flatten({ background: colors.background }).png().toBuffer();
+
+const assets = [
+  { name: 'public/icon.svg', content: Buffer.from(icon) },
+  { name: 'public/manifest.webmanifest', content: Buffer.from(manifest) },
+  { name: 'assets/icon.png', content: nativeIcon },
+];
+
+for (const { name, content } of assets) {
+  const path = new URL(`../apps/client/${name}`, import.meta.url);
 
   if (process.argv.includes('--check')) {
-    if (await readFile(path, 'utf8') !== content) throw new Error(`${name} is stale. Run npm run assets:brand.`);
+    if (!(await readFile(path)).equals(content)) throw new Error(`${name} is stale. Run npm run assets:brand.`);
   } else {
     await writeFile(path, content);
   }

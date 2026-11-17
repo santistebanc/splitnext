@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { clientErrorKind, parseInviteLink } from '@splitnext/client';
 import { AppController } from '../model/controller';
 import { createDispatcher } from '../model/actions';
-import { browserSubstrate } from './browserPlatform';
+import { defaultSubstrate } from './platform';
 import { ViewTransition } from './ViewTransition';
 import { SyncStatus } from './ConnectionStatus';
 import { Frame } from './Frame';
@@ -42,10 +42,11 @@ type AppProps = { controller: AppController; invite?: boolean; substrate: AppSub
 type Screen = { header?: ReactNode; body: ReactNode; footer?: ReactNode };
 
 export function AppScreen(props: ScreenProps) {
-  const substrate = props.substrate ?? browserSubstrate;
+  const substrate = props.substrate ?? defaultSubstrate;
   const [controller, setController] = useState<AppController | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [incomingInvite, setIncomingInvite] = useState(false);
 
   useEffect(() => {
     let current: AppController | null = null;
@@ -62,12 +63,16 @@ export function AppScreen(props: ScreenProps) {
         }
 
         await current.start(substrate.lifecycle.online());
+        const incoming = parseInviteLink(substrate.navigation.url());
 
-        const code = props.invite ? parseInviteLink(substrate.navigation.url())?.token : undefined;
+        if (!cancelled) setIncomingInvite(Boolean(incoming));
+
+        const code = incoming?.token;
         const joined = props.incomingGroupId ?? (code ? await current.groupWithInvite(code) : null);
 
         if (!cancelled && joined && (await current.openJoinedGroup(joined))) {
           substrate.navigation.enterApp();
+          setController(current);
 
           return;
         }
@@ -115,7 +120,7 @@ export function AppScreen(props: ScreenProps) {
     );
   }
 
-  return <ReadyApp controller={controller} {...props} substrate={substrate} />;
+  return <ReadyApp controller={controller} {...props} invite={Boolean(props.invite || incomingInvite)} substrate={substrate} />;
 }
 
 /** A placeholder shaped like the groups list while local storage opens. */

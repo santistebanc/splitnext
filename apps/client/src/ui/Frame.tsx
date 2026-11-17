@@ -111,7 +111,7 @@ export function Frame(props: FrameProps) {
   useLayoutEffect(() => {
     const node: unknown = Platform.OS === 'web' ? scroll.current?.getScrollableNode() : null;
 
-    if (!(node instanceof HTMLElement)) return;
+    if (Platform.OS !== 'web' || !(node instanceof HTMLElement)) return;
     const measure = () => setScrollbar(node.offsetWidth - node.clientWidth);
     const observer = new ResizeObserver(measure);
 
@@ -194,7 +194,7 @@ export function Frame(props: FrameProps) {
     const node: unknown = Platform.OS === 'web' ? scroll.current?.getScrollableNode() : null;
     const element = Platform.OS === 'web' ? document.getElementById(id) : null;
 
-    if (!(node instanceof HTMLElement) || !(element instanceof HTMLElement)) return;
+    if (Platform.OS !== 'web' || !(node instanceof HTMLElement) || !(element instanceof HTMLElement)) return;
     const y = element.getBoundingClientRect().top - node.getBoundingClientRect().top + node.scrollTop;
     const compactHeight = headerRef.current.full - headerRef.current.shrink;
 

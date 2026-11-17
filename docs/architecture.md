@@ -23,7 +23,7 @@ How the system fits together and the rules each part keeps. The
 - **Client SDK** (`src/client/`): the HTTP transport, the stateful sync client,
   the replica store over a swappable storage adapter, and realtime
   subscriptions.
-- **App** (`apps/client/`): an Expo Router app, built for the web today. Its
+- **App** (`apps/client/`): one Expo Router app for web, Android, and iOS. Its
   `model/` holds the controller over the SDK, the action catalog every caller
   uses, the workflow state machine, and the shared UI state; `design/` holds
   the design system; `ui/` the screens built from it; `devtools/` the in-app
@@ -85,6 +85,24 @@ Browser assets share the mark's paths (`design/brand.ts`) and palette.
 `npm run assets:brand` generates the favicon and install manifest; builds and
 fast checks reject stale copies. `ToastContent` shares toast text, actions,
 and styling between platform hosts. Check marks use the outline icon family.
+
+### Native runtime
+
+Metro selects `entry.native.ts` and `ui/platform.native.ts` on Android and iOS.
+The shared controller, action rules, and sync SDK stay unchanged.
+`native/storage.ts` implements atomic document updates with SQLite transactions;
+it returns success only after commit. Native preferences use a separate SQLite
+key-value store. The credential stays in SecureStore, never in a replica key.
+A local installation marker selects its secure key; missing credentials stop
+startup, and a fresh installation gets a new identity even if an old iOS
+Keychain entry remains. Android backup is disabled for this installation data.
+
+Native adapters supply network and foreground events, clipboard, sharing,
+and Back requests through the same navigation action rules. Safe areas and
+keyboard avoidance belong to the native root. Fonts and the generated launcher
+icon are embedded. Native screen transitions currently change at once.
+Verified web-link handoff, push notifications, and store distribution remain
+separate work. See [native development](native-app.md) for acceptance limits.
 
 Screens take every color, size, and duration from tokens and build from these
 components rather than their own copies. App chrome that needs the app's

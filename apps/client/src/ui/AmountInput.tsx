@@ -1,6 +1,7 @@
 import type { RefObject } from 'react';
 import { TextInput } from 'react-native';
-import { formatAmount, parseAmount } from '@splitnext/client';
+import { formatAmount } from '@splitnext/client';
+import { nativeAmountDraft } from '../native/amount';
 import { colors, fonts, strokes } from '../design';
 
 export type AmountInputHandle = { focus: (options?: FocusOptions) => void };
@@ -39,11 +40,9 @@ export function AmountInput(props: AmountInputProps) {
       inputMode="decimal"
       value={props.value}
       onChangeText={(value) => {
-        if (!/^\d*(?:[.,]\d*)?$/.test(value)) return;
-        const decimal = value.replace(',', '.');
-        const minor = parseAmount(decimal.startsWith('.') ? `0${decimal}` : decimal);
+        const draft = nativeAmountDraft(value);
 
-        if (value === '' || minor !== null) props.onChangeText(minor === null ? '' : formatAmount(minor));
+        if (draft !== null) props.onChangeText(draft);
       }}
       returnKeyType={props.enterKeyHint ?? 'done'}
       onSubmitEditing={props.onSubmitEditing}
