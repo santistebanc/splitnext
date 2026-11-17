@@ -127,6 +127,10 @@ export class Lab {
 
     return entry;
   }
+  /** Resolves when every timeline and manifest write started so far has finished. */
+  async settled() {
+    await Promise.all([this.eventTail, this.saveTail]);
+  }
   async runWrangler(args) {
     const child = spawn(
       process.execPath,

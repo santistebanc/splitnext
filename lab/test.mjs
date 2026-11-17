@@ -307,6 +307,7 @@ test("the first suitable page hosts in-page devices and later pages only view", 
     assert.match(background.res.written.join(""), /"role":"viewer"/);
     first.res.end();
     tab.res.end();
+    await lab.settled();
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -357,6 +358,7 @@ test("in-page devices are driven through their host and namespaced by environmen
     await lab.execute("serverNetwork", { available: false });
     assert.deepEqual(page.calls.at(-1), { type: "gate", open: false, epoch: lab.epoch });
     page.res.end();
+    await lab.settled();
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -384,6 +386,7 @@ test("a lost host fails pending calls and a replacement host takes over", async 
     lab.registerHost(next.res, false);
     assert.equal(lab.host.res, next.res);
     next.res.end();
+    await lab.settled();
   } finally {
     await rm(root, { recursive: true, force: true });
   }
