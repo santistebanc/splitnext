@@ -290,6 +290,7 @@ function storageFailure(): Error {
 }
 
 const laterTasks: Array<() => void> = [];
+
 let laterChannel: MessageChannel | null = null;
 
 /**
@@ -303,6 +304,7 @@ function later(task: () => void): void {
     laterChannel = new MessageChannel();
     laterChannel.port1.onmessage = () => laterTasks.shift()?.();
   }
+
   laterTasks.push(task);
   laterChannel.port2.postMessage(null);
 }
