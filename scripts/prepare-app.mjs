@@ -57,13 +57,14 @@ for (const path of publicAssets) {
 
 const release = releaseHash.digest('hex').slice(0, 16);
 
-const precache = [
-  '/',
-  '/app',
-  ...publicAssets,
-  ...(manifest.assets?.js ?? []),
-  ...(manifest.assets?.css ?? []),
-];
+// Expo splits the bundle per route, so each page's own chunks must be
+// cached too, or an offline reload cannot start the app.
+const routeAssets = [manifest, ...(manifest.htmlRoutes ?? [])].flatMap((entry) => [
+  ...(entry.assets?.js ?? []),
+  ...(entry.assets?.css ?? []),
+]);
+
+const precache = [...new Set(['/', '/app', ...publicAssets, ...routeAssets])];
 
 const serviceWorker = await readFile(
   new URL('./service-worker.js', import.meta.url),

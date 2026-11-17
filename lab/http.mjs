@@ -1,6 +1,6 @@
 import { build } from "esbuild";
 import { createServer } from "node:http";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -29,35 +29,44 @@ async function readBody(req, limit = 10_000_000) {
   return body;
 }
 
-const entryDirectory = path.join(appAssets, "_expo", "static", "js", "web");
+const routeManifest = path.join(repo, "src", "generated", "expo-server", "_expo", "routes.json");
 
-/** The built app's client script, which also carries the many-device host and a device's frame. */
-async function entryName() {
-  const files = await readdir(entryDirectory).catch(() => []);
-  const entry = files.find((name) => /^index-.*\.js$/.test(name));
+/**
+ * The built app's client scripts in load order: Metro's runtime and the shared
+ * chunk come before the entry, which also carries the many-device host and a
+ * device's frame.
+ */
+async function entryScripts() {
+  const manifest = await readFile(routeManifest, "utf8").then(JSON.parse).catch(() => null);
+  const scripts = manifest?.assets?.js ?? [];
 
-  if (!entry) throw new Error("frontend_not_built: run npm run frontend:build");
+  if (scripts.length === 0) throw new Error("frontend_not_built: run npm run frontend:build");
 
-  return entry;
+  return scripts;
 }
 
 async function hostEntry() {
-  return readFile(path.join(entryDirectory, await entryName()));
+  const parts = await Promise.all(
+    (await entryScripts()).map((script) => readFile(path.join(appAssets, "." + script), "utf8")),
+  );
+
+  // Each part is a classic script, so running them in order as one file is the same as loading them one by one.
+  return parts.join(";\n");
 }
 
 /**
- * The page inside each in-page device's frame. It loads the app's script by its
- * content-hashed name, so every frame after the first reads it from the cache.
+ * The page inside each in-page device's frame. It loads the app's scripts by
+ * their content-hashed names, so every frame after the first reads them from the cache.
  */
 async function framePage() {
-  const script = `/_expo/static/js/web/${await entryName()}`;
+  const scripts = (await entryScripts()).map((script) => `<script src="${script}"></script>`).join("\n");
 
   return `<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Lab device</title></head>
 <body>
 <script>window.splitnextLabFramePage = true;</script>
-<script src="${script}"></script>
+${scripts}
 </body>
 </html>`;
 }
