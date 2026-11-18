@@ -293,6 +293,23 @@ async function showSection(page: Page, name: 'People' | 'Expenses'): Promise<voi
     });
 }
 
+/**
+ * Clicks a control and returns where the page was scrolled when it was
+ * pressed. Playwright can scroll further before clicking, to reach a point
+ * that no floating control covers, so a position read before the click is not
+ * always the one the page is left at (task #180).
+ */
+async function clickAt(page: Page, target: Locator): Promise<number> {
+  const scroller = page.locator('#splitnext-page');
+
+  await scroller.evaluate((node) => {
+    document.addEventListener('pointerdown', () => { node.dataset.pressedAt = String(node.scrollTop); }, { capture: true, once: true });
+  });
+  await target.click();
+
+  return Number(await scroller.evaluate((node) => node.dataset.pressedAt));
+}
+
 /** Geometry checks compare settled screens; motion tests sample the movement separately. */
 async function motionSettled(page: Page): Promise<void> {
   await expect(page.locator('[data-copied-page]')).toHaveCount(0);
@@ -1811,9 +1828,10 @@ test('opens views at the top and restores context on returning or browsing histo
   await scroller.evaluate((node) => { node.scrollTop = 160; });
   await expect(compactTitle(page, 'Scroll navigation')).toBeVisible();
   await person(page, 'Gus').scrollIntoViewIfNeeded();
-  const groupPosition = await position();
+  // Task #180: the position the page had when it was left, which can be past
+  // where it was put if the click first scrolls Gus clear of the floating controls.
+  let groupPosition = await clickAt(page, person(page, 'Gus'));
 
-  await person(page, 'Gus').click();
   await atTop();
   await expect(heading(page, 'Gus')).toHaveCSS('font-size', '32px');
   await scroller.evaluate((node) => { node.scrollTop = 400; });
@@ -1822,7 +1840,7 @@ test('opens views at the top and restores context on returning or browsing histo
   await expect.poll(position).toBeCloseTo(groupPosition, 0);
 
   // A fresh opening starts at the top even if this person was scrolled before.
-  await person(page, 'Gus').click();
+  groupPosition = await clickAt(page, person(page, 'Gus'));
   await atTop();
   // Scroll past the whole fold, so restoration has a compact header to keep.
   await scroller.evaluate((node) => { node.scrollTop = 400; });
@@ -1841,9 +1859,8 @@ test('opens views at the top and restores context on returning or browsing histo
 
   // The invite sheet opens over the page without moving it.
   await button(page, 'Invite people').scrollIntoViewIfNeeded();
-  const invitePosition = await position();
+  const invitePosition = await clickAt(page, button(page, 'Invite people'));
 
-  await button(page, 'Invite people').click();
   await expect(page.getByRole('region', { name: 'Invite people' })).toBeVisible();
   await expect.poll(position).toBeCloseTo(invitePosition, 0);
   await closeInvite(page);
