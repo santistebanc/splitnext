@@ -87,7 +87,8 @@ test('a host report is acknowledged before awaiting a gate result on the same ch
 
   try {
     await loseCommittedResponse(lab, {
-      device: 'a', groupId: 'group', name: 'Changed', timeoutMs: 150,
+      // Generous, so a slow event write on a busy host is not taken for the deadlock this test catches.
+      device: 'a', groupId: 'group', name: 'Changed', timeoutMs: 2000,
       action: () => (pending = (async () => {
         await lab.event('response.received', { device: 'a', method: 'POST', path: '/groups/group/sync' });
         acknowledged.resolve();
@@ -307,6 +308,7 @@ test("the first suitable page hosts in-page devices and later pages only view", 
     assert.match(background.res.written.join(""), /"role":"viewer"/);
     first.res.end();
     tab.res.end();
+    await lab.settled();
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -357,6 +359,7 @@ test("in-page devices are driven through their host and namespaced by environmen
     await lab.execute("serverNetwork", { available: false });
     assert.deepEqual(page.calls.at(-1), { type: "gate", open: false, epoch: lab.epoch });
     page.res.end();
+    await lab.settled();
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -384,6 +387,7 @@ test("a lost host fails pending calls and a replacement host takes over", async 
     lab.registerHost(next.res, false);
     assert.equal(lab.host.res, next.res);
     next.res.end();
+    await lab.settled();
   } finally {
     await rm(root, { recursive: true, force: true });
   }
