@@ -48,6 +48,8 @@ export function AmountInput(props: AmountInputProps) {
       onSubmitEditing={props.onSubmitEditing}
       style={[
         { flex: 1, minWidth: 0, color: colors.ink, fontFamily: fonts.mono, fontWeight: '500', letterSpacing: -2.8 },
+        // Android pads text fields and fonts; at a large size in a fixed height that cuts off the tops of the digits.
+        { paddingVertical: 0, includeFontPadding: false, textAlignVertical: 'center' },
         { marginLeft: 0, paddingHorizontal: 15, height: props.height, fontSize: props.fontSize, textAlign: props.align ?? 'left' },
         props.inline && { paddingHorizontal: 0, textAlign: 'right', borderWidth: 0, borderBottomWidth: strokes.ink, borderColor: colors.ink },
       ]}
